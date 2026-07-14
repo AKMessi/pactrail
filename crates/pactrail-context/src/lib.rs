@@ -2,6 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
@@ -101,19 +102,12 @@ impl RepositoryIndex {
             }
             let path = entry.path();
             let relative = portable_relative(root, path)?;
-            let bytes = fs::read(path).map_err(|source| ContextError::Io {
-                path: path.to_path_buf(),
-                source,
-            })?;
-            let digest = blake3::hash(&bytes).to_hex().to_string();
-            let size = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+            let (digest, size, retained) = fingerprint_and_retain(path)?;
             let language = detect_language(path);
             *languages.entry(language).or_insert(0) += 1;
-            let text = if size <= MAX_INDEX_FILE_BYTES {
-                std::str::from_utf8(&bytes).ok()
-            } else {
-                None
-            };
+            let text = retained
+                .as_deref()
+                .and_then(|bytes| std::str::from_utf8(bytes).ok());
             let (lines, symbols, imports) = text.map_or((0, Vec::new(), Vec::new()), |text| {
                 let lines = text.lines().count();
                 let (symbols, imports) = extract_structure(text, language);
@@ -189,6 +183,36 @@ impl RepositoryIndex {
             .map(|(_, file)| file)
             .collect()
     }
+}
+
+fn fingerprint_and_retain(path: &Path) -> Result<(String, u64, Option<Vec<u8>>), ContextError> {
+    let metadata = fs::metadata(path).map_err(|source| ContextError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let size = metadata.len();
+    let mut retained = (size <= MAX_INDEX_FILE_BYTES)
+        .then(|| Vec::with_capacity(usize::try_from(size).unwrap_or_default()));
+    let mut file = fs::File::open(path).map_err(|source| ContextError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let mut hasher = blake3::Hasher::new();
+    let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
+    loop {
+        let count = file.read(&mut buffer).map_err(|source| ContextError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+        if count == 0 {
+            break;
+        }
+        hasher.update(&buffer[..count]);
+        if let Some(bytes) = &mut retained {
+            bytes.extend_from_slice(&buffer[..count]);
+        }
+    }
+    Ok((hasher.finalize().to_hex().to_string(), size, retained))
 }
 
 /// Bounded provider-neutral context compiled for one task.
@@ -474,5 +498,21 @@ mod tests {
             retrieved.first().map(|file| file.path.as_str()),
             Some("receipt.rs")
         );
+    }
+
+    #[test]
+    fn oversized_files_are_hashed_without_semantic_retention() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let path = root.path().join("large.rs");
+        let bytes = vec![b'x'; usize::try_from(MAX_INDEX_FILE_BYTES).unwrap_or_default() + 1];
+        fs::write(&path, &bytes).unwrap_or_else(|error| unreachable!("large fixture: {error}"));
+
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let file = &index.files["large.rs"];
+        assert_eq!(file.bytes, MAX_INDEX_FILE_BYTES + 1);
+        assert_eq!(file.lines, 0);
+        assert!(file.symbols.is_empty());
+        assert_eq!(file.digest, blake3::hash(&bytes).to_hex().to_string());
     }
 }
