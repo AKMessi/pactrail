@@ -1,0 +1,25 @@
+[package]
+name = "pactrail-context"
+description = "Provenance-aware repository context for Pactrail"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+blake3.workspace = true
+ignore.workspace = true
+pactrail-core = { path = "../pactrail-core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
+

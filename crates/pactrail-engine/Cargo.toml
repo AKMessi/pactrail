@@ -12,3 +12,19 @@ publish = false
 [lints]
 workspace = true
 
+[dependencies]
+pactrail-context = { path = "../pactrail-context" }
+pactrail-core = { path = "../pactrail-core" }
+pactrail-models = { path = "../pactrail-models" }
+pactrail-store = { path = "../pactrail-store" }
+pactrail-tools = { path = "../pactrail-tools" }
+pactrail-workspace = { path = "../pactrail-workspace" }
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+

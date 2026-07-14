@@ -62,6 +62,19 @@ impl PolicyEngine {
         self.permissions.allow.insert(capability);
         self
     }
+
+    /// Returns capabilities this evaluator grants beyond a task contract.
+    #[must_use]
+    pub fn overgrants(&self, contract: &PermissionSet) -> Vec<Capability> {
+        self.permissions
+            .allow
+            .iter()
+            .filter(|capability| {
+                !contract.allow.contains(*capability) || contract.deny.contains(*capability)
+            })
+            .cloned()
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -86,5 +99,15 @@ mod tests {
         let decision =
             PolicyEngine::new(permissions).evaluate(&Capability::Network, "example.com", None);
         assert!(matches!(decision, PolicyDecision::Deny { .. }));
+    }
+
+    #[test]
+    fn reports_runtime_grants_missing_from_contract() {
+        let policy = PolicyEngine::local_default();
+        let contract = PermissionSet::default();
+        assert_eq!(
+            policy.overgrants(&contract),
+            vec![Capability::FileRead, Capability::FileWrite]
+        );
     }
 }

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/pactrail-cli",
+    "crates/pactrail-context",
     "crates/pactrail-core",
     "crates/pactrail-engine",
     "crates/pactrail-models",

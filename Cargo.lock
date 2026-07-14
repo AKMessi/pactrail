@@ -733,6 +733,19 @@ name = "pactrail"
 version = "0.1.0"
 
 [[package]]
+name = "pactrail-context"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "ignore",
+ "pactrail-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "pactrail-core"
 version = "0.1.0"
 dependencies = [
@@ -748,6 +761,20 @@ dependencies = [
 [[package]]
 name = "pactrail-engine"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "pactrail-context",
+ "pactrail-core",
+ "pactrail-models",
+ "pactrail-store",
+ "pactrail-tools",
+ "pactrail-workspace",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "pactrail-models"
