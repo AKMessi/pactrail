@@ -18,7 +18,7 @@ use pactrail_tools::{PolicyEngine, ToolError, builtin_registry};
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
 use secrecy::SecretString;
-use serde_json::{Value, json};
+use serde_json::json;
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
@@ -51,11 +51,35 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
     }
 }
 
+/// Structured result shared by scriptable and interactive frontends.
+pub(crate) struct CompletedRun {
+    pub run_root: PathBuf,
+    pub model_summary: String,
+    pub receipt: ChangeReceipt,
+    pub tokens: u64,
+}
+
 async fn run(
     cli_workspace: &Path,
     state_override: Option<&Path>,
     args: RunArgs,
 ) -> Result<(), CliError> {
+    let output = args.output;
+    let completed = execute_run(cli_workspace, state_override, args).await?;
+    render_run(
+        &completed.run_root,
+        &completed.model_summary,
+        &completed.receipt,
+        completed.tokens,
+        output,
+    )
+}
+
+pub(crate) async fn execute_run(
+    cli_workspace: &Path,
+    state_override: Option<&Path>,
+    args: RunArgs,
+) -> Result<CompletedRun, CliError> {
     let (mut contract, workspace) = load_contract(cli_workspace, &args)?;
     contract.workspace_root = workspace.display().to_string();
     if args.task.is_none() {
@@ -103,13 +127,12 @@ async fn run(
     if args.apply && receipt.outcome == ReceiptOutcome::ReadyToApply {
         receipt = apply_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
     }
-    render_run(
-        &run_root,
-        &outcome.final_text,
-        &receipt,
-        outcome.usage.total(),
-        args.output,
-    )
+    Ok(CompletedRun {
+        run_root,
+        model_summary: outcome.final_text,
+        receipt,
+        tokens: outcome.usage.total(),
+    })
 }
 
 fn load_contract(
@@ -240,7 +263,7 @@ fn configure_native_process_permissions(
     Ok(())
 }
 
-fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+pub(crate) fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
     let run_root = run_root(state, run_id);
     let receipt_path = run_root.join("receipt.json");
@@ -283,24 +306,28 @@ fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     }
 }
 
-fn apply(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+pub(crate) fn apply(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
-    let run_root = run_root(state, run_id);
-    let receipt = read_receipt(&run_root)?;
-    let transaction = WorkspaceTransaction::open(&run_root)?;
-    let mut store = EventStore::open(state.join("events.sqlite3"))?;
-    let receipt = apply_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
+    let receipt = apply_run(state, run_id)?;
     if args.json {
         write_json(&receipt)
     } else {
         write_human_stdout(&format!(
             "Applied run {} to {} ({} files).\n",
             run_id,
-            transaction.source_root().display(),
+            receipt.contract.workspace_root,
             receipt.changes.len()
         ))
         .map_err(CliError::Output)
     }
+}
+
+pub(crate) fn apply_run(state: &Path, run_id: RunId) -> Result<ChangeReceipt, CliError> {
+    let run_root = run_root(state, run_id);
+    let receipt = read_receipt(&run_root)?;
+    let transaction = WorkspaceTransaction::open(&run_root)?;
+    let mut store = EventStore::open(state.join("events.sqlite3"))?;
+    apply_ready_receipt(&run_root, receipt, &transaction, &mut store)
 }
 
 fn apply_ready_receipt(
@@ -350,19 +377,23 @@ fn apply_ready_receipt(
     Ok(applied)
 }
 
-fn discard(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+pub(crate) fn discard(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
-    let run_root = run_root(state, run_id);
-    let receipt = read_receipt(&run_root)?;
-    let transaction = WorkspaceTransaction::open(&run_root)?;
-    let mut store = EventStore::open(state.join("events.sqlite3"))?;
-    let discarded = discard_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
+    let discarded = discard_run(state, run_id)?;
     if args.json {
         write_json(&discarded)
     } else {
         write_human_stdout(&format!("Discarded run {run_id}; receipt preserved.\n"))
             .map_err(CliError::Output)
     }
+}
+
+pub(crate) fn discard_run(state: &Path, run_id: RunId) -> Result<ChangeReceipt, CliError> {
+    let run_root = run_root(state, run_id);
+    let receipt = read_receipt(&run_root)?;
+    let transaction = WorkspaceTransaction::open(&run_root)?;
+    let mut store = EventStore::open(state.join("events.sqlite3"))?;
+    discard_ready_receipt(&run_root, receipt, &transaction, &mut store)
 }
 
 fn discard_ready_receipt(
@@ -485,38 +516,20 @@ fn state_receipt_mismatch(state: RunState, outcome: ReceiptOutcome, operation: &
     ))
 }
 
-fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
-    let runs = state.join("runs");
-    if !runs.is_dir() {
-        return if json_output {
-            write_json(&Vec::<Value>::new())
-        } else {
-            write_human_stdout("No Pactrail runs found.\n").map_err(CliError::Output)
-        };
-    }
-    let mut values = Vec::new();
-    for entry in fs::read_dir(&runs).map_err(|source| CliError::Io {
-        path: runs.clone(),
-        source,
-    })? {
-        let entry = entry.map_err(|source| CliError::Io {
-            path: runs.clone(),
-            source,
-        })?;
-        let receipt_path = entry.path().join("receipt.json");
-        if !receipt_path.is_file() {
-            continue;
-        }
-        let receipt = read_receipt(entry.path().as_path())?;
-        values.push(json!({
+pub(crate) fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
+    let receipts = completed_runs(state)?;
+    let values = receipts
+        .iter()
+        .map(|receipt| {
+            json!({
             "run_id": receipt.run_id,
             "outcome": receipt.outcome,
             "goal": receipt.contract.goal,
             "changes": receipt.changes.len(),
             "created_at": receipt.created_at,
-        }));
-    }
-    values.sort_by(|left, right| left["run_id"].as_str().cmp(&right["run_id"].as_str()));
+            })
+        })
+        .collect::<Vec<_>>();
     if json_output {
         write_json(&values)
     } else if values.is_empty() {
@@ -536,6 +549,28 @@ fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
             .join("\n");
         write_human_stdout(&format!("{text}\n")).map_err(CliError::Output)
     }
+}
+
+pub(crate) fn completed_runs(state: &Path) -> Result<Vec<ChangeReceipt>, CliError> {
+    let runs = state.join("runs");
+    if !runs.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut receipts = Vec::new();
+    for entry in fs::read_dir(&runs).map_err(|source| CliError::Io {
+        path: runs.clone(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| CliError::Io {
+            path: runs.clone(),
+            source,
+        })?;
+        if entry.path().join("receipt.json").is_file() {
+            receipts.push(read_receipt(entry.path().as_path())?);
+        }
+    }
+    receipts.sort_by_key(|receipt| receipt.run_id.to_string());
+    Ok(receipts)
 }
 
 fn tools(json_output: bool) -> Result<(), CliError> {
@@ -672,7 +707,10 @@ fn render_run(
     }
 }
 
-fn state_dir(workspace: &Path, override_path: Option<&Path>) -> Result<PathBuf, CliError> {
+pub(crate) fn state_dir(
+    workspace: &Path,
+    override_path: Option<&Path>,
+) -> Result<PathBuf, CliError> {
     override_path.map_or_else(
         || absolute_or_join(workspace, Path::new(".pactrail")),
         |path| absolute_or_join(workspace, path),
@@ -695,16 +733,16 @@ fn absolute_or_join(base: &Path, path: &Path) -> Result<PathBuf, CliError> {
     }
 }
 
-fn run_root(state: &Path, run_id: RunId) -> PathBuf {
+pub(crate) fn run_root(state: &Path, run_id: RunId) -> PathBuf {
     state.join("runs").join(run_id.to_string())
 }
 
-fn parse_run_id(value: &str) -> Result<RunId, CliError> {
+pub(crate) fn parse_run_id(value: &str) -> Result<RunId, CliError> {
     RunId::from_str(value)
         .map_err(|error| CliError::Argument(format!("invalid run id {value:?}: {error}")))
 }
 
-fn read_receipt(run_root: &Path) -> Result<ChangeReceipt, CliError> {
+pub(crate) fn read_receipt(run_root: &Path) -> Result<ChangeReceipt, CliError> {
     let path = run_root.join("receipt.json");
     let backup = run_root.join("receipt.json.bak");
     if !path.exists() && backup.is_file() {
