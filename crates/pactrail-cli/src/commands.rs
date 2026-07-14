@@ -23,7 +23,7 @@ use tempfile::NamedTempFile;
 use thiserror::Error;
 
 use crate::cli::{Cli, Command, OutputFormat, ProviderKind, RunArgs, RunIdArgs};
-use crate::output::write_stdout;
+use crate::output::{escape_json_terminal_controls, write_human_stdout, write_stdout};
 
 pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
     match cli.command {
@@ -262,7 +262,7 @@ fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
             if integrity { "valid" } else { "INVALID" },
             receipt_path.display(),
         );
-        return write_stdout(&text).map_err(CliError::Output);
+        return write_human_stdout(&text).map_err(CliError::Output);
     }
     let store = EventStore::open(state.join("events.sqlite3"))?;
     let snapshot = store.snapshot(run_id)?;
@@ -275,7 +275,7 @@ fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     if args.json {
         write_json(&value)
     } else {
-        write_stdout(&format!(
+        write_human_stdout(&format!(
             "Run: {run_id}\nState: {:?}\nReceipt: not available\n",
             snapshot.state
         ))
@@ -293,7 +293,7 @@ fn apply(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     if args.json {
         write_json(&receipt)
     } else {
-        write_stdout(&format!(
+        write_human_stdout(&format!(
             "Applied run {} to {} ({} files).\n",
             run_id,
             transaction.source_root().display(),
@@ -360,7 +360,7 @@ fn discard(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     if args.json {
         write_json(&discarded)
     } else {
-        write_stdout(&format!("Discarded run {run_id}; receipt preserved.\n"))
+        write_human_stdout(&format!("Discarded run {run_id}; receipt preserved.\n"))
             .map_err(CliError::Output)
     }
 }
@@ -491,7 +491,7 @@ fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
         return if json_output {
             write_json(&Vec::<Value>::new())
         } else {
-            write_stdout("No Pactrail runs found.\n").map_err(CliError::Output)
+            write_human_stdout("No Pactrail runs found.\n").map_err(CliError::Output)
         };
     }
     let mut values = Vec::new();
@@ -520,7 +520,7 @@ fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
     if json_output {
         write_json(&values)
     } else if values.is_empty() {
-        write_stdout("No completed Pactrail runs found.\n").map_err(CliError::Output)
+        write_human_stdout("No completed Pactrail runs found.\n").map_err(CliError::Output)
     } else {
         let text = values
             .iter()
@@ -534,7 +534,7 @@ fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        write_stdout(&format!("{text}\n")).map_err(CliError::Output)
+        write_human_stdout(&format!("{text}\n")).map_err(CliError::Output)
     }
 }
 
@@ -555,7 +555,7 @@ fn tools(json_output: bool) -> Result<(), CliError> {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        write_stdout(&format!("{text}\n")).map_err(CliError::Output)
+        write_human_stdout(&format!("{text}\n")).map_err(CliError::Output)
     }
 }
 
@@ -616,7 +616,7 @@ fn doctor(json_output: bool) -> Result<(), CliError> {
                 }
             ));
         }
-        write_stdout(&format!("{}\n", lines.join("\n"))).map_err(CliError::Output)
+        write_human_stdout(&format!("{}\n", lines.join("\n"))).map_err(CliError::Output)
     }
 }
 
@@ -654,7 +654,7 @@ fn render_run(
             } else {
                 "not applicable".to_owned()
             };
-            write_stdout(&format!(
+            write_human_stdout(&format!(
                 "Run: {}\nOutcome: {:?}\n\n{}\n\nChanged files:\n{}\n\nEvidence: {} passed, {} failed, {} inconclusive\nTokens: {}\nReceipt: {}\nApply: {}\n",
                 receipt.run_id,
                 receipt.outcome,
@@ -778,7 +778,7 @@ fn write_receipt(run_root: &Path, receipt: &ChangeReceipt) -> Result<(), CliErro
 fn write_json<T: serde::Serialize>(value: &T) -> Result<(), CliError> {
     let mut text = serde_json::to_string_pretty(value).map_err(CliError::Json)?;
     text.push('\n');
-    write_stdout(&text).map_err(CliError::Output)
+    write_stdout(&escape_json_terminal_controls(&text)).map_err(CliError::Output)
 }
 
 #[derive(Debug, Error)]
