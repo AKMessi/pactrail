@@ -13,6 +13,10 @@ pub struct FileChange {
     pub path: String,
     pub before_digest: Option<String>,
     pub after_digest: Option<String>,
+    /// Unix permission bits before the change, when available.
+    pub before_unix_mode: Option<u32>,
+    /// Unix permission bits after the change, when available.
+    pub after_unix_mode: Option<u32>,
     pub bytes_added: u64,
     pub bytes_removed: u64,
 }
@@ -73,7 +77,7 @@ pub struct ReceiptInput {
 
 impl ChangeReceipt {
     /// Current receipt schema version.
-    pub const SCHEMA_VERSION: u32 = 1;
+    pub const SCHEMA_VERSION: u32 = 2;
 
     /// Builds and signs a receipt with a content integrity hash.
     ///
@@ -135,6 +139,9 @@ impl ChangeReceipt {
     ///
     /// Returns a serialization error if the receipt cannot be canonicalized.
     pub fn verify_integrity(&self) -> Result<bool, ReceiptError> {
+        if self.schema_version != Self::SCHEMA_VERSION {
+            return Err(ReceiptError::UnsupportedSchema(self.schema_version));
+        }
         self.compute_hash()
             .map(|expected| expected == self.integrity_hash)
     }
@@ -169,6 +176,8 @@ fn summarize(evidence: &[Evidence]) -> VerificationSummary {
 /// Receipt construction or verification failed.
 #[derive(Debug, Error)]
 pub enum ReceiptError {
+    #[error("unsupported change receipt schema version {0}")]
+    UnsupportedSchema(u32),
     #[error("evidence refers to unknown obligation {0}")]
     UnknownObligation(ObligationId),
     #[error("required obligations are missing evidence: {0:?}")]
@@ -220,5 +229,31 @@ mod tests {
         assert_eq!(receipt.verify_integrity().ok(), Some(true));
         receipt.baseline_digest = "tampered".to_owned();
         assert_eq!(receipt.verify_integrity().ok(), Some(false));
+    }
+
+    #[test]
+    fn receipt_rejects_unknown_schema() {
+        let contract = TaskContract::new("fix bug", ".");
+        let evidence = vec![Evidence::deterministic_pass(
+            contract.obligations[0].id,
+            EvidenceKind::Test,
+            "tests passed",
+        )];
+        let mut receipt = ChangeReceipt::build(ReceiptInput {
+            run_id: RunId::new(),
+            contract,
+            outcome: ReceiptOutcome::ReadyToApply,
+            baseline_digest: "baseline".to_owned(),
+            final_event_hash: "event".to_owned(),
+            changes: Vec::new(),
+            evidence,
+            unresolved_risks: Vec::new(),
+        })
+        .unwrap_or_else(|error| unreachable!("valid receipt: {error}"));
+        receipt.schema_version = u32::MAX;
+        assert!(matches!(
+            receipt.verify_integrity(),
+            Err(ReceiptError::UnsupportedSchema(u32::MAX))
+        ));
     }
 }

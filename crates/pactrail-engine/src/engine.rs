@@ -475,16 +475,18 @@ fn transition(
     Ok(())
 }
 
-fn change_map(changes: Vec<pactrail_core::FileChange>) -> BTreeMap<String, Option<String>> {
+fn change_map(
+    changes: Vec<pactrail_core::FileChange>,
+) -> BTreeMap<String, (Option<String>, Option<u32>)> {
     changes
         .into_iter()
-        .map(|change| (change.path, change.after_digest))
+        .map(|change| (change.path, (change.after_digest, change.after_unix_mode)))
         .collect()
 }
 
 fn changed_effects(
-    before: &BTreeMap<String, Option<String>>,
-    after: &BTreeMap<String, Option<String>>,
+    before: &BTreeMap<String, (Option<String>, Option<u32>)>,
+    after: &BTreeMap<String, (Option<String>, Option<u32>)>,
 ) -> Vec<String> {
     before
         .keys()

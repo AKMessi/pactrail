@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-use crate::manifest::{apply_mode, fingerprint};
+use crate::manifest::{apply_mode, fingerprint, unix_mode};
 use crate::{PathError, SafeRelativePath, WorkspaceManifest};
 
 const METADATA_FILE: &str = "transaction.json";
@@ -90,6 +90,20 @@ impl WorkspaceTransaction {
         })?;
         let baseline = WorkspaceManifest::capture(&source_root)?;
         copy_manifest_files(&source_root, &workspace_root, &baseline)?;
+        let copied = WorkspaceManifest::capture(&workspace_root)?;
+        if copied != baseline {
+            return Err(TransactionError::SnapshotCopyMismatch {
+                expected: baseline.digest,
+                actual: copied.digest,
+            });
+        }
+        let source_after_copy = WorkspaceManifest::capture(&source_root)?;
+        if source_after_copy != baseline {
+            return Err(TransactionError::SourceChangedDuringSnapshot {
+                expected: baseline.digest,
+                actual: source_after_copy.digest,
+            });
+        }
         let metadata = TransactionMetadata {
             schema_version: 1,
             source_root,
@@ -242,6 +256,8 @@ impl WorkspaceTransaction {
                 path: path.clone(),
                 before_digest: before.map(|item| item.digest.clone()),
                 after_digest: after.map(|item| item.digest.clone()),
+                before_unix_mode: before.and_then(|item| item.unix_mode),
+                after_unix_mode: after.and_then(|item| item.unix_mode),
                 bytes_added: after.map_or(0, |item| item.bytes),
                 bytes_removed: before.map_or(0, |item| item.bytes),
             });
@@ -260,38 +276,59 @@ impl WorkspaceTransaction {
     /// or an apply/rollback I/O failure.
     pub fn apply(&self) -> Result<ApplyOutcome, TransactionError> {
         let changes = self.changes()?;
+        self.apply_change_set(&changes)
+    }
+
+    /// Lands exactly the supplied, receipt-bound change set.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the candidate has changed since the expected set was
+    /// produced, or under the same conditions as [`Self::apply`].
+    pub fn apply_expected(
+        &self,
+        expected: &[FileChange],
+    ) -> Result<ApplyOutcome, TransactionError> {
+        let current = self.changes()?;
+        if current != expected {
+            return Err(TransactionError::CandidateSetDrift);
+        }
+        self.apply_change_set(expected)
+    }
+
+    fn apply_change_set(&self, changes: &[FileChange]) -> Result<ApplyOutcome, TransactionError> {
         let journal_root = self.control_root.join(APPLY_JOURNAL_DIRECTORY);
         if journal_root.exists() {
-            match self.source_state(&changes)? {
+            match self.source_state(changes)? {
                 SourceState::Applied => {
-                    let resulting = WorkspaceManifest::capture(&self.metadata.source_root)?;
+                    let outcome = self.current_apply_outcome(changes.len())?;
                     fs::remove_dir_all(&journal_root).map_err(|source| TransactionError::Io {
                         path: journal_root,
                         source,
                     })?;
-                    return Ok(ApplyOutcome {
-                        changed_files: changes.len(),
-                        baseline_digest: self.metadata.baseline.digest.clone(),
-                        resulting_digest: resulting.digest,
-                    });
+                    return Ok(outcome);
                 }
                 SourceState::Partial => rollback(
                     &self.metadata.source_root,
                     &journal_root,
                     &self.metadata.baseline,
-                    &changes,
+                    changes,
                 )?,
                 SourceState::Baseline => {}
                 SourceState::Drift {
                     path,
                     expected,
                     actual,
+                    expected_mode,
+                    actual_mode,
                 } => {
-                    return Err(TransactionError::BaselineDrift {
+                    return Err(baseline_drift(
                         path,
                         expected,
                         actual,
-                    });
+                        expected_mode,
+                        actual_mode,
+                    ));
                 }
             }
             fs::remove_dir_all(&journal_root).map_err(|source| TransactionError::Io {
@@ -299,16 +336,9 @@ impl WorkspaceTransaction {
                 source,
             })?;
         }
-        match self.source_state(&changes)? {
+        match self.source_state(changes)? {
             SourceState::Baseline => {}
-            SourceState::Applied => {
-                let resulting = WorkspaceManifest::capture(&self.metadata.source_root)?;
-                return Ok(ApplyOutcome {
-                    changed_files: changes.len(),
-                    baseline_digest: self.metadata.baseline.digest.clone(),
-                    resulting_digest: resulting.digest,
-                });
-            }
+            SourceState::Applied => return self.current_apply_outcome(changes.len()),
             SourceState::Partial => {
                 return Err(TransactionError::Invariant(
                     "source contains a partial apply without a recovery journal".to_owned(),
@@ -318,26 +348,30 @@ impl WorkspaceTransaction {
                 path,
                 expected,
                 actual,
+                expected_mode,
+                actual_mode,
             } => {
-                return Err(TransactionError::BaselineDrift {
+                return Err(baseline_drift(
                     path,
                     expected,
                     actual,
-                });
+                    expected_mode,
+                    actual_mode,
+                ));
             }
         }
         fs::create_dir_all(&journal_root).map_err(|source| TransactionError::Io {
             path: journal_root.clone(),
             source,
         })?;
-        backup_changed_files(&self.metadata.source_root, &journal_root, &changes)?;
+        backup_changed_files(&self.metadata.source_root, &journal_root, changes)?;
 
-        if let Err(apply_error) = self.apply_changes(&changes) {
+        if let Err(apply_error) = self.apply_changes(changes) {
             if let Err(rollback_error) = rollback(
                 &self.metadata.source_root,
                 &journal_root,
                 &self.metadata.baseline,
-                &changes,
+                changes,
             ) {
                 return Err(TransactionError::RollbackFailed {
                     apply: Box::new(apply_error),
@@ -347,13 +381,21 @@ impl WorkspaceTransaction {
             return Err(apply_error);
         }
 
-        let resulting = WorkspaceManifest::capture(&self.metadata.source_root)?;
+        let outcome = self.current_apply_outcome(changes.len())?;
         fs::remove_dir_all(&journal_root).map_err(|source| TransactionError::Io {
             path: journal_root,
             source,
         })?;
+        Ok(outcome)
+    }
+
+    fn current_apply_outcome(
+        &self,
+        changed_files: usize,
+    ) -> Result<ApplyOutcome, TransactionError> {
+        let resulting = WorkspaceManifest::capture(&self.metadata.source_root)?;
         Ok(ApplyOutcome {
-            changed_files: changes.len(),
+            changed_files,
             baseline_digest: self.metadata.baseline.digest.clone(),
             resulting_digest: resulting.digest,
         })
@@ -376,24 +418,27 @@ impl WorkspaceTransaction {
         let mut first_foreign_drift = None;
         for change in changes {
             let source = self.metadata.source_root.join(&change.path);
-            let actual = if source.exists() {
-                Some(fingerprint(&source)?.digest)
-            } else {
-                None
+            let actual = fingerprint_optional(&self.metadata.source_root, &source)?;
+            let baseline = ChangeFingerprint {
+                digest: change.before_digest.clone(),
+                unix_mode: change.before_unix_mode,
             };
-            all_baseline &= actual == change.before_digest;
-            all_applied &= actual == change.after_digest;
-            if actual != change.before_digest && actual != change.after_digest {
+            let applied = ChangeFingerprint {
+                digest: change.after_digest.clone(),
+                unix_mode: change.after_unix_mode,
+            };
+            all_baseline &= actual == baseline;
+            all_applied &= actual == applied;
+            if actual != baseline && actual != applied {
                 all_known = false;
             }
-            if actual != change.before_digest
-                && actual != change.after_digest
-                && first_foreign_drift.is_none()
-            {
+            if actual != baseline && actual != applied && first_foreign_drift.is_none() {
                 first_foreign_drift = Some(SourceState::Drift {
                     path: change.path.clone(),
                     expected: change.before_digest.clone(),
-                    actual: actual.clone(),
+                    actual: actual.digest.clone(),
+                    expected_mode: change.before_unix_mode,
+                    actual_mode: actual.unix_mode,
                 });
             }
         }
@@ -416,23 +461,57 @@ impl WorkspaceTransaction {
         for change in changes {
             let source = self.metadata.source_root.join(&change.path);
             let candidate = self.workspace_root.join(&change.path);
+            ensure_no_symlink_ancestors(&self.metadata.source_root, &source)?;
+            ensure_no_symlink_ancestors(&self.workspace_root, &candidate)?;
+            let source_fingerprint = fingerprint_optional(&self.metadata.source_root, &source)?;
+            let expected_source = ChangeFingerprint {
+                digest: change.before_digest.clone(),
+                unix_mode: change.before_unix_mode,
+            };
+            if source_fingerprint != expected_source {
+                return Err(TransactionError::BaselineDrift {
+                    path: change.path.clone(),
+                    expected: expected_source.digest,
+                    actual: source_fingerprint.digest,
+                    expected_mode: expected_source.unix_mode,
+                    actual_mode: source_fingerprint.unix_mode,
+                });
+            }
             match &change.after_digest {
-                Some(_) => {
+                Some(expected_digest) => {
                     let mut content = Vec::new();
-                    File::open(&candidate)
-                        .and_then(|mut file| file.read_to_end(&mut content))
+                    let mut file =
+                        File::open(&candidate).map_err(|error| TransactionError::Io {
+                            path: candidate.clone(),
+                            source: error,
+                        })?;
+                    file.read_to_end(&mut content)
                         .map_err(|error| TransactionError::Io {
                             path: candidate.clone(),
                             source: error,
                         })?;
+                    let metadata = file.metadata().map_err(|error| TransactionError::Io {
+                        path: candidate.clone(),
+                        source: error,
+                    })?;
+                    let actual_digest = blake3::hash(&content).to_hex().to_string();
+                    let actual_mode = unix_mode(&metadata);
+                    if &actual_digest != expected_digest || actual_mode != change.after_unix_mode {
+                        return Err(TransactionError::CandidateDrift {
+                            path: change.path.clone(),
+                            expected: expected_digest.clone(),
+                            actual: actual_digest,
+                            expected_mode: change.after_unix_mode,
+                            actual_mode,
+                        });
+                    }
                     if let Some(parent) = source.parent() {
                         fs::create_dir_all(parent).map_err(|error| TransactionError::Io {
                             path: parent.to_path_buf(),
                             source: error,
                         })?;
                     }
-                    let mode = fingerprint(&candidate)?.unix_mode;
-                    write_atomic(&source, &content, mode)?;
+                    write_atomic(&source, &content, change.after_unix_mode)?;
                 }
                 None => fs::remove_file(&source).map_err(|error| TransactionError::Io {
                     path: source,
@@ -453,7 +532,53 @@ enum SourceState {
         path: String,
         expected: Option<String>,
         actual: Option<String>,
+        expected_mode: Option<u32>,
+        actual_mode: Option<u32>,
     },
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct ChangeFingerprint {
+    digest: Option<String>,
+    unix_mode: Option<u32>,
+}
+
+fn baseline_drift(
+    path: String,
+    expected: Option<String>,
+    actual: Option<String>,
+    expected_mode: Option<u32>,
+    actual_mode: Option<u32>,
+) -> TransactionError {
+    TransactionError::BaselineDrift {
+        path,
+        expected,
+        actual,
+        expected_mode,
+        actual_mode,
+    }
+}
+
+fn fingerprint_optional(root: &Path, path: &Path) -> Result<ChangeFingerprint, TransactionError> {
+    ensure_no_symlink_ancestors(root, path)?;
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_file() => {
+            let fingerprint = fingerprint(path)?;
+            Ok(ChangeFingerprint {
+                digest: Some(fingerprint.digest),
+                unix_mode: fingerprint.unix_mode,
+            })
+        }
+        Ok(_) => Err(TransactionError::UnsupportedFile(path.to_path_buf())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(ChangeFingerprint {
+            digest: None,
+            unix_mode: None,
+        }),
+        Err(source) => Err(TransactionError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
 }
 
 fn copy_manifest_files(
@@ -656,6 +781,14 @@ pub enum TransactionError {
     NotDirectory(PathBuf),
     #[error("transaction destination is not empty: {0}")]
     DestinationNotEmpty(PathBuf),
+    #[error(
+        "source changed while its transaction snapshot was being created (expected manifest {expected}, actual {actual})"
+    )]
+    SourceChangedDuringSnapshot { expected: String, actual: String },
+    #[error(
+        "transaction copy does not match its captured manifest (expected {expected}, actual {actual})"
+    )]
+    SnapshotCopyMismatch { expected: String, actual: String },
     #[error("at least one write scope is required")]
     EmptyWriteScope,
     #[error("write is outside the task contract scope: {0}")]
@@ -667,13 +800,27 @@ pub enum TransactionError {
     #[error("transaction invariant failed: {0}")]
     Invariant(String),
     #[error(
-        "source file {path} changed after the run started (expected {expected:?}, actual {actual:?})"
+        "source file {path} changed after the run started (expected digest {expected:?} mode {expected_mode:?}, actual digest {actual:?} mode {actual_mode:?})"
     )]
     BaselineDrift {
         path: String,
         expected: Option<String>,
         actual: Option<String>,
+        expected_mode: Option<u32>,
+        actual_mode: Option<u32>,
     },
+    #[error(
+        "candidate file {path} changed after receipt construction (expected digest {expected} mode {expected_mode:?}, actual digest {actual} mode {actual_mode:?})"
+    )]
+    CandidateDrift {
+        path: String,
+        expected: String,
+        actual: String,
+        expected_mode: Option<u32>,
+        actual_mode: Option<u32>,
+    },
+    #[error("transaction candidate no longer matches the receipt-bound change set")]
+    CandidateSetDrift,
     #[error("apply failed and rollback also failed; apply: {apply}; rollback: {rollback}")]
     RollbackFailed {
         apply: Box<TransactionError>,
@@ -760,5 +907,37 @@ mod tests {
         let reopened = WorkspaceTransaction::open(&transaction.control_root)
             .unwrap_or_else(|error| unreachable!("open transaction: {error}"));
         assert_eq!(reopened.baseline_digest(), transaction.baseline_digest());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_mode_changes_are_receipted_and_applied() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (source, _control, transaction) = fixture();
+        let candidate = transaction.workspace_root().join("src/lib.rs");
+        let baseline_mode = fs::metadata(&candidate)
+            .unwrap_or_else(|error| unreachable!("candidate metadata: {error}"))
+            .permissions()
+            .mode();
+        let changed_mode = baseline_mode ^ 0o100;
+        fs::set_permissions(&candidate, fs::Permissions::from_mode(changed_mode))
+            .unwrap_or_else(|error| unreachable!("candidate chmod: {error}"));
+
+        let changes = transaction
+            .changes()
+            .unwrap_or_else(|error| unreachable!("mode changes: {error}"));
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].before_digest, changes[0].after_digest);
+        assert_eq!(changes[0].before_unix_mode, Some(baseline_mode));
+        assert_eq!(changes[0].after_unix_mode, Some(changed_mode));
+        transaction
+            .apply_expected(&changes)
+            .unwrap_or_else(|error| unreachable!("mode apply: {error}"));
+        let source_mode = fs::metadata(source.path().join("src/lib.rs"))
+            .unwrap_or_else(|error| unreachable!("source metadata: {error}"))
+            .permissions()
+            .mode();
+        assert_eq!(source_mode, changed_mode);
     }
 }

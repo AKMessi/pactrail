@@ -283,7 +283,7 @@ fn apply_ready_receipt(
     require_receipt_integrity(&receipt)?;
     let snapshot = store.snapshot(receipt.run_id)?;
     if snapshot.state == RunState::Applied {
-        transaction.apply()?;
+        transaction.apply_expected(&receipt.changes)?;
         if receipt.outcome == ReceiptOutcome::Applied {
             if receipt.final_event_hash != snapshot.last_hash.0 {
                 return Err(CliError::Argument(
@@ -306,7 +306,7 @@ fn apply_ready_receipt(
             "apply",
         ));
     }
-    transaction.apply()?;
+    transaction.apply_expected(&receipt.changes)?;
     let sequence = snapshot.last_sequence.map_or(0, |value| value + 1);
     let event = store.append(
         receipt.run_id,
@@ -793,7 +793,7 @@ mod tests {
     use super::*;
 
     struct ReadyFixture {
-        _source: tempfile::TempDir,
+        source: tempfile::TempDir,
         _control: tempfile::TempDir,
         run_root: PathBuf,
         transaction: WorkspaceTransaction,
@@ -858,7 +858,7 @@ mod tests {
         })
         .unwrap_or_else(|error| unreachable!("receipt: {error}"));
         ReadyFixture {
-            _source: source,
+            source,
             _control: control,
             run_root,
             transaction,
@@ -935,5 +935,26 @@ mod tests {
         assert_eq!(repaired.final_event_hash, terminal.hash.0);
         assert!(!staged.exists());
         assert_eq!(read_receipt(&fixture.run_root).ok(), Some(repaired));
+    }
+
+    #[test]
+    fn apply_rejects_candidate_changes_after_receipt() {
+        let mut fixture = ready_fixture();
+        fixture
+            .transaction
+            .write_file("README.md", b"# Changed after receipt\n")
+            .unwrap_or_else(|error| unreachable!("candidate mutation: {error}"));
+
+        let result = apply_ready_receipt(
+            &fixture.run_root,
+            fixture.receipt,
+            &fixture.transaction,
+            &mut fixture.store,
+        );
+        assert!(matches!(
+            result,
+            Err(CliError::Transaction(TransactionError::CandidateSetDrift))
+        ));
+        assert!(!fixture.source.path().join("README.md").exists());
     }
 }

@@ -53,10 +53,10 @@ regular files into a separate workspace. Model tools receive only that root.
 
 Apply performs these checks:
 
-1. Rescan the transaction and determine touched paths.
-2. Verify every touched source path still has its baseline digest.
+1. Rescan the transaction and require an exact match with the receipt-bound change set.
+2. Verify every touched source path still has its baseline digest and Unix mode.
 3. Back up existing touched files into a run-local journal.
-4. Write and synchronize candidate files.
+4. Revalidate candidate bytes and modes, then write and synchronize them.
 5. Roll back from the journal if any write fails.
 6. Record the `Applied` event and reissue the receipt.
 
@@ -82,4 +82,3 @@ Contracts, event envelopes, and receipts carry independent schema versions.
 Unknown persisted versions fail closed. Public behavior follows semantic
 versioning; breaking Rust API changes are permitted only during the `0.x`
 developer-preview line.
-

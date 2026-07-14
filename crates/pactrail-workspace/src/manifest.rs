@@ -140,13 +140,13 @@ fn manifest_digest(files: &BTreeMap<String, FileFingerprint>) -> String {
 // The manifest format is shared with non-Unix hosts, where mode is absent.
 // Keeping one return type prevents platform-specific serialization behavior.
 #[allow(clippy::unnecessary_wraps)]
-fn unix_mode(metadata: &fs::Metadata) -> Option<u32> {
+pub(crate) fn unix_mode(metadata: &fs::Metadata) -> Option<u32> {
     use std::os::unix::fs::PermissionsExt;
     Some(metadata.permissions().mode())
 }
 
 #[cfg(not(unix))]
-fn unix_mode(_metadata: &fs::Metadata) -> Option<u32> {
+pub(crate) fn unix_mode(_metadata: &fs::Metadata) -> Option<u32> {
     None
 }
 

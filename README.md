@@ -17,7 +17,8 @@ evidence-backed software transaction.
 - Typed, JSON Schema-described read, search, edit, delete, and process tools.
 - Strict workspace-relative path and write-scope enforcement.
 - Copy-on-run transactions for Git and plain directories.
-- Baseline-drift detection, idempotent apply, crash journal, rollback, and discard.
+- Receipt-bound landing, baseline content/mode drift detection, idempotent apply,
+  crash journal, rollback, and discard.
 - Append-only SQLite events with hash-chain integrity.
 - BLAKE3-addressed compressed artifact storage.
 - Repository topology, language, symbol, import, and hierarchical `AGENTS.md` indexing.
