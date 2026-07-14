@@ -1,0 +1,11 @@
+/target/
+/.pactrail/
+*.pactrail-run
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+

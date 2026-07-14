@@ -1,0 +1,75 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/pactrail-cli",
+    "crates/pactrail-core",
+    "crates/pactrail-engine",
+    "crates/pactrail-models",
+    "crates/pactrail-store",
+    "crates/pactrail-tools",
+    "crates/pactrail-workspace",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+authors = ["Pactrail Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/AKMessi/pactrail"
+homepage = "https://github.com/AKMessi/pactrail"
+keywords = ["agent", "coding-agent", "llm", "developer-tools", "ai"]
+categories = ["command-line-utilities", "development-tools"]
+
+[workspace.dependencies]
+async-trait = "0.1"
+blake3 = "1"
+bytes = "1"
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+directories = "6"
+futures-core = "0.3"
+futures-util = "0.3"
+globset = "0.4"
+ignore = "0.4"
+miette = { version = "7", features = ["fancy"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+rusqlite = { version = "0.37", features = ["bundled", "uuid"] }
+schemars = { version = "1", features = ["uuid1"] }
+secrecy = { version = "0.10", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+thiserror = "2"
+time = { version = "0.3", features = ["formatting", "macros", "serde"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-stream = "0.1"
+toml = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+uuid = { version = "1", features = ["serde", "v7"] }
+walkdir = "2"
+zstd = "0.13"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+rust_2018_idioms = { level = "deny", priority = -1 }
+unused_lifetimes = "deny"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+large_futures = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = 3
+panic = "abort"
+strip = "symbols"

@@ -1,0 +1,20 @@
+[package]
+name = "pactrail"
+description = "A verification-native coding agent harness"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[[bin]]
+name = "pactrail"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
