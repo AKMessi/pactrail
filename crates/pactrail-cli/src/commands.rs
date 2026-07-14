@@ -66,14 +66,7 @@ async fn run(
         contract.permissions.deny.insert(Capability::SecretUse);
         contract.permissions.deny.insert(Capability::ExternalWrite);
     }
-    if args.allow_process {
-        contract.permissions.deny.remove(&Capability::ProcessSpawn);
-        contract.permissions.allow.insert(Capability::ProcessSpawn);
-        // Native processes are not a network sandbox. Reflect their effective
-        // capability in the durable contract instead of claiming a false denial.
-        contract.permissions.deny.remove(&Capability::Network);
-        contract.permissions.allow.insert(Capability::Network);
-    }
+    configure_native_process_permissions(&mut contract, args.allow_process)?;
     contract.validate().map_err(CliError::Contract)?;
     for required in [Capability::FileRead, Capability::FileWrite] {
         if !contract.permissions.allow.contains(&required) {
@@ -209,6 +202,42 @@ fn api_key_from_env(name: &str) -> Result<SecretString, CliError> {
             "required API key environment variable {name:?} is not set"
         ))
     })
+}
+
+fn configure_native_process_permissions(
+    contract: &mut TaskContract,
+    cli_opt_in: bool,
+) -> Result<(), CliError> {
+    let effective = [
+        Capability::ProcessSpawn,
+        Capability::Network,
+        Capability::SecretUse,
+        Capability::ExternalWrite,
+    ];
+    if cli_opt_in {
+        for capability in &effective {
+            contract.permissions.deny.remove(capability);
+            contract.permissions.allow.insert(capability.clone());
+        }
+    }
+    if contract
+        .permissions
+        .allow
+        .contains(&Capability::ProcessSpawn)
+    {
+        let missing = effective
+            .iter()
+            .filter(|capability| !contract.permissions.allow.contains(*capability))
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            return Err(CliError::Argument(format!(
+                "native process execution is unsandboxed; its contract must also allow: {}",
+                missing.join(", ")
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
@@ -956,5 +985,34 @@ mod tests {
             Err(CliError::Transaction(TransactionError::CandidateSetDrift))
         ));
         assert!(!fixture.source.path().join("README.md").exists());
+    }
+
+    #[test]
+    fn native_process_opt_in_records_all_effective_capabilities() {
+        let mut contract = TaskContract::new("run checks", ".");
+        contract.permissions.deny.extend([
+            Capability::Network,
+            Capability::SecretUse,
+            Capability::ExternalWrite,
+        ]);
+        configure_native_process_permissions(&mut contract, true)
+            .unwrap_or_else(|error| unreachable!("native opt-in: {error}"));
+        for capability in [
+            Capability::ProcessSpawn,
+            Capability::Network,
+            Capability::SecretUse,
+            Capability::ExternalWrite,
+        ] {
+            assert!(contract.permissions.allow.contains(&capability));
+            assert!(!contract.permissions.deny.contains(&capability));
+        }
+    }
+
+    #[test]
+    fn task_file_cannot_understate_native_process_access() {
+        let mut contract = TaskContract::new("run checks", ".");
+        contract.permissions.allow.insert(Capability::ProcessSpawn);
+        let result = configure_native_process_permissions(&mut contract, false);
+        assert!(matches!(result, Err(CliError::Argument(_))));
     }
 }

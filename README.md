@@ -69,10 +69,11 @@ pactrail task-template "Refactor the cache without changing behavior" > pactrail
 pactrail run --task pactrail.task.toml --model qwen3-coder --output json
 ```
 
-Process execution is disabled unless the contract allows it or `--allow-process`
-is passed. Native processes can access the host filesystem and network; the
-workspace transaction protects source landing, but it is not a host sandbox.
-Use only trusted repositories until the OCI runner is available.
+Process execution is disabled unless the contract records its full effective
+authority or `--allow-process` is passed. Native processes can access the host
+filesystem, network, secrets, and external services; the workspace transaction
+protects receipt landing, but it is not a host sandbox. Use only trusted
+repositories until the OCI runner is available.
 
 ## Core workflow
 

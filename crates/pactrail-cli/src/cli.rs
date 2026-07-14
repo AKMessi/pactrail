@@ -85,7 +85,7 @@ pub struct RunArgs {
     #[arg(long = "write-path", default_value = ".")]
     pub write_paths: Vec<String>,
 
-    /// Permit unsandboxed direct processes, which may access the host and network.
+    /// Trust unsandboxed processes with host, network, secret, and external access.
     #[arg(long)]
     pub allow_process: bool,
 

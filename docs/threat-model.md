@@ -33,9 +33,10 @@ but they cannot override capability policy or path confinement.
 
 `--allow-process` is an explicit trust decision. A native child process is run in
 the transaction directory with a scrubbed environment, but it is not confined by
-an operating-system or container sandbox. It may attempt to read other host files
-or use the network. Pactrail reflects this effective network capability in the
-task contract and includes the limitation in the receipt.
+an operating-system or container sandbox. It may attempt to read other host files,
+discover secrets, use the network, or mutate external state. Pactrail therefore
+records process, network, secret-use, and external-write authority in the task
+contract; task files that understate this authority are rejected.
 
 Do not enable native processes for an untrusted repository. Use `pactrail doctor`
 to inspect available container runtimes and prefer the forthcoming OCI backend
@@ -52,4 +53,3 @@ for hostile inputs.
 
 Report suspected vulnerabilities through GitHub private vulnerability reporting,
 as described in `SECURITY.md`.
-
