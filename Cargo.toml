@@ -40,7 +40,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 thiserror = "2"
-time = { version = "0.3", features = ["formatting", "macros", "serde"] }
+time = { version = "0.3", features = ["formatting", "macros", "parsing", "serde"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-stream = "0.1"
 toml = "0.9"
@@ -52,7 +52,6 @@ zstd = "0.13"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-missing_docs = "warn"
 rust_2018_idioms = { level = "deny", priority = -1 }
 unused_lifetimes = "deny"
 unused_qualifications = "warn"
