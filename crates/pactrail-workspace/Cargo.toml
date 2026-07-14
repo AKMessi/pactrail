@@ -12,3 +12,12 @@ publish = false
 [lints]
 workspace = true
 
+[dependencies]
+blake3.workspace = true
+ignore.workspace = true
+pactrail-core = { path = "../pactrail-core" }
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+
