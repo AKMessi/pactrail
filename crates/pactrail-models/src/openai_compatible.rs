@@ -73,13 +73,24 @@ impl OpenAiCompatibleDriver {
                 "provider credentials must not be embedded in the endpoint URL".to_owned(),
             ));
         }
+        if endpoint.query().is_some() || endpoint.fragment().is_some() {
+            return Err(ModelError::InvalidRequest(
+                "provider endpoint must not contain a query or fragment".to_owned(),
+            ));
+        }
         if config.name.trim().is_empty() || config.model.trim().is_empty() {
             return Err(ModelError::InvalidRequest(
                 "provider name and model cannot be empty".to_owned(),
             ));
         }
+        if config.timeout.is_zero() {
+            return Err(ModelError::InvalidRequest(
+                "provider timeout must be greater than zero".to_owned(),
+            ));
+        }
         let client = reqwest::Client::builder()
             .timeout(config.timeout)
+            .redirect(reqwest::redirect::Policy::none())
             .user_agent(concat!("pactrail/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(ModelError::Transport)?;
@@ -362,6 +373,17 @@ fn provider_message(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
 
+    fn config(base_url: &str) -> OpenAiCompatibleConfig {
+        OpenAiCompatibleConfig {
+            name: "test".to_owned(),
+            base_url: base_url.to_owned(),
+            model: "model".to_owned(),
+            api_key: None,
+            timeout: Duration::from_secs(1),
+            capabilities: ModelCapabilities::default(),
+        }
+    }
+
     #[test]
     fn parses_text_tools_usage_and_extensions() {
         let value = json!({
@@ -389,33 +411,75 @@ mod tests {
 
     #[test]
     fn remote_plain_http_is_rejected() {
-        let config = OpenAiCompatibleConfig {
-            name: "unsafe".to_owned(),
-            base_url: "http://example.com/v1".to_owned(),
-            model: "model".to_owned(),
-            api_key: None,
-            timeout: Duration::from_secs(1),
-            capabilities: ModelCapabilities::default(),
-        };
         assert!(matches!(
-            OpenAiCompatibleDriver::new(config),
+            OpenAiCompatibleDriver::new(config("http://example.com/v1")),
             Err(ModelError::InvalidRequest(_))
         ));
     }
 
     #[test]
     fn localhost_prefix_confusion_is_rejected() {
-        let config = OpenAiCompatibleConfig {
-            name: "unsafe".to_owned(),
-            base_url: "http://localhost.evil.example/v1".to_owned(),
-            model: "model".to_owned(),
-            api_key: None,
-            timeout: Duration::from_secs(1),
-            capabilities: ModelCapabilities::default(),
-        };
+        assert!(matches!(
+            OpenAiCompatibleDriver::new(config("http://localhost.evil.example/v1")),
+            Err(ModelError::InvalidRequest(_))
+        ));
+    }
+
+    #[test]
+    fn ambiguous_endpoint_components_are_rejected() {
+        for endpoint in [
+            "https://api.example.com/v1?tenant=other",
+            "https://api.example.com/v1#fragment",
+        ] {
+            assert!(matches!(
+                OpenAiCompatibleDriver::new(config(endpoint)),
+                Err(ModelError::InvalidRequest(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn zero_timeout_is_rejected() {
+        let mut config = config("https://api.example.com/v1");
+        config.timeout = Duration::ZERO;
         assert!(matches!(
             OpenAiCompatibleDriver::new(config),
             Err(ModelError::InvalidRequest(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn redirects_are_not_followed() {
+        use std::{
+            io::{Read, Write},
+            net::TcpListener,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .unwrap_or_else(|error| unreachable!("test listener must bind: {error}"));
+        let address = listener
+            .local_addr()
+            .unwrap_or_else(|error| unreachable!("test listener needs an address: {error}"));
+        let server = std::thread::spawn(move || -> std::io::Result<()> {
+            let (mut stream, _) = listener.accept()?;
+            stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+            let mut request = [0_u8; 4_096];
+            let _ = stream.read(&mut request)?;
+            let response = format!(
+                "HTTP/1.1 302 Found\r\nLocation: http://{address}/redirected\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            );
+            stream.write_all(response.as_bytes())?;
+            Ok(())
+        });
+
+        let driver = OpenAiCompatibleDriver::new(config(&format!("http://{address}/v1")))
+            .unwrap_or_else(|error| unreachable!("loopback endpoint must be valid: {error}"));
+        let result = driver.send(&json!({})).await;
+
+        assert!(matches!(
+            result,
+            Err(ModelError::Provider { status: 302, .. })
+        ));
+        assert!(matches!(server.join(), Ok(Ok(()))));
     }
 }
