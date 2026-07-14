@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
 
 /// Verification-native coding agent harness.
 #[derive(Debug, Parser)]
@@ -15,7 +16,7 @@ pub struct Cli {
     pub state_dir: Option<PathBuf>,
 
     #[command(subcommand)]
-    pub command: Command,
+    pub command: Option<Command>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -110,7 +111,8 @@ pub struct RunArgs {
     pub output: OutputFormat,
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
 pub enum ProviderKind {
     Ollama,
     OpenAi,

@@ -26,7 +26,9 @@ use crate::cli::{Cli, Command, OutputFormat, ProviderKind, RunArgs, RunIdArgs};
 use crate::output::{escape_json_terminal_controls, write_human_stdout, write_stdout};
 
 pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
-    match cli.command {
+    match cli.command.ok_or_else(|| {
+        CliError::Argument("a command is required outside interactive mode".to_owned())
+    })? {
         Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), args).await,
         Command::Inspect(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;

@@ -40,7 +40,7 @@ pub fn escape_json_terminal_controls(value: &str) -> String {
     escaped
 }
 
-fn sanitize_terminal_text(value: &str) -> String {
+pub(crate) fn sanitize_terminal_text(value: &str) -> String {
     value
         .chars()
         .map(|character| {
