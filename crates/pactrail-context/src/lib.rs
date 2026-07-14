@@ -230,8 +230,12 @@ impl ContextPack {
     ///
     /// Returns an error if the contract cannot be serialized.
     pub fn compile(contract: &TaskContract, index: &RepositoryIndex) -> Result<Self, ContextError> {
+        // The transaction root is an implementation detail, not a valid model tool path.
+        // Keeping the model's filesystem namespace virtual also prevents host path leakage.
+        let mut model_contract = contract.clone();
+        ".".clone_into(&mut model_contract.workspace_root);
         let contract_json =
-            serde_json::to_string_pretty(contract).map_err(ContextError::Serialization)?;
+            serde_json::to_string_pretty(&model_contract).map_err(ContextError::Serialization)?;
         let retrieved = index.retrieve(&contract.goal, 40);
         let cited_files = retrieved
             .iter()
@@ -269,7 +273,7 @@ impl ContextPack {
             .collect::<Vec<_>>()
             .join("\n");
         let rendered = format!(
-            "# Task contract\n{contract_json}\n\n# Repository\nDigest: {}\nFiles: {}\nLanguages: {language_summary}\n\n# Applicable repository instructions\n{}\n# Lexically relevant topology\n{}",
+            "# Task contract\n{contract_json}\n\nThe model-visible workspace root is `.`. Every tool path must be relative to it; host paths are unavailable.\n\n# Repository\nDigest: {}\nFiles: {}\nLanguages: {language_summary}\n\n# Applicable repository instructions\n{}\n# Lexically relevant topology\n{}",
             index.digest,
             index.files.len(),
             if instructions.is_empty() {
@@ -514,5 +518,21 @@ mod tests {
         assert_eq!(file.lines, 0);
         assert!(file.symbols.is_empty());
         assert_eq!(file.digest, blake3::hash(&bytes).to_hex().to_string());
+    }
+
+    #[test]
+    fn model_context_virtualizes_the_workspace_root() {
+        let host_root = r"C:\Users\private\project";
+        let contract = TaskContract::new("Create a file", host_root);
+        let context = ContextPack::compile(&contract, &RepositoryIndex::default())
+            .unwrap_or_else(|error| unreachable!("context: {error}"));
+
+        assert!(!context.rendered.contains(host_root));
+        assert!(context.rendered.contains(r#""workspace_root": ".""#));
+        assert!(
+            context
+                .rendered
+                .contains("Every tool path must be relative")
+        );
     }
 }

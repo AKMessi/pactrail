@@ -46,8 +46,11 @@ fn success(content: Value, summary: impl Into<String>, effects: Vec<String>) -> 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ReadFileInput {
+    /// Workspace-relative file path, such as `src/lib.rs`. Absolute paths are forbidden.
     path: String,
+    /// Optional one-based first line to return.
     start_line: Option<usize>,
+    /// Optional inclusive one-based last line to return.
     end_line: Option<usize>,
 }
 
@@ -114,7 +117,9 @@ impl Tool for ReadFileTool {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ListFilesInput {
+    /// Workspace-relative directory. Omit or use `.` for the workspace root; never pass a file or absolute path.
     path: Option<String>,
+    /// Maximum number of file paths to return.
     #[serde(default = "default_list_limit")]
     max_entries: usize,
 }
@@ -187,10 +192,14 @@ impl Tool for ListFilesTool {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct SearchInput {
+    /// Literal text to find.
     query: String,
+    /// Workspace-relative directory to search. Omit or use `.` for the root; never pass a file or absolute path.
     path: Option<String>,
+    /// Maximum number of matching lines to return.
     #[serde(default = "default_search_limit")]
     max_results: usize,
+    /// Whether matching preserves letter case.
     #[serde(default)]
     case_sensitive: bool,
 }
@@ -301,7 +310,9 @@ impl Tool for SearchTool {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct WriteFileInput {
+    /// Workspace-relative file path, such as `SMOKE_TEST.md`. Absolute paths are forbidden.
     path: String,
+    /// Complete UTF-8 content that the file should contain.
     content: String,
 }
 
@@ -348,9 +359,13 @@ impl Tool for WriteFileTool {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ReplaceTextInput {
+    /// Workspace-relative file path. Absolute paths are forbidden.
     path: String,
+    /// Exact text expected in the current file.
     old: String,
+    /// Replacement text.
     new: String,
+    /// Required number of occurrences of `old`; defaults to one.
     #[serde(default = "default_replacement_count")]
     expected_replacements: usize,
 }
@@ -430,6 +445,7 @@ impl Tool for ReplaceTextTool {
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct RemoveFileInput {
+    /// Workspace-relative file path. Absolute paths are forbidden.
     path: String,
 }
 
@@ -469,13 +485,9 @@ fn resolve_directory(context: &ToolContext<'_>, relative: &str) -> Result<PathBu
         context.workspace.resolve_read(relative)?
     };
     if !path.is_dir() {
-        return Err(ToolError::Io {
-            path,
-            source: std::io::Error::new(
-                std::io::ErrorKind::NotADirectory,
-                "search root is not a directory",
-            ),
-        });
+        return Err(ToolError::InvalidRange(format!(
+            "path {relative:?} must name a workspace-relative directory; omit it or use `.` for the workspace root"
+        )));
     }
     Ok(path)
 }
@@ -605,5 +617,16 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("list: {error}"));
         assert_eq!(output.content["files"], json!(["a.txt", "b.txt"]));
         assert!(output.truncated);
+    }
+
+    #[test]
+    fn list_schema_explains_its_virtual_directory_path() {
+        let schema = ListFilesTool.descriptor().input_schema;
+        let description = schema["properties"]["path"]["description"]
+            .as_str()
+            .unwrap_or_default();
+
+        assert!(description.contains("Workspace-relative directory"));
+        assert!(description.contains("never pass a file or absolute path"));
     }
 }
