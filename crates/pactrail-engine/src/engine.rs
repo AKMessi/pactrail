@@ -402,7 +402,7 @@ impl<'a> RunEngine<'a> {
             })
             .collect();
         let mut risks = Vec::new();
-        risks.push("Native verification processes are capability-gated but are not a network sandbox; use an OCI runner for hostile repositories".to_owned());
+        risks.push("Native verification processes are capability-gated but are not a host-filesystem or network sandbox; use an OCI runner for hostile repositories".to_owned());
         if !all_passed {
             risks.push("At least one deterministic repository check failed".to_owned());
         }

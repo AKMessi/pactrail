@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            archive: pactrail-linux-x86_64.tar.gz
+            kind: unix
+          - os: macos-14
+            archive: pactrail-macos-aarch64.tar.gz
+            kind: unix
+          - os: windows-latest
+            archive: pactrail-windows-x86_64.zip
+            kind: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --all-features --locked
+      - run: cargo build --release --locked -p pactrail
+      - name: Package Unix binary
+        if: matrix.kind == 'unix'
+        shell: bash
+        run: |
+          mkdir package
+          cp target/release/pactrail README.md LICENSE-MIT LICENSE-APACHE package/
+          tar -C package -czf "${{ matrix.archive }}" .
+      - name: Package Windows binary
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory package
+          Copy-Item target/release/pactrail.exe, README.md, LICENSE-MIT, LICENSE-APACHE package/
+          Compress-Archive -Path package/* -DestinationPath "${{ matrix.archive }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Generate checksums
+        run: sha256sum artifacts/* > artifacts/SHA256SUMS
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/* --verify-tag --generate-notes

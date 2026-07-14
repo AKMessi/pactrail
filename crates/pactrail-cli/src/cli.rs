@@ -42,6 +42,11 @@ pub enum Command {
     },
     /// Print the current task-contract JSON Schema.
     Schema,
+    /// Generate a validated task-contract TOML template.
+    TaskTemplate {
+        /// Natural-language software task.
+        goal: String,
+    },
     /// Report local execution dependencies and sandbox limitations.
     Doctor {
         /// Emit machine-readable JSON.
@@ -80,7 +85,7 @@ pub struct RunArgs {
     #[arg(long = "write-path", default_value = ".")]
     pub write_paths: Vec<String>,
 
-    /// Permit direct process execution for builds and tests.
+    /// Permit unsandboxed direct processes, which may access the host and network.
     #[arg(long)]
     pub allow_process: bool,
 

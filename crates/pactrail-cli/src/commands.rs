@@ -46,6 +46,7 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
         }
         Command::Tools { json } => tools(json),
         Command::Schema => schema(),
+        Command::TaskTemplate { goal } => task_template(&cli.workspace, goal),
         Command::Doctor { json } => doctor(json),
     }
 }
@@ -68,6 +69,10 @@ async fn run(
     if args.allow_process {
         contract.permissions.deny.remove(&Capability::ProcessSpawn);
         contract.permissions.allow.insert(Capability::ProcessSpawn);
+        // Native processes are not a network sandbox. Reflect their effective
+        // capability in the durable contract instead of claiming a false denial.
+        contract.permissions.deny.remove(&Capability::Network);
+        contract.permissions.allow.insert(Capability::Network);
     }
     contract.validate().map_err(CliError::Contract)?;
     for required in [Capability::FileRead, Capability::FileWrite] {
@@ -459,6 +464,22 @@ fn schema() -> Result<(), CliError> {
     write_json(&schema_for!(TaskContract))
 }
 
+fn task_template(workspace: &Path, goal: String) -> Result<(), CliError> {
+    let workspace = fs::canonicalize(workspace).map_err(|source| CliError::Io {
+        path: workspace.to_path_buf(),
+        source,
+    })?;
+    let mut contract = TaskContract::new(goal, workspace.display().to_string());
+    contract.permissions.allow.insert(Capability::FileRead);
+    contract.permissions.allow.insert(Capability::FileWrite);
+    contract.permissions.deny.insert(Capability::Network);
+    contract.permissions.deny.insert(Capability::SecretUse);
+    contract.permissions.deny.insert(Capability::ExternalWrite);
+    let mut text = toml::to_string_pretty(&contract).map_err(CliError::TaskTomlSerialize)?;
+    text.push('\n');
+    write_stdout(&text).map_err(CliError::Output)
+}
+
 fn doctor(json_output: bool) -> Result<(), CliError> {
     let commands = ["git", "cargo", "rustc", "docker", "podman", "ollama"];
     let checks = commands
@@ -472,7 +493,7 @@ fn doctor(json_output: bool) -> Result<(), CliError> {
         })
         .collect::<Vec<_>>();
     let report = json!({
-        "native_process_isolation": "workspace transaction only; not a network sandbox",
+        "native_process_isolation": "workspace transaction only; not a host-filesystem or network sandbox",
         "recommended_hostile_repo_backend": "OCI via Docker or Podman",
         "commands": checks,
     });
@@ -480,7 +501,7 @@ fn doctor(json_output: bool) -> Result<(), CliError> {
         write_json(&report)
     } else {
         let mut lines = vec![
-            "Native execution protects the working tree but is not a host/network sandbox."
+            "Native execution protects the working tree but is not a host-filesystem/network sandbox."
                 .to_owned(),
             "Use Docker or Podman for hostile repositories when OCI support is configured."
                 .to_owned(),
@@ -675,6 +696,8 @@ pub enum CliError {
     Output(std::io::Error),
     #[error("task contract TOML is invalid: {0}")]
     TaskToml(toml::de::Error),
+    #[error("task contract TOML serialization failed: {0}")]
+    TaskTomlSerialize(toml::ser::Error),
     #[error("task contract is invalid: {0}")]
     Contract(pactrail_core::ContractError),
     #[error("JSON is invalid: {0}")]
