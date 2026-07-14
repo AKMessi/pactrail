@@ -10,6 +10,9 @@ use crate::cli::ProviderKind;
 
 const SETTINGS_SCHEMA: u16 = 1;
 const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
+const MAX_MODEL_BYTES: usize = 512;
+const MAX_BASE_URL_BYTES: usize = 2_048;
+const MAX_API_KEY_ENV_BYTES: usize = 256;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -49,23 +52,19 @@ impl InteractiveSettings {
                 self.schema
             )));
         }
-        if self
-            .model
-            .as_deref()
-            .is_some_and(|model| model.trim().is_empty() || contains_control(model))
-        {
-            return Err(SettingsError::Invalid(
-                "model must be non-empty and contain no control characters".to_owned(),
-            ));
+        if self.model.as_deref().is_some_and(|model| {
+            model.trim().is_empty() || model.len() > MAX_MODEL_BYTES || contains_control(model)
+        }) {
+            return Err(SettingsError::Invalid(format!(
+                "model must be non-empty, at most {MAX_MODEL_BYTES} bytes, and contain no control characters"
+            )));
         }
-        if self
-            .base_url
-            .as_deref()
-            .is_some_and(|url| url.trim().is_empty() || contains_control(url))
-        {
-            return Err(SettingsError::Invalid(
-                "base URL must be non-empty and contain no control characters".to_owned(),
-            ));
+        if self.base_url.as_deref().is_some_and(|url| {
+            url.trim().is_empty() || url.len() > MAX_BASE_URL_BYTES || contains_control(url)
+        }) {
+            return Err(SettingsError::Invalid(format!(
+                "base URL must be non-empty, at most {MAX_BASE_URL_BYTES} bytes, and contain no control characters"
+            )));
         }
         if self.context_tokens < 1_024 || self.context_tokens > 4_194_304 {
             return Err(SettingsError::Invalid(
@@ -88,15 +87,15 @@ impl InteractiveSettings {
             ));
         }
         if self.api_key_env.is_empty()
+            || self.api_key_env.len() > MAX_API_KEY_ENV_BYTES
             || !self
                 .api_key_env
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
         {
-            return Err(SettingsError::Invalid(
-                "API key environment variable must contain only ASCII letters, numbers, and underscores"
-                    .to_owned(),
-            ));
+            return Err(SettingsError::Invalid(format!(
+                "API key environment variable must be at most {MAX_API_KEY_ENV_BYTES} bytes and contain only ASCII letters, numbers, and underscores"
+            )));
         }
         Ok(())
     }
@@ -105,7 +104,11 @@ impl InteractiveSettings {
     pub fn effective_model(&self) -> Option<String> {
         std::env::var("PACTRAIL_MODEL")
             .ok()
-            .filter(|value| !value.trim().is_empty())
+            .filter(|value| {
+                !value.trim().is_empty()
+                    && value.len() <= MAX_MODEL_BYTES
+                    && !contains_control(value)
+            })
             .or_else(|| self.model.clone())
     }
 
@@ -113,7 +116,11 @@ impl InteractiveSettings {
     pub fn effective_base_url(&self) -> Option<String> {
         std::env::var("PACTRAIL_BASE_URL")
             .ok()
-            .filter(|value| !value.trim().is_empty())
+            .filter(|value| {
+                !value.trim().is_empty()
+                    && value.len() <= MAX_BASE_URL_BYTES
+                    && !contains_control(value)
+            })
             .or_else(|| self.base_url.clone())
     }
 }

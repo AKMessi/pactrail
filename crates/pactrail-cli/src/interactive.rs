@@ -233,7 +233,7 @@ impl Session {
                 self.emit(&format!(
                     "{}\n",
                     self.theme
-                        .muted("The durable event trail is available with /runs or pactrail list.")
+                        .muted("Any initialized run state remains under .pactrail for diagnosis.")
                 ))?;
             }
         }
@@ -402,12 +402,18 @@ impl Session {
                 "usage: /model <name|number>; use /models to discover choices".to_owned(),
             ));
         }
-        let selected = argument
-            .parse::<usize>()
-            .ok()
-            .and_then(|index| index.checked_sub(1))
-            .and_then(|index| self.known_models.get(index).cloned())
-            .unwrap_or_else(|| argument.to_owned());
+        let selected = match argument.parse::<usize>() {
+            Ok(index) => index
+                .checked_sub(1)
+                .and_then(|index| self.known_models.get(index))
+                .cloned()
+                .ok_or_else(|| {
+                    CliError::Argument(format!(
+                        "model selection {argument} is unavailable; use /models to refresh choices"
+                    ))
+                })?,
+            Err(_) => argument.to_owned(),
+        };
         let mut settings = self.settings.clone();
         settings.model = Some(selected.clone());
         self.persist(settings)?;
@@ -462,7 +468,17 @@ impl Session {
         }
         let mut settings = self.settings.clone();
         settings.provider = provider;
-        settings.base_url = base_url;
+        settings.base_url = base_url.or_else(|| {
+            (provider == ProviderKind::OpenAiCompatible)
+                .then(|| self.settings.base_url.clone())
+                .flatten()
+        });
+        if provider == ProviderKind::OpenAiCompatible && settings.base_url.is_none() {
+            return Err(CliError::Argument(
+                "open-ai-compatible requires a base URL; use /provider open-ai-compatible <base-url> or /connect <base-url> <model>"
+                    .to_owned(),
+            ));
+        }
         self.persist(settings)?;
         self.known_models.clear();
         self.emit(&format!(
@@ -572,7 +588,7 @@ impl Session {
                 self.theme.muted("No completed runs in this workspace.")
             ));
         }
-        let mut lines = vec![self.theme.heading("Recent runs")];
+        let mut lines = vec![self.theme.heading("Recent completed runs")];
         for receipt in receipts.iter().rev().take(12) {
             lines.push(format!(
                 "  {}  {:<15}  {:>2} files  {}",
@@ -603,13 +619,6 @@ impl Session {
     fn render_diff(&self, run_id: RunId) -> Result<(), CliError> {
         let run_root = commands::run_root(&self.state, run_id);
         let receipt = commands::read_receipt(&run_root)?;
-        if receipt.outcome == ReceiptOutcome::Discarded {
-            return self.emit(&format!(
-                "{}\n",
-                self.theme
-                    .warning("The candidate workspace was removed when this run was discarded.")
-            ));
-        }
         let diff = render_receipt_diff(&run_root, &receipt)
             .map_err(|error| CliError::Argument(format!("diff failed: {error}")))?;
         let mut output = format!("\n{}\n", self.theme.heading("Diff"));
@@ -668,10 +677,16 @@ impl Session {
             format_count(completed.tokens),
         ))?;
         if completed.receipt.outcome == ReceiptOutcome::ReadyToApply {
-            self.emit(&format!(
-                "{}\n\n",
-                self.theme.muted("Review with /diff, then /apply or /discard. The source workspace is still untouched.")
-            ))?;
+            let message = if completed.receipt.changes.is_empty() {
+                self.theme.warning(
+                    "No file changes were produced; the model may not support tool calling. Nothing needs applying.",
+                )
+            } else {
+                self.theme.muted(
+                    "Review with /diff, then /apply or /discard. The source workspace is still untouched.",
+                )
+            };
+            self.emit(&format!("{message}\n\n"))?;
         }
         Ok(())
     }
@@ -966,7 +981,8 @@ fn split_command(line: &str) -> (&str, &str) {
 }
 
 fn command_line(theme: &Theme, command: &str, description: &str) -> String {
-    format!("  {:<31} {}", theme.code(command), theme.muted(description))
+    let command = format!("{command:<29}");
+    format!("  {} {}", theme.code(&command), theme.muted(description))
 }
 
 fn parse_count(value: &str, name: &str) -> Result<u64, CliError> {

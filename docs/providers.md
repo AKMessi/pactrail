@@ -20,6 +20,29 @@ Endpoint URLs containing credentials are rejected. Non-loopback HTTP is rejected
 Responses are capped at 16 MiB, malformed tool arguments fail explicitly, and
 rate-limit/server failures use bounded exponential retries.
 
+## Interactive configuration
+
+Running `pactrail` without a subcommand opens the interactive session. The
+default Ollama endpoint is `http://127.0.0.1:11434/v1`; `/models` queries the
+active endpoint and `/model <name|number>` persists the selection.
+
+Configure any OpenAI-compatible server without restarting:
+
+```text
+/connect http://127.0.0.1:8080/v1 model-id
+```
+
+For hosted endpoints, keep credentials out of the URL and shell history:
+
+```text
+/provider open-ai-compatible https://models.example.com/v1
+/key-env MODELS_API_KEY
+/model coding-model
+```
+
+Pactrail reads the named environment variable at request time. It never writes
+the secret value to settings. Plain HTTP is accepted only for loopback hosts.
+
 ## Adding a provider
 
 Implement `ModelDriver` and translate the provider protocol to these normalized types:
@@ -34,4 +57,3 @@ Implement `ModelDriver` and translate the provider protocol to these normalized 
 Provider implementations must preserve assistant tool-call messages before tool
 results, redact secrets from errors, enforce bounded response bodies, reject
 insecure remote transport, and provide recorded protocol fixtures.
-

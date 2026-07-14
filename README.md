@@ -25,7 +25,10 @@ evidence-backed software transaction.
 - Model turn, token, process, output, and filesystem limits.
 - Automatic Rust, Go, Python, and JavaScript test discovery.
 - Evidence grades that distinguish deterministic results from observations and model opinions.
-- Human-readable and JSON CLI output, task files, receipts, inspection, and run listing.
+- An interactive, persistent terminal session with model discovery, history,
+  completion, review, diff, apply, and discard commands.
+- Scriptable human-readable and JSON output, task files, receipts, inspection,
+  and run listing.
 
 ## Install
 
@@ -37,9 +40,53 @@ cargo install --git https://github.com/AKMessi/pactrail.git --locked pactrail
 
 Pactrail requires Rust 1.95 or newer when building from source.
 
+For a local checkout, install the current source with:
+
+```console
+cargo install --path crates/pactrail-cli --locked --force
+```
+
+Cargo places the executable in its binary directory (normally `~/.cargo/bin`).
+Once that directory is on `PATH`, `pactrail` works from any terminal and any
+repository.
+
 ## Quick start
 
-Run with a local Ollama model:
+Open a terminal in the repository you want to work on and start Pactrail:
+
+```console
+pactrail
+```
+
+The interactive session discovers models from local Ollama on first launch.
+Type a software task directly, or use `/models` and `/model` to choose a model:
+
+```text
+/models
+/model 1
+Fix the failing parser tests and add a regression test
+/diff
+/apply
+```
+
+Pactrail runs every model edit in an isolated transaction. `/diff` reviews the
+immutable run artifact; `/apply` performs integrity and source-drift checks
+before touching the working tree. `/discard` removes the candidate while
+preserving its receipt and diff.
+
+Connect a llama.cpp, vLLM, LM Studio, SGLang, or other OpenAI-compatible server
+inside the session:
+
+```text
+/connect http://127.0.0.1:8080/v1 model-id
+```
+
+Use `/help` for the command palette and `/status` for the active endpoint,
+model, token limits, and safety policy. Settings and input history persist
+across sessions.
+
+The non-interactive interface remains available for scripts and CI. Run with a
+local Ollama model:
 
 ```console
 pactrail run "Fix the failing parser tests" --model qwen3-coder
@@ -86,7 +133,8 @@ repositories until the OCI runner is available.
 7. Apply only after receipt validation and baseline-drift checks.
 
 See [Architecture](docs/architecture.md), [Threat model](docs/threat-model.md),
-and [Provider compatibility](docs/providers.md).
+[Interactive CLI](docs/interactive-cli.md), and
+[Provider compatibility](docs/providers.md).
 
 ## Development
 
@@ -106,7 +154,8 @@ second process.
 The current `0.x` line is a production-quality developer preview. Receipt,
 event, and contract formats are explicitly versioned, but public Rust APIs may
 still change before 1.0. See the repository milestones for ACP, MCP, stronger
-native/OCI sandboxing, native Anthropic/Gemini adapters, and the full TUI.
+native/OCI sandboxing, native Anthropic/Gemini adapters, and richer terminal
+visualization.
 
 ## License
 

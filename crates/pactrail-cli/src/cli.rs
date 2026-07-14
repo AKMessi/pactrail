@@ -5,7 +5,13 @@ use serde::{Deserialize, Serialize};
 
 /// Verification-native coding agent harness.
 #[derive(Debug, Parser)]
-#[command(name = "pactrail", version, about, propagate_version = true)]
+#[command(
+    name = "pactrail",
+    version,
+    about,
+    propagate_version = true,
+    after_help = "Run `pactrail` without a command to start the interactive coding session."
+)]
 pub struct Cli {
     /// Workspace used to resolve the default state directory.
     #[arg(long, global = true, default_value = ".")]

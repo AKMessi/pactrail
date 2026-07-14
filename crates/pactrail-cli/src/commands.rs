@@ -125,6 +125,8 @@ pub(crate) async fn execute_run(
         .await?;
     let mut receipt = outcome.receipt;
     write_receipt(&run_root, &receipt)?;
+    crate::diff::write_receipt_diff(&run_root, &receipt)
+        .map_err(|error| CliError::Argument(format!("review artifact failed: {error}")))?;
 
     if args.apply && receipt.outcome == ReceiptOutcome::ReadyToApply {
         receipt = apply_ready_receipt(&run_root, receipt, &transaction, &mut store)?;

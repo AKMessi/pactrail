@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::thread;
 
 use serde_json::{Value, json};
@@ -48,6 +48,15 @@ fn complete_run_is_isolated_then_applies() {
         .unwrap_or_else(|| unreachable!("run id missing"));
     assert_eq!(result["outcome"], "ready_to_apply");
     assert!(!workspace.path().join("README.md").exists());
+    let review_path = workspace
+        .path()
+        .join(".pactrail")
+        .join("runs")
+        .join(run_id)
+        .join("review.diff");
+    let review_before = std::fs::read_to_string(&review_path)
+        .unwrap_or_else(|error| unreachable!("review artifact: {error}"));
+    assert!(review_before.contains("+# Created by Pactrail"));
 
     let apply = Command::new(env!("CARGO_BIN_EXE_pactrail"))
         .args([
@@ -67,6 +76,10 @@ fn complete_run_is_isolated_then_applies() {
     assert_eq!(
         std::fs::read_to_string(workspace.path().join("README.md")).ok(),
         Some("# Created by Pactrail\n".to_owned())
+    );
+    assert_eq!(
+        std::fs::read_to_string(&review_path).ok(),
+        Some(review_before)
     );
     let applied: Value = serde_json::from_slice(&apply.stdout)
         .unwrap_or_else(|error| unreachable!("apply JSON: {error}"));
@@ -93,6 +106,18 @@ fn complete_run_is_isolated_then_applies() {
         repeated_receipt["integrity_hash"],
         applied["integrity_hash"]
     );
+}
+
+#[test]
+fn no_subcommand_fails_fast_without_a_terminal() {
+    let output = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .stdin(Stdio::null())
+        .output()
+        .unwrap_or_else(|error| unreachable!("interactive command: {error}"));
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains(
+        "interactive mode requires a terminal; use `pactrail run <goal>` for automation"
+    ));
 }
 
 fn serve_model(listener: &TcpListener) {
