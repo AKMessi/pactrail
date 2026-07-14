@@ -40,6 +40,12 @@ impl EventStore {
             .and_then(|()| connection.pragma_update(None, "journal_mode", "WAL"))
             .and_then(|()| connection.pragma_update(None, "synchronous", "FULL"))
             .map_err(StoreError::Database)?;
+        let database_version: i64 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .map_err(StoreError::Database)?;
+        if !matches!(database_version, 0 | 1) {
+            return Err(StoreError::UnsupportedDatabaseSchema(database_version));
+        }
         connection
             .execute_batch(
                 "BEGIN IMMEDIATE;
@@ -56,10 +62,14 @@ impl EventStore {
                  ) STRICT;
                  CREATE INDEX IF NOT EXISTS events_by_run
                     ON events (run_id, sequence);
-                 PRAGMA user_version = 1;
                  COMMIT;",
             )
             .map_err(StoreError::Database)?;
+        if database_version == 0 {
+            connection
+                .pragma_update(None, "user_version", 1)
+                .map_err(StoreError::Database)?;
+        }
         Ok(Self { connection })
     }
 
@@ -224,6 +234,8 @@ pub enum StoreError {
     InvalidSchema(i64),
     #[error("compiled event schema {EVENT_SCHEMA_VERSION} cannot read stored data")]
     UnsupportedSchema,
+    #[error("event database schema version {0} is unsupported")]
+    UnsupportedDatabaseSchema(i64),
 }
 
 #[cfg(test)]
@@ -287,6 +299,24 @@ mod tests {
                 expected: 0,
                 actual: 1
             })
+        ));
+    }
+
+    #[test]
+    fn future_database_schema_is_rejected() {
+        let directory = tempfile::tempdir()
+            .unwrap_or_else(|error| unreachable!("temporary directory: {error}"));
+        let path = directory.path().join("events.sqlite3");
+        let connection = Connection::open(&path)
+            .unwrap_or_else(|error| unreachable!("fixture database: {error}"));
+        connection
+            .pragma_update(None, "user_version", 99)
+            .unwrap_or_else(|error| unreachable!("fixture schema: {error}"));
+        drop(connection);
+
+        assert!(matches!(
+            EventStore::open(path),
+            Err(StoreError::UnsupportedDatabaseSchema(99))
         ));
     }
 }
