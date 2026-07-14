@@ -11,4 +11,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
-
+    ignore:
+      # This branch encodes Pactrail's MSRV, not the action implementation version.
+      - dependency-name: dtolnay/rust-toolchain
