@@ -13,12 +13,12 @@ publish = false
 workspace = true
 
 [dependencies]
-pactrail-context = { path = "../pactrail-context" }
-pactrail-core = { path = "../pactrail-core" }
-pactrail-models = { path = "../pactrail-models" }
-pactrail-store = { path = "../pactrail-store" }
-pactrail-tools = { path = "../pactrail-tools" }
-pactrail-workspace = { path = "../pactrail-workspace" }
+pactrail-context = { version = "0.1.0", path = "../pactrail-context" }
+pactrail-core = { version = "0.1.0", path = "../pactrail-core" }
+pactrail-models = { version = "0.1.0", path = "../pactrail-models" }
+pactrail-store = { version = "0.1.0", path = "../pactrail-store" }
+pactrail-tools = { version = "0.1.0", path = "../pactrail-tools" }
+pactrail-workspace = { version = "0.1.0", path = "../pactrail-workspace" }
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
@@ -27,4 +27,3 @@ tracing.workspace = true
 async-trait.workspace = true
 tempfile.workspace = true
 tokio.workspace = true
-

@@ -16,8 +16,8 @@ workspace = true
 async-trait.workspace = true
 blake3.workspace = true
 ignore.workspace = true
-pactrail-core = { path = "../pactrail-core" }
-pactrail-workspace = { path = "../pactrail-workspace" }
+pactrail-core = { version = "0.1.0", path = "../pactrail-core" }
+pactrail-workspace = { version = "0.1.0", path = "../pactrail-workspace" }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -26,4 +26,3 @@ tokio.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-
