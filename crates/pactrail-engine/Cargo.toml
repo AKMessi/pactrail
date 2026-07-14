@@ -21,9 +21,9 @@ pactrail-tools = { version = "0.1.0", path = "../pactrail-tools" }
 pactrail-workspace = { version = "0.1.0", path = "../pactrail-workspace" }
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
 tempfile.workspace = true
-tokio.workspace = true

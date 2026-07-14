@@ -91,9 +91,6 @@ impl<'a> RunEngine<'a> {
     ///
     /// Returns [`EngineError`] under the same hard-invariant conditions as
     /// [`Self::execute`]. An identifier already present in the event store is rejected.
-    // This method intentionally keeps lifecycle transitions visible in one place;
-    // extracting them would obscure the event-ordering invariant.
-    #[allow(clippy::too_many_lines)]
     pub async fn execute_with_id(
         &self,
         run_id: RunId,
@@ -102,6 +99,39 @@ impl<'a> RunEngine<'a> {
         store: &mut EventStore,
     ) -> Result<RunOutcome, EngineError> {
         contract.validate()?;
+        let wall_time_seconds = contract.budget.wall_time_seconds;
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(wall_time_seconds),
+            self.execute_inner(run_id, contract, transaction, store),
+        )
+        .await;
+        let Ok(outcome) = result else {
+            let snapshot = store.snapshot(run_id)?;
+            if !snapshot.state.is_terminal() {
+                store.append(
+                    run_id,
+                    snapshot.last_sequence.map_or(0, |sequence| sequence + 1),
+                    RunEvent::StateChanged {
+                        from: snapshot.state,
+                        to: RunState::Failed,
+                    },
+                )?;
+            }
+            return Err(EngineError::WallTimeExceeded { wall_time_seconds });
+        };
+        outcome
+    }
+
+    // This method intentionally keeps lifecycle transitions visible in one place;
+    // extracting them would obscure the event-ordering invariant.
+    #[allow(clippy::too_many_lines)]
+    async fn execute_inner(
+        &self,
+        run_id: RunId,
+        contract: TaskContract,
+        transaction: &WorkspaceTransaction,
+        store: &mut EventStore,
+    ) -> Result<RunOutcome, EngineError> {
         let overgrants = self.policy.overgrants(&contract.permissions);
         if !overgrants.is_empty() {
             return Err(EngineError::InvalidConfiguration(format!(
@@ -519,6 +549,8 @@ pub enum EngineError {
     Protocol(String),
     #[error("model used {used} tokens, exceeding the {limit}-token task budget")]
     BudgetExceeded { used: u64, limit: u64 },
+    #[error("run exceeded its {wall_time_seconds}-second wall-time budget")]
+    WallTimeExceeded { wall_time_seconds: u64 },
     #[error("model did not complete within {0} turns")]
     MaxTurns(u16),
 }
@@ -537,6 +569,10 @@ mod tests {
         name: String,
         model: String,
         responses: Mutex<VecDeque<ModelResponse>>,
+        capabilities: ModelCapabilities,
+    }
+
+    struct SlowModel {
         capabilities: ModelCapabilities,
     }
 
@@ -561,6 +597,74 @@ mod tests {
                 .pop_front()
                 .ok_or_else(|| ModelError::InvalidRequest("script exhausted".to_owned()))
         }
+    }
+
+    #[async_trait]
+    impl ModelDriver for SlowModel {
+        fn name(&self) -> &'static str {
+            "slow"
+        }
+
+        fn model(&self) -> &'static str {
+            "test"
+        }
+
+        fn capabilities(&self) -> &ModelCapabilities {
+            &self.capabilities
+        }
+
+        async fn invoke(&self, _request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            Err(ModelError::InvalidRequest(
+                "slow model was not cancelled".to_owned(),
+            ))
+        }
+    }
+
+    #[tokio::test]
+    async fn wall_time_budget_cancels_and_fails_the_run() {
+        let model = SlowModel {
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let engine = RunEngine::new(&model, &registry, &policy);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let mut contract = TaskContract::new("Wait forever", source.path().display().to_string());
+        contract.budget.wall_time_seconds = 1;
+        contract
+            .permissions
+            .allow
+            .insert(pactrail_core::Capability::FileRead);
+        contract
+            .permissions
+            .allow
+            .insert(pactrail_core::Capability::FileWrite);
+        let run_id = RunId::new();
+
+        let result = engine
+            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .await;
+        assert!(matches!(
+            result,
+            Err(EngineError::WallTimeExceeded {
+                wall_time_seconds: 1
+            })
+        ));
+        let snapshot = store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        assert_eq!(snapshot.state, RunState::Failed);
     }
 
     #[tokio::test]

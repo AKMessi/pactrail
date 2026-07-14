@@ -72,9 +72,10 @@ conversation sequence. Tool calls are ID-unique within the run. Each call record
 model/provider identity, declared capability, result, and filesystem effects
 calculated by comparing transaction manifests before and after the call.
 
-The engine bounds model attempts and aggregate reported tokens. A final response
-does not become evidence merely because the model states it. Verification results
-are recorded separately and graded.
+The engine bounds total wall time, model attempts, and aggregate provider-reported
+tokens. Nonzero cost budgets fail closed until a trusted, model-specific pricing
+source is configured. A final response does not become evidence merely because
+the model states it. Verification results are recorded separately and graded.
 
 ## Compatibility policy
 

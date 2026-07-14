@@ -26,7 +26,7 @@ impl Default for Budget {
         Self {
             wall_time_seconds: 3_600,
             model_tokens: 250_000,
-            cost_microusd: 10_000_000,
+            cost_microusd: 0,
             max_concurrency: 4,
             max_model_attempts: 24,
         }
@@ -184,6 +184,9 @@ impl TaskContract {
         if self.budget.max_model_attempts == 0 {
             return Err(ContractError::ZeroModelAttempts);
         }
+        if self.budget.cost_microusd != 0 {
+            return Err(ContractError::UnsupportedCostBudget);
+        }
 
         let mut obligation_ids = BTreeSet::new();
         for obligation in &self.obligations {
@@ -234,6 +237,9 @@ pub enum ContractError {
     /// A zero attempt limit could never invoke a model.
     #[error("maximum model attempts must be greater than zero")]
     ZeroModelAttempts,
+    /// Endpoint-neutral cost accounting requires an explicit pricing source.
+    #[error("nonzero cost budgets are unsupported until a trusted pricing source is configured")]
+    UnsupportedCostBudget,
 }
 
 #[cfg(test)]
@@ -254,6 +260,16 @@ mod tests {
             contract.validate(),
             Err(ContractError::DuplicateObligation(_))
         ));
+    }
+
+    #[test]
+    fn unsupported_cost_budget_fails_closed() {
+        let mut contract = TaskContract::new("repair the parser", ".");
+        contract.budget.cost_microusd = 1;
+        assert_eq!(
+            contract.validate(),
+            Err(ContractError::UnsupportedCostBudget)
+        );
     }
 
     #[test]
