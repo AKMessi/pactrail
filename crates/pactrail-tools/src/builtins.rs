@@ -1,4 +1,5 @@
-use std::fs::{self, File};
+use std::collections::BTreeSet;
+use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
@@ -13,6 +14,7 @@ use crate::{Tool, ToolContext, ToolDescriptor, ToolError, ToolOutput};
 
 const MAX_READ_BYTES: u64 = 1024 * 1024;
 const MAX_SEARCH_FILE_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_EDIT_BYTES: u64 = 8 * 1024 * 1024;
 
 fn descriptor<T: JsonSchema>(
     name: &str,
@@ -70,20 +72,7 @@ impl Tool for ReadFileTool {
         let request: ReadFileInput = input(value, "read_file")?;
         context.authorize(&Capability::FileRead, request.path.clone(), "read_file")?;
         let path = context.workspace.resolve_read(&request.path)?;
-        let metadata = fs::metadata(&path).map_err(|source| ToolError::Io {
-            path: path.clone(),
-            source,
-        })?;
-        if metadata.len() > MAX_READ_BYTES {
-            return Err(ToolError::InvalidRange(format!(
-                "file is {} bytes; read limit is {MAX_READ_BYTES}",
-                metadata.len()
-            )));
-        }
-        let bytes = fs::read(&path).map_err(|source| ToolError::Io {
-            path: path.clone(),
-            source,
-        })?;
+        let bytes = read_bounded(&path, MAX_READ_BYTES)?;
         let text = String::from_utf8(bytes).map_err(|_| ToolError::NonUtf8(path.clone()))?;
         let total_lines = text.lines().count();
         let start = request.start_line.unwrap_or(1);
@@ -161,10 +150,12 @@ impl Tool for ListFilesTool {
         let relative = request.path.unwrap_or_else(|| ".".to_owned());
         context.authorize(&Capability::FileRead, relative.clone(), "list_files")?;
         let start = resolve_directory(context, &relative)?;
-        let mut files = Vec::new();
+        let mut files = BTreeSet::new();
+        let mut truncated = false;
         for item in WalkBuilder::new(&start)
             .hidden(false)
             .git_ignore(true)
+            .sort_by_file_path(Ord::cmp)
             .build()
         {
             let entry = item.map_err(|source| ToolError::Io {
@@ -172,15 +163,16 @@ impl Tool for ListFilesTool {
                 source: std::io::Error::other(source),
             })?;
             if entry.file_type().is_some_and(|kind| kind.is_file()) {
-                files.push(portable_relative(
+                files.insert(portable_relative(
                     context.workspace.workspace_root(),
                     entry.path(),
                 )?);
+                if files.len() > request.max_entries {
+                    files.pop_last();
+                    truncated = true;
+                }
             }
         }
-        files.sort();
-        let truncated = files.len() > request.max_entries;
-        files.truncate(request.max_entries);
         let count = files.len();
         Ok(ToolOutput {
             content: json!({ "files": files }),
@@ -254,6 +246,7 @@ impl Tool for SearchTool {
         'files: for item in WalkBuilder::new(&start)
             .hidden(false)
             .git_ignore(true)
+            .sort_by_file_path(Ord::cmp)
             .build()
         {
             let entry = item.map_err(|source| ToolError::Io {
@@ -274,7 +267,8 @@ impl Tool for SearchTool {
                 path: entry.path().to_path_buf(),
                 source,
             })?;
-            for (index, line) in BufReader::new(file).lines().enumerate() {
+            let bounded = file.take(MAX_SEARCH_FILE_BYTES + 1);
+            for (index, line) in BufReader::new(bounded).lines().enumerate() {
                 let Ok(line) = line else { continue };
                 let haystack = if request.case_sensitive {
                     line.clone()
@@ -330,6 +324,12 @@ impl Tool for WriteFileTool {
         value: Value,
     ) -> Result<ToolOutput, ToolError> {
         let request: WriteFileInput = input(value, "write_file")?;
+        let bytes = u64::try_from(request.content.len()).unwrap_or(u64::MAX);
+        if bytes > MAX_EDIT_BYTES {
+            return Err(ToolError::InvalidRange(format!(
+                "content is {bytes} bytes; write limit is {MAX_EDIT_BYTES}"
+            )));
+        }
         context.authorize(&Capability::FileWrite, request.path.clone(), "write_file")?;
         context
             .workspace
@@ -386,19 +386,34 @@ impl Tool for ReplaceTextTool {
         context.authorize(&Capability::FileRead, request.path.clone(), "replace_text")?;
         context.authorize(&Capability::FileWrite, request.path.clone(), "replace_text")?;
         let path = context.workspace.resolve_read(&request.path)?;
-        let mut text = String::new();
-        File::open(&path)
-            .and_then(|mut file| file.read_to_string(&mut text))
-            .map_err(|source| ToolError::Io {
-                path: path.clone(),
-                source,
-            })?;
+        let bytes = read_bounded(&path, MAX_EDIT_BYTES)?;
+        let text = String::from_utf8(bytes).map_err(|_| ToolError::NonUtf8(path.clone()))?;
         let actual = text.matches(&request.old).count();
         if actual != request.expected_replacements {
             return Err(ToolError::ReplacementCount {
                 expected: request.expected_replacements,
                 actual,
             });
+        }
+        let removed = request
+            .old
+            .len()
+            .checked_mul(actual)
+            .ok_or_else(|| ToolError::InvalidRange("replacement size overflowed".to_owned()))?;
+        let added = request
+            .new
+            .len()
+            .checked_mul(actual)
+            .ok_or_else(|| ToolError::InvalidRange("replacement size overflowed".to_owned()))?;
+        let resulting_bytes = text
+            .len()
+            .checked_sub(removed)
+            .and_then(|size| size.checked_add(added))
+            .ok_or_else(|| ToolError::InvalidRange("replacement size overflowed".to_owned()))?;
+        if u64::try_from(resulting_bytes).unwrap_or(u64::MAX) > MAX_EDIT_BYTES {
+            return Err(ToolError::InvalidRange(format!(
+                "replacement would exceed the {MAX_EDIT_BYTES}-byte edit limit"
+            )));
         }
         let replacement = text.replace(&request.old, &request.new);
         context
@@ -465,6 +480,27 @@ fn resolve_directory(context: &ToolContext<'_>, relative: &str) -> Result<PathBu
     Ok(path)
 }
 
+fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, ToolError> {
+    let file = File::open(path).map_err(|source| ToolError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let capacity = usize::try_from(limit.min(64 * 1024)).unwrap_or_default();
+    let mut bytes = Vec::with_capacity(capacity);
+    file.take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|source| ToolError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit {
+        return Err(ToolError::InvalidRange(format!(
+            "file exceeds the {limit}-byte read limit"
+        )));
+    }
+    Ok(bytes)
+}
+
 fn portable_relative(root: &Path, path: &Path) -> Result<String, ToolError> {
     let relative = path.strip_prefix(root).map_err(|_| ToolError::Io {
         path: path.to_path_buf(),
@@ -488,6 +524,8 @@ fn portable_relative(root: &Path, path: &Path) -> Result<String, ToolError> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use crate::PolicyEngine;
     use pactrail_workspace::WorkspaceTransaction;
@@ -546,5 +584,26 @@ mod tests {
             .await
             .unwrap_or_else(|error| unreachable!("read: {error}"));
         assert_eq!(output.content["content"], "second line");
+    }
+
+    #[tokio::test]
+    async fn file_listing_is_lexical_and_memory_bounded() {
+        let (_source, _control, transaction) = fixture();
+        for name in ["z.txt", "a.txt", "b.txt"] {
+            transaction
+                .write_file(name, b"fixture")
+                .unwrap_or_else(|error| unreachable!("candidate file: {error}"));
+        }
+        let policy = PolicyEngine::local_default();
+        let context = ToolContext {
+            workspace: &transaction,
+            policy: &policy,
+        };
+        let output = ListFilesTool
+            .execute(&context, json!({"max_entries": 2}))
+            .await
+            .unwrap_or_else(|error| unreachable!("list: {error}"));
+        assert_eq!(output.content["files"], json!(["a.txt", "b.txt"]));
+        assert!(output.truncated);
     }
 }
