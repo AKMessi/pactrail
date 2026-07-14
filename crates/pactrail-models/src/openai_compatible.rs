@@ -1,0 +1,421 @@
+use std::time::Duration;
+
+use async_trait::async_trait;
+use futures_util::StreamExt;
+use reqwest::StatusCode;
+use secrecy::{ExposeSecret, SecretString};
+use serde_json::{Value, json};
+use tracing::warn;
+
+use crate::{
+    ConversationItem, FinishReason, Message, ModelCapabilities, ModelDriver, ModelError,
+    ModelRequest, ModelResponse, Role, ToolCall, Usage,
+};
+
+const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+const MAX_RETRIES: u32 = 3;
+
+/// Configuration for an `OpenAI` Chat Completions compatible endpoint.
+#[derive(Clone)]
+pub struct OpenAiCompatibleConfig {
+    pub name: String,
+    pub base_url: String,
+    pub model: String,
+    pub api_key: Option<SecretString>,
+    pub timeout: Duration,
+    pub capabilities: ModelCapabilities,
+}
+
+impl OpenAiCompatibleConfig {
+    /// Creates a local Ollama configuration using its OpenAI-compatible endpoint.
+    #[must_use]
+    pub fn ollama(model: impl Into<String>) -> Self {
+        Self {
+            name: "ollama".to_owned(),
+            base_url: "http://127.0.0.1:11434/v1".to_owned(),
+            model: model.into(),
+            api_key: None,
+            timeout: Duration::from_mins(5),
+            capabilities: ModelCapabilities::default(),
+        }
+    }
+}
+
+/// Production driver for Chat Completions compatible API and local endpoints.
+pub struct OpenAiCompatibleDriver {
+    config: OpenAiCompatibleConfig,
+    client: reqwest::Client,
+}
+
+impl OpenAiCompatibleDriver {
+    /// Builds a driver with the platform TLS backend and a bounded timeout.
+    ///
+    /// # Errors
+    ///
+    /// Returns a transport error if the HTTP client cannot be constructed, or
+    /// an invalid-request error if the endpoint is not HTTP(S).
+    pub fn new(config: OpenAiCompatibleConfig) -> Result<Self, ModelError> {
+        let endpoint = reqwest::Url::parse(&config.base_url).map_err(|error| {
+            ModelError::InvalidRequest(format!("invalid provider endpoint: {error}"))
+        })?;
+        let host = endpoint.host_str().unwrap_or_default();
+        let loopback = host.eq_ignore_ascii_case("localhost")
+            || host
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|address| address.is_loopback());
+        if endpoint.scheme() != "https" && !(endpoint.scheme() == "http" && loopback) {
+            return Err(ModelError::InvalidRequest(
+                "remote model endpoints must use HTTPS".to_owned(),
+            ));
+        }
+        if !endpoint.username().is_empty() || endpoint.password().is_some() {
+            return Err(ModelError::InvalidRequest(
+                "provider credentials must not be embedded in the endpoint URL".to_owned(),
+            ));
+        }
+        if config.name.trim().is_empty() || config.model.trim().is_empty() {
+            return Err(ModelError::InvalidRequest(
+                "provider name and model cannot be empty".to_owned(),
+            ));
+        }
+        let client = reqwest::Client::builder()
+            .timeout(config.timeout)
+            .user_agent(concat!("pactrail/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .map_err(ModelError::Transport)?;
+        Ok(Self { config, client })
+    }
+
+    fn endpoint(&self) -> String {
+        format!(
+            "{}/chat/completions",
+            self.config.base_url.trim_end_matches('/')
+        )
+    }
+
+    async fn send(&self, body: &Value) -> Result<(Value, Option<String>), ModelError> {
+        let mut attempt = 0_u32;
+        loop {
+            let mut request = self.client.post(self.endpoint()).json(body);
+            if let Some(api_key) = &self.config.api_key {
+                request = request.bearer_auth(api_key.expose_secret());
+            }
+            let response = request.send().await.map_err(ModelError::Transport)?;
+            let status = response.status();
+            let request_id = response
+                .headers()
+                .get("x-request-id")
+                .and_then(|header| header.to_str().ok())
+                .map(str::to_owned);
+            let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+            let bytes = read_bounded(response, MAX_RESPONSE_BYTES).await?;
+            if status.is_success() {
+                let value = serde_json::from_slice(&bytes).map_err(ModelError::Json)?;
+                return Ok((value, request_id));
+            }
+            let message = provider_message(&bytes);
+            if retryable && attempt < MAX_RETRIES {
+                attempt += 1;
+                let delay = Duration::from_millis(250_u64.saturating_mul(2_u64.pow(attempt - 1)));
+                warn!(attempt, status = status.as_u16(), "retrying model request");
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+            return Err(ModelError::Provider {
+                status: status.as_u16(),
+                message,
+            });
+        }
+    }
+}
+
+#[async_trait]
+impl ModelDriver for OpenAiCompatibleDriver {
+    fn name(&self) -> &str {
+        &self.config.name
+    }
+
+    fn model(&self) -> &str {
+        &self.config.model
+    }
+
+    fn capabilities(&self) -> &ModelCapabilities {
+        &self.config.capabilities
+    }
+
+    async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+        if request.conversation.is_empty() {
+            return Err(ModelError::InvalidRequest(
+                "at least one message is required".to_owned(),
+            ));
+        }
+        if request.max_output_tokens == 0
+            || request.max_output_tokens > self.config.capabilities.max_output_tokens
+        {
+            return Err(ModelError::InvalidRequest(format!(
+                "max_output_tokens must be between 1 and {}",
+                self.config.capabilities.max_output_tokens
+            )));
+        }
+        let messages = request
+            .conversation
+            .iter()
+            .map(conversation_json)
+            .collect::<Result<Vec<_>, _>>()?;
+        let tools = request
+            .tools
+            .iter()
+            .map(|tool| {
+                json!({
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.input_schema,
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut body = json!({
+            "model": self.config.model,
+            "messages": messages,
+            "max_tokens": request.max_output_tokens,
+            "stream": false,
+        });
+        if !tools.is_empty() {
+            body["tools"] = Value::Array(tools);
+            body["tool_choice"] = Value::String("auto".to_owned());
+        }
+        if let Some(temperature) = request.temperature {
+            if !(0.0..=2.0).contains(&temperature) {
+                return Err(ModelError::InvalidRequest(
+                    "temperature must be between 0 and 2".to_owned(),
+                ));
+            }
+            body["temperature"] = json!(temperature);
+        }
+
+        let (response, request_id) = self.send(&body).await?;
+        parse_response(&response, request_id)
+    }
+}
+
+fn message_json(message: &Message) -> Value {
+    let role = match message.role {
+        Role::System => "system",
+        Role::User => "user",
+        Role::Assistant => "assistant",
+    };
+    json!({ "role": role, "content": message.content })
+}
+
+fn conversation_json(item: &ConversationItem) -> Result<Value, ModelError> {
+    match item {
+        ConversationItem::Message(message) => Ok(message_json(message)),
+        ConversationItem::AssistantToolCalls { text, calls } => {
+            let calls = calls
+                .iter()
+                .map(|call| {
+                    Ok(json!({
+                        "id": call.id,
+                        "type": "function",
+                        "function": {
+                            "name": call.name,
+                            "arguments": serde_json::to_string(&call.arguments)
+                                .map_err(ModelError::Json)?,
+                        }
+                    }))
+                })
+                .collect::<Result<Vec<Value>, ModelError>>()?;
+            Ok(json!({
+                "role": "assistant",
+                "content": text,
+                "tool_calls": calls,
+            }))
+        }
+        ConversationItem::ToolResult(result) => Ok(json!({
+            "role": "tool",
+            "tool_call_id": result.call_id,
+            "name": result.name,
+            "content": serde_json::to_string(&result.content).map_err(ModelError::Json)?,
+        })),
+    }
+}
+
+fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResponse, ModelError> {
+    let choice = value
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .ok_or_else(|| ModelError::MalformedResponse("missing choices[0]".to_owned()))?;
+    let message = choice
+        .get("message")
+        .ok_or_else(|| ModelError::MalformedResponse("missing response message".to_owned()))?;
+    let text = message
+        .get("content")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let tool_calls = message
+        .get("tool_calls")
+        .and_then(Value::as_array)
+        .map(|calls| calls.iter().map(parse_tool_call).collect())
+        .transpose()?
+        .unwrap_or_default();
+    let finish_reason = match choice.get("finish_reason").and_then(Value::as_str) {
+        Some("stop") => FinishReason::Complete,
+        Some("tool_calls" | "function_call") => FinishReason::ToolCalls,
+        Some("length") => FinishReason::Length,
+        Some("content_filter") => FinishReason::ContentFilter,
+        _ => FinishReason::Unknown,
+    };
+    let usage = value
+        .get("usage")
+        .map_or_else(Usage::default, |usage| Usage {
+            input_tokens: number(usage, "prompt_tokens"),
+            output_tokens: number(usage, "completion_tokens"),
+            cached_input_tokens: usage
+                .get("prompt_tokens_details")
+                .map_or(0, |details| number(details, "cached_tokens")),
+        });
+    let mut extensions = serde_json::Map::new();
+    for key in ["id", "created", "system_fingerprint"] {
+        if let Some(value) = value.get(key) {
+            extensions.insert(key.to_owned(), value.clone());
+        }
+    }
+    Ok(ModelResponse {
+        text,
+        tool_calls,
+        finish_reason,
+        usage,
+        provider_request_id: request_id,
+        extensions,
+    })
+}
+
+fn parse_tool_call(value: &Value) -> Result<ToolCall, ModelError> {
+    let id = value
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ModelError::MalformedResponse("tool call is missing id".to_owned()))?;
+    let function = value
+        .get("function")
+        .ok_or_else(|| ModelError::MalformedResponse("tool call is missing function".to_owned()))?;
+    let name = function
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ModelError::MalformedResponse("tool call is missing name".to_owned()))?;
+    let arguments = function
+        .get("arguments")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            ModelError::MalformedResponse("tool call is missing arguments".to_owned())
+        })?;
+    let arguments = serde_json::from_str(arguments).map_err(ModelError::Json)?;
+    Ok(ToolCall {
+        id: id.to_owned(),
+        name: name.to_owned(),
+        arguments,
+    })
+}
+
+fn number(value: &Value, key: &str) -> u64 {
+    value.get(key).and_then(Value::as_u64).unwrap_or_default()
+}
+
+async fn read_bounded(response: reqwest::Response, limit: usize) -> Result<Vec<u8>, ModelError> {
+    if response
+        .content_length()
+        .is_some_and(|length| usize::try_from(length).map_or(true, |length| length > limit))
+    {
+        return Err(ModelError::ResponseTooLarge { limit });
+    }
+    let mut bytes = Vec::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(ModelError::Transport)?;
+        if bytes.len().saturating_add(chunk.len()) > limit {
+            return Err(ModelError::ResponseTooLarge { limit });
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
+fn provider_message(bytes: &[u8]) -> String {
+    serde_json::from_slice::<Value>(bytes)
+        .ok()
+        .and_then(|value| {
+            value
+                .pointer("/error/message")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| {
+            let text = String::from_utf8_lossy(bytes);
+            text.chars().take(1_000).collect()
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_text_tools_usage_and_extensions() {
+        let value = json!({
+            "id": "response-1",
+            "choices": [{
+                "message": {
+                    "content": "I will inspect it.",
+                    "tool_calls": [{
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "read_file", "arguments": "{\"path\":\"src/lib.rs\"}"}
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 4}
+        });
+        let response = parse_response(&value, Some("request-1".to_owned()))
+            .unwrap_or_else(|error| unreachable!("valid response: {error}"));
+        assert_eq!(response.tool_calls[0].name, "read_file");
+        assert_eq!(response.usage.total(), 14);
+        assert_eq!(response.finish_reason, FinishReason::ToolCalls);
+        assert_eq!(response.extensions["id"], "response-1");
+    }
+
+    #[test]
+    fn remote_plain_http_is_rejected() {
+        let config = OpenAiCompatibleConfig {
+            name: "unsafe".to_owned(),
+            base_url: "http://example.com/v1".to_owned(),
+            model: "model".to_owned(),
+            api_key: None,
+            timeout: Duration::from_secs(1),
+            capabilities: ModelCapabilities::default(),
+        };
+        assert!(matches!(
+            OpenAiCompatibleDriver::new(config),
+            Err(ModelError::InvalidRequest(_))
+        ));
+    }
+
+    #[test]
+    fn localhost_prefix_confusion_is_rejected() {
+        let config = OpenAiCompatibleConfig {
+            name: "unsafe".to_owned(),
+            base_url: "http://localhost.evil.example/v1".to_owned(),
+            model: "model".to_owned(),
+            api_key: None,
+            timeout: Duration::from_secs(1),
+            capabilities: ModelCapabilities::default(),
+        };
+        assert!(matches!(
+            OpenAiCompatibleDriver::new(config),
+            Err(ModelError::InvalidRequest(_))
+        ));
+    }
+}

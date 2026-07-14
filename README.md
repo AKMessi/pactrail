@@ -15,6 +15,9 @@ Pactrail is under active development. The first usable vertical slice is being b
 - Local-first: no account, hosted service, or telemetry is required.
 - Secure by default: network, secrets, and external side effects require scoped policy decisions.
 
+Remote providers must use HTTPS. Pactrail uses the operating system TLS backend so
+production trust policy and certificate management remain under host control.
+
 ## Building
 
 ```console
@@ -28,4 +31,3 @@ The minimum supported Rust version is 1.95.
 ## License
 
 Licensed under either of Apache License 2.0 or MIT at your option.
-
