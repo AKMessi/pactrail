@@ -79,7 +79,7 @@ impl EventStore {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(StoreError::Database)?;
-        let head: Option<(u64, String)> = transaction
+        let head: Option<(i64, String)> = transaction
             .query_row(
                 "SELECT sequence, hash FROM events
                  WHERE run_id = ?1 ORDER BY sequence DESC LIMIT 1",
@@ -88,7 +88,12 @@ impl EventStore {
             )
             .optional()
             .map_err(StoreError::Database)?;
-        let actual_sequence = head.as_ref().map_or(0, |(sequence, _)| sequence + 1);
+        let actual_sequence = match head.as_ref() {
+            Some((sequence, _)) => {
+                u64::try_from(*sequence).map_err(|_| StoreError::InvalidSequence(*sequence))? + 1
+            }
+            None => 0,
+        };
         if actual_sequence != expected_sequence {
             return Err(StoreError::Concurrency {
                 expected: expected_sequence,
