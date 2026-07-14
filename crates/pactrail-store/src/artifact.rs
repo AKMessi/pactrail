@@ -4,6 +4,9 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
+const MAX_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_COMPRESSED_BYTES: u64 = 128 * 1024 * 1024;
+
 /// Metadata for content persisted by an [`ArtifactStore`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StoredArtifact {
@@ -39,9 +42,18 @@ impl ArtifactStore {
     ///
     /// Returns an I/O error when compression or atomic persistence fails.
     pub fn put(&self, content: &[u8]) -> Result<StoredArtifact, ArtifactError> {
+        let uncompressed_bytes = u64::try_from(content.len()).unwrap_or(u64::MAX);
+        if uncompressed_bytes > MAX_ARTIFACT_BYTES {
+            return Err(ArtifactError::TooLarge {
+                actual: uncompressed_bytes,
+                limit: MAX_ARTIFACT_BYTES,
+            });
+        }
         let digest = blake3::hash(content).to_hex().to_string();
         let destination = self.path_for(&digest)?;
-        if !destination.exists() {
+        if destination.exists() {
+            self.get(&digest)?;
+        } else {
             let parent = destination
                 .parent()
                 .ok_or_else(|| ArtifactError::InvalidDigest(digest.clone()))?;
@@ -54,16 +66,25 @@ impl ArtifactStore {
                     path: parent.to_path_buf(),
                     source,
                 })?;
-            let compressed =
-                zstd::stream::encode_all(content, 3).map_err(|source| ArtifactError::Io {
-                    path: destination.clone(),
-                    source,
-                })?;
+            {
+                let mut encoder = zstd::stream::write::Encoder::new(temporary.as_file_mut(), 3)
+                    .map_err(|source| ArtifactError::Io {
+                        path: destination.clone(),
+                        source,
+                    })?;
+                encoder
+                    .write_all(content)
+                    .and_then(|()| encoder.finish().map(|_| ()))
+                    .map_err(|source| ArtifactError::Io {
+                        path: destination.clone(),
+                        source,
+                    })?;
+            }
             temporary
-                .write_all(&compressed)
-                .and_then(|()| temporary.as_file().sync_all())
+                .as_file()
+                .sync_all()
                 .map_err(|source| ArtifactError::Io {
-                    path: temporary.path().to_path_buf(),
+                    path: destination.clone(),
                     source,
                 })?;
             match temporary.persist_noclobber(&destination) {
@@ -85,7 +106,7 @@ impl ArtifactStore {
             .len();
         Ok(StoredArtifact {
             digest,
-            uncompressed_bytes: u64::try_from(content.len()).unwrap_or(u64::MAX),
+            uncompressed_bytes,
             compressed_bytes,
         })
     }
@@ -98,19 +119,42 @@ impl ArtifactStore {
     /// or content that no longer matches its address.
     pub fn get(&self, digest: &str) -> Result<Vec<u8>, ArtifactError> {
         let path = self.path_for(digest)?;
-        let mut compressed = Vec::new();
-        File::open(&path)
-            .and_then(|mut file| file.read_to_end(&mut compressed))
+        let compressed_bytes = fs::metadata(&path)
+            .map_err(|source| ArtifactError::Io {
+                path: path.clone(),
+                source,
+            })?
+            .len();
+        if compressed_bytes > MAX_COMPRESSED_BYTES {
+            return Err(ArtifactError::TooLarge {
+                actual: compressed_bytes,
+                limit: MAX_COMPRESSED_BYTES,
+            });
+        }
+        let file = File::open(&path).map_err(|source| ArtifactError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        let decoder =
+            zstd::stream::read::Decoder::new(file).map_err(|source| ArtifactError::Io {
+                path: path.clone(),
+                source,
+            })?;
+        let mut content = Vec::new();
+        decoder
+            .take(MAX_ARTIFACT_BYTES + 1)
+            .read_to_end(&mut content)
             .map_err(|source| ArtifactError::Io {
                 path: path.clone(),
                 source,
             })?;
-        let content = zstd::stream::decode_all(compressed.as_slice()).map_err(|source| {
-            ArtifactError::Io {
-                path: path.clone(),
-                source,
-            }
-        })?;
+        let uncompressed_bytes = u64::try_from(content.len()).unwrap_or(u64::MAX);
+        if uncompressed_bytes > MAX_ARTIFACT_BYTES {
+            return Err(ArtifactError::TooLarge {
+                actual: uncompressed_bytes,
+                limit: MAX_ARTIFACT_BYTES,
+            });
+        }
         let actual = blake3::hash(&content).to_hex().to_string();
         if actual != digest {
             return Err(ArtifactError::Integrity {
@@ -131,7 +175,11 @@ impl ArtifactStore {
     }
 
     fn path_for(&self, digest: &str) -> Result<PathBuf, ArtifactError> {
-        if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
             return Err(ArtifactError::InvalidDigest(digest.to_owned()));
         }
         Ok(self.root.join(&digest[..2]).join(format!("{digest}.zst")))
@@ -143,6 +191,8 @@ impl ArtifactStore {
 pub enum ArtifactError {
     #[error("invalid BLAKE3 digest {0:?}")]
     InvalidDigest(String),
+    #[error("artifact is {actual} bytes, exceeding the {limit}-byte limit")]
+    TooLarge { actual: u64, limit: u64 },
     #[error("artifact I/O failed at {path}: {source}")]
     Io {
         path: PathBuf,
@@ -186,5 +236,27 @@ mod tests {
             store.get("../secret"),
             Err(ArtifactError::InvalidDigest(_))
         ));
+        assert!(matches!(
+            store.contains(&"A".repeat(64)),
+            Err(ArtifactError::InvalidDigest(_))
+        ));
+    }
+
+    #[test]
+    fn existing_corrupt_artifact_is_never_reported_as_stored() {
+        let directory = tempfile::tempdir()
+            .unwrap_or_else(|error| unreachable!("temporary directory: {error}"));
+        let store = ArtifactStore::open(directory.path())
+            .unwrap_or_else(|error| unreachable!("artifact store: {error}"));
+        let artifact = store
+            .put(b"durable evidence")
+            .unwrap_or_else(|error| unreachable!("initial artifact: {error}"));
+        let path = store
+            .path_for(&artifact.digest)
+            .unwrap_or_else(|error| unreachable!("artifact path: {error}"));
+        fs::write(&path, b"corrupt")
+            .unwrap_or_else(|error| unreachable!("corrupt fixture: {error}"));
+
+        assert!(store.put(b"durable evidence").is_err());
     }
 }
