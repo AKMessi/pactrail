@@ -260,13 +260,71 @@ impl WorkspaceTransaction {
     /// or an apply/rollback I/O failure.
     pub fn apply(&self) -> Result<ApplyOutcome, TransactionError> {
         let changes = self.changes()?;
-        self.check_source_drift(&changes)?;
         let journal_root = self.control_root.join(APPLY_JOURNAL_DIRECTORY);
         if journal_root.exists() {
+            match self.source_state(&changes)? {
+                SourceState::Applied => {
+                    let resulting = WorkspaceManifest::capture(&self.metadata.source_root)?;
+                    fs::remove_dir_all(&journal_root).map_err(|source| TransactionError::Io {
+                        path: journal_root,
+                        source,
+                    })?;
+                    return Ok(ApplyOutcome {
+                        changed_files: changes.len(),
+                        baseline_digest: self.metadata.baseline.digest.clone(),
+                        resulting_digest: resulting.digest,
+                    });
+                }
+                SourceState::Partial => rollback(
+                    &self.metadata.source_root,
+                    &journal_root,
+                    &self.metadata.baseline,
+                    &changes,
+                )?,
+                SourceState::Baseline => {}
+                SourceState::Drift {
+                    path,
+                    expected,
+                    actual,
+                } => {
+                    return Err(TransactionError::BaselineDrift {
+                        path,
+                        expected,
+                        actual,
+                    });
+                }
+            }
             fs::remove_dir_all(&journal_root).map_err(|source| TransactionError::Io {
                 path: journal_root.clone(),
                 source,
             })?;
+        }
+        match self.source_state(&changes)? {
+            SourceState::Baseline => {}
+            SourceState::Applied => {
+                let resulting = WorkspaceManifest::capture(&self.metadata.source_root)?;
+                return Ok(ApplyOutcome {
+                    changed_files: changes.len(),
+                    baseline_digest: self.metadata.baseline.digest.clone(),
+                    resulting_digest: resulting.digest,
+                });
+            }
+            SourceState::Partial => {
+                return Err(TransactionError::Invariant(
+                    "source contains a partial apply without a recovery journal".to_owned(),
+                ));
+            }
+            SourceState::Drift {
+                path,
+                expected,
+                actual,
+            } => {
+                return Err(TransactionError::BaselineDrift {
+                    path,
+                    expected,
+                    actual,
+                });
+            }
         }
         fs::create_dir_all(&journal_root).map_err(|source| TransactionError::Io {
             path: journal_root.clone(),
@@ -311,7 +369,11 @@ impl WorkspaceTransaction {
         })
     }
 
-    fn check_source_drift(&self, changes: &[FileChange]) -> Result<(), TransactionError> {
+    fn source_state(&self, changes: &[FileChange]) -> Result<SourceState, TransactionError> {
+        let mut all_baseline = true;
+        let mut all_applied = true;
+        let mut all_known = true;
+        let mut first_foreign_drift = None;
         for change in changes {
             let source = self.metadata.source_root.join(&change.path);
             let actual = if source.exists() {
@@ -319,15 +381,35 @@ impl WorkspaceTransaction {
             } else {
                 None
             };
-            if actual != change.before_digest {
-                return Err(TransactionError::BaselineDrift {
+            all_baseline &= actual == change.before_digest;
+            all_applied &= actual == change.after_digest;
+            if actual != change.before_digest && actual != change.after_digest {
+                all_known = false;
+            }
+            if actual != change.before_digest
+                && actual != change.after_digest
+                && first_foreign_drift.is_none()
+            {
+                first_foreign_drift = Some(SourceState::Drift {
                     path: change.path.clone(),
                     expected: change.before_digest.clone(),
-                    actual,
+                    actual: actual.clone(),
                 });
             }
         }
-        Ok(())
+        if all_baseline {
+            Ok(SourceState::Baseline)
+        } else if all_applied {
+            Ok(SourceState::Applied)
+        } else if all_known {
+            Ok(SourceState::Partial)
+        } else {
+            first_foreign_drift.ok_or_else(|| {
+                TransactionError::Invariant(
+                    "mixed source state had no non-baseline file".to_owned(),
+                )
+            })
+        }
     }
 
     fn apply_changes(&self, changes: &[FileChange]) -> Result<(), TransactionError> {
@@ -360,6 +442,18 @@ impl WorkspaceTransaction {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum SourceState {
+    Baseline,
+    Applied,
+    Partial,
+    Drift {
+        path: String,
+        expected: Option<String>,
+        actual: Option<String>,
+    },
 }
 
 fn copy_manifest_files(
@@ -570,6 +664,8 @@ pub enum TransactionError {
     UnsupportedSchema(u32),
     #[error("transaction metadata is invalid: {0}")]
     Serialization(serde_json::Error),
+    #[error("transaction invariant failed: {0}")]
+    Invariant(String),
     #[error(
         "source file {path} changed after the run started (expected {expected:?}, actual {actual:?})"
     )]
@@ -625,6 +721,10 @@ mod tests {
             fs::read_to_string(source.path().join("src/lib.rs")).ok(),
             Some("pub fn new() {}\n".to_owned())
         );
+        let repeated = transaction
+            .apply()
+            .unwrap_or_else(|error| unreachable!("idempotent apply: {error}"));
+        assert_eq!(repeated.changed_files, 1);
     }
 
     #[test]

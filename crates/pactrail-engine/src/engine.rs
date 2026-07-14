@@ -75,11 +75,28 @@ impl<'a> RunEngine<'a> {
     /// Returns [`EngineError`] when the contract, context, durable store, model,
     /// transaction, or receipt violates a hard invariant. Ordinary tool errors
     /// are returned to the model and recorded rather than crashing the run.
+    pub async fn execute(
+        &self,
+        contract: TaskContract,
+        transaction: &WorkspaceTransaction,
+        store: &mut EventStore,
+    ) -> Result<RunOutcome, EngineError> {
+        self.execute_with_id(RunId::new(), contract, transaction, store)
+            .await
+    }
+
+    /// Runs a task under a caller-supplied durable run identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError`] under the same hard-invariant conditions as
+    /// [`Self::execute`]. An identifier already present in the event store is rejected.
     // This method intentionally keeps lifecycle transitions visible in one place;
     // extracting them would obscure the event-ordering invariant.
     #[allow(clippy::too_many_lines)]
-    pub async fn execute(
+    pub async fn execute_with_id(
         &self,
+        run_id: RunId,
         contract: TaskContract,
         transaction: &WorkspaceTransaction,
         store: &mut EventStore,
@@ -96,7 +113,6 @@ impl<'a> RunEngine<'a> {
                 "max_turns must be greater than zero".to_owned(),
             ));
         }
-        let run_id = RunId::new();
         let mut journal = Journal::new(run_id, store);
         journal.append(RunEvent::ContractRegistered(contract.clone()))?;
         let mut state = RunState::Created;
