@@ -71,6 +71,28 @@ fn complete_run_is_isolated_then_applies() {
     let applied: Value = serde_json::from_slice(&apply.stdout)
         .unwrap_or_else(|error| unreachable!("apply JSON: {error}"));
     assert_eq!(applied["outcome"], "applied");
+
+    let repeated = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "apply",
+            run_id,
+            "--json",
+        ])
+        .output()
+        .unwrap_or_else(|error| unreachable!("repeated apply command: {error}"));
+    assert!(
+        repeated.status.success(),
+        "repeated apply failed: {}",
+        String::from_utf8_lossy(&repeated.stderr)
+    );
+    let repeated_receipt: Value = serde_json::from_slice(&repeated.stdout)
+        .unwrap_or_else(|error| unreachable!("repeated apply JSON: {error}"));
+    assert_eq!(
+        repeated_receipt["integrity_hash"],
+        applied["integrity_hash"]
+    );
 }
 
 fn serve_model(listener: &TcpListener) {

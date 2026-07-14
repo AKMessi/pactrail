@@ -280,13 +280,31 @@ fn apply_ready_receipt(
     transaction: &WorkspaceTransaction,
     store: &mut EventStore,
 ) -> Result<ChangeReceipt, CliError> {
-    require_ready_receipt(&receipt)?;
+    require_receipt_integrity(&receipt)?;
     let snapshot = store.snapshot(receipt.run_id)?;
-    if snapshot.state != RunState::AwaitingApply {
-        return Err(CliError::Argument(format!(
-            "run state is {:?}, expected awaiting_apply",
-            snapshot.state
-        )));
+    if snapshot.state == RunState::Applied {
+        transaction.apply()?;
+        if receipt.outcome == ReceiptOutcome::Applied {
+            if receipt.final_event_hash != snapshot.last_hash.0 {
+                return Err(CliError::Argument(
+                    "applied receipt does not match the durable event head".to_owned(),
+                ));
+            }
+            return Ok(receipt);
+        }
+        if receipt.outcome == ReceiptOutcome::ReadyToApply {
+            let applied = rebuild_receipt(receipt, ReceiptOutcome::Applied, snapshot.last_hash.0)?;
+            write_receipt(run_root, &applied)?;
+            return Ok(applied);
+        }
+    }
+    if snapshot.state != RunState::AwaitingApply || receipt.outcome != ReceiptOutcome::ReadyToApply
+    {
+        return Err(state_receipt_mismatch(
+            snapshot.state,
+            receipt.outcome,
+            "apply",
+        ));
     }
     transaction.apply()?;
     let sequence = snapshot.last_sequence.map_or(0, |value| value + 1);
@@ -307,25 +325,75 @@ fn discard(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
     let run_root = run_root(state, run_id);
     let receipt = read_receipt(&run_root)?;
-    require_ready_receipt(&receipt)?;
     let transaction = WorkspaceTransaction::open(&run_root)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
-    let snapshot = store.snapshot(run_id)?;
-    if snapshot.state != RunState::AwaitingApply {
-        return Err(CliError::Argument(format!(
-            "run state is {:?}, expected awaiting_apply",
-            snapshot.state
-        )));
+    let discarded = discard_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
+    if args.json {
+        write_json(&discarded)
+    } else {
+        write_stdout(&format!("Discarded run {run_id}; receipt preserved.\n"))
+            .map_err(CliError::Output)
     }
+}
+
+fn discard_ready_receipt(
+    run_root: &Path,
+    receipt: ChangeReceipt,
+    transaction: &WorkspaceTransaction,
+    store: &mut EventStore,
+) -> Result<ChangeReceipt, CliError> {
+    require_receipt_integrity(&receipt)?;
+    let snapshot = store.snapshot(receipt.run_id)?;
     let workspace = transaction.workspace_root().to_path_buf();
     let staged = run_root.join("discarded-workspace");
-    fs::rename(&workspace, &staged).map_err(|source| CliError::Io {
-        path: workspace.clone(),
-        source,
-    })?;
+
+    if snapshot.state == RunState::Discarded {
+        if workspace.exists() {
+            return Err(CliError::Argument(format!(
+                "discarded run still has a transaction workspace at {}",
+                workspace.display()
+            )));
+        }
+        remove_staged_workspace(&staged)?;
+        if receipt.outcome == ReceiptOutcome::Discarded {
+            if receipt.final_event_hash != snapshot.last_hash.0 {
+                return Err(CliError::Argument(
+                    "discarded receipt does not match the durable event head".to_owned(),
+                ));
+            }
+            return Ok(receipt);
+        }
+        if receipt.outcome == ReceiptOutcome::ReadyToApply {
+            let discarded =
+                rebuild_receipt(receipt, ReceiptOutcome::Discarded, snapshot.last_hash.0)?;
+            write_receipt(run_root, &discarded)?;
+            return Ok(discarded);
+        }
+    }
+    if snapshot.state != RunState::AwaitingApply || receipt.outcome != ReceiptOutcome::ReadyToApply
+    {
+        return Err(state_receipt_mismatch(
+            snapshot.state,
+            receipt.outcome,
+            "discard",
+        ));
+    }
+
+    if workspace.exists() && !staged.exists() {
+        fs::rename(&workspace, &staged).map_err(|source| CliError::Io {
+            path: workspace.clone(),
+            source,
+        })?;
+    } else if workspace.exists() || !staged.is_dir() {
+        return Err(CliError::Argument(format!(
+            "discard staging is inconsistent (workspace={}, staged={})",
+            workspace.exists(),
+            staged.exists()
+        )));
+    }
     let sequence = snapshot.last_sequence.map_or(0, |value| value + 1);
     let appended = store.append(
-        run_id,
+        receipt.run_id,
         sequence,
         RunEvent::StateChanged {
             from: RunState::AwaitingApply,
@@ -339,18 +407,10 @@ fn discard(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
             return Err(CliError::Store(error));
         }
     };
-    fs::remove_dir_all(&staged).map_err(|source| CliError::Io {
-        path: staged,
-        source,
-    })?;
+    remove_staged_workspace(&staged)?;
     let discarded = rebuild_receipt(receipt, ReceiptOutcome::Discarded, event.hash.0)?;
-    write_receipt(&run_root, &discarded)?;
-    if args.json {
-        write_json(&discarded)
-    } else {
-        write_stdout(&format!("Discarded run {run_id}; receipt preserved.\n"))
-            .map_err(CliError::Output)
-    }
+    write_receipt(run_root, &discarded)?;
+    Ok(discarded)
 }
 
 fn rebuild_receipt(
@@ -371,19 +431,29 @@ fn rebuild_receipt(
     .map_err(CliError::Receipt)
 }
 
-fn require_ready_receipt(receipt: &ChangeReceipt) -> Result<(), CliError> {
+fn require_receipt_integrity(receipt: &ChangeReceipt) -> Result<(), CliError> {
     if !receipt.verify_integrity()? {
         return Err(CliError::Argument(
             "receipt integrity check failed; refusing state change".to_owned(),
         ));
     }
-    if receipt.outcome != ReceiptOutcome::ReadyToApply {
-        return Err(CliError::Argument(format!(
-            "run outcome is {:?}, not ready_to_apply",
-            receipt.outcome
-        )));
+    Ok(())
+}
+
+fn remove_staged_workspace(staged: &Path) -> Result<(), CliError> {
+    if staged.exists() {
+        fs::remove_dir_all(staged).map_err(|source| CliError::Io {
+            path: staged.to_path_buf(),
+            source,
+        })?;
     }
     Ok(())
+}
+
+fn state_receipt_mismatch(state: RunState, outcome: ReceiptOutcome, operation: &str) -> CliError {
+    CliError::Argument(format!(
+        "cannot {operation}: durable run state is {state:?}, receipt outcome is {outcome:?}"
+    ))
 }
 
 fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
@@ -714,4 +784,156 @@ pub enum CliError {
     Tool(#[from] ToolError),
     #[error("receipt failed: {0}")]
     Receipt(#[from] pactrail_core::ReceiptError),
+}
+
+#[cfg(test)]
+mod tests {
+    use pactrail_core::{Evidence, EvidenceKind};
+
+    use super::*;
+
+    struct ReadyFixture {
+        _source: tempfile::TempDir,
+        _control: tempfile::TempDir,
+        run_root: PathBuf,
+        transaction: WorkspaceTransaction,
+        store: EventStore,
+        receipt: ChangeReceipt,
+    }
+
+    fn ready_fixture() -> ReadyFixture {
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let run_root = control.path().join("run");
+        let transaction = WorkspaceTransaction::create(source.path(), &run_root, &[".".to_owned()])
+            .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        transaction
+            .write_file("README.md", b"# Recovered\n")
+            .unwrap_or_else(|error| unreachable!("candidate write: {error}"));
+
+        let run_id = RunId::new();
+        let contract = TaskContract::new("Create a README", source.path().display().to_string());
+        let evidence = vec![Evidence::deterministic_pass(
+            contract.obligations[0].id,
+            EvidenceKind::Test,
+            "fixture passed",
+        )];
+        let mut store = EventStore::open_in_memory()
+            .unwrap_or_else(|error| unreachable!("event store: {error}"));
+        store
+            .append(run_id, 0, RunEvent::ContractRegistered(contract.clone()))
+            .unwrap_or_else(|error| unreachable!("contract event: {error}"));
+        let transitions = [
+            (RunState::Created, RunState::Contracting),
+            (RunState::Contracting, RunState::Investigating),
+            (RunState::Investigating, RunState::Planning),
+            (RunState::Planning, RunState::Executing),
+            (RunState::Executing, RunState::Verifying),
+            (RunState::Verifying, RunState::Reviewing),
+            (RunState::Reviewing, RunState::AwaitingApply),
+        ];
+        for (offset, (from, to)) in transitions.into_iter().enumerate() {
+            store
+                .append(
+                    run_id,
+                    u64::try_from(offset).unwrap_or_default() + 1,
+                    RunEvent::StateChanged { from, to },
+                )
+                .unwrap_or_else(|error| unreachable!("state event: {error}"));
+        }
+        let snapshot = store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        let receipt = ChangeReceipt::build(ReceiptInput {
+            run_id,
+            contract,
+            outcome: ReceiptOutcome::ReadyToApply,
+            baseline_digest: transaction.baseline_digest().to_owned(),
+            final_event_hash: snapshot.last_hash.0,
+            changes: transaction
+                .changes()
+                .unwrap_or_else(|error| unreachable!("changes: {error}")),
+            evidence,
+            unresolved_risks: Vec::new(),
+        })
+        .unwrap_or_else(|error| unreachable!("receipt: {error}"));
+        ReadyFixture {
+            _source: source,
+            _control: control,
+            run_root,
+            transaction,
+            store,
+            receipt,
+        }
+    }
+
+    #[test]
+    fn apply_repairs_receipt_after_terminal_event() {
+        let mut fixture = ready_fixture();
+        fixture
+            .transaction
+            .apply()
+            .unwrap_or_else(|error| unreachable!("filesystem apply: {error}"));
+        let snapshot = fixture
+            .store
+            .snapshot(fixture.receipt.run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        let terminal = fixture
+            .store
+            .append(
+                fixture.receipt.run_id,
+                snapshot.last_sequence.map_or(0, |value| value + 1),
+                RunEvent::StateChanged {
+                    from: RunState::AwaitingApply,
+                    to: RunState::Applied,
+                },
+            )
+            .unwrap_or_else(|error| unreachable!("applied event: {error}"));
+
+        let repaired = apply_ready_receipt(
+            &fixture.run_root,
+            fixture.receipt,
+            &fixture.transaction,
+            &mut fixture.store,
+        )
+        .unwrap_or_else(|error| unreachable!("receipt recovery: {error}"));
+        assert_eq!(repaired.outcome, ReceiptOutcome::Applied);
+        assert_eq!(repaired.final_event_hash, terminal.hash.0);
+        assert_eq!(read_receipt(&fixture.run_root).ok(), Some(repaired));
+    }
+
+    #[test]
+    fn discard_repairs_receipt_and_staging_after_terminal_event() {
+        let mut fixture = ready_fixture();
+        let staged = fixture.run_root.join("discarded-workspace");
+        fs::rename(fixture.transaction.workspace_root(), &staged)
+            .unwrap_or_else(|error| unreachable!("discard staging: {error}"));
+        let snapshot = fixture
+            .store
+            .snapshot(fixture.receipt.run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        let terminal = fixture
+            .store
+            .append(
+                fixture.receipt.run_id,
+                snapshot.last_sequence.map_or(0, |value| value + 1),
+                RunEvent::StateChanged {
+                    from: RunState::AwaitingApply,
+                    to: RunState::Discarded,
+                },
+            )
+            .unwrap_or_else(|error| unreachable!("discarded event: {error}"));
+
+        let repaired = discard_ready_receipt(
+            &fixture.run_root,
+            fixture.receipt,
+            &fixture.transaction,
+            &mut fixture.store,
+        )
+        .unwrap_or_else(|error| unreachable!("discard recovery: {error}"));
+        assert_eq!(repaired.outcome, ReceiptOutcome::Discarded);
+        assert_eq!(repaired.final_event_hash, terminal.hash.0);
+        assert!(!staged.exists());
+        assert_eq!(read_receipt(&fixture.run_root).ok(), Some(repaired));
+    }
 }
