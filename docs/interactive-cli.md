@@ -26,6 +26,8 @@ The activity line reflects engine events rather than simulating work. It shows:
 - model turn, latency, tool-call count, provider-reported tokens, and aggregate
   model time;
 - the active typed tool, changed path, duration, and bounded output count;
+- non-progress detection and the bounded read-only recovery turn when a weak
+  model repeats an identical successful call;
 - detected verification command, position, result, and duration;
 - final turns, tool calls, tokens, elapsed/model time, and truncation count.
 
@@ -37,6 +39,13 @@ without persisting raw prompts, keys, or raw tool arguments.
 Failure does not erase observability: Pactrail reports the run ID, exports the
 portable trace, keeps that run focused for `/trace`, and lists it in `/runs`
 even when no receipt could be issued.
+
+Informational prompts are first-class runs. They terminate as `ANSWERED`, issue
+an integrity-checked receipt with no candidate changes, and never ask for
+`/apply`. Broad workspace overviews begin with a deterministic profile derived
+from root manifests and conventional entrypoints, followed by a separately
+labelled model explanation. This keeps tiny-model degradation useful without
+presenting model prose as kernel evidence.
 
 Internal logs stay out of the normal transcript even when another tool exports
 `RUST_LOG`. Set `PACTRAIL_LOG` for interactive diagnostics; non-interactive
@@ -83,6 +92,16 @@ When the run stops, Pactrail prints the receipt outcome, evidence counts,
 integrity status, changed paths, risks, model summary, and token usage. `/review`
 combines receipt and diff. `/discard` rejects the candidate while retaining the
 receipt, immutable diff, and trace. `/runs` browses recent history.
+
+For a repository question, use the same prompt directly:
+
+```text
+whats this directory about
+/trace
+```
+
+The trace shows project-profile grounding, any model/tool activity, verification
+availability, and the terminal `Completed` state.
 
 Run IDs accept any unique prefix shown by `/runs`. Commands without an ID focus
 the newest ready candidate, including after restart or after another candidate

@@ -74,8 +74,13 @@ For each run, the compiler:
 3. Requires the task contract and root `AGENTS.md` to fit in full. Failure is
    explicit rather than silently dropping authoritative instructions.
 4. Labels nested `AGENTS.md` files with their virtual directory scope.
-5. Adds complete relevant memory and topology entries in priority order.
-6. Omits optional entries whole, records inclusion metadata, and shows the model
+5. Falls back to conventional manifests, READMEs, and entrypoints for broad
+   repository questions, adding bounded current previews labelled as untrusted
+   file evidence.
+6. Produces a deterministic project profile from root ecosystem manifests and
+   conventional entrypoints so tiny models do not have to infer basic topology.
+7. Adds complete relevant memory and topology entries in priority order.
+8. Omits optional entries whole, records inclusion metadata, and shows the model
    a visible budget-exhaustion notice.
 
 Memory is advisory. It includes an identifier, kind, source, title, and content;
@@ -101,6 +106,14 @@ Each tool result is normalized, output-bounded, and compared against transaction
 manifests before and after execution. The event record contains a digest of the
 arguments rather than raw potentially sensitive inputs, plus duration, risk,
 call ID, output size/truncation, declared capability, and observed effects.
+
+The loop controller separately tracks identical tool turns and all-failed tool
+turns. A repeated successful read-only call receives explicit steering. If a
+conservatively classified informational goal still repeats three times, Pactrail
+permits exactly one additional model attempt with no tools and an evidence-only
+synthesis instruction. This recovery consumes the normal model-attempt and
+token budgets and is fully journaled. Failed calls, change requests, and
+mutation loops do not receive this fallback.
 
 ## Durable memory
 
@@ -130,6 +143,12 @@ journal remains authoritative; JSONL is the portable inspection artifact.
 
 Pactrail intentionally does not persist raw model prompts, responses, API keys,
 or raw tool arguments in traces.
+
+Read-only informational runs transition from `Reviewing` to terminal
+`Completed` and issue an `Answered` receipt. Change runs retain the explicit
+`AwaitingApply` boundary. For broad workspace answers the engine prepends the
+deterministic project profile to a separately labelled model explanation and
+records the grounding action in the trace.
 
 ## Workspace transaction and apply
 

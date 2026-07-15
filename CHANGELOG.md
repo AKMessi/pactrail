@@ -22,6 +22,14 @@ follow [Semantic Versioning](https://semver.org/).
   history so model/protocol failures remain discoverable after restart.
 - Interactive `/tools` kernel inspector and expanded live latency/token/context
   activity reporting.
+- First-class `Answered` receipts and terminal `Completed` runs for
+  informational prompts, with no fake candidate or apply step.
+- Conventional project-anchor fallback, bounded current anchor previews, and
+  deterministic ecosystem/entrypoint profiles for broad workspace questions.
+- Bounded weak-model recovery that steers repeated successful read-only calls,
+  then permits one budgeted tool-free synthesis turn for informational goals.
+- Distinct live and trace presentation for recovery and deterministic answer
+  grounding.
 
 ### Changed
 

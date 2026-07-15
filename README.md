@@ -47,8 +47,10 @@ pactrail ❯ Fix the parser regression and add a test.
   risk, argument digests, output bounds, observed effects, verification, policy,
   evidence, and state transitions are hash-linked and available as portable
   JSONL.
-- **Weak models fail usefully.** Repeated or invalid tool loops stop early while
-  preserving coherent candidate changes for human review.
+- **Weak models degrade gracefully.** Broad questions receive bounded current
+  anchor previews and a deterministic ecosystem/entrypoint profile. Repeated
+  successful read-only loops get one tool-free synthesis turn; invalid loops
+  still fail closed, while coherent candidate edits remain reviewable.
 
 ## Shipped in 0.1
 
@@ -61,6 +63,9 @@ pactrail ❯ Fix the parser regression and add a test.
   browser, `/runs`, `/review`, immutable `/diff`, explicit `/apply` and
   `/discard`, `/doctor`, model discovery, and persistent provider settings.
 - Human-readable output by default and stable JSON for scripts.
+- Informational prompts finish as `ANSWERED` with no fake apply step. Kernel
+  facts and model explanation remain visibly distinct for broad workspace
+  overviews.
 
 ### Tool Kernel v2
 
@@ -129,6 +134,14 @@ Fix the failing parser tests and add a regression test.
 /trace
 /diff
 /apply
+```
+
+You can also ask normal repository questions. They produce terminal `ANSWERED`
+runs with integrity-checked receipts and traces, but no candidate or apply step:
+
+```text
+whats this directory about
+/trace
 ```
 
 Connect any local OpenAI-compatible server without restarting:

@@ -16,6 +16,8 @@ promise or a security claim.
 - Tool Kernel v2 with schemas, risk/behavior annotations, batch read, atomic
   multi-edit, change inspection, recall, bounded results, and safe read batching.
 - Model-aware context budgets and correctly scoped `AGENTS.md` instructions.
+- Grounded broad-question context with anchor previews, deterministic project
+  profiles, first-class answered runs, and bounded weak-model loop recovery.
 - Provenance-aware workspace memory with human and applied-receipt write paths.
 - Hash-linked detailed execution traces and portable JSONL.
 - Interactive review-focused CLI plus scriptable JSON interface.
