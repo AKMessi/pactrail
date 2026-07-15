@@ -63,12 +63,73 @@ pub enum Command {
         #[arg(value_enum)]
         shell: CompletionShell,
     },
+    /// Manage provenance-aware memory for the selected workspace.
+    Memory {
+        #[command(subcommand)]
+        command: MemoryCommand,
+    },
     /// Report local execution dependencies and sandbox limitations.
     Doctor {
         /// Emit machine-readable JSON.
         #[arg(long)]
         json: bool,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MemoryCommand {
+    /// List the most recent active memories.
+    List {
+        /// Maximum number of memories.
+        #[arg(long, default_value_t = 20, value_parser = clap::value_parser!(u16).range(1..=100))]
+        limit: u16,
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Search memory by topic, file, decision, or convention.
+    Search {
+        /// Lexical retrieval query.
+        query: String,
+        /// Maximum number of matches.
+        #[arg(long, default_value_t = 10, value_parser = clap::value_parser!(u16).range(1..=100))]
+        limit: u16,
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Add an explicit human-authored workspace memory.
+    Add {
+        /// Memory content.
+        content: String,
+        /// Short title; defaults to a bounded prefix of the content.
+        #[arg(long)]
+        title: Option<String>,
+        /// Semantic memory class.
+        #[arg(long, value_enum, default_value = "convention")]
+        kind: MemoryKindArg,
+        /// Searchable tag. Repeatable.
+        #[arg(long = "tag")]
+        tags: Vec<String>,
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Forget one active memory by ID or unique ID prefix.
+    Forget {
+        /// Full memory ID or unique prefix.
+        id: String,
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum MemoryKindArg {
+    Convention,
+    Decision,
+    Warning,
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]

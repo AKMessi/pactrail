@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 pactrail-context = { version = "0.1.0", path = "../pactrail-context" }
 pactrail-core = { version = "0.1.0", path = "../pactrail-core" }
+pactrail-memory = { version = "0.1.0", path = "../pactrail-memory" }
 pactrail-models = { version = "0.1.0", path = "../pactrail-models" }
 pactrail-store = { version = "0.1.0", path = "../pactrail-store" }
 pactrail-tools = { version = "0.1.0", path = "../pactrail-tools" }

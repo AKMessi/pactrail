@@ -7,6 +7,7 @@ use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use pactrail_core::{ChangeReceipt, FileChange, ReceiptOutcome, RunId, RunState};
 use pactrail_engine::{RunObserver, RunProgress};
+use pactrail_memory::{MemoryDraft, MemoryKind};
 use reedline::{
     DefaultCompleter, DefaultValidator, FileBackedHistory, Prompt, PromptEditMode,
     PromptHistorySearch, PromptHistorySearchStatus, PromptViMode, Reedline, Signal,
@@ -23,7 +24,7 @@ use crate::theme::Theme;
 
 const HISTORY_CAPACITY: usize = 2_000;
 const MAX_MODEL_LIST_BYTES: usize = 1024 * 1024;
-const HELP_GROUPS: &[&str] = &["Work", "Model", "Safety", "Session"];
+const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Safety", "Session"];
 const COMMANDS: &[CommandHelp] = &[
     CommandHelp::new("Work", "/review [run]", "show receipt and immutable diff"),
     CommandHelp::new("Work", "/diff [run]", "review candidate changes"),
@@ -38,6 +39,21 @@ const COMMANDS: &[CommandHelp] = &[
         "Work",
         "/inspect [run]",
         "inspect a receipt without its diff",
+    ),
+    CommandHelp::new(
+        "Memory",
+        "/memory [query]",
+        "browse or search workspace memory",
+    ),
+    CommandHelp::new(
+        "Memory",
+        "/remember [kind] <text>",
+        "save a convention, decision, or warning",
+    ),
+    CommandHelp::new(
+        "Memory",
+        "/forget <id>",
+        "remove a memory by ID or unique prefix",
     ),
     CommandHelp::new("Model", "/models", "discover models from the endpoint"),
     CommandHelp::new("Model", "/model <name|#>", "select and persist a model"),
@@ -124,6 +140,7 @@ pub(crate) async fn launch(
         .map_err(|error| CliError::Argument(format!("settings failed: {error}")))?;
     let receipts = commands::completed_runs(&state)?;
     let (last_run, pending_runs) = run_focus(&receipts);
+    let memory_count = commands::list_memories(&state, 100)?.len();
     let history = FileBackedHistory::with_file(HISTORY_CAPACITY, preferences.history_path())
         .map_err(|error| CliError::Argument(format!("history failed: {error}")))?;
     let mut completer = DefaultCompleter::with_inclusions(&['/', '-']);
@@ -147,6 +164,7 @@ pub(crate) async fn launch(
         theme: Theme::detect(),
         last_run,
         pending_runs,
+        memory_count,
         known_models: Vec::new(),
     };
     session.bootstrap().await?;
@@ -165,6 +183,7 @@ struct Session {
     theme: Theme,
     last_run: Option<RunId>,
     pending_runs: usize,
+    memory_count: usize,
     known_models: Vec<String>,
 }
 
@@ -379,6 +398,9 @@ impl Session {
             "/turns" => self.set_turns(arguments)?,
             "/process" => self.set_process_access(arguments)?,
             "/runs" | "/history" => self.render_runs()?,
+            "/memory" => self.render_memories(arguments)?,
+            "/remember" => self.remember(arguments)?,
+            "/forget" => self.forget(arguments)?,
             "/inspect" => self.inspect_run(arguments, false)?,
             "/review" => self.inspect_run(arguments, true)?,
             "/diff" => self.render_diff(self.resolve_run(arguments)?)?,
@@ -471,8 +493,18 @@ impl Session {
                 plural(self.pending_runs, "candidate", "candidates")
             ))
         };
+        let memory = if self.memory_count == 0 {
+            self.theme
+                .muted("empty · /remember to teach this workspace")
+        } else {
+            self.theme.accent(&format!(
+                "{} {} · /memory",
+                self.memory_count,
+                plural(self.memory_count, "memory", "memories")
+            ))
+        };
         let banner = format!(
-            "\n  {}  {}\n  {}\n\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n\n  {}\n",
+            "\n  {}  {}\n  {}\n\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n\n  {}\n",
             self.theme.brand("P A C T R A I L"),
             self.theme.muted(env!("CARGO_PKG_VERSION")),
             self.theme
@@ -485,6 +517,8 @@ impl Session {
             process,
             "review",
             review,
+            "memory",
+            memory,
             self.theme.muted(
                 "Describe a change, or use /help. Prefix a task with // when it starts with /."
             ),
@@ -582,8 +616,17 @@ impl Session {
                 plural(self.pending_runs, "candidate", "candidates")
             ))
         };
+        let memory = if self.memory_count == 0 {
+            self.theme.muted("empty")
+        } else {
+            self.theme.accent(&format!(
+                "{} active {}",
+                self.memory_count,
+                plural(self.memory_count, "entry", "entries")
+            ))
+        };
         self.emit(&format!(
-            "\n{}\n  {:<12} {}\n  {:<12} {} · {}\n  {:<12} {}\n  {:<12} {}\n  {:<12} {} context · {} output · {} turns\n  {:<12} {}\n  {:<12} {}\n\n",
+            "\n{}\n  {:<12} {}\n  {:<12} {} · {}\n  {:<12} {}\n  {:<12} {}\n  {:<12} {} context · {} output · {} turns\n  {:<12} {}\n  {:<12} {}\n  {:<12} {}\n\n",
             self.theme.heading("Session"),
             "workspace",
             self.theme.text(&display_path(&self.workspace)),
@@ -602,6 +645,126 @@ impl Session {
             process,
             "review",
             review,
+            "memory",
+            memory,
+        ))
+    }
+
+    fn render_memories(&self, query: &str) -> Result<(), CliError> {
+        let memories = if query.trim().is_empty() {
+            commands::list_memories(&self.state, 20)?
+        } else {
+            commands::search_memories(&self.state, query, 20)?
+                .into_iter()
+                .map(|item| item.memory)
+                .collect()
+        };
+        if memories.is_empty() {
+            return self.emit(&format!(
+                "\n{}\n  {}\n\n",
+                self.theme.heading("Workspace memory"),
+                self.theme.muted(if query.trim().is_empty() {
+                    "No memories yet. Use /remember <text> to add one."
+                } else {
+                    "No memory matched that query."
+                })
+            ));
+        }
+        let mut lines = vec![format!(
+            "{}  {}",
+            self.theme.heading("Workspace memory"),
+            self.theme.muted(&format!(
+                "{} {}{}",
+                memories.len(),
+                plural(memories.len(), "entry", "entries"),
+                if query.trim().is_empty() {
+                    String::new()
+                } else {
+                    format!(" for {query:?}")
+                }
+            ))
+        )];
+        for memory in memories {
+            let marker = match memory.kind {
+                MemoryKind::Convention => self.theme.accent("◆"),
+                MemoryKind::Decision => self.theme.success("●"),
+                MemoryKind::Warning => self.theme.warning("!"),
+                MemoryKind::AppliedRun => self.theme.muted("✓"),
+            };
+            lines.push(format!(
+                "  {marker} {}  {}  {}",
+                self.theme.code(&memory.id.to_string()[..8]),
+                self.theme.muted(&memory.kind.to_string()),
+                self.theme.text(&truncate(&memory.title, 62))
+            ));
+            for content in wrap_text(&memory.content.replace('\n', " "), 78)
+                .into_iter()
+                .take(2)
+            {
+                lines.push(format!("      {}", self.theme.muted(&content)));
+            }
+        }
+        lines.push(self.theme.muted(
+            "Memory is advisory and provenance-tagged; current files and task instructions win.",
+        ));
+        self.emit(&format!("\n{}\n\n", lines.join("\n")))
+    }
+
+    fn remember(&mut self, argument: &str) -> Result<(), CliError> {
+        let argument = argument.trim();
+        if argument.is_empty() {
+            return Err(CliError::Argument(
+                "usage: /remember [convention|decision|warning] <text>".to_owned(),
+            ));
+        }
+        let (first, remaining) = argument
+            .split_once(char::is_whitespace)
+            .unwrap_or((argument, ""));
+        let (kind, content) = match first.to_ascii_lowercase().as_str() {
+            "convention" => (MemoryKind::Convention, remaining.trim()),
+            "decision" => (MemoryKind::Decision, remaining.trim()),
+            "warning" => (MemoryKind::Warning, remaining.trim()),
+            _ => (MemoryKind::Convention, argument),
+        };
+        if content.is_empty() {
+            return Err(CliError::Argument(
+                "memory content cannot be empty".to_owned(),
+            ));
+        }
+        let title = content
+            .split_whitespace()
+            .take(10)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let memory = commands::remember_memory(
+            &self.state,
+            MemoryDraft {
+                kind,
+                title,
+                content: content.to_owned(),
+                tags: Vec::new(),
+            },
+        )?;
+        self.refresh_memory_count()?;
+        self.emit(&format!(
+            "\n{} Remembered for this workspace\n  {}  {}\n\n",
+            self.theme.success("✓"),
+            self.theme.code(&memory.id.to_string()[..8]),
+            self.theme.text(&memory.title)
+        ))
+    }
+
+    fn forget(&mut self, argument: &str) -> Result<(), CliError> {
+        if argument.trim().is_empty() {
+            return Err(CliError::Argument("usage: /forget <memory-id>".to_owned()));
+        }
+        let id = commands::resolve_memory_id(&self.state, argument.trim())?;
+        commands::forget_memory(&self.state, id)?;
+        self.refresh_memory_count()?;
+        self.emit(&format!(
+            "\n{} Forgot workspace memory {}\n\n",
+            self.theme.warning("◇"),
+            self.theme.code(&id.to_string()[..8])
         ))
     }
 
@@ -926,6 +1089,7 @@ impl Session {
         let receipt = commands::apply_run(&self.state, run_id)?;
         self.last_run = Some(run_id);
         self.refresh_pending_runs()?;
+        self.refresh_memory_count()?;
         self.emit(&format!(
             "\n{} Applied {} {}\n  {}\n\n",
             self.theme.success("✓"),
@@ -1091,6 +1255,11 @@ impl Session {
         Ok(())
     }
 
+    fn refresh_memory_count(&mut self) -> Result<(), CliError> {
+        self.memory_count = commands::list_memories(&self.state, 100)?.len();
+        Ok(())
+    }
+
     fn render_error(&self, message: &str) -> Result<(), CliError> {
         self.emit(&format!(
             "{} {}\n",
@@ -1126,10 +1295,14 @@ fn tool_activity(name: &str) -> &'static str {
     match name {
         "list_files" => "mapping workspace files",
         "read_file" => "reading source",
+        "read_many_files" => "reading related sources",
         "search" => "searching workspace",
+        "recall_memory" => "recalling workspace memory",
         "write_file" => "writing candidate file",
         "replace_text" => "editing candidate file",
+        "edit_file" => "applying atomic candidate edits",
         "remove_file" => "removing candidate file",
+        "workspace_changes" => "inspecting candidate changes",
         "run_process" => "running trusted process",
         _ => "running typed tool",
     }

@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 
-use crate::{Tool, ToolContext, ToolDescriptor, ToolError, ToolOutput};
+use crate::{Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput};
 
 const DEFAULT_TIMEOUT_SECONDS: u64 = 120;
 const MAX_TIMEOUT_SECONDS: u64 = 3_600;
@@ -51,6 +51,7 @@ impl Tool for RunProcessTool {
             input_schema: serde_json::to_value(schema_for!(RunProcessInput))
                 .unwrap_or_else(|_| json!({})),
             required_capability: Capability::ProcessSpawn,
+            annotations: ToolAnnotations::HOST_EXECUTION,
         }
     }
 
@@ -241,6 +242,7 @@ mod tests {
         let context = ToolContext {
             workspace: &transaction,
             policy: &policy,
+            memory: None,
         };
         let result = RunProcessTool
             .execute(&context, json!({"program":"cargo"}))

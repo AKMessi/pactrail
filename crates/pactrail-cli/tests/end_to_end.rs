@@ -106,6 +106,31 @@ fn complete_run_is_isolated_then_applies() {
         repeated_receipt["integrity_hash"],
         applied["integrity_hash"]
     );
+
+    assert_applied_memory(workspace.path(), run_id);
+}
+
+fn assert_applied_memory(workspace: &Path, run_id: &str) {
+    let memory = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace),
+            "memory",
+            "search",
+            "Create README",
+            "--json",
+        ])
+        .output()
+        .unwrap_or_else(|error| unreachable!("memory search: {error}"));
+    assert!(
+        memory.status.success(),
+        "memory search failed: {}",
+        String::from_utf8_lossy(&memory.stderr)
+    );
+    let memories: Value = serde_json::from_slice(&memory.stdout)
+        .unwrap_or_else(|error| unreachable!("memory JSON: {error}"));
+    assert_eq!(memories[0]["memory"]["source"], "applied_receipt");
+    assert_eq!(memories[0]["memory"]["source_run_id"], run_id);
 }
 
 #[test]

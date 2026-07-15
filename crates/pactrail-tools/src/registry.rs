@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pactrail_core::{Capability, PolicyDecision};
+use pactrail_memory::{MemoryError, MemoryStore};
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,55 @@ pub struct ToolDescriptor {
     pub description: String,
     pub input_schema: Value,
     pub required_capability: Capability,
+    pub annotations: ToolAnnotations,
+}
+
+/// Runtime and UX hints that do not weaken policy enforcement.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+pub struct ToolAnnotations {
+    /// Whether the tool only observes bounded local state.
+    pub read_only: bool,
+    /// Whether repeating an identical call is expected to have the same effect.
+    pub idempotent: bool,
+    /// Whether calls may execute concurrently with other parallel-safe calls.
+    pub parallel_safe: bool,
+    /// Coarse risk shown in traces and tool discovery.
+    pub risk: ToolRisk,
+}
+
+impl ToolAnnotations {
+    /// Standard annotation set for deterministic read-only tools.
+    pub const READ_ONLY: Self = Self {
+        read_only: true,
+        idempotent: true,
+        parallel_safe: true,
+        risk: ToolRisk::ReadOnly,
+    };
+
+    /// Standard annotation set for isolated workspace mutations.
+    pub const WORKSPACE_MUTATION: Self = Self {
+        read_only: false,
+        idempotent: false,
+        parallel_safe: false,
+        risk: ToolRisk::WorkspaceMutation,
+    };
+
+    /// Standard annotation set for unsandboxed native processes.
+    pub const HOST_EXECUTION: Self = Self {
+        read_only: false,
+        idempotent: false,
+        parallel_safe: false,
+        risk: ToolRisk::HostExecution,
+    };
+}
+
+/// Human-readable tool risk class.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolRisk {
+    ReadOnly,
+    WorkspaceMutation,
+    HostExecution,
 }
 
 /// Bounded result of executing one tool call.
@@ -34,6 +84,7 @@ pub struct ToolOutput {
 pub struct ToolContext<'a> {
     pub workspace: &'a WorkspaceTransaction,
     pub policy: &'a PolicyEngine,
+    pub memory: Option<&'a MemoryStore>,
 }
 
 impl ToolContext<'_> {
@@ -117,6 +168,12 @@ impl ToolRegistry {
         self.tools.values().map(|tool| tool.descriptor()).collect()
     }
 
+    /// Returns one registered descriptor without executing the tool.
+    #[must_use]
+    pub fn descriptor(&self, name: &str) -> Option<ToolDescriptor> {
+        self.tools.get(name).map(|tool| tool.descriptor())
+    }
+
     /// Executes a registered tool.
     ///
     /// # Errors
@@ -180,6 +237,16 @@ pub enum ToolError {
     NonUtf8(std::path::PathBuf),
     #[error("requested range is invalid: {0}")]
     InvalidRange(String),
+    #[error("workspace memory is unavailable for this run")]
+    MemoryUnavailable,
+    #[error("workspace memory failed: {0}")]
+    Memory(#[from] MemoryError),
     #[error("replacement count was {actual}, expected {expected}")]
     ReplacementCount { expected: usize, actual: usize },
+    #[error("edit {index} replacement count was {actual}, expected {expected}")]
+    InvalidEditCount {
+        index: usize,
+        expected: usize,
+        actual: usize,
+    },
 }

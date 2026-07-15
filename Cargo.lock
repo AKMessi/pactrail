@@ -1162,8 +1162,10 @@ dependencies = [
  "directories",
  "futures-util",
  "indicatif",
+ "pactrail-context",
  "pactrail-core",
  "pactrail-engine",
+ "pactrail-memory",
  "pactrail-models",
  "pactrail-store",
  "pactrail-tools",
@@ -1216,6 +1218,7 @@ dependencies = [
  "async-trait",
  "pactrail-context",
  "pactrail-core",
+ "pactrail-memory",
  "pactrail-models",
  "pactrail-store",
  "pactrail-tools",
@@ -1225,6 +1228,21 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "pactrail-memory"
+version = "0.1.0"
+dependencies = [
+ "pactrail-core",
+ "rusqlite",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "time",
+ "uuid",
 ]
 
 [[package]]
@@ -1267,6 +1285,7 @@ dependencies = [
  "blake3",
  "ignore",
  "pactrail-core",
+ "pactrail-memory",
  "pactrail-workspace",
  "schemars",
  "serde",

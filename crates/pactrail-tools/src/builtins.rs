@@ -10,30 +10,46 @@ use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::{Tool, ToolContext, ToolDescriptor, ToolError, ToolOutput};
+use crate::{Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput};
 
 const MAX_READ_BYTES: u64 = 1024 * 1024;
 const MAX_SEARCH_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_EDIT_BYTES: u64 = 8 * 1024 * 1024;
 
-fn descriptor<T: JsonSchema>(
+pub(crate) fn descriptor<T: JsonSchema>(
     name: &str,
     description: &str,
     required_capability: Capability,
 ) -> ToolDescriptor {
+    let annotations = match required_capability {
+        Capability::FileRead | Capability::MemoryRead => ToolAnnotations::READ_ONLY,
+        Capability::FileWrite => ToolAnnotations::WORKSPACE_MUTATION,
+        Capability::ProcessSpawn
+        | Capability::Network
+        | Capability::SecretUse
+        | Capability::ExternalWrite => ToolAnnotations::HOST_EXECUTION,
+    };
     ToolDescriptor {
         name: name.to_owned(),
         description: description.to_owned(),
         input_schema: serde_json::to_value(schema_for!(T)).unwrap_or_else(|_| json!({})),
         required_capability,
+        annotations,
     }
 }
 
-fn input<T: for<'de> Deserialize<'de>>(value: Value, tool: &'static str) -> Result<T, ToolError> {
+pub(crate) fn input<T: for<'de> Deserialize<'de>>(
+    value: Value,
+    tool: &'static str,
+) -> Result<T, ToolError> {
     serde_json::from_value(value).map_err(|source| ToolError::InvalidInput { tool, source })
 }
 
-fn success(content: Value, summary: impl Into<String>, effects: Vec<String>) -> ToolOutput {
+pub(crate) fn success(
+    content: Value,
+    summary: impl Into<String>,
+    effects: Vec<String>,
+) -> ToolOutput {
     ToolOutput {
         content,
         summary: summary.into(),
@@ -492,7 +508,7 @@ fn resolve_directory(context: &ToolContext<'_>, relative: &str) -> Result<PathBu
     Ok(path)
 }
 
-fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, ToolError> {
+pub(crate) fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, ToolError> {
     let file = File::open(path).map_err(|source| ToolError::Io {
         path: path.to_path_buf(),
         source,
@@ -566,6 +582,7 @@ mod tests {
         let context = ToolContext {
             workspace: &transaction,
             policy: &policy,
+            memory: None,
         };
         let output = ReplaceTextTool
             .execute(
@@ -587,6 +604,7 @@ mod tests {
         let context = ToolContext {
             workspace: &transaction,
             policy: &policy,
+            memory: None,
         };
         let output = ReadFileTool
             .execute(
@@ -610,6 +628,7 @@ mod tests {
         let context = ToolContext {
             workspace: &transaction,
             policy: &policy,
+            memory: None,
         };
         let output = ListFilesTool
             .execute(&context, json!({"max_entries": 2}))

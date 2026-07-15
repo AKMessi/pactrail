@@ -11,6 +11,8 @@ pub enum Capability {
     FileRead,
     /// Write files inside the isolated workspace transaction.
     FileWrite,
+    /// Read provenance-tagged memory associated with the active workspace.
+    MemoryRead,
     /// Spawn a local process.
     ProcessSpawn,
     /// Connect to a network resource.
@@ -55,6 +57,7 @@ impl fmt::Display for Capability {
         let value = match self {
             Self::FileRead => "file_read",
             Self::FileWrite => "file_write",
+            Self::MemoryRead => "memory_read",
             Self::ProcessSpawn => "process_spawn",
             Self::Network => "network",
             Self::SecretUse => "secret_use",

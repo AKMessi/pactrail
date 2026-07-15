@@ -19,7 +19,9 @@ directories.workspace = true
 futures-util.workspace = true
 indicatif.workspace = true
 pactrail-core = { version = "0.1.0", path = "../pactrail-core" }
+pactrail-context = { version = "0.1.0", path = "../pactrail-context" }
 pactrail-engine = { version = "0.1.0", path = "../pactrail-engine" }
+pactrail-memory = { version = "0.1.0", path = "../pactrail-memory" }
 pactrail-models = { version = "0.1.0", path = "../pactrail-models" }
 pactrail-store = { version = "0.1.0", path = "../pactrail-store" }
 pactrail-tools = { version = "0.1.0", path = "../pactrail-tools" }

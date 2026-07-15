@@ -12,6 +12,9 @@ use pactrail_core::{
     TaskContract,
 };
 use pactrail_engine::{EngineError, RunEngine, RunObserver};
+use pactrail_memory::{
+    MemoryDraft, MemoryError, MemoryId, MemoryKind, MemoryMatch, MemoryRecord, MemoryStore,
+};
 use pactrail_models::{
     ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
@@ -24,7 +27,10 @@ use serde_json::json;
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-use crate::cli::{Cli, Command, CompletionShell, OutputFormat, ProviderKind, RunArgs, RunIdArgs};
+use crate::cli::{
+    Cli, Command, CompletionShell, MemoryCommand, MemoryKindArg, OutputFormat, ProviderKind,
+    RunArgs, RunIdArgs,
+};
 use crate::output::{escape_json_terminal_controls, write_human_stdout, write_stdout};
 
 pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
@@ -52,6 +58,10 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
         Command::Schema => schema(),
         Command::TaskTemplate { goal } => task_template(&cli.workspace, goal),
         Command::Completion { shell } => completion(shell),
+        Command::Memory { command } => {
+            let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
+            memory(&state, command)
+        }
         Command::Doctor { json } => doctor(json),
     }
 }
@@ -109,6 +119,7 @@ async fn execute_run_inner(
         contract.allowed_write_paths.clone_from(&args.write_paths);
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);
+        contract.permissions.allow.insert(Capability::MemoryRead);
         contract.permissions.deny.insert(Capability::Network);
         contract.permissions.deny.insert(Capability::SecretUse);
         contract.permissions.deny.insert(Capability::ExternalWrite);
@@ -137,10 +148,29 @@ async fn execute_run_inner(
     let transaction =
         WorkspaceTransaction::create(&workspace, &run_root, &contract.allowed_write_paths)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
+    let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
     let registry = builtin_registry()?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
-    let engine = RunEngine::new(&driver, &registry, &policy).with_max_turns(args.max_turns);
+    let context_fragments = if contract.permissions.allow.contains(&Capability::MemoryRead) {
+        memory
+            .search(&contract.goal, 8)?
+            .into_iter()
+            .map(|item| pactrail_context::ContextFragment {
+                source: format!(
+                    "memory:{} [{}; {}] {}",
+                    item.memory.id, item.memory.kind, item.memory.source, item.memory.title
+                ),
+                content: item.memory.content,
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let engine = RunEngine::new(&driver, &registry, &policy)
+        .with_memory(&memory)
+        .with_context_fragments(context_fragments)
+        .with_max_turns(args.max_turns);
     let outcome = match observer {
         Some(observer) => {
             engine
@@ -160,6 +190,7 @@ async fn execute_run_inner(
 
     if args.apply && receipt.outcome == ReceiptOutcome::ReadyToApply {
         receipt = apply_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
+        memory.remember_applied_run(&receipt)?;
     }
     Ok(CompletedRun {
         run_root,
@@ -366,7 +397,9 @@ pub(crate) fn apply_run(state: &Path, run_id: RunId) -> Result<ChangeReceipt, Cl
     let receipt = read_receipt(&run_root)?;
     let transaction = WorkspaceTransaction::open(&run_root)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
-    apply_ready_receipt(&run_root, receipt, &transaction, &mut store)
+    let applied = apply_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
+    MemoryStore::open(state.join("memory.sqlite3"))?.remember_applied_run(&applied)?;
+    Ok(applied)
 }
 
 fn apply_ready_receipt(
@@ -645,6 +678,7 @@ fn task_template(workspace: &Path, goal: String) -> Result<(), CliError> {
     let mut contract = TaskContract::new(goal, workspace.display().to_string());
     contract.permissions.allow.insert(Capability::FileRead);
     contract.permissions.allow.insert(Capability::FileWrite);
+    contract.permissions.allow.insert(Capability::MemoryRead);
     contract.permissions.deny.insert(Capability::Network);
     contract.permissions.deny.insert(Capability::SecretUse);
     contract.permissions.deny.insert(Capability::ExternalWrite);
@@ -670,6 +704,160 @@ fn completion(shell: CompletionShell) -> Result<(), CliError> {
     let output = String::from_utf8(output)
         .map_err(|error| CliError::Argument(format!("completion output was not UTF-8: {error}")))?;
     write_stdout(&output).map_err(CliError::Output)
+}
+
+fn memory(state: &Path, command: MemoryCommand) -> Result<(), CliError> {
+    match command {
+        MemoryCommand::List { limit, json } => {
+            let memories = list_memories(state, usize::from(limit))?;
+            render_memories(&memories, json)
+        }
+        MemoryCommand::Search { query, limit, json } => {
+            let matches = search_memories(state, &query, usize::from(limit))?;
+            if json {
+                write_json(&matches)
+            } else {
+                let memories = matches
+                    .into_iter()
+                    .map(|item| item.memory)
+                    .collect::<Vec<_>>();
+                render_memories(&memories, false)
+            }
+        }
+        MemoryCommand::Add {
+            content,
+            title,
+            kind,
+            tags,
+            json,
+        } => {
+            let title = title.unwrap_or_else(|| default_memory_title(&content));
+            let memory = remember_memory(
+                state,
+                MemoryDraft {
+                    kind: memory_kind(kind),
+                    title,
+                    content,
+                    tags,
+                },
+            )?;
+            if json {
+                write_json(&memory)
+            } else {
+                write_human_stdout(&format!(
+                    "Remembered {} [{}] {}\n",
+                    memory.id, memory.kind, memory.title
+                ))
+                .map_err(CliError::Output)
+            }
+        }
+        MemoryCommand::Forget { id, json } => {
+            let id = resolve_memory_id(state, &id)?;
+            forget_memory(state, id)?;
+            if json {
+                write_json(&json!({ "forgotten": id }))
+            } else {
+                write_human_stdout(&format!("Forgot memory {id}.\n")).map_err(CliError::Output)
+            }
+        }
+    }
+}
+
+pub(crate) fn list_memories(state: &Path, limit: usize) -> Result<Vec<MemoryRecord>, CliError> {
+    MemoryStore::open(state.join("memory.sqlite3"))?
+        .list(limit)
+        .map_err(CliError::Memory)
+}
+
+pub(crate) fn search_memories(
+    state: &Path,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<MemoryMatch>, CliError> {
+    MemoryStore::open(state.join("memory.sqlite3"))?
+        .search(query, limit)
+        .map_err(CliError::Memory)
+}
+
+pub(crate) fn remember_memory(state: &Path, draft: MemoryDraft) -> Result<MemoryRecord, CliError> {
+    MemoryStore::open(state.join("memory.sqlite3"))?
+        .remember(draft)
+        .map_err(CliError::Memory)
+}
+
+pub(crate) fn forget_memory(state: &Path, id: MemoryId) -> Result<(), CliError> {
+    MemoryStore::open(state.join("memory.sqlite3"))?
+        .forget(id)
+        .map_err(CliError::Memory)
+}
+
+pub(crate) fn resolve_memory_id(state: &Path, value: &str) -> Result<MemoryId, CliError> {
+    if let Ok(id) = MemoryId::from_str(value) {
+        return Ok(id);
+    }
+    if value.len() < 4 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(CliError::Argument(format!(
+            "memory id {value:?} is not a UUID or hexadecimal prefix"
+        )));
+    }
+    let matches = list_memories(state, 100)?
+        .into_iter()
+        .filter(|memory| memory.id.to_string().starts_with(value))
+        .map(|memory| memory.id)
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [id] => Ok(*id),
+        [] => Err(CliError::Argument(format!(
+            "no active memory matches prefix {value:?}"
+        ))),
+        _ => Err(CliError::Argument(format!(
+            "memory prefix {value:?} is ambiguous"
+        ))),
+    }
+}
+
+fn render_memories(memories: &[MemoryRecord], json_output: bool) -> Result<(), CliError> {
+    if json_output {
+        return write_json(memories);
+    }
+    if memories.is_empty() {
+        return write_human_stdout("No matching Pactrail memories.\n").map_err(CliError::Output);
+    }
+    let text = memories
+        .iter()
+        .map(|memory| {
+            format!(
+                "{}  {:<11}  {}\n    {}",
+                memory.id,
+                memory.kind,
+                memory.title,
+                memory.content.replace('\n', " ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    write_human_stdout(&format!("{text}\n")).map_err(CliError::Output)
+}
+
+fn default_memory_title(content: &str) -> String {
+    let title = content
+        .split_whitespace()
+        .take(10)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if title.is_empty() {
+        "Workspace memory".to_owned()
+    } else {
+        title
+    }
+}
+
+const fn memory_kind(kind: MemoryKindArg) -> MemoryKind {
+    match kind {
+        MemoryKindArg::Convention => MemoryKind::Convention,
+        MemoryKindArg::Decision => MemoryKind::Decision,
+        MemoryKindArg::Warning => MemoryKind::Warning,
+    }
 }
 
 pub(crate) fn doctor(json_output: bool) -> Result<(), CliError> {
@@ -871,7 +1059,7 @@ fn write_receipt(run_root: &Path, receipt: &ChangeReceipt) -> Result<(), CliErro
     Ok(())
 }
 
-fn write_json<T: serde::Serialize>(value: &T) -> Result<(), CliError> {
+fn write_json<T: serde::Serialize + ?Sized>(value: &T) -> Result<(), CliError> {
     let mut text = serde_json::to_string_pretty(value).map_err(CliError::Json)?;
     text.push('\n');
     write_stdout(&escape_json_terminal_controls(&text)).map_err(CliError::Output)
@@ -907,6 +1095,8 @@ pub enum CliError {
     Transaction(#[from] TransactionError),
     #[error("tool registry failed: {0}")]
     Tool(#[from] ToolError),
+    #[error("workspace memory failed: {0}")]
+    Memory(#[from] MemoryError),
     #[error("receipt failed: {0}")]
     Receipt(#[from] pactrail_core::ReceiptError),
 }

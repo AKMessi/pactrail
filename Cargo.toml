@@ -5,6 +5,7 @@ members = [
     "crates/pactrail-context",
     "crates/pactrail-core",
     "crates/pactrail-engine",
+    "crates/pactrail-memory",
     "crates/pactrail-models",
     "crates/pactrail-store",
     "crates/pactrail-tools",

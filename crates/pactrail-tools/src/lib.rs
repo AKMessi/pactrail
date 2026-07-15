@@ -1,5 +1,6 @@
 //! Typed, policy-aware tools for Pactrail.
 
+mod advanced;
 mod builtins;
 mod policy;
 mod process;
@@ -10,7 +11,10 @@ pub use builtins::{
 };
 pub use policy::PolicyEngine;
 pub use process::RunProcessTool;
-pub use registry::{Tool, ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry};
+pub use registry::{
+    Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry,
+    ToolRisk,
+};
 
 /// Builds the production default set of local coding tools.
 ///
@@ -22,11 +26,16 @@ pub use registry::{Tool, ToolContext, ToolDescriptor, ToolError, ToolOutput, Too
 pub fn builtin_registry() -> Result<ToolRegistry, ToolError> {
     let mut registry = ToolRegistry::new();
     registry.register(ReadFileTool)?;
+    registry.register(ReadManyFilesTool)?;
     registry.register(ListFilesTool)?;
     registry.register(SearchTool)?;
     registry.register(WriteFileTool)?;
     registry.register(ReplaceTextTool)?;
+    registry.register(EditFileTool)?;
     registry.register(RemoveFileTool)?;
+    registry.register(WorkspaceChangesTool)?;
+    registry.register(RecallMemoryTool)?;
     registry.register(RunProcessTool)?;
     Ok(registry)
 }
+pub use advanced::{EditFileTool, ReadManyFilesTool, RecallMemoryTool, WorkspaceChangesTool};
