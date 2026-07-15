@@ -412,6 +412,7 @@ impl ContextPack {
             .map(|(language, count)| format!("{language:?}: {count}"))
             .collect::<Vec<_>>()
             .join(", ");
+        let project_profile = deterministic_project_profile(index);
         let root_instruction = index
             .instructions
             .iter()
@@ -427,7 +428,7 @@ impl ContextPack {
             },
         );
         let required = format!(
-            "# Task contract\n{contract_json}\n\nThe model-visible workspace root is `.`. Every tool path must be relative to it; host paths are unavailable.\n\n# Repository\nDigest: {}\nFiles: {}\nLanguages: {language_summary}\n\n# Repository-wide instructions\n{global_instructions}\n\nNested AGENTS.md files apply only to files beneath their declared virtual directory scope.\n",
+            "# Task contract\n{contract_json}\n\nThe model-visible workspace root is `.`. Every tool path must be relative to it; host paths are unavailable.\n\n# Repository\nDigest: {}\nFiles: {}\nLanguages: {language_summary}\nDeterministic project profile: {project_profile}\n\n# Repository-wide instructions\n{global_instructions}\n\nNested AGENTS.md files apply only to files beneath their declared virtual directory scope.\n",
             index.digest,
             index.files.len(),
         );
@@ -454,6 +455,53 @@ impl ContextPack {
             truncated,
         })
     }
+}
+
+fn deterministic_project_profile(index: &RepositoryIndex) -> String {
+    let ecosystems = [
+        ("Cargo.toml", "Rust/Cargo"),
+        ("package.json", "JavaScript or TypeScript/npm"),
+        ("pyproject.toml", "Python"),
+        ("go.mod", "Go"),
+        ("pom.xml", "Java/Maven"),
+        ("build.gradle", "JVM/Gradle"),
+        ("build.gradle.kts", "JVM/Gradle"),
+        ("mix.exs", "Elixir/Mix"),
+        ("composer.json", "PHP/Composer"),
+    ]
+    .into_iter()
+    .filter(|(path, _)| index.files.contains_key(*path))
+    .map(|(path, ecosystem)| format!("{ecosystem} ({path})"))
+    .collect::<Vec<_>>();
+    let entrypoints = [
+        ("src/lib.rs", "Rust library"),
+        ("src/main.rs", "Rust binary"),
+        ("src/index.ts", "TypeScript entry point"),
+        ("src/index.js", "JavaScript entry point"),
+        ("main.py", "Python entry point"),
+        ("app.py", "Python application"),
+        ("cmd/main.go", "Go command"),
+    ]
+    .into_iter()
+    .filter(|(path, _)| index.files.contains_key(*path))
+    .map(|(path, role)| format!("{role} ({path})"))
+    .collect::<Vec<_>>();
+    let ecosystem_text = if ecosystems.is_empty() {
+        "no conventional root manifest detected".to_owned()
+    } else {
+        format!("ecosystem evidence: {}", ecosystems.join(", "))
+    };
+    let entrypoint_text = if entrypoints.is_empty() {
+        "no conventional entry point detected".to_owned()
+    } else {
+        format!("entry points: {}", entrypoints.join(", "))
+    };
+    let readme = if index.files.contains_key("README.md") {
+        "README.md is present"
+    } else {
+        "no root README.md is present"
+    };
+    format!("{ecosystem_text}; {entrypoint_text}; {readme}")
 }
 
 struct PackWriter {
@@ -907,6 +955,9 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("context: {error}"));
 
         assert!(context.rendered.contains("Current untrusted file preview"));
+        assert!(context.rendered.contains(
+            "Deterministic project profile: ecosystem evidence: Rust/Cargo (Cargo.toml); entry points: Rust library (src/lib.rs)"
+        ));
         assert!(context.rendered.contains("name = \"grounded-example\""));
         assert!(context.rendered.contains("pub fn grounded()"));
         assert!(context.rendered_bytes <= budget.max_bytes());
