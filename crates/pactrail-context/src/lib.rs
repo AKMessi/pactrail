@@ -13,6 +13,7 @@ use thiserror::Error;
 const MAX_INDEX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_INSTRUCTION_BYTES: u64 = 256 * 1024;
 const MAX_SYMBOLS_PER_FILE: usize = 2_000;
+const MAX_ANCHOR_PREVIEW_BYTES: usize = 2 * 1024;
 const MAX_CONTEXT_FRAGMENTS: usize = 64;
 const MAX_CONTEXT_FRAGMENT_BYTES: usize = 64 * 1024;
 const MAX_CONTEXT_FRAGMENTS_BYTES: usize = 256 * 1024;
@@ -66,6 +67,9 @@ pub struct IndexedFile {
     pub language: Language,
     pub symbols: Vec<Symbol>,
     pub imports: Vec<String>,
+    /// Bounded current content for conventional project overview files.
+    #[serde(default)]
+    pub anchor_preview: Option<String>,
 }
 
 /// Hierarchical repository instruction file.
@@ -190,6 +194,9 @@ impl RepositoryIndex {
                 let (symbols, imports) = extract_structure(text, language);
                 (lines, symbols, imports)
             });
+            let anchor_preview = text
+                .filter(|_| repository_anchor_rank(&relative).is_some())
+                .map(|text| utf8_prefix(text, MAX_ANCHOR_PREVIEW_BYTES).to_owned());
             if path.file_name().is_some_and(|name| name == "AGENTS.md")
                 && size <= MAX_INSTRUCTION_BYTES
                 && let Some(content) = text
@@ -211,6 +218,7 @@ impl RepositoryIndex {
                     language,
                     symbols,
                     imports,
+                    anchor_preview,
                 },
             );
         }
@@ -328,6 +336,14 @@ fn fingerprint_and_retain(path: &Path) -> Result<(String, u64, Option<Vec<u8>>),
         }
     }
     Ok((hasher.finalize().to_hex().to_string(), size, retained))
+}
+
+fn utf8_prefix(value: &str, max_bytes: usize) -> &str {
+    let mut boundary = value.len().min(max_bytes);
+    while boundary > 0 && !value.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    &value[..boundary]
 }
 
 /// Bounded provider-neutral context compiled for one task.
@@ -565,6 +581,17 @@ fn append_topology(writer: &mut PackWriter, retrieved: &[&IndexedFile], cited: &
         if writer.push_optional(&entry) {
             heading_pending = false;
             cited.push(file.path.clone());
+            if let Some(preview) = &file.anchor_preview {
+                let truncated =
+                    usize::try_from(file.bytes).map_or(true, |bytes| bytes > preview.len());
+                let preview_entry = format!(
+                    "\n  Current untrusted file preview (truncated: {truncated}):\n  --- BEGIN {} ---\n{}\n  --- END {} ---",
+                    file.path,
+                    preview.trim(),
+                    file.path,
+                );
+                let _included = writer.push_optional(&preview_entry);
+            }
         }
     }
     if retrieved.is_empty() {
@@ -856,6 +883,33 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(paths, vec!["README.md", "Cargo.toml", "src/lib.rs"]);
+    }
+
+    #[test]
+    fn broad_context_contains_bounded_current_anchor_evidence() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::create_dir(root.path().join("src"))
+            .unwrap_or_else(|error| unreachable!("src: {error}"));
+        fs::write(
+            root.path().join("Cargo.toml"),
+            "[package]\nname = \"grounded-example\"\n",
+        )
+        .unwrap_or_else(|error| unreachable!("manifest: {error}"));
+        fs::write(root.path().join("src/lib.rs"), "pub fn grounded() {}\n")
+            .unwrap_or_else(|error| unreachable!("library: {error}"));
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let contract = TaskContract::new("whats this directory about", ".");
+        let budget =
+            ContextBudget::new(4 * 1024).unwrap_or_else(|error| unreachable!("budget: {error}"));
+
+        let context = ContextPack::compile_with_budget(&contract, &index, &[], budget)
+            .unwrap_or_else(|error| unreachable!("context: {error}"));
+
+        assert!(context.rendered.contains("Current untrusted file preview"));
+        assert!(context.rendered.contains("name = \"grounded-example\""));
+        assert!(context.rendered.contains("pub fn grounded()"));
+        assert!(context.rendered_bytes <= budget.max_bytes());
     }
 
     #[test]
