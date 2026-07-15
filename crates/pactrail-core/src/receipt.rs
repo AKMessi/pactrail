@@ -25,6 +25,8 @@ pub struct FileChange {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReceiptOutcome {
+    /// A read-only task returned an evidence-backed answer with no candidate changes.
+    Answered,
     ReadyToApply,
     Applied,
     Discarded,
@@ -205,6 +207,39 @@ mod tests {
             unresolved_risks: Vec::new(),
         });
         assert!(matches!(result, Err(ReceiptError::MissingEvidence(_))));
+    }
+
+    #[test]
+    fn answered_receipts_are_integrity_checked_without_changes() {
+        let contract = TaskContract::new("explain this repository", ".");
+        let obligation_id = contract.obligations[0].id;
+        let receipt = ChangeReceipt::build(ReceiptInput {
+            run_id: RunId::new(),
+            contract,
+            outcome: ReceiptOutcome::Answered,
+            baseline_digest: "baseline".to_owned(),
+            final_event_hash: "event".to_owned(),
+            changes: Vec::new(),
+            evidence: vec![Evidence {
+                id: crate::EvidenceId::new(),
+                obligation_id,
+                kind: EvidenceKind::FileObservation,
+                grade: EvidenceGrade::Observed,
+                status: EvidenceStatus::Passed,
+                summary: "repository files were inspected".to_owned(),
+                artifact_digest: None,
+                reproduction: None,
+            }],
+            unresolved_risks: Vec::new(),
+        })
+        .unwrap_or_else(|error| unreachable!("receipt: {error}"));
+
+        assert_eq!(receipt.outcome, ReceiptOutcome::Answered);
+        assert!(
+            receipt
+                .verify_integrity()
+                .unwrap_or_else(|error| unreachable!("integrity: {error}"))
+        );
     }
 
     #[test]

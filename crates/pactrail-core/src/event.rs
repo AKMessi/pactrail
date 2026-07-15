@@ -29,6 +29,8 @@ pub enum RunState {
     Executing,
     Verifying,
     Reviewing,
+    /// A read-only task produced a final answer and has nothing to apply.
+    Completed,
     AwaitingApply,
     Applied,
     Discarded,
@@ -42,7 +44,7 @@ impl RunState {
     pub const fn is_terminal(self) -> bool {
         matches!(
             self,
-            Self::Applied | Self::Discarded | Self::Failed | Self::Cancelled
+            Self::Completed | Self::Applied | Self::Discarded | Self::Failed | Self::Cancelled
         )
     }
 
@@ -61,7 +63,7 @@ impl RunState {
                 )
                 | (Self::Executing, Self::Verifying)
                 | (Self::Verifying, Self::Reviewing)
-                | (Self::Reviewing, Self::AwaitingApply)
+                | (Self::Reviewing, Self::Completed | Self::AwaitingApply)
                 | (Self::AwaitingApply, Self::Applied | Self::Discarded)
         )
     }
@@ -337,6 +339,51 @@ mod tests {
             .apply(&contracting)
             .unwrap_or_else(|error| unreachable!("valid transition: {error}"));
         assert_eq!(snapshot.state, RunState::Contracting);
+    }
+
+    #[test]
+    fn read_only_runs_can_complete_without_an_apply_state() {
+        let run_id = RunId::new();
+        let mut snapshot = RunSnapshot::new(run_id);
+        let states = [
+            RunState::Contracting,
+            RunState::Investigating,
+            RunState::Planning,
+            RunState::Executing,
+            RunState::Verifying,
+            RunState::Reviewing,
+            RunState::Completed,
+        ];
+        let contract = event(
+            run_id,
+            0,
+            EventHash::genesis(),
+            RunEvent::ContractRegistered(TaskContract::new("explain this repository", ".")),
+        );
+        snapshot
+            .apply(&contract)
+            .unwrap_or_else(|error| unreachable!("contract: {error}"));
+        let mut previous_hash = contract.hash;
+        let mut previous_state = RunState::Created;
+        for (index, state) in states.into_iter().enumerate() {
+            let transition = event(
+                run_id,
+                u64::try_from(index).unwrap_or_default() + 1,
+                previous_hash,
+                RunEvent::StateChanged {
+                    from: previous_state,
+                    to: state,
+                },
+            );
+            previous_hash = transition.hash.clone();
+            previous_state = state;
+            snapshot
+                .apply(&transition)
+                .unwrap_or_else(|error| unreachable!("transition: {error}"));
+        }
+
+        assert_eq!(snapshot.state, RunState::Completed);
+        assert!(snapshot.state.is_terminal());
     }
 
     #[test]

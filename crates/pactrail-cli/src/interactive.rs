@@ -298,6 +298,23 @@ impl RunActivity {
             _ => {}
         }
     }
+
+    fn on_recovery_progress(&self, progress: &RunProgress) {
+        match progress {
+            RunProgress::RecoveryStarted { repeated_turns, .. } => self.set_message(format!(
+                "loop detected after {repeated_turns} turns · forcing an evidence-bounded answer"
+            )),
+            RunProgress::RecoveryCompleted {
+                text_bytes,
+                duration_ms,
+            } => self.set_message(format!(
+                "answer recovered · {} · {}",
+                format_bytes(u64::try_from(*text_bytes).unwrap_or(u64::MAX)),
+                format_duration(Duration::from_millis(*duration_ms))
+            )),
+            _ => {}
+        }
+    }
 }
 
 impl RunObserver for RunActivity {
@@ -389,6 +406,9 @@ impl RunObserver for RunActivity {
                         "turn {turn} \u{00b7} {name} rejected; steering model"
                     ));
                 }
+            }
+            RunProgress::RecoveryStarted { .. } | RunProgress::RecoveryCompleted { .. } => {
+                self.on_recovery_progress(progress);
             }
             RunProgress::VerificationStarted { .. }
             | RunProgress::VerificationCommandStarted { .. }
@@ -1272,12 +1292,17 @@ impl Session {
             completed.model_summary.trim()
         };
         let tokens = format_count(completed.tokens);
+        let report_title = if completed.receipt.outcome == ReceiptOutcome::Answered {
+            "Answer"
+        } else {
+            "Model report"
+        };
         self.emit(&format!(
             "{}\n{}\n\n{} {tokens} tokens  {}\n",
-            self.theme.heading("Model report"),
+            self.theme.heading(report_title),
             self.theme.text(summary),
             self.theme.muted("usage"),
-            self.theme.code("/trace inspect execution"),
+            self.theme.code("/trace inspect evidence"),
         ))?;
         if completed.receipt.outcome == ReceiptOutcome::ReadyToApply {
             let message = if completed.receipt.changes.is_empty() {
@@ -1312,14 +1337,16 @@ impl Session {
                 self.theme.text(line)
             ));
         }
-        lines.push(format!(
-            "  {} {} {} · {} added · {} removed",
-            self.theme.muted("candidate"),
-            receipt.changes.len(),
-            plural(receipt.changes.len(), "file", "files"),
-            format_bytes(bytes_added),
-            format_bytes(bytes_removed),
-        ));
+        if receipt.outcome != ReceiptOutcome::Answered {
+            lines.push(format!(
+                "  {} {} {} · {} added · {} removed",
+                self.theme.muted("candidate"),
+                receipt.changes.len(),
+                plural(receipt.changes.len(), "file", "files"),
+                format_bytes(bytes_added),
+                format_bytes(bytes_removed),
+            ));
+        }
         lines.push(format!(
             "  {} {}",
             self.theme.muted("evidence "),
@@ -1335,19 +1362,21 @@ impl Session {
             }
         ));
 
-        lines.push(String::new());
-        lines.push(self.theme.heading("Changes"));
-        if receipt.changes.is_empty() {
-            lines.push(format!("  {}", self.theme.muted("(none)")));
-        }
-        for change in &receipt.changes {
-            let path = format!("{:<62}", truncate(&change.path, 62));
-            lines.push(format!(
-                "  {}  {} {}",
-                change_marker(&self.theme, change),
-                self.theme.code(&path),
-                self.theme.muted(&change_delta(change)),
-            ));
+        if receipt.outcome != ReceiptOutcome::Answered {
+            lines.push(String::new());
+            lines.push(self.theme.heading("Changes"));
+            if receipt.changes.is_empty() {
+                lines.push(format!("  {}", self.theme.muted("(none)")));
+            }
+            for change in &receipt.changes {
+                let path = format!("{:<62}", truncate(&change.path, 62));
+                lines.push(format!(
+                    "  {}  {} {}",
+                    change_marker(&self.theme, change),
+                    self.theme.code(&path),
+                    self.theme.muted(&change_delta(change)),
+                ));
+            }
         }
 
         if !receipt.unresolved_risks.is_empty() {
@@ -1437,6 +1466,7 @@ fn state_activity(state: RunState) -> Option<String> {
         RunState::Executing => Some("starting model loop".to_owned()),
         RunState::Verifying => Some("detecting repository checks".to_owned()),
         RunState::Reviewing => Some("sealing evidence receipt".to_owned()),
+        RunState::Completed => Some("answer sealed with an integrity receipt".to_owned()),
         RunState::AwaitingApply => Some("candidate ready for review".to_owned()),
         RunState::Failed => Some("run failed".to_owned()),
         RunState::Created | RunState::Applied | RunState::Discarded | RunState::Cancelled => None,
@@ -1825,6 +1855,7 @@ fn provider_label(provider: ProviderKind) -> &'static str {
 
 fn outcome_text(theme: &Theme, outcome: ReceiptOutcome) -> String {
     match outcome {
+        ReceiptOutcome::Answered => theme.success("ANSWERED"),
         ReceiptOutcome::ReadyToApply => theme.success("READY TO APPLY"),
         ReceiptOutcome::Applied => theme.success("APPLIED"),
         ReceiptOutcome::Discarded => theme.warning("DISCARDED"),
@@ -1839,6 +1870,7 @@ fn run_state_text(theme: &Theme, state: RunState) -> String {
         RunState::Cancelled => theme.warning("CANCELLED"),
         RunState::Applied => theme.success("APPLIED"),
         RunState::Discarded => theme.warning("DISCARDED"),
+        RunState::Completed => theme.success("ANSWERED"),
         RunState::AwaitingApply => theme.success("READY TO APPLY"),
         _ => theme.muted(&format!("{state:?}").to_uppercase()),
     }
