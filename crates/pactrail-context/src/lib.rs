@@ -350,6 +350,7 @@ fn utf8_prefix(value: &str, max_bytes: usize) -> &str {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ContextPack {
     pub repository_digest: String,
+    pub project_profile: String,
     pub rendered: String,
     pub cited_files: Vec<String>,
     pub included_instructions: Vec<String>,
@@ -446,6 +447,7 @@ impl ContextPack {
         let rendered_bytes = rendered.len();
         Ok(Self {
             repository_digest: index.digest.clone(),
+            project_profile,
             rendered,
             cited_files,
             included_instructions,

@@ -585,6 +585,30 @@ impl<'a> RunEngine<'a> {
             transition(&mut journal, &mut state, RunState::Failed, observer)?;
             return Err(EngineError::MaxTurns(max_turns));
         }
+        if goal_intent == GoalIntent::Informational && is_broad_repository_overview(&contract.goal)
+        {
+            final_text = format!(
+                "Pactrail workspace profile (deterministic)\n{}\n\nModel explanation\n{}",
+                context_pack.project_profile,
+                final_text.trim()
+            );
+            journal.append(RunEvent::ActionCompleted(ActionRecord {
+                actor: "context".to_owned(),
+                action: "ground_overview_answer".to_owned(),
+                summary: "prepended the deterministic project profile to a broad workspace answer"
+                    .to_owned(),
+                declared_effects: Vec::new(),
+                observed_effects: Vec::new(),
+                succeeded: true,
+                duration_ms: 0,
+                attributes: BTreeMap::from([(
+                    "profile_digest".to_owned(),
+                    blake3::hash(context_pack.project_profile.as_bytes())
+                        .to_hex()
+                        .to_string(),
+                )]),
+            }))?;
+        }
 
         transition(&mut journal, &mut state, RunState::Verifying, observer)?;
         let verification_commands = detect_verification_commands(transaction.workspace_root());
@@ -1335,6 +1359,27 @@ fn classify_goal(goal: &str) -> GoalIntent {
     }
 }
 
+fn is_broad_repository_overview(goal: &str) -> bool {
+    let words = goal
+        .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
+        .map(str::to_ascii_lowercase)
+        .filter(|word| !word.is_empty())
+        .collect::<BTreeSet<_>>();
+    let names_workspace = words.iter().any(|word| {
+        matches!(
+            word.as_str(),
+            "codebase" | "directory" | "project" | "repo" | "repository" | "workspace"
+        )
+    });
+    let asks_overview = words.iter().any(|word| {
+        matches!(
+            word.as_str(),
+            "about" | "describe" | "overview" | "purpose" | "summarize" | "what" | "whats"
+        )
+    });
+    names_workspace && asks_overview
+}
+
 fn change_map(
     changes: Vec<pactrail_core::FileChange>,
 ) -> BTreeMap<String, (Option<String>, Option<u32>)> {
@@ -1583,6 +1628,10 @@ mod tests {
             GoalIntent::Change
         );
         assert_eq!(classify_goal("Create a README"), GoalIntent::Change);
+        assert!(is_broad_repository_overview("whats this directory about"));
+        assert!(!is_broad_repository_overview(
+            "why does receipt verification fail?"
+        ));
     }
 
     #[tokio::test]
@@ -1879,6 +1928,8 @@ mod tests {
 
         assert_eq!(outcome.receipt.outcome, ReceiptOutcome::Answered);
         assert!(outcome.receipt.changes.is_empty());
+        assert!(outcome.final_text.contains("Pactrail workspace profile"));
+        assert!(outcome.final_text.contains("Rust/Cargo (Cargo.toml)"));
         assert!(outcome.final_text.contains("Cargo.toml"));
         assert_eq!(outcome.usage.total(), 60);
         assert!(outcome.receipt.unresolved_risks.iter().any(|risk| {
