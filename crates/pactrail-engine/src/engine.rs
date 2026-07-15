@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
+use futures_util::future::join_all;
 use pactrail_context::{
     ContextBudget, ContextError, ContextFragment, ContextPack, RepositoryIndex,
 };
@@ -11,11 +12,13 @@ use pactrail_core::{
 };
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
-    ConversationItem, FinishReason, Message, ModelDriver, ModelError, ModelRequest, ToolResult,
-    Usage,
+    ConversationItem, FinishReason, Message, ModelDriver, ModelError, ModelRequest, ToolCall,
+    ToolResult, Usage,
 };
 use pactrail_store::{EventStore, StoreError};
-use pactrail_tools::{PolicyEngine, ToolContext, ToolError, ToolRegistry};
+use pactrail_tools::{
+    PolicyEngine, ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry,
+};
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use serde_json::json;
 use thiserror::Error;
@@ -470,111 +473,15 @@ impl<'a> RunEngine<'a> {
                 calls: response.tool_calls.clone(),
             });
             let mut any_tool_succeeded = false;
-            for call in response.tool_calls {
-                observer.on_progress(&RunProgress::ToolStarted {
-                    name: call.name.clone(),
-                });
-                let tool_started = Instant::now();
-                let arguments_digest = blake3::hash(call.arguments.to_string().as_bytes())
-                    .to_hex()
-                    .to_string();
-                let descriptor = self.tools.descriptor(&call.name);
-                let before = change_map(transaction.changes()?);
-                let tool_context = ToolContext {
-                    workspace: transaction,
-                    policy: self.policy,
-                    memory: self.memory,
-                };
-                let result = self
-                    .tools
-                    .execute(&call.name, &tool_context, call.arguments)
-                    .await;
-                let after = change_map(transaction.changes()?);
-                let changed_files = changed_paths(&before, &after);
-                let mut observed_effects = changed_files
-                    .iter()
-                    .map(|path| format!("fs.changed:{path}"))
-                    .collect::<Vec<_>>();
-                let (tool_result, succeeded, summary, output_bytes, truncated) = match result {
-                    Ok(output) => {
-                        observed_effects.extend(output.observed_effects);
-                        let (content, output_bytes, bounded) = bound_tool_content(output.content);
-                        (
-                            ToolResult {
-                                call_id: call.id.clone(),
-                                name: call.name.clone(),
-                                content,
-                                is_error: !output.succeeded,
-                            },
-                            output.succeeded,
-                            output.summary,
-                            output_bytes,
-                            output.truncated || bounded,
-                        )
-                    }
-                    Err(error) => {
-                        warn!(tool = %call.name, %error, "tool call failed");
-                        let model_error = model_safe_tool_error(&error);
-                        let content = json!({ "error": model_error });
-                        let output_bytes = content.to_string().len();
-                        (
-                            ToolResult {
-                                call_id: call.id.clone(),
-                                name: call.name.clone(),
-                                content,
-                                is_error: true,
-                            },
-                            false,
-                            error.to_string(),
-                            output_bytes,
-                            false,
-                        )
-                    }
-                };
-                observed_effects.sort();
-                observed_effects.dedup();
-                let tool_duration_ms = elapsed_millis(tool_started);
-                any_tool_succeeded |= succeeded;
-                observer.on_progress(&RunProgress::ToolCompleted {
-                    name: call.name.clone(),
-                    succeeded,
-                    changed_files: changed_files.clone(),
-                    duration_ms: tool_duration_ms,
-                    output_bytes,
-                    truncated,
-                });
-                let mut attributes = BTreeMap::from([
-                    ("turn".to_owned(), (turn + 1).to_string()),
-                    ("call_id".to_owned(), call.id.clone()),
-                    ("arguments_digest".to_owned(), arguments_digest),
-                    ("output_bytes".to_owned(), output_bytes.to_string()),
-                    ("output_truncated".to_owned(), truncated.to_string()),
-                    ("changed_files".to_owned(), changed_files.len().to_string()),
-                ]);
-                if let Some(descriptor) = &descriptor {
-                    attributes.insert(
-                        "risk".to_owned(),
-                        format!("{:?}", descriptor.annotations.risk).to_lowercase(),
-                    );
-                    attributes.insert(
-                        "parallel_safe".to_owned(),
-                        descriptor.annotations.parallel_safe.to_string(),
-                    );
+            for batch in self.schedule_tool_batches(response.tool_calls) {
+                let executions = self
+                    .execute_tool_batch(transaction, observer, turn + 1, batch)
+                    .await?;
+                for execution in executions {
+                    any_tool_succeeded |= execution.succeeded;
+                    journal.append(RunEvent::ActionCompleted(execution.action))?;
+                    conversation.push(ConversationItem::ToolResult(execution.result));
                 }
-                journal.append(RunEvent::ActionCompleted(ActionRecord {
-                    actor: format!("tool:{}", call.name),
-                    action: call.name,
-                    summary,
-                    declared_effects: descriptor.map_or_else(
-                        || vec!["unknown tool contract".to_owned()],
-                        |descriptor| vec![descriptor.required_capability.to_string()],
-                    ),
-                    observed_effects,
-                    succeeded,
-                    duration_ms: tool_duration_ms,
-                    attributes,
-                }))?;
-                conversation.push(ConversationItem::ToolResult(tool_result));
             }
             if any_tool_succeeded {
                 consecutive_failed_tool_turns = 0;
@@ -678,6 +585,107 @@ impl<'a> RunEngine<'a> {
             usage,
             context_digest: context_pack.repository_digest,
             event_count: journal.sequence,
+        })
+    }
+
+    fn schedule_tool_batches(&self, calls: Vec<ToolCall>) -> Vec<Vec<ToolCall>> {
+        let mut batches = Vec::new();
+        let mut read_batch = Vec::new();
+        for call in calls {
+            let parallel_safe = self
+                .tools
+                .descriptor(&call.name)
+                .is_some_and(|descriptor| descriptor.annotations.parallel_safe);
+            if parallel_safe {
+                read_batch.push(call);
+                continue;
+            }
+            if !read_batch.is_empty() {
+                batches.push(std::mem::take(&mut read_batch));
+            }
+            batches.push(vec![call]);
+        }
+        if !read_batch.is_empty() {
+            batches.push(read_batch);
+        }
+        batches
+    }
+
+    async fn execute_tool_batch(
+        &self,
+        transaction: &WorkspaceTransaction,
+        observer: &dyn RunObserver,
+        turn: u16,
+        calls: Vec<ToolCall>,
+    ) -> Result<Vec<CompletedToolExecution>, EngineError> {
+        let scheduled_parallel = calls.len() > 1;
+        let futures = calls.into_iter().map(|call| {
+            self.execute_tool_call(transaction, observer, turn, call, scheduled_parallel)
+        });
+        join_all(futures).await.into_iter().collect()
+    }
+
+    async fn execute_tool_call(
+        &self,
+        transaction: &WorkspaceTransaction,
+        observer: &dyn RunObserver,
+        turn: u16,
+        call: ToolCall,
+        scheduled_parallel: bool,
+    ) -> Result<CompletedToolExecution, EngineError> {
+        observer.on_progress(&RunProgress::ToolStarted {
+            name: call.name.clone(),
+        });
+        let tool_started = Instant::now();
+        let arguments_digest = blake3::hash(call.arguments.to_string().as_bytes())
+            .to_hex()
+            .to_string();
+        let descriptor = self.tools.descriptor(&call.name);
+        let before = change_map(transaction.changes()?);
+        let tool_context = ToolContext {
+            workspace: transaction,
+            policy: self.policy,
+            memory: self.memory,
+        };
+        let result = self
+            .tools
+            .execute(&call.name, &tool_context, call.arguments.clone())
+            .await;
+        let after = change_map(transaction.changes()?);
+        let changed_files = changed_paths(&before, &after);
+        let mut observed_effects = changed_files
+            .iter()
+            .map(|path| format!("fs.changed:{path}"))
+            .collect::<Vec<_>>();
+        let normalized = normalize_tool_result(&call, result, &mut observed_effects);
+        observed_effects.sort();
+        observed_effects.dedup();
+        let duration_ms = elapsed_millis(tool_started);
+        observer.on_progress(&RunProgress::ToolCompleted {
+            name: call.name.clone(),
+            succeeded: normalized.succeeded,
+            changed_files: changed_files.clone(),
+            duration_ms,
+            output_bytes: normalized.output_bytes,
+            truncated: normalized.truncated,
+        });
+        let action = tool_action(
+            &call,
+            ToolActionMetadata {
+                descriptor,
+                turn,
+                arguments_digest,
+                changed_files: changed_files.len(),
+                observed_effects,
+                duration_ms,
+                scheduled_parallel,
+            },
+            &normalized,
+        );
+        Ok(CompletedToolExecution {
+            result: normalized.result,
+            action,
+            succeeded: normalized.succeeded,
         })
     }
 
@@ -835,6 +843,122 @@ impl<'a> RunEngine<'a> {
     }
 }
 
+struct CompletedToolExecution {
+    result: ToolResult,
+    action: ActionRecord,
+    succeeded: bool,
+}
+
+struct NormalizedToolResult {
+    result: ToolResult,
+    summary: String,
+    succeeded: bool,
+    output_bytes: usize,
+    truncated: bool,
+}
+
+struct ToolActionMetadata {
+    descriptor: Option<ToolDescriptor>,
+    turn: u16,
+    arguments_digest: String,
+    changed_files: usize,
+    observed_effects: Vec<String>,
+    duration_ms: u64,
+    scheduled_parallel: bool,
+}
+
+fn normalize_tool_result(
+    call: &ToolCall,
+    result: Result<ToolOutput, ToolError>,
+    observed_effects: &mut Vec<String>,
+) -> NormalizedToolResult {
+    match result {
+        Ok(output) => {
+            observed_effects.extend(output.observed_effects);
+            let (content, output_bytes, bounded) = bound_tool_content(output.content);
+            NormalizedToolResult {
+                result: ToolResult {
+                    call_id: call.id.clone(),
+                    name: call.name.clone(),
+                    content,
+                    is_error: !output.succeeded,
+                },
+                summary: output.summary,
+                succeeded: output.succeeded,
+                output_bytes,
+                truncated: output.truncated || bounded,
+            }
+        }
+        Err(error) => {
+            warn!(tool = %call.name, %error, "tool call failed");
+            let content = json!({ "error": model_safe_tool_error(&error) });
+            let output_bytes = content.to_string().len();
+            NormalizedToolResult {
+                result: ToolResult {
+                    call_id: call.id.clone(),
+                    name: call.name.clone(),
+                    content,
+                    is_error: true,
+                },
+                summary: error.to_string(),
+                succeeded: false,
+                output_bytes,
+                truncated: false,
+            }
+        }
+    }
+}
+
+fn tool_action(
+    call: &ToolCall,
+    metadata: ToolActionMetadata,
+    result: &NormalizedToolResult,
+) -> ActionRecord {
+    let mut attributes = BTreeMap::from([
+        ("turn".to_owned(), metadata.turn.to_string()),
+        ("call_id".to_owned(), call.id.clone()),
+        ("arguments_digest".to_owned(), metadata.arguments_digest),
+        ("output_bytes".to_owned(), result.output_bytes.to_string()),
+        ("output_truncated".to_owned(), result.truncated.to_string()),
+        (
+            "changed_files".to_owned(),
+            metadata.changed_files.to_string(),
+        ),
+        (
+            "execution".to_owned(),
+            if metadata.scheduled_parallel {
+                "parallel"
+            } else {
+                "serial"
+            }
+            .to_owned(),
+        ),
+    ]);
+    if let Some(descriptor) = &metadata.descriptor {
+        attributes.insert(
+            "risk".to_owned(),
+            format!("{:?}", descriptor.annotations.risk).to_lowercase(),
+        );
+        attributes.insert(
+            "parallel_safe".to_owned(),
+            descriptor.annotations.parallel_safe.to_string(),
+        );
+    }
+    ActionRecord {
+        actor: format!("tool:{}", call.name),
+        action: call.name.clone(),
+        summary: result.summary.clone(),
+        declared_effects: metadata.descriptor.map_or_else(
+            || vec!["unknown tool contract".to_owned()],
+            |descriptor| vec![descriptor.required_capability.to_string()],
+        ),
+        observed_effects: metadata.observed_effects,
+        succeeded: result.succeeded,
+        duration_ms: metadata.duration_ms,
+        attributes,
+    }
+}
+
 fn verification_action(
     command: &VerificationCommand,
     summary: String,
@@ -884,7 +1008,7 @@ fn report_verification_end(
 fn verification_attributes(
     index: usize,
     total: usize,
-    output: &pactrail_tools::ToolOutput,
+    output: &ToolOutput,
 ) -> BTreeMap<String, String> {
     BTreeMap::from([
         ("index".to_owned(), (index + 1).to_string()),
@@ -1060,10 +1184,13 @@ pub enum EngineError {
 #[cfg(test)]
 mod tests {
     use std::collections::VecDeque;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     use async_trait::async_trait;
+    use pactrail_core::Capability;
     use pactrail_models::{ModelCapabilities, ModelResponse, ToolCall};
+    use pactrail_tools::{Tool, ToolAnnotations};
+    use tokio::sync::Barrier;
 
     use super::*;
 
@@ -1076,6 +1203,39 @@ mod tests {
 
     struct SlowModel {
         capabilities: ModelCapabilities,
+    }
+
+    struct BarrierReadTool {
+        barrier: Arc<Barrier>,
+    }
+
+    #[async_trait]
+    impl Tool for BarrierReadTool {
+        fn descriptor(&self) -> ToolDescriptor {
+            ToolDescriptor {
+                name: "barrier_read".to_owned(),
+                description: "Test-only parallel read barrier".to_owned(),
+                input_schema: json!({"type": "object", "additionalProperties": false}),
+                required_capability: Capability::FileRead,
+                annotations: ToolAnnotations::READ_ONLY,
+            }
+        }
+
+        async fn execute(
+            &self,
+            context: &ToolContext<'_>,
+            _input: serde_json::Value,
+        ) -> Result<ToolOutput, ToolError> {
+            context.authorize(&Capability::FileRead, ".", "barrier_read")?;
+            self.barrier.wait().await;
+            Ok(ToolOutput {
+                content: json!({"ready": true}),
+                summary: "parallel read completed".to_owned(),
+                observed_effects: Vec::new(),
+                succeeded: true,
+                truncated: false,
+            })
+        }
     }
 
     #[derive(Default)]
@@ -1182,14 +1342,8 @@ mod tests {
             EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
         let mut contract = TaskContract::new("Wait forever", source.path().display().to_string());
         contract.budget.wall_time_seconds = 1;
-        contract
-            .permissions
-            .allow
-            .insert(pactrail_core::Capability::FileRead);
-        contract
-            .permissions
-            .allow
-            .insert(pactrail_core::Capability::FileWrite);
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
         let run_id = RunId::new();
 
         let result = engine
@@ -1205,6 +1359,96 @@ mod tests {
             .snapshot(run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
         assert_eq!(snapshot.state, RunState::Failed);
+    }
+
+    #[tokio::test]
+    async fn parallel_safe_tool_calls_execute_concurrently_and_record_stable_order() {
+        let responses = VecDeque::from([
+            ModelResponse {
+                text: String::new(),
+                tool_calls: vec![
+                    ToolCall {
+                        id: "parallel-1".to_owned(),
+                        name: "barrier_read".to_owned(),
+                        arguments: json!({}),
+                    },
+                    ToolCall {
+                        id: "parallel-2".to_owned(),
+                        name: "barrier_read".to_owned(),
+                        arguments: json!({}),
+                    },
+                ],
+                finish_reason: FinishReason::ToolCalls,
+                usage: Usage::default(),
+                provider_request_id: None,
+                extensions: serde_json::Map::new(),
+            },
+            ModelResponse {
+                text: "Read batch completed.".to_owned(),
+                tool_calls: Vec::new(),
+                finish_reason: FinishReason::Complete,
+                usage: Usage::default(),
+                provider_request_id: None,
+                extensions: serde_json::Map::new(),
+            },
+        ]);
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "parallel-test".to_owned(),
+            responses: Mutex::new(responses),
+            capabilities: ModelCapabilities {
+                parallel_tools: true,
+                ..ModelCapabilities::default()
+            },
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let mut registry = ToolRegistry::new();
+        registry
+            .register(BarrierReadTool {
+                barrier: Arc::new(Barrier::new(2)),
+            })
+            .unwrap_or_else(|error| unreachable!("tool: {error}"));
+        let policy = PolicyEngine::local_default();
+        let engine = RunEngine::new(&model, &registry, &policy);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let mut contract =
+            TaskContract::new("Read in parallel", source.path().display().to_string());
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let run_id = RunId::new();
+
+        engine
+            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .await
+            .unwrap_or_else(|error| unreachable!("run: {error}"));
+        let actions = store
+            .load(run_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"))
+            .into_iter()
+            .filter_map(|envelope| match envelope.event {
+                RunEvent::ActionCompleted(action) if action.actor == "tool:barrier_read" => {
+                    Some(action)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(actions.len(), 2);
+        assert_eq!(actions[0].attributes["call_id"], "parallel-1");
+        assert_eq!(actions[1].attributes["call_id"], "parallel-2");
+        assert!(
+            actions
+                .iter()
+                .all(|action| action.attributes["execution"] == "parallel")
+        );
     }
 
     #[tokio::test]
@@ -1261,14 +1505,8 @@ mod tests {
             EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
         let mut contract =
             TaskContract::new("Create a README", source.path().display().to_string());
-        contract
-            .permissions
-            .allow
-            .insert(pactrail_core::Capability::FileRead);
-        contract
-            .permissions
-            .allow
-            .insert(pactrail_core::Capability::FileWrite);
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
         let observer = RecordingObserver::default();
         let outcome = engine
             .execute_with_id_and_observer(
@@ -1342,14 +1580,8 @@ mod tests {
         let mut store =
             EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
         let mut contract = TaskContract::new("Create the smoke-test file", ".");
-        contract
-            .permissions
-            .allow
-            .insert(pactrail_core::Capability::FileRead);
-        contract
-            .permissions
-            .allow
-            .insert(pactrail_core::Capability::FileWrite);
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
 
         let outcome = engine
             .execute(contract, &transaction, &mut store)
@@ -1394,14 +1626,8 @@ mod tests {
         let mut store =
             EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
         let mut contract = TaskContract::new("Create the smoke-test file", ".");
-        contract
-            .permissions
-            .allow
-            .insert(pactrail_core::Capability::FileRead);
-        contract
-            .permissions
-            .allow
-            .insert(pactrail_core::Capability::FileWrite);
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
         let run_id = RunId::new();
 
         let result = engine

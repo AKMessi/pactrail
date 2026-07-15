@@ -11,6 +11,7 @@ use pactrail_core::{
 };
 use pactrail_engine::{RunObserver, RunProgress};
 use pactrail_memory::{MemoryDraft, MemoryKind};
+use pactrail_tools::{ToolDescriptor, ToolRisk, builtin_registry};
 use reedline::{
     DefaultCompleter, DefaultValidator, FileBackedHistory, Prompt, PromptEditMode,
     PromptHistorySearch, PromptHistorySearchStatus, PromptViMode, Reedline, Signal,
@@ -27,7 +28,7 @@ use crate::theme::Theme;
 
 const HISTORY_CAPACITY: usize = 2_000;
 const MAX_MODEL_LIST_BYTES: usize = 1024 * 1024;
-const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Safety", "Session"];
+const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Kernel", "Safety", "Session"];
 const COMMANDS: &[CommandHelp] = &[
     CommandHelp::new("Work", "/review [run]", "show receipt and immutable diff"),
     CommandHelp::new("Work", "/diff [run]", "review candidate changes"),
@@ -76,6 +77,11 @@ const COMMANDS: &[CommandHelp] = &[
         "Model",
         "/key-env <name>",
         "select the API-key environment variable",
+    ),
+    CommandHelp::new(
+        "Kernel",
+        "/tools",
+        "inspect typed tools, capabilities, and risk classes",
     ),
     CommandHelp::new(
         "Safety",
@@ -460,6 +466,7 @@ impl Session {
             "/help" | "/?" => self.render_help(arguments)?,
             "/status" | "/settings" | "/config" => self.render_status()?,
             "/doctor" => commands::doctor(false)?,
+            "/tools" => self.render_tools()?,
             "/models" => self.refresh_models().await?,
             "/model" => self.set_model(arguments)?,
             "/connect" => self.connect(arguments)?,
@@ -644,6 +651,30 @@ impl Session {
         lines.push(String::new());
         lines.push(self.theme.muted(
             "Tab completes commands · arrows browse history · Ctrl-R searches · Ctrl-C cancels input · Ctrl-D exits",
+        ));
+        self.emit(&format!("\n{}\n\n", lines.join("\n")))
+    }
+
+    fn render_tools(&self) -> Result<(), CliError> {
+        let descriptors = builtin_registry()?.descriptors();
+        let parallel_reads = descriptors
+            .iter()
+            .filter(|tool| tool.annotations.read_only && tool.annotations.parallel_safe)
+            .count();
+        let mut lines = vec![format!(
+            "{}  {}",
+            self.theme.heading("Tool kernel"),
+            self.theme.muted(&format!(
+                "{} typed contracts · {parallel_reads} parallel-safe reads",
+                descriptors.len()
+            ))
+        )];
+        for descriptor in &descriptors {
+            lines.extend(render_tool_descriptor(&self.theme, descriptor));
+        }
+        lines.push(String::new());
+        lines.push(self.theme.muted(
+            "Every call is schema-validated, capability-gated, output-bounded, and recorded in /trace.",
         ));
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
@@ -1429,6 +1460,43 @@ fn format_duration(duration: Duration) -> String {
             duration.as_secs() % 60
         )
     }
+}
+
+fn render_tool_descriptor(theme: &Theme, tool: &ToolDescriptor) -> Vec<String> {
+    let (marker, risk) = match tool.annotations.risk {
+        ToolRisk::ReadOnly => (
+            theme.success("◇"),
+            theme.success(&format!("{:<11}", "read")),
+        ),
+        ToolRisk::WorkspaceMutation => {
+            (theme.accent("◆"), theme.accent(&format!("{:<11}", "edit")))
+        }
+        ToolRisk::HostExecution => (
+            theme.warning("!"),
+            theme.warning(&format!("{:<11}", "host")),
+        ),
+    };
+    let flags = [
+        tool.annotations.read_only.then_some("read-only"),
+        tool.annotations.idempotent.then_some("idempotent"),
+        tool.annotations.parallel_safe.then_some("parallel-safe"),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" · ");
+    let mut lines = vec![format!(
+        "\n  {marker} {}  {risk} {}",
+        theme.code(&format!("{:<20}", tool.name)),
+        theme.muted(&tool.required_capability.to_string())
+    )];
+    for text in wrap_text(&tool.description, 76).into_iter().take(2) {
+        lines.push(format!("     {}", theme.text(&text)));
+    }
+    if !flags.is_empty() {
+        lines.push(format!("     {}", theme.muted(&flags)));
+    }
+    lines
 }
 
 fn render_trace_event(
