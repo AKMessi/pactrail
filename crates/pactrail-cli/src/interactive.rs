@@ -1,11 +1,14 @@
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU16, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU16, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
-use pactrail_core::{ChangeReceipt, FileChange, ReceiptOutcome, RunId, RunState};
+use pactrail_core::{
+    ActionRecord, ChangeReceipt, EventEnvelope, FileChange, ReceiptOutcome, RunEvent, RunId,
+    RunState,
+};
 use pactrail_engine::{RunObserver, RunProgress};
 use pactrail_memory::{MemoryDraft, MemoryKind};
 use reedline::{
@@ -35,6 +38,11 @@ const COMMANDS: &[CommandHelp] = &[
         "reject a candidate; retain evidence",
     ),
     CommandHelp::new("Work", "/runs", "browse durable run history"),
+    CommandHelp::new(
+        "Work",
+        "/trace [run]",
+        "show the verified model/tool/event timeline",
+    ),
     CommandHelp::new(
         "Work",
         "/inspect [run]",
@@ -192,6 +200,9 @@ struct RunActivity {
     model: String,
     turn: AtomicU16,
     tool_calls: AtomicUsize,
+    model_tokens: AtomicU64,
+    model_time_ms: AtomicU64,
+    truncated_outputs: AtomicUsize,
     started: Instant,
 }
 
@@ -210,6 +221,9 @@ impl RunActivity {
             model: truncate(model, 32),
             turn: AtomicU16::new(0),
             tool_calls: AtomicUsize::new(0),
+            model_tokens: AtomicU64::new(0),
+            model_time_ms: AtomicU64::new(0),
+            truncated_outputs: AtomicUsize::new(0),
             started: Instant::now(),
         }
     }
@@ -223,16 +237,60 @@ impl RunActivity {
         let tools = self.tool_calls.load(Ordering::Relaxed);
         let turn_word = plural(turns.into(), "turn", "turns");
         let tool_word = plural(tools, "tool", "tools");
+        let tokens = self.model_tokens.load(Ordering::Relaxed);
+        let model_time = format_duration(Duration::from_millis(
+            self.model_time_ms.load(Ordering::Relaxed),
+        ));
         let elapsed = format_duration(self.started.elapsed());
         let duration = theme.muted(&elapsed);
+        let truncated = self.truncated_outputs.load(Ordering::Relaxed);
+        let truncation = if truncated == 0 {
+            String::new()
+        } else {
+            format!("  {}", theme.warning(&format!("{truncated} bounded")))
+        };
         format!(
-            "{} {turns} {turn_word}  {tools} {tool_word}  {duration}\n",
+            "{} {turns} {turn_word}  {tools} {tool_word}  {} tokens  {} model  {duration}{truncation}\n",
             theme.success("\u{2713}"),
+            format_count(tokens),
+            theme.muted(&model_time),
         )
     }
 
     fn set_message(&self, message: String) {
         self.progress.set_message(message);
+    }
+
+    fn on_verification_progress(&self, progress: &RunProgress) {
+        match progress {
+            RunProgress::VerificationStarted { commands } => self.set_message(if *commands == 0 {
+                "grading available evidence".to_owned()
+            } else {
+                format!(
+                    "preparing {commands} verification {}",
+                    plural(*commands, "check", "checks")
+                )
+            }),
+            RunProgress::VerificationCommandStarted {
+                description,
+                index,
+                total,
+            } => self.set_message(format!(
+                "verifying {index}/{total} \u{00b7} {}",
+                truncate(description, 52)
+            )),
+            RunProgress::VerificationCommandCompleted {
+                description,
+                succeeded,
+                duration_ms,
+            } => self.set_message(format!(
+                "{} \u{00b7} {} \u{00b7} {}",
+                if *succeeded { "passed" } else { "inconclusive" },
+                truncate(description, 52),
+                format_duration(Duration::from_millis(*duration_ms))
+            )),
+            _ => {}
+        }
     }
 }
 
@@ -252,13 +310,25 @@ impl RunObserver for RunActivity {
                 ));
             }
             RunProgress::ModelTurnCompleted {
-                turn, tool_calls, ..
+                turn,
+                tool_calls,
+                duration_ms,
+                input_tokens,
+                output_tokens,
+                ..
             } => {
+                self.model_tokens.fetch_add(
+                    input_tokens.saturating_add(*output_tokens),
+                    Ordering::Relaxed,
+                );
+                self.model_time_ms
+                    .fetch_add(*duration_ms, Ordering::Relaxed);
+                let duration = format_duration(Duration::from_millis(*duration_ms));
                 self.set_message(if *tool_calls == 0 {
-                    format!("turn {turn} \u{00b7} model finished")
+                    format!("turn {turn} \u{00b7} model finished in {duration}")
                 } else {
                     format!(
-                        "turn {turn} \u{00b7} received {tool_calls} {}",
+                        "turn {turn} \u{00b7} {duration} \u{00b7} received {tool_calls} {}",
                         plural(*tool_calls, "action", "actions")
                     )
                 });
@@ -275,47 +345,35 @@ impl RunObserver for RunActivity {
                 name,
                 succeeded,
                 changed_files,
+                duration_ms,
+                truncated,
+                ..
             } => {
                 let turn = self.turn.load(Ordering::Relaxed);
+                if *truncated {
+                    self.truncated_outputs.fetch_add(1, Ordering::Relaxed);
+                }
+                let duration = format_duration(Duration::from_millis(*duration_ms));
                 if let Some(path) = changed_files.first() {
                     self.set_message(format!(
-                        "turn {turn} \u{00b7} changed {}",
+                        "turn {turn} \u{00b7} changed {} \u{00b7} {duration}",
                         truncate(path, 48)
                     ));
                 } else if *succeeded {
-                    self.set_message(format!("turn {turn} \u{00b7} {name} complete"));
+                    self.set_message(format!(
+                        "turn {turn} \u{00b7} {name} complete \u{00b7} {duration}"
+                    ));
                 } else {
                     self.set_message(format!(
                         "turn {turn} \u{00b7} {name} rejected; steering model"
                     ));
                 }
             }
-            RunProgress::VerificationStarted { commands } => {
-                self.set_message(if *commands == 0 {
-                    "grading available evidence".to_owned()
-                } else {
-                    format!(
-                        "preparing {commands} verification {}",
-                        plural(*commands, "check", "checks")
-                    )
-                });
+            RunProgress::VerificationStarted { .. }
+            | RunProgress::VerificationCommandStarted { .. }
+            | RunProgress::VerificationCommandCompleted { .. } => {
+                self.on_verification_progress(progress);
             }
-            RunProgress::VerificationCommandStarted {
-                description,
-                index,
-                total,
-            } => self.set_message(format!(
-                "verifying {index}/{total} \u{00b7} {}",
-                truncate(description, 52)
-            )),
-            RunProgress::VerificationCommandCompleted {
-                description,
-                succeeded,
-            } => self.set_message(format!(
-                "{} \u{00b7} {}",
-                if *succeeded { "passed" } else { "inconclusive" },
-                truncate(description, 52)
-            )),
             _ => {}
         }
     }
@@ -398,6 +456,7 @@ impl Session {
             "/turns" => self.set_turns(arguments)?,
             "/process" => self.set_process_access(arguments)?,
             "/runs" | "/history" => self.render_runs()?,
+            "/trace" => self.render_trace(self.resolve_run(arguments)?)?,
             "/memory" => self.render_memories(arguments)?,
             "/remember" => self.remember(arguments)?,
             "/forget" => self.forget(arguments)?,
@@ -1038,6 +1097,37 @@ impl Session {
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
+    fn render_trace(&self, run_id: RunId) -> Result<(), CliError> {
+        let events = commands::load_trace(&self.state, run_id)?;
+        if events.is_empty() {
+            return self.emit(&format!(
+                "\n{}\n  {}\n\n",
+                self.theme.heading("Execution trace"),
+                self.theme.muted("No durable events found for this run.")
+            ));
+        }
+        let started = &events[0];
+        let mut lines = vec![format!(
+            "{}  {}",
+            self.theme.heading("Execution trace"),
+            self.theme.muted(&format!(
+                "{} · {} events · hash chain verified",
+                short_run_id(run_id),
+                events.len()
+            ))
+        )];
+        for envelope in &events {
+            lines.extend(render_trace_event(&self.theme, started, envelope));
+        }
+        lines.push(self.theme.muted(&format!(
+            "Portable JSONL · {}",
+            commands::run_root(&self.state, run_id)
+                .join("trace.jsonl")
+                .display()
+        )));
+        self.emit(&format!("\n{}\n\n", lines.join("\n")))
+    }
+
     fn inspect_run(&self, argument: &str, include_diff: bool) -> Result<(), CliError> {
         let run_id = self.resolve_run(argument)?;
         let run_root = commands::run_root(&self.state, run_id);
@@ -1122,10 +1212,11 @@ impl Session {
         };
         let tokens = format_count(completed.tokens);
         self.emit(&format!(
-            "{}\n{}\n\n{} {tokens} tokens\n",
+            "{}\n{}\n\n{} {tokens} tokens  {}\n",
             self.theme.heading("Model report"),
             self.theme.text(summary),
             self.theme.muted("usage"),
+            self.theme.code("/trace inspect execution"),
         ))?;
         if completed.receipt.outcome == ReceiptOutcome::ReadyToApply {
             let message = if completed.receipt.changes.is_empty() {
@@ -1321,6 +1412,115 @@ fn format_duration(duration: Duration) -> String {
             "{}m {:02}s",
             duration.as_secs() / 60,
             duration.as_secs() % 60
+        )
+    }
+}
+
+fn render_trace_event(
+    theme: &Theme,
+    started: &EventEnvelope,
+    envelope: &EventEnvelope,
+) -> Vec<String> {
+    let elapsed = envelope.timestamp - started.timestamp;
+    let elapsed_ms = u64::try_from(elapsed.whole_milliseconds().max(0)).unwrap_or(u64::MAX);
+    let time = theme.muted(&format!("{:>7}", trace_duration(elapsed_ms)));
+    match &envelope.event {
+        RunEvent::ContractRegistered(contract) => vec![format!(
+            "  {time}  {} {}",
+            theme.accent("◆"),
+            theme.text(&format!("contract · {}", contract.goal))
+        )],
+        RunEvent::StateChanged { from, to } => vec![format!(
+            "  {time}  {} {}",
+            theme.muted("◇"),
+            theme.muted(&format!("state · {from:?} → {to:?}"))
+        )],
+        RunEvent::ActionCompleted(action) => render_trace_action(theme, &time, action),
+        RunEvent::EvidenceRecorded(evidence) => vec![format!(
+            "  {time}  {} {}",
+            theme.success("✓"),
+            theme.text(&format!(
+                "evidence · {:?}/{:?} · {}",
+                evidence.grade, evidence.status, evidence.summary
+            ))
+        )],
+        RunEvent::PolicyEvaluated(decision) => vec![format!(
+            "  {time}  {} {}",
+            theme.warning("!"),
+            theme.text(&format!("policy · {decision:?}"))
+        )],
+        RunEvent::CheckpointCreated { checkpoint } => vec![format!(
+            "  {time}  {} {}",
+            theme.muted("•"),
+            theme.muted(&format!("checkpoint · {checkpoint}"))
+        )],
+        RunEvent::NoteRecorded { message } => vec![format!(
+            "  {time}  {} {}",
+            theme.muted("•"),
+            theme.muted(&format!("note · {message}"))
+        )],
+    }
+}
+
+fn render_trace_action(theme: &Theme, time: &str, action: &ActionRecord) -> Vec<String> {
+    let (marker, label) = if action.actor.starts_with("model:") {
+        (theme.brand("●"), theme.accent(&format!("{:<8}", "model")))
+    } else if action.actor.starts_with("tool:") {
+        (theme.accent("●"), theme.text(&format!("{:<8}", "tool")))
+    } else if action.actor == "verifier" {
+        (
+            theme.success("●"),
+            theme.success(&format!("{:<8}", "verify")),
+        )
+    } else {
+        (theme.muted("●"), theme.text(&format!("{:<8}", "action")))
+    };
+    let outcome = if action.succeeded {
+        theme.success("ok")
+    } else {
+        theme.danger("failed")
+    };
+    let mut lines = vec![format!(
+        "  {time}  {marker} {label} {}  {outcome}",
+        theme.muted(&trace_duration(action.duration_ms))
+    )];
+    for summary in wrap_text(&action.summary, 78).into_iter().take(3) {
+        lines.push(format!("             {}", theme.text(&summary)));
+    }
+    if !action.attributes.is_empty() {
+        let attributes = action
+            .attributes
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join("  ");
+        for text in wrap_text(&attributes, 78).into_iter().take(3) {
+            lines.push(format!("             {}", theme.muted(&text)));
+        }
+    }
+    if !action.observed_effects.is_empty() {
+        let effects = format!("effects · {}", action.observed_effects.join(", "));
+        for text in wrap_text(&effects, 78).into_iter().take(2) {
+            lines.push(format!("             {}", theme.muted(&text)));
+        }
+    }
+    lines
+}
+
+fn trace_duration(milliseconds: u64) -> String {
+    if milliseconds < 1_000 {
+        format!("{milliseconds}ms")
+    } else if milliseconds < 60_000 {
+        format!(
+            "{}.{:02}s",
+            milliseconds / 1_000,
+            (milliseconds % 1_000) / 10
+        )
+    } else {
+        format!(
+            "{}m {:02}s",
+            milliseconds / 60_000,
+            (milliseconds / 1_000) % 60
         )
     }
 }

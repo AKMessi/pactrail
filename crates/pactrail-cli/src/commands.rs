@@ -8,8 +8,8 @@ use std::time::Duration;
 use clap::CommandFactory;
 use clap_complete::{generate, shells};
 use pactrail_core::{
-    Capability, ChangeReceipt, ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState,
-    TaskContract,
+    Capability, ChangeReceipt, EventEnvelope, ReceiptInput, ReceiptOutcome, RunEvent, RunId,
+    RunState, TaskContract,
 };
 use pactrail_engine::{EngineError, RunEngine, RunObserver};
 use pactrail_memory::{
@@ -41,6 +41,10 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
         Command::Inspect(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
             inspect(&state, &args)
+        }
+        Command::Trace(args) => {
+            let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
+            trace(&state, &args)
         }
         Command::Apply(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
@@ -192,6 +196,7 @@ async fn execute_run_inner(
         receipt = apply_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
         memory.remember_applied_run(&receipt)?;
     }
+    write_trace_artifact(&run_root, &store, receipt.run_id)?;
     Ok(CompletedRun {
         run_root,
         model_summary: outcome.final_text,
@@ -376,6 +381,114 @@ pub(crate) fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     }
 }
 
+pub(crate) fn trace(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+    let run_id = parse_run_id(&args.run_id)?;
+    let events = load_trace(state, run_id)?;
+    if args.json {
+        return write_json(&events);
+    }
+    write_human_stdout(&render_trace_text(run_id, &events)).map_err(CliError::Output)
+}
+
+pub(crate) fn load_trace(state: &Path, run_id: RunId) -> Result<Vec<EventEnvelope>, CliError> {
+    EventStore::open(state.join("events.sqlite3"))?
+        .load(run_id)
+        .map_err(CliError::Store)
+}
+
+fn render_trace_text(run_id: RunId, events: &[EventEnvelope]) -> String {
+    if events.is_empty() {
+        return format!("Trace {run_id}\nNo durable events found.\n");
+    }
+    let started = events[0].timestamp;
+    let mut lines = vec![format!(
+        "Trace {run_id}  ({} events, hash chain verified)",
+        events.len()
+    )];
+    for envelope in events {
+        let elapsed = envelope.timestamp - started;
+        let elapsed_ms = elapsed.whole_milliseconds().max(0);
+        let prefix = format!(
+            "{:>8}  #{:<3}",
+            format_trace_elapsed(elapsed_ms),
+            envelope.sequence
+        );
+        match &envelope.event {
+            RunEvent::ContractRegistered(contract) => {
+                lines.push(format!("{prefix}  CONTRACT  {}", contract.goal));
+            }
+            RunEvent::StateChanged { from, to } => {
+                lines.push(format!("{prefix}  STATE     {from:?} -> {to:?}"));
+            }
+            RunEvent::ActionCompleted(action) => {
+                lines.push(format!(
+                    "{prefix}  {:<9} {:>7}  {}  {}",
+                    trace_actor(&action.actor),
+                    format_trace_elapsed(i128::from(action.duration_ms)),
+                    if action.succeeded { "OK" } else { "FAIL" },
+                    action.summary
+                ));
+                if !action.attributes.is_empty() {
+                    lines.push(format!(
+                        "                    {}",
+                        action
+                            .attributes
+                            .iter()
+                            .map(|(key, value)| format!("{key}={value}"))
+                            .collect::<Vec<_>>()
+                            .join("  ")
+                    ));
+                }
+                if !action.observed_effects.is_empty() {
+                    lines.push(format!(
+                        "                    effects: {}",
+                        action.observed_effects.join(", ")
+                    ));
+                }
+            }
+            RunEvent::EvidenceRecorded(evidence) => lines.push(format!(
+                "{prefix}  EVIDENCE  {:?}/{:?}  {}",
+                evidence.grade, evidence.status, evidence.summary
+            )),
+            RunEvent::PolicyEvaluated(decision) => {
+                lines.push(format!("{prefix}  POLICY    {decision:?}"));
+            }
+            RunEvent::CheckpointCreated { checkpoint } => {
+                lines.push(format!("{prefix}  CHECKPT   {checkpoint}"));
+            }
+            RunEvent::NoteRecorded { message } => {
+                lines.push(format!("{prefix}  NOTE      {message}"));
+            }
+        }
+    }
+    lines.push(String::new());
+    lines.join("\n")
+}
+
+fn trace_actor(actor: &str) -> &'static str {
+    if actor.starts_with("model:") {
+        "MODEL"
+    } else if actor.starts_with("tool:") {
+        "TOOL"
+    } else if actor == "verifier" {
+        "VERIFY"
+    } else {
+        "ACTION"
+    }
+}
+
+fn format_trace_elapsed(milliseconds: i128) -> String {
+    if milliseconds < 1_000 {
+        format!("{milliseconds}ms")
+    } else {
+        format!(
+            "{}.{:02}s",
+            milliseconds / 1_000,
+            (milliseconds % 1_000) / 10
+        )
+    }
+}
+
 pub(crate) fn apply(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
     let receipt = apply_run(state, run_id)?;
@@ -398,6 +511,7 @@ pub(crate) fn apply_run(state: &Path, run_id: RunId) -> Result<ChangeReceipt, Cl
     let transaction = WorkspaceTransaction::open(&run_root)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
     let applied = apply_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
+    write_trace_artifact(&run_root, &store, run_id)?;
     MemoryStore::open(state.join("memory.sqlite3"))?.remember_applied_run(&applied)?;
     Ok(applied)
 }
@@ -465,7 +579,9 @@ pub(crate) fn discard_run(state: &Path, run_id: RunId) -> Result<ChangeReceipt, 
     let receipt = read_receipt(&run_root)?;
     let transaction = WorkspaceTransaction::open(&run_root)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
-    discard_ready_receipt(&run_root, receipt, &transaction, &mut store)
+    let discarded = discard_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
+    write_trace_artifact(&run_root, &store, run_id)?;
+    Ok(discarded)
 }
 
 fn discard_ready_receipt(
@@ -918,6 +1034,7 @@ fn render_run(
             "risks": receipt.unresolved_risks,
             "tokens": tokens,
             "receipt": run_root.join("receipt.json"),
+            "trace": run_root.join("trace.jsonl"),
         })),
         OutputFormat::Human => {
             let changes = if receipt.changes.is_empty() {
@@ -936,7 +1053,7 @@ fn render_run(
                 "not applicable".to_owned()
             };
             write_human_stdout(&format!(
-                "Run: {}\nOutcome: {:?}\n\n{}\n\nChanged files:\n{}\n\nEvidence: {} passed, {} failed, {} inconclusive\nTokens: {}\nReceipt: {}\nApply: {}\n",
+                "Run: {}\nOutcome: {:?}\n\n{}\n\nChanged files:\n{}\n\nEvidence: {} passed, {} failed, {} inconclusive\nTokens: {}\nReceipt: {}\nTrace: {}\nApply: {}\n",
                 receipt.run_id,
                 receipt.outcome,
                 model_summary,
@@ -946,6 +1063,7 @@ fn render_run(
                 receipt.verification.inconclusive,
                 tokens,
                 run_root.join("receipt.json").display(),
+                run_root.join("trace.jsonl").display(),
                 apply_hint,
             ))
             .map_err(CliError::Output)
@@ -1010,49 +1128,74 @@ pub(crate) fn read_receipt(run_root: &Path) -> Result<ChangeReceipt, CliError> {
 fn write_receipt(run_root: &Path, receipt: &ChangeReceipt) -> Result<(), CliError> {
     let path = run_root.join("receipt.json");
     let backup = run_root.join("receipt.json.bak");
+    let bytes = serde_json::to_vec_pretty(receipt).map_err(CliError::Json)?;
+    write_atomic_artifact(&path, &backup, &bytes)
+}
+
+fn write_trace_artifact(
+    run_root: &Path,
+    store: &EventStore,
+    run_id: RunId,
+) -> Result<(), CliError> {
+    let events = store.load(run_id)?;
+    let mut bytes = Vec::new();
+    for event in events {
+        serde_json::to_writer(&mut bytes, &event).map_err(CliError::Json)?;
+        bytes.push(b'\n');
+    }
+    write_atomic_artifact(
+        &run_root.join("trace.jsonl"),
+        &run_root.join("trace.jsonl.bak"),
+        &bytes,
+    )
+}
+
+fn write_atomic_artifact(path: &Path, backup: &Path, bytes: &[u8]) -> Result<(), CliError> {
     if backup.exists() {
         if path.exists() {
-            fs::remove_file(&backup).map_err(|source| CliError::Io {
-                path: backup.clone(),
+            fs::remove_file(backup).map_err(|source| CliError::Io {
+                path: backup.to_path_buf(),
                 source,
             })?;
         } else {
-            fs::rename(&backup, &path).map_err(|source| CliError::Io {
-                path: backup.clone(),
+            fs::rename(backup, path).map_err(|source| CliError::Io {
+                path: backup.to_path_buf(),
                 source,
             })?;
         }
     }
-    let bytes = serde_json::to_vec_pretty(receipt).map_err(CliError::Json)?;
-    let mut temporary = NamedTempFile::new_in(run_root).map_err(|source| CliError::Io {
-        path: run_root.to_path_buf(),
+    let parent = path.parent().ok_or_else(|| {
+        CliError::Argument(format!("artifact path {} has no parent", path.display()))
+    })?;
+    let mut temporary = NamedTempFile::new_in(parent).map_err(|source| CliError::Io {
+        path: parent.to_path_buf(),
         source,
     })?;
     temporary
-        .write_all(&bytes)
+        .write_all(bytes)
         .and_then(|()| temporary.as_file().sync_all())
         .map_err(|source| CliError::Io {
             path: temporary.path().to_path_buf(),
             source,
         })?;
     if path.exists() {
-        fs::rename(&path, &backup).map_err(|source| CliError::Io {
-            path: path.clone(),
+        fs::rename(path, backup).map_err(|source| CliError::Io {
+            path: path.to_path_buf(),
             source,
         })?;
     }
-    if let Err(error) = temporary.persist(&path) {
+    if let Err(error) = temporary.persist(path) {
         if backup.exists() {
-            let _restore = fs::rename(&backup, &path);
+            let _restore = fs::rename(backup, path);
         }
         return Err(CliError::Io {
-            path,
+            path: path.to_path_buf(),
             source: error.error,
         });
     }
     if backup.exists() {
-        fs::remove_file(&backup).map_err(|source| CliError::Io {
-            path: backup,
+        fs::remove_file(backup).map_err(|source| CliError::Io {
+            path: backup.to_path_buf(),
             source,
         })?;
     }

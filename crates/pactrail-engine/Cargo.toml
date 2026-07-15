@@ -13,6 +13,7 @@ publish = false
 workspace = true
 
 [dependencies]
+blake3.workspace = true
 pactrail-context = { version = "0.1.0", path = "../pactrail-context" }
 pactrail-core = { version = "0.1.0", path = "../pactrail-core" }
 pactrail-memory = { version = "0.1.0", path = "../pactrail-memory" }

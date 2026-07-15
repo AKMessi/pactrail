@@ -131,6 +131,32 @@ fn assert_applied_memory(workspace: &Path, run_id: &str) {
         .unwrap_or_else(|error| unreachable!("memory JSON: {error}"));
     assert_eq!(memories[0]["memory"]["source"], "applied_receipt");
     assert_eq!(memories[0]["memory"]["source_run_id"], run_id);
+
+    let trace_path = workspace
+        .join(".pactrail")
+        .join("runs")
+        .join(run_id)
+        .join("trace.jsonl");
+    let trace_text = std::fs::read_to_string(&trace_path)
+        .unwrap_or_else(|error| unreachable!("portable trace: {error}"));
+    assert!(trace_text.lines().count() >= 10);
+    assert!(trace_text.contains("\"duration_ms\""));
+    assert!(trace_text.contains("\"to\":\"applied\""));
+
+    let trace = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace),
+            "trace",
+            run_id,
+            "--json",
+        ])
+        .output()
+        .unwrap_or_else(|error| unreachable!("trace command: {error}"));
+    assert!(trace.status.success());
+    let events: Value = serde_json::from_slice(&trace.stdout)
+        .unwrap_or_else(|error| unreachable!("trace JSON: {error}"));
+    assert!(events.as_array().is_some_and(|events| events.len() >= 10));
 }
 
 #[test]

@@ -34,6 +34,8 @@ pub enum Command {
     Run(RunArgs),
     /// Inspect a durable run and its evidence receipt.
     Inspect(RunIdArgs),
+    /// Render the integrity-checked execution trace for a run.
+    Trace(RunIdArgs),
     /// Apply a ready transaction after baseline-drift checks.
     Apply(RunIdArgs),
     /// Discard a ready transaction while preserving its receipt.

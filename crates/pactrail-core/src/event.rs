@@ -78,6 +78,12 @@ pub struct ActionRecord {
     #[serde(default)]
     pub observed_effects: Vec<String>,
     pub succeeded: bool,
+    /// End-to-end action duration. Zero denotes an older event without timing data.
+    #[serde(default)]
+    pub duration_ms: u64,
+    /// Bounded non-sensitive diagnostic fields with stable string values.
+    #[serde(default)]
+    pub attributes: std::collections::BTreeMap<String, String>,
 }
 
 /// Payload variants accepted by the deterministic run reducer.
@@ -371,5 +377,20 @@ mod tests {
             snapshot.apply(&envelope),
             Err(StateError::InvalidTransition { .. })
         ));
+    }
+
+    #[test]
+    fn legacy_action_records_default_trace_fields() {
+        let action: ActionRecord = serde_json::from_value(serde_json::json!({
+            "actor": "tool:read_file",
+            "action": "read_file",
+            "summary": "read one file",
+            "declared_effects": ["file_read"],
+            "observed_effects": ["fs.read:README.md"],
+            "succeeded": true
+        }))
+        .unwrap_or_else(|error| unreachable!("legacy action: {error}"));
+        assert_eq!(action.duration_ms, 0);
+        assert!(action.attributes.is_empty());
     }
 }
