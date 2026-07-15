@@ -225,8 +225,16 @@ impl RepositoryIndex {
     }
 
     /// Retrieves files by lexical overlap with a task, with stable tie-breaking.
+    ///
+    /// When task wording does not name any repository concepts (for example,
+    /// "what is this directory about?"), the result falls back to a small set
+    /// of conventional project anchors. This keeps broad discovery useful
+    /// without flooding the model context with arbitrary paths.
     #[must_use]
     pub fn retrieve(&self, query: &str, limit: usize) -> Vec<&IndexedFile> {
+        if limit == 0 {
+            return Vec::new();
+        }
         let tokens = query_tokens(query);
         let mut scored = self
             .files
@@ -254,12 +262,41 @@ impl RepositoryIndex {
                 .cmp(left_score)
                 .then_with(|| left.path.cmp(&right.path))
         });
-        scored
+        let mut retrieved = scored
             .into_iter()
             .filter(|(score, _)| *score > 0)
             .take(limit)
             .map(|(_, file)| file)
-            .collect()
+            .collect::<Vec<_>>();
+        if retrieved.is_empty() {
+            let mut anchors = self
+                .files
+                .values()
+                .filter_map(|file| repository_anchor_rank(&file.path).map(|rank| (rank, file)))
+                .collect::<Vec<_>>();
+            anchors.sort_by(|(left_rank, left), (right_rank, right)| {
+                left_rank
+                    .cmp(right_rank)
+                    .then_with(|| left.path.cmp(&right.path))
+            });
+            retrieved.extend(anchors.into_iter().take(limit.min(8)).map(|(_, file)| file));
+        }
+        retrieved
+    }
+}
+
+fn repository_anchor_rank(path: &str) -> Option<u8> {
+    let normalized = path.to_ascii_lowercase();
+    let file_name = normalized.rsplit('/').next().unwrap_or(&normalized);
+    match file_name {
+        "readme" | "readme.md" | "readme.mdx" | "readme.rst" | "readme.txt" => Some(0),
+        "cargo.toml" | "package.json" | "pyproject.toml" | "go.mod" | "pom.xml"
+        | "build.gradle" | "build.gradle.kts" | "mix.exs" | "composer.json" => Some(1),
+        _ => match normalized.as_str() {
+            "src/main.rs" | "src/lib.rs" | "main.py" | "app.py" | "src/index.ts"
+            | "src/index.js" | "cmd/main.go" => Some(2),
+            _ => None,
+        },
     }
 }
 
@@ -791,6 +828,34 @@ mod tests {
             retrieved.first().map(|file| file.path.as_str()),
             Some("receipt.rs")
         );
+    }
+
+    #[test]
+    fn broad_repository_questions_fall_back_to_project_anchors() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::create_dir(root.path().join("src"))
+            .unwrap_or_else(|error| unreachable!("src: {error}"));
+        fs::write(root.path().join("README.md"), "# Example\n")
+            .unwrap_or_else(|error| unreachable!("readme: {error}"));
+        fs::write(
+            root.path().join("Cargo.toml"),
+            "[package]\nname = \"example\"\n",
+        )
+        .unwrap_or_else(|error| unreachable!("manifest: {error}"));
+        fs::write(root.path().join("src/lib.rs"), "pub fn example() {}\n")
+            .unwrap_or_else(|error| unreachable!("library: {error}"));
+        fs::write(root.path().join("notes.txt"), "unrelated\n")
+            .unwrap_or_else(|error| unreachable!("notes: {error}"));
+
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let paths = index
+            .retrieve("whats this directory about", 10)
+            .into_iter()
+            .map(|file| file.path.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(paths, vec!["README.md", "Cargo.toml", "src/lib.rs"]);
     }
 
     #[test]
