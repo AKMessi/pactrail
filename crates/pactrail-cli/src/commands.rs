@@ -176,17 +176,21 @@ async fn execute_run_inner(
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
         .with_max_turns(args.max_turns);
-    let outcome = match observer {
+    let engine_result = match observer {
         Some(observer) => {
             engine
                 .execute_with_id_and_observer(run_id, contract, &transaction, &mut store, observer)
-                .await?
+                .await
         }
         None => {
             engine
                 .execute_with_id(run_id, contract, &transaction, &mut store)
-                .await?
+                .await
         }
+    };
+    let outcome = match engine_result {
+        Ok(outcome) => outcome,
+        Err(source) => return Err(failed_run_error(&run_root, &state, &store, run_id, source)),
     };
     let mut receipt = outcome.receipt;
     write_receipt(&run_root, &receipt)?;
@@ -204,6 +208,28 @@ async fn execute_run_inner(
         receipt,
         tokens: outcome.usage.total(),
     })
+}
+
+fn failed_run_error(
+    run_root: &Path,
+    state: &Path,
+    store: &EventStore,
+    run_id: RunId,
+    source: EngineError,
+) -> CliError {
+    let trace_path = run_root.join("trace.jsonl");
+    let trace_status = match write_trace_artifact(run_root, store, run_id) {
+        Ok(()) => format!("Portable trace: {}", trace_path.display()),
+        Err(error) => format!(
+            "Portable trace export failed ({error}); authoritative events remain in {}",
+            state.join("events.sqlite3").display()
+        ),
+    };
+    CliError::RunFailed {
+        run_id,
+        source: Box::new(source),
+        trace_status,
+    }
 }
 
 fn validate_model_limits(args: &RunArgs) -> Result<(), CliError> {
@@ -726,31 +752,35 @@ fn state_receipt_mismatch(state: RunState, outcome: ReceiptOutcome, operation: &
 }
 
 pub(crate) fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
-    let receipts = completed_runs(state)?;
-    let values = receipts
+    let runs = run_history(state)?;
+    let values = runs
         .iter()
-        .map(|receipt| {
+        .map(|run| {
             json!({
-            "run_id": receipt.run_id,
-            "outcome": receipt.outcome,
-            "goal": receipt.contract.goal,
-            "changes": receipt.changes.len(),
-            "created_at": receipt.created_at,
+                "run_id": run.run_id,
+                "state": run.state,
+                "outcome": run.outcome,
+                "goal": run.goal,
+                "changes": run.changes,
             })
         })
         .collect::<Vec<_>>();
     if json_output {
         write_json(&values)
     } else if values.is_empty() {
-        write_human_stdout("No completed Pactrail runs found.\n").map_err(CliError::Output)
+        write_human_stdout("No durable Pactrail runs found.\n").map_err(CliError::Output)
     } else {
         let text = values
             .iter()
             .map(|value| {
+                let status = value["outcome"]
+                    .as_str()
+                    .or_else(|| value["state"].as_str())
+                    .unwrap_or_default();
                 format!(
                     "{}  {:<16}  {}",
                     value["run_id"].as_str().unwrap_or_default(),
-                    value["outcome"].as_str().unwrap_or_default(),
+                    status,
                     value["goal"].as_str().unwrap_or_default()
                 )
             })
@@ -758,6 +788,49 @@ pub(crate) fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
             .join("\n");
         write_human_stdout(&format!("{text}\n")).map_err(CliError::Output)
     }
+}
+
+pub(crate) struct RunHistoryEntry {
+    pub run_id: RunId,
+    pub state: RunState,
+    pub outcome: Option<ReceiptOutcome>,
+    pub goal: String,
+    pub changes: usize,
+}
+
+pub(crate) fn run_history(state_root: &Path) -> Result<Vec<RunHistoryEntry>, CliError> {
+    let database = state_root.join("events.sqlite3");
+    if !database.is_file() {
+        return Ok(Vec::new());
+    }
+    let store = EventStore::open(database)?;
+    let mut history = Vec::new();
+    for run_id in store.list_run_ids()? {
+        let events = store.load(run_id)?;
+        let mut durable_state = RunState::Created;
+        let mut goal = "(task contract unavailable)".to_owned();
+        for envelope in events {
+            match envelope.event {
+                RunEvent::ContractRegistered(contract) => goal = contract.goal,
+                RunEvent::StateChanged { to, .. } => durable_state = to,
+                _ => {}
+            }
+        }
+        let root = run_root(state_root, run_id);
+        let receipt = if root.join("receipt.json").is_file() {
+            Some(read_receipt(&root)?)
+        } else {
+            None
+        };
+        history.push(RunHistoryEntry {
+            run_id,
+            state: durable_state,
+            outcome: receipt.as_ref().map(|receipt| receipt.outcome),
+            goal,
+            changes: receipt.as_ref().map_or(0, |receipt| receipt.changes.len()),
+        });
+    }
+    Ok(history)
 }
 
 pub(crate) fn completed_runs(state: &Path) -> Result<Vec<ChangeReceipt>, CliError> {
@@ -1276,6 +1349,13 @@ pub enum CliError {
     Model(ModelError),
     #[error("engine failed: {0}")]
     Engine(#[from] EngineError),
+    #[error("engine failed for run {run_id}: {source}\n{trace_status}")]
+    RunFailed {
+        run_id: RunId,
+        #[source]
+        source: Box<EngineError>,
+        trace_status: String,
+    },
     #[error("event store failed: {0}")]
     Store(#[from] StoreError),
     #[error("workspace transaction failed: {0}")]
@@ -1286,6 +1366,15 @@ pub enum CliError {
     Memory(#[from] MemoryError),
     #[error("receipt failed: {0}")]
     Receipt(#[from] pactrail_core::ReceiptError),
+}
+
+impl CliError {
+    pub(crate) const fn run_id(&self) -> Option<RunId> {
+        match self {
+            Self::RunFailed { run_id, .. } => Some(*run_id),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]

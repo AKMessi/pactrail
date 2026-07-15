@@ -197,6 +197,33 @@ impl EventStore {
         Ok(events)
     }
 
+    /// Lists distinct durable run identifiers from newest to oldest.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the database cannot be queried or contains a
+    /// malformed run identifier.
+    pub fn list_run_ids(&self) -> Result<Vec<RunId>, StoreError> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT run_id FROM events
+                 GROUP BY run_id
+                 ORDER BY MIN(timestamp) DESC, run_id DESC",
+            )
+            .map_err(StoreError::Database)?;
+        let rows = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(StoreError::Database)?;
+        let mut run_ids = Vec::new();
+        for row in rows {
+            let value = row.map_err(StoreError::Database)?;
+            let run_id = value.parse().map_err(|_| StoreError::InvalidRunId(value))?;
+            run_ids.push(run_id);
+        }
+        Ok(run_ids)
+    }
+
     /// Reconstructs the current deterministic projection for one run.
     ///
     /// # Errors
@@ -232,6 +259,8 @@ pub enum StoreError {
     InvalidSequence(i64),
     #[error("invalid event schema number {0} found in storage")]
     InvalidSchema(i64),
+    #[error("invalid run identifier {0:?} found in event storage")]
+    InvalidRunId(String),
     #[error("compiled event schema {EVENT_SCHEMA_VERSION} cannot read stored data")]
     UnsupportedSchema,
     #[error("event database schema version {0} is unsupported")]
@@ -300,6 +329,32 @@ mod tests {
                 actual: 1
             })
         ));
+    }
+
+    #[test]
+    fn lists_runs_newest_first() {
+        let mut store = EventStore::open_in_memory()
+            .unwrap_or_else(|error| unreachable!("event store: {error}"));
+        let first = RunId::new();
+        let second = RunId::new();
+        for run_id in [first, second] {
+            store
+                .append(
+                    run_id,
+                    0,
+                    RunEvent::NoteRecorded {
+                        message: "run".to_owned(),
+                    },
+                )
+                .unwrap_or_else(|error| unreachable!("append: {error}"));
+        }
+
+        assert_eq!(
+            store
+                .list_run_ids()
+                .unwrap_or_else(|error| unreachable!("list: {error}")),
+            vec![second, first]
+        );
     }
 
     #[test]

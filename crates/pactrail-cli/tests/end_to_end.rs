@@ -110,6 +110,88 @@ fn complete_run_is_isolated_then_applies() {
     assert_applied_memory(workspace.path(), run_id);
 }
 
+#[test]
+fn failed_run_exports_trace_and_remains_discoverable() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|error| unreachable!("mock provider: {error}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|error| unreachable!("provider address: {error}"));
+    let response = json!({
+        "id": "invalid-turn",
+        "choices": [{
+            "message": {"content": ""},
+            "finish_reason": "tool_calls"
+        }],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 1}
+    });
+    let server = thread::spawn(move || serve_responses(&listener, &[response]));
+
+    let output = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "run",
+            "Trigger a protocol failure",
+            "--provider",
+            "open-ai-compatible",
+            "--base-url",
+            &format!("http://{address}/v1"),
+            "--model",
+            "broken-mock",
+        ])
+        .output()
+        .unwrap_or_else(|error| unreachable!("run command: {error}"));
+    server
+        .join()
+        .unwrap_or_else(|_| unreachable!("provider thread panicked"));
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let marker = "engine failed for run ";
+    let start = stderr.find(marker).map_or_else(
+        || unreachable!("run id missing from: {stderr}"),
+        |index| index + marker.len(),
+    );
+    let run_id = stderr
+        .get(start..start + 36)
+        .unwrap_or_else(|| unreachable!("run id was not a UUID"));
+    assert!(stderr.contains("Portable trace:"));
+
+    let trace_path = workspace
+        .path()
+        .join(".pactrail")
+        .join("runs")
+        .join(run_id)
+        .join("trace.jsonl");
+    let trace = std::fs::read_to_string(trace_path)
+        .unwrap_or_else(|error| unreachable!("failed trace: {error}"));
+    assert!(trace.contains("\"to\":\"failed\""));
+
+    let list = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args(["--workspace", path_text(workspace.path()), "list", "--json"])
+        .output()
+        .unwrap_or_else(|error| unreachable!("list command: {error}"));
+    assert!(list.status.success());
+    let runs: Value = serde_json::from_slice(&list.stdout)
+        .unwrap_or_else(|error| unreachable!("list JSON: {error}"));
+    assert_eq!(runs[0]["run_id"], run_id);
+    assert_eq!(runs[0]["state"], "failed");
+    assert!(runs[0]["outcome"].is_null());
+
+    let trace_command = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "trace",
+            run_id,
+            "--json",
+        ])
+        .output()
+        .unwrap_or_else(|error| unreachable!("trace command: {error}"));
+    assert!(trace_command.status.success());
+}
+
 fn assert_applied_memory(workspace: &Path, run_id: &str) {
     let memory = Command::new(env!("CARGO_BIN_EXE_pactrail"))
         .args([
@@ -245,12 +327,16 @@ fn serve_model(listener: &TcpListener) {
             "usage": {"prompt_tokens": 25, "completion_tokens": 7}
         }),
     ];
+    serve_responses(listener, &responses);
+}
+
+fn serve_responses(listener: &TcpListener, responses: &[Value]) {
     for response in responses {
         let (mut stream, _address) = listener
             .accept()
             .unwrap_or_else(|error| unreachable!("provider accept: {error}"));
         read_request(&mut stream);
-        let body = serde_json::to_vec(&response)
+        let body = serde_json::to_vec(response)
             .unwrap_or_else(|error| unreachable!("provider response: {error}"));
         let header = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",

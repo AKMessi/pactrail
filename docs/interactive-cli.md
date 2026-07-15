@@ -34,6 +34,10 @@ verification, policy, evidence, checkpoint, note, and lifecycle events have
 distinct markers and colors. Action attributes and observed effects are shown
 without persisting raw prompts, keys, or raw tool arguments.
 
+Failure does not erase observability: Pactrail reports the run ID, exports the
+portable trace, keeps that run focused for `/trace`, and lists it in `/runs`
+even when no receipt could be issued.
+
 Internal logs stay out of the normal transcript even when another tool exports
 `RUST_LOG`. Set `PACTRAIL_LOG` for interactive diagnostics; non-interactive
 commands continue to honor `RUST_LOG`.

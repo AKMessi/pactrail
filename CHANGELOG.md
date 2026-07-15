@@ -18,6 +18,8 @@ follow [Semantic Versioning](https://semver.org/).
   `AGENTS.md` instructions.
 - Integrity-checked model/tool/verification execution timelines, interactive
   `/trace`, scriptable `pactrail trace`, and portable run-local JSONL.
+- Failed-run trace export, run-ID diagnostics, and receipt-independent run
+  history so model/protocol failures remain discoverable after restart.
 - Interactive `/tools` kernel inspector and expanded live latency/token/context
   activity reporting.
 

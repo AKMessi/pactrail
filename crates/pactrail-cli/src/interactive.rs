@@ -542,12 +542,23 @@ impl Session {
                 self.render_completed(&completed)?;
             }
             Err(error) => {
+                if let Some(run_id) = error.run_id() {
+                    self.last_run = Some(run_id);
+                }
                 self.render_error(&error.to_string())?;
-                self.emit(&format!(
-                    "{}\n",
-                    self.theme
-                        .muted("Any initialized run state remains under .pactrail for diagnosis.")
-                ))?;
+                let guidance = error.run_id().map_or_else(
+                    || {
+                        "Any initialized run state remains under .pactrail for diagnosis."
+                            .to_owned()
+                    },
+                    |run_id| {
+                        format!(
+                            "Run {} is durable · /trace inspects it · /runs keeps it discoverable",
+                            short_run_id(run_id)
+                        )
+                    },
+                );
+                self.emit(&format!("{}\n", self.theme.muted(&guidance)))?;
             }
         }
         Ok(())
@@ -1105,11 +1116,11 @@ impl Session {
     }
 
     fn render_runs(&self) -> Result<(), CliError> {
-        let receipts = commands::completed_runs(&self.state)?;
-        if receipts.is_empty() {
+        let runs = commands::run_history(&self.state)?;
+        if runs.is_empty() {
             return self.emit(&format!(
                 "{}\n",
-                self.theme.muted("No completed runs in this workspace.")
+                self.theme.muted("No durable runs in this workspace.")
             ));
         }
         let mut lines = vec![format!(
@@ -1117,23 +1128,27 @@ impl Session {
             self.theme.heading("Run history"),
             self.theme.muted(&format!(
                 "{} total · {} waiting",
-                receipts.len(),
+                runs.len(),
                 self.pending_runs
             ))
         )];
-        for receipt in receipts.iter().rev().take(12) {
-            let marker = if self.last_run == Some(receipt.run_id) {
+        for run in runs.iter().take(12) {
+            let marker = if self.last_run == Some(run.run_id) {
                 self.theme.accent("●")
             } else {
                 self.theme.muted("○")
             };
+            let status = run.outcome.map_or_else(
+                || run_state_text(&self.theme, run.state),
+                |outcome| outcome_text(&self.theme, outcome),
+            );
             lines.push(format!(
                 "  {marker} {}  {}  {} {}  {}",
-                self.theme.code(&short_run_id(receipt.run_id)),
-                outcome_text(&self.theme, receipt.outcome),
-                receipt.changes.len(),
-                plural(receipt.changes.len(), "file", "files"),
-                self.theme.text(&truncate(&receipt.contract.goal, 56)),
+                self.theme.code(&short_run_id(run.run_id)),
+                status,
+                run.changes,
+                plural(run.changes, "file", "files"),
+                self.theme.text(&truncate(&run.goal, 56)),
             ));
         }
         lines.push(
@@ -1360,9 +1375,9 @@ impl Session {
         if let Ok(run_id) = commands::parse_run_id(argument) {
             return Ok(run_id);
         }
-        let matches = commands::completed_runs(&self.state)?
+        let matches = commands::run_history(&self.state)?
             .into_iter()
-            .map(|receipt| receipt.run_id)
+            .map(|run| run.run_id)
             .filter(|run_id| run_id.to_string().starts_with(argument))
             .collect::<Vec<_>>();
         match matches.as_slice() {
@@ -1815,6 +1830,17 @@ fn outcome_text(theme: &Theme, outcome: ReceiptOutcome) -> String {
         ReceiptOutcome::Discarded => theme.warning("DISCARDED"),
         ReceiptOutcome::Failed => theme.danger("FAILED"),
         ReceiptOutcome::Cancelled => theme.warning("CANCELLED"),
+    }
+}
+
+fn run_state_text(theme: &Theme, state: RunState) -> String {
+    match state {
+        RunState::Failed => theme.danger("FAILED"),
+        RunState::Cancelled => theme.warning("CANCELLED"),
+        RunState::Applied => theme.success("APPLIED"),
+        RunState::Discarded => theme.warning("DISCARDED"),
+        RunState::AwaitingApply => theme.success("READY TO APPLY"),
+        _ => theme.muted(&format!("{state:?}").to_uppercase()),
     }
 }
 
