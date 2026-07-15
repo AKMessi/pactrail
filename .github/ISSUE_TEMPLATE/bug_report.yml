@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a reproducible Pactrail defect or regression.
+title: "bug: "
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, private source, `.pactrail` state, or security vulnerabilities. Use private vulnerability reporting for security issues.
+  - type: input
+    id: version
+    attributes:
+      label: Pactrail version or commit
+      placeholder: pactrail 0.1.0 / commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Windows, macOS, Linux, Other]
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Provider and model
+      description: Use non-sensitive identifiers only; write "not model-related" when applicable.
+      placeholder: llama.cpp / local-model
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe actual and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include commands and a minimal public fixture. Remove secrets, private paths, and proprietary code.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: trace
+    attributes:
+      label: Sanitized diagnostics
+      description: Include relevant error or `pactrail trace` metadata only after checking it for sensitive data.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed credentials, private source, personal data, model files, and sensitive paths.
+          required: true
+        - label: This is not a vulnerability report.
+          required: true

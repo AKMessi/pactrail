@@ -20,6 +20,10 @@ Endpoint URLs containing credentials are rejected. Non-loopback HTTP is rejected
 Responses are capped at 16 MiB, malformed tool arguments fail explicitly, and
 rate-limit/server failures use bounded exponential retries.
 
+Pactrail does not assume that model listing is available. `GET /models` is a UX
+convenience; a configured model ID remains usable when discovery returns 404 or
+another unsupported response.
+
 ## Interactive configuration
 
 Running `pactrail` without a subcommand opens the interactive session. The
@@ -43,6 +47,34 @@ For hosted endpoints, keep credentials out of the URL and shell history:
 Pactrail reads the named environment variable at request time. It never writes
 the secret value to settings. Plain HTTP is accepted only for loopback hosts.
 
+## Running a local GGUF model
+
+Pactrail is a harness, not a GGUF inference runtime. Start the model with a
+server that exposes the OpenAI Chat Completions tool-calling protocol, then point
+Pactrail at its loopback `/v1` URL. For llama.cpp-style servers:
+
+```text
+/key-env PACTRAIL_LOCAL_API_KEY
+/connect http://127.0.0.1:8080/v1 model-id
+/context 4096
+/output-tokens 512
+/turns 8
+/process off
+```
+
+If the server requires a bearer header, set the selected variable to a non-empty
+local placeholder. If it accepts unauthenticated loopback requests, leaving the
+variable unset is supported by the `open-ai-compatible` configuration.
+
+Tool quality is model-dependent. Very small models may repeat an invalid call or
+provide host-absolute paths. Pactrail returns a model-safe path correction,
+stops bounded non-progress loops, and preserves any coherent candidate changes
+for explicit `/diff` and `/apply` review.
+
+The declared context and output values must reflect the server configuration.
+Pactrail uses them to budget repository context and reject impossible output
+limits; the inference server remains authoritative for tokenizer-specific limits.
+
 ## Adding a provider
 
 Implement `ModelDriver` and translate the provider protocol to these normalized types:
@@ -57,3 +89,7 @@ Implement `ModelDriver` and translate the provider protocol to these normalized 
 Provider implementations must preserve assistant tool-call messages before tool
 results, redact secrets from errors, enforce bounded response bodies, reject
 insecure remote transport, and provide recorded protocol fixtures.
+
+The current adapter is non-streaming. Native Anthropic/Gemini protocols, SSE
+streaming, prompt-cache controls, and provider-specific token counting are
+tracked as roadmap work rather than emulated through provider-name conditionals.

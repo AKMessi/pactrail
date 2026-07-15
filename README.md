@@ -1,156 +1,213 @@
 # Pactrail
 
+[![CI](https://github.com/AKMessi/pactrail/actions/workflows/ci.yml/badge.svg)](https://github.com/AKMessi/pactrail/actions/workflows/ci.yml)
+[![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange.svg)](rust-toolchain.toml)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+
 **Every change carries its evidence.**
 
-Pactrail is a verification-native coding agent harness written in Rust. A task
-becomes an explicit contract, model writes happen in an isolated transaction,
-and a tamper-evident change receipt is produced before the working tree can be
-modified.
+Pactrail is a model-agnostic coding-agent harness written in Rust. It combines
+the direct terminal flow of a coding assistant with a stricter execution model:
+tasks become contracts, edits happen in isolated transactions, actions become
+tamper-evident traces, and the source workspace changes only after explicit,
+receipt-bound apply.
 
-Pactrail is not a role-playing agent swarm. Its core abstraction is a durable,
-evidence-backed software transaction.
+The central abstraction is not a chat wrapper or an agent persona. It is a
+durable, inspectable software change transaction.
 
-## What works today
+```text
+  P A C T R A I L  0.1.0
+  verification-native coding · every change carries evidence
 
-- Local Ollama and HTTPS OpenAI-compatible model endpoints.
-- A provider-neutral Rust model and tool API.
-- Typed, JSON Schema-described read, search, edit, delete, and process tools.
-- Strict workspace-relative path and write-scope enforcement.
-- Copy-on-run transactions for Git and plain directories.
-- Receipt-bound landing, baseline content/mode drift detection, idempotent apply,
-  crash journal, rollback, and discard.
-- Append-only SQLite events with hash-chain integrity.
-- BLAKE3-addressed compressed artifact storage.
-- Repository topology, language, symbol, import, and hierarchical `AGENTS.md` indexing.
-- Model turn, token, process, output, and filesystem limits.
-- Automatic Rust, Go, Python, and JavaScript test discovery.
-- Evidence grades that distinguish deterministic results from observations and model opinions.
-- An interactive, persistent terminal session with model discovery, history,
-  completion, truthful live engine activity, review-aware prompts, evidence
-  rendering, diff, apply, and discard commands.
-- Scriptable human-readable and JSON output, task files, receipts, inspection,
-  and run listing.
+  workspace  C:\work\project
+  model      local-coder
+  safety     isolated edits · native processes blocked
+  review     no candidates waiting
+  memory     3 memories · /memory
+
+pactrail ❯ Fix the parser regression and add a test.
+```
+
+## Why Pactrail is different
+
+- **The model proposes; the kernel disposes.** Models never receive a raw host
+  filesystem or an untyped shell. JSON Schema tools, capability policy, path
+  confinement, budgets, and transaction state remain deterministic Rust code.
+- **Review is a hard boundary.** Candidate edits live under `.pactrail/runs`.
+  `/diff` reads an immutable review artifact; `/apply` rechecks the receipt,
+  candidate bytes, file modes, and source baseline before landing anything.
+- **Memory has provenance.** Explicit conventions, decisions, and warnings live
+  in a durable SQLite store. Applied receipts can create integrity-checked
+  historical records. The model can recall memory but cannot write it.
+- **Context adapts to the model.** Repository topology, scoped `AGENTS.md`
+  instructions, and relevant memories are compiled under a model-derived byte
+  budget. Authoritative context fails closed; optional entries are omitted whole
+  and the omission is visible.
+- **Traces describe reality.** Model latency and token deltas, tool duration,
+  risk, argument digests, output bounds, observed effects, verification, policy,
+  evidence, and state transitions are hash-linked and available as portable
+  JSONL.
+- **Weak models fail usefully.** Repeated or invalid tool loops stop early while
+  preserving coherent candidate changes for human review.
+
+## Shipped in 0.1
+
+### Interactive experience
+
+- Start from any repository with `pactrail`; optionally pass the first task.
+- Persistent history, completion, typo suggestions, review-aware prompt, and
+  truthful live phases instead of simulated activity.
+- `/tools` risk/capability inspector, `/trace` execution timeline, `/memory`
+  browser, `/runs`, `/review`, immutable `/diff`, explicit `/apply` and
+  `/discard`, `/doctor`, model discovery, and persistent provider settings.
+- Human-readable output by default and stable JSON for scripts.
+
+### Tool Kernel v2
+
+- Bounded file listing, single and batch reads, lexical search, exact replace,
+  atomic multi-edit, write, remove, candidate-change inspection, memory recall,
+  and trusted native verification.
+- Per-tool read-only, idempotency, parallel-safety, capability, and risk metadata.
+- Consecutive parallel-safe reads overlap; mutations stay serial and durable
+  results retain the model's call order.
+- Model-visible results are bounded to 256 KiB with explicit narrowing guidance.
+
+### Durable safety and state
+
+- Git-aware or plain-directory copy-on-run transactions.
+- Workspace-relative path enforcement, write-scope enforcement, symlink and
+  special-file rejection, and concurrent source-drift protection.
+- Idempotent apply with a synchronized crash journal and rollback.
+- SQLite WAL event and memory stores with full synchronization and fail-closed
+  schema versions.
+- BLAKE3 hash-linked events, integrity-protected receipts, and a tested
+  compressed content-addressed artifact-store primitive.
+- Automatic Rust, Go, Python, and JavaScript verification discovery.
+
+### Model portability
+
+- Ollama, OpenAI, llama.cpp, vLLM, SGLang, LM Studio, LocalAI, and compatible
+  hosted gateways through a bounded OpenAI Chat Completions adapter.
+- A provider-neutral Rust `ModelDriver`, ordered conversation IR, typed tool
+  calls/results, finish reasons, usage, request IDs, and extension metadata.
+- Remote endpoints require HTTPS. Plain HTTP is restricted to exact loopback
+  hosts, redirects are disabled, and credentials are read from environment
+  variables rather than CLI values or settings files.
 
 ## Install
 
-Until signed release binaries are published, install from the repository:
+Install the current source from GitHub:
 
 ```console
 cargo install --git https://github.com/AKMessi/pactrail.git --locked pactrail
 ```
 
-Pactrail requires Rust 1.95 or newer when building from source.
-
-For a local checkout, install the current source with:
+Or from a local checkout:
 
 ```console
 cargo install --path crates/pactrail-cli --locked --force
 ```
 
-Cargo places the executable in its binary directory (normally `~/.cargo/bin`).
-Once that directory is on `PATH`, `pactrail` works from any terminal and any
-repository.
+Building requires Rust 1.95 or newer. Cargo normally installs the executable in
+`~/.cargo/bin`; put that directory on `PATH` and `pactrail` will start from any
+terminal.
 
 ## Quick start
 
-Open a terminal in the repository you want to work on and start Pactrail:
+Open a terminal in a project and launch the session:
 
 ```console
 pactrail
 ```
 
-Start the session and submit its first task in one command:
-
-```console
-pactrail "Fix the failing parser tests and add a regression test"
-```
-
-The interactive session discovers models from local Ollama on first launch.
-Type a software task directly, or use `/models` and `/model` to choose a model:
+Pactrail discovers local Ollama models on first launch. A normal review loop is:
 
 ```text
 /models
 /model 1
-Fix the failing parser tests and add a regression test
+Fix the failing parser tests and add a regression test.
+/trace
 /diff
 /apply
 ```
 
-Pactrail runs every model edit in an isolated transaction. `/diff` reviews the
-immutable run artifact; `/apply` performs integrity and source-drift checks
-before touching the working tree. `/discard` removes the candidate while
-preserving its receipt and diff.
-
-Connect a llama.cpp, vLLM, LM Studio, SGLang, or other OpenAI-compatible server
-inside the session:
+Connect any local OpenAI-compatible server without restarting:
 
 ```text
 /connect http://127.0.0.1:8080/v1 model-id
+/context 4096
+/output-tokens 512
+/turns 8
 ```
 
-Use `/help` for the command palette and `/status` for the active endpoint,
-model, credential presence, token limits, safety policy, and pending review
-count. Settings and input history persist across sessions. Ready candidates
-remain visible in the prompt and become the default target for `/review`,
-`/diff`, `/apply`, and `/discard`.
+For a local GGUF model, start its llama.cpp-compatible server separately, then
+connect Pactrail to its `/v1` endpoint. A key variable may contain any non-empty
+placeholder if that server requires an authorization header; Pactrail does not
+need a real remote credential for a local endpoint.
 
-Generate native shell completions with `pactrail completion bash`, `fish`,
-`zsh`, `elvish`, or `powershell`. For example, in PowerShell:
+Native processes are disabled by default. `/process on` permits detected tests
+and other registered process calls, but those children have the host process's
+filesystem, network, secret, and external-service authority. The edit
+transaction is not an operating-system sandbox. Enable this only for trusted
+repositories.
 
-```powershell
-pactrail completion powershell | Out-String | Invoke-Expression
-```
+## Automation and CI
 
-The non-interactive interface remains available for scripts and CI. Run with a
-local Ollama model:
+No-subcommand mode intentionally requires a terminal. Use subcommands in scripts:
 
 ```console
-pactrail run "Fix the failing parser tests" --model qwen3-coder
+pactrail run "Fix the parser" --model qwen3-coder --output json
+pactrail trace <RUN_ID> --json
+pactrail inspect <RUN_ID> --json
+pactrail apply <RUN_ID> --json
 ```
 
-Run against an HTTPS OpenAI-compatible endpoint without putting a key in shell history:
-
-```console
-export OPENAI_API_KEY="..."
-pactrail run "Add regression tests for issue 42" \
-  --provider open-ai-compatible \
-  --base-url https://models.example.com/v1 \
-  --model coding-model
-```
-
-The source tree is still untouched when the run finishes. Inspect and land it explicitly:
-
-```console
-pactrail inspect <RUN_ID>
-pactrail apply <RUN_ID>
-```
-
-Generate a complete TOML contract for CI or repeatable work:
+Repeatable work can use a complete versioned contract:
 
 ```console
 pactrail task-template "Refactor the cache without changing behavior" > pactrail.task.toml
 pactrail run --task pactrail.task.toml --model qwen3-coder --output json
 ```
 
-Process execution is disabled unless the contract records its full effective
-authority or `--allow-process` is passed. Native processes can access the host
-filesystem, network, secrets, and external services; the workspace transaction
-protects receipt landing, but it is not a host sandbox. Use only trusted
-repositories until the OCI runner is available.
+Other discovery commands include `pactrail tools --json`, `pactrail schema`,
+`pactrail memory list`, `pactrail list`, `pactrail doctor`, and
+`pactrail completion <shell>`.
 
-## Core workflow
+## Architecture at a glance
 
-1. Validate the task contract and capability policy.
-2. Snapshot the repository into an isolated transaction.
-3. Compile deterministic repository context for the selected model.
-4. Execute typed tools while recording declared and observed effects.
-5. Run detected verification commands when process capability is granted.
-6. Grade evidence and issue a hash-protected change receipt.
-7. Apply only after receipt validation and baseline-drift checks.
+```text
+TaskContract ──> model-budgeted ContextPack ──> ModelDriver
+     │                       │                       │
+     │                 provenance memory       typed calls
+     │                                               │
+     ├──> PolicyEngine ──> Tool Kernel ──> WorkspaceTransaction
+     │                           │                  │
+     └──> hash-linked EventStore <──── effects ────┘
+                    │
+              Evidence + ChangeReceipt ──> apply / discard
+```
 
-See [Architecture](docs/architecture.md), [Threat model](docs/threat-model.md),
-[Interactive CLI](docs/interactive-cli.md), and
-[Provider compatibility](docs/providers.md).
+The nine crates keep the core domain, storage, memory, context, models, tools,
+workspace transactions, engine, and CLI independently testable. See
+[Architecture](docs/architecture.md), [Threat model](docs/threat-model.md),
+[Interactive CLI](docs/interactive-cli.md), [Providers](docs/providers.md), and
+[Roadmap](docs/roadmap.md).
+
+## Durable local layout
+
+Pactrail keeps its state in `WORKSPACE/.pactrail` by default:
+
+```text
+.pactrail/
+├── events.sqlite3        # authoritative hash-linked event journal
+├── memory.sqlite3        # provenance-aware workspace memory
+└── runs/<run-id>/
+    ├── transaction.json  # isolated workspace metadata
+    ├── workspace/        # model-visible candidate tree
+    ├── receipt.json      # integrity-protected change receipt
+    ├── review.diff       # immutable review artifact
+    └── trace.jsonl       # portable verified execution timeline
+```
 
 ## Development
 
@@ -161,18 +218,18 @@ cargo test --workspace --all-features --locked
 cargo doc --workspace --all-features --no-deps --locked
 ```
 
-The end-to-end suite runs a real Pactrail child process against a local mock
-provider, confirms the source is untouched, and then lands the receipt in a
-second process.
+CI runs those gates plus release builds on Linux, macOS, and Windows, and applies
+the dependency/license policy in `deny.toml`. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md) and [Development](docs/development.md).
 
-## Status and compatibility
+## Project status
 
-The current `0.x` line is a production-quality developer preview. Receipt,
-event, and contract formats are explicitly versioned, but public Rust APIs may
-still change before 1.0. See the repository milestones for ACP, MCP, stronger
-native/OCI sandboxing, native Anthropic/Gemini adapters, and richer terminal
-visualization.
+Pactrail 0.1 is a production-grade developer preview: its invariants and failure
+modes are tested, while Rust APIs and versioned local formats may still evolve
+before 1.0. OCI/OS sandbox backends, MCP, native provider adapters, streaming,
+and richer retrieval are roadmap work—not current security claims.
 
 ## License
 
-Licensed under either Apache License 2.0 or MIT at your option.
+Licensed under either [Apache License 2.0](LICENSE-APACHE) or
+[MIT](LICENSE-MIT), at your option.

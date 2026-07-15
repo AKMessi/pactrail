@@ -1,35 +1,47 @@
 # Interactive CLI
 
-Start Pactrail from the root of any Git or plain-directory workspace:
+Start Pactrail from any Git or plain-directory workspace:
 
 ```console
 pactrail
 ```
 
-An optional positional task starts the same interactive session and executes
-immediately before opening the next prompt:
+An optional positional task runs immediately before the first prompt:
 
 ```console
-pactrail "Refactor the parser error type and update its regression tests"
+pactrail "Refactor the parser error type and add regression coverage"
 ```
 
-The session keeps the familiar coding-agent flow—type a task and press Enter—
-while retaining Pactrail's explicit transaction boundary. The model works in a
-run-local copy. Source files change only after `/apply` validates the receipt,
-candidate contents, and baseline state.
+The interface keeps the direct coding-agent flow—describe a change and press
+Enter—while preserving an explicit transaction boundary. The model works in a
+run-local candidate. Source files change only after `/apply` validates the
+receipt, candidate contents, file modes, and source baseline.
 
-The activity line reports the engine's real lifecycle rather than displaying a
-generic waiting animation: repository indexing, model turn number, typed tool,
-changed file, verification command, and receipt sealing. Internal diagnostic
-logs stay out of the normal transcript even when another tool exported
-`RUST_LOG`. Set the Pactrail-specific `PACTRAIL_LOG` filter when diagnosing an
-interactive session; non-interactive commands continue to honor `RUST_LOG`.
+## What the UI reports
+
+The activity line reflects engine events rather than simulating work. It shows:
+
+- repository context size, cited/indexed files, compilation time, and whether
+  model-budgeting omitted optional entries;
+- model turn, latency, tool-call count, provider-reported tokens, and aggregate
+  model time;
+- the active typed tool, changed path, duration, and bounded output count;
+- detected verification command, position, result, and duration;
+- final turns, tool calls, tokens, elapsed/model time, and truncation count.
+
+`/trace` renders the durable timeline after a run. Context, model, tool,
+verification, policy, evidence, checkpoint, note, and lifecycle events have
+distinct markers and colors. Action attributes and observed effects are shown
+without persisting raw prompts, keys, or raw tool arguments.
+
+Internal logs stay out of the normal transcript even when another tool exports
+`RUST_LOG`. Set `PACTRAIL_LOG` for interactive diagnostics; non-interactive
+commands continue to honor `RUST_LOG`.
 
 ## First session
 
-Pactrail uses local Ollama by default. When no model has been selected, startup
-attempts model discovery and selects the first reported model. Use these
-commands to inspect or change the selection:
+Pactrail uses local Ollama by default. If no model is configured, startup tries
+model discovery and selects the first result:
 
 ```text
 /models
@@ -37,99 +49,125 @@ commands to inspect or change the selection:
 /status
 ```
 
-For a local llama.cpp server or another OpenAI-compatible API:
+Connect llama.cpp, vLLM, LM Studio, SGLang, LocalAI, or another compatible API:
 
 ```text
 /connect http://127.0.0.1:8080/v1 model-id
+/context 4096
+/output-tokens 512
+/turns 8
 ```
 
-`/connect` validates the endpoint, stores only the URL and model identifier,
-and switches the provider atomically. Remote endpoints must use HTTPS, URLs
-containing credentials are rejected, and API keys are read only from the
-environment variable selected with `/key-env`.
+Some compatible APIs omit `GET /models`. `/models` then reports discovery as
+unavailable without clearing the configured model; select a known ID directly.
 
-Some compatible APIs do not implement `GET /models`. In that case `/models`
-explains that discovery is unavailable without clearing the configured model;
-use `/model <known-id>` to select it directly. `/status` reports only whether
-the selected environment variable is present and never displays its value.
+`/connect` validates and atomically persists only the provider kind, URL, and
+model. Remote endpoints require HTTPS, URLs containing credentials are rejected,
+redirects are not followed, and keys are read from the environment variable
+selected by `/key-env`. `/status` reports only whether that variable is present.
 
-## Task and review loop
-
-Enter a natural-language task without a leading slash:
+## Task, trace, and review loop
 
 ```text
-Refactor the parser error type and update its regression tests
-```
-
-After the run, Pactrail prints its receipt, verification summary, changed paths,
-unresolved risks, and token usage. The normal landing loop is:
-
-```text
+Fix the parser error conversion and add a regression test.
+/trace
 /diff
 /apply
 ```
 
-Use `/review` to show both receipt and diff, `/discard` to reject the candidate,
-and `/runs` to select an older completed run. Run IDs may be abbreviated to any
-unique prefix shown by `/runs`. Review diffs are immutable run artifacts, so
-they remain available after apply or discard.
+When the run stops, Pactrail prints the receipt outcome, evidence counts,
+integrity status, changed paths, risks, model summary, and token usage. `/review`
+combines receipt and diff. `/discard` rejects the candidate while retaining the
+receipt, immutable diff, and trace. `/runs` browses recent history.
 
-When one or more candidates are waiting, the right side of the prompt displays
-the review count. Commands without a run ID focus the newest ready candidate,
-including after a restart or after landing another candidate. This prevents an
-older review from becoming hidden behind a newer applied or discarded run.
+Run IDs accept any unique prefix shown by `/runs`. Commands without an ID focus
+the newest ready candidate, including after restart or after another candidate
+is applied. The prompt's right side shows how many reviews are waiting.
 
-## Commands
+## Workspace memory
 
-| Command | Purpose |
-|---|---|
-| `/help [command]` | Show the grouped command palette or focused command help. |
-| `/status` | Show workspace, provider, model, limits, and process policy. |
-| `/doctor` | Check local runtimes and explain the native isolation boundary. |
-| `/models` | Discover models from the active endpoint. |
-| `/model <name\|number>` | Persist a model selection. |
-| `/connect <url> <model>` | Configure an OpenAI-compatible endpoint and model. |
-| `/provider <kind> [url]` | Select Ollama, OpenAI, or a compatible provider. |
-| `/endpoint <url>` | Change only the active endpoint. |
-| `/key-env <name>` | Select the environment variable holding the API key. |
-| `/context <tokens>` | Set declared model context capacity. |
-| `/output-tokens <tokens>` | Set maximum output tokens per model turn. |
-| `/turns <count>` | Set the maximum model turns per run. |
-| `/process on\|off` | Control trusted native process execution. |
-| `/runs` | Show recent completed runs. |
-| `/inspect [run]` | Inspect a run receipt. |
-| `/review [run]` | Inspect a receipt and its immutable diff. |
-| `/diff [run]` | Show the immutable unified diff. |
-| `/apply [run]` | Land a ready transaction after safety checks. |
-| `/discard [run]` | Remove a candidate while preserving evidence. |
-| `/clear` | Clear the terminal. |
-| `/quit` | Exit the session. |
+Memory is explicit and provenance-aware:
 
-Arrow keys navigate persistent history and Ctrl-R searches it. Ctrl-C cancels
-the current input; Ctrl-D closes the session. Prefix a task with `//` when the
-task itself must begin with `/`.
+```text
+/remember convention Rust errors use thiserror and preserve source chains.
+/remember decision Keep the public parser API synchronous.
+/remember warning Do not edit generated/schema.rs directly.
+/memory parser
+/forget <memory-id-prefix>
+```
 
-Command completion is available with Tab. Unknown slash commands include a
-bounded typo suggestion when there is a close unambiguous match.
+`/remember` accepts `convention`, `decision`, or `warning`; omitting the kind
+defaults to convention. Relevant entries are retrieved at task start under the
+context budget and are also available through the model's read-only
+`recall_memory` tool. Applied receipts create integrity-checked historical
+records. The model cannot add or delete memory.
 
-## Process safety
+## Tool kernel inspector
 
-Native process execution defaults to off. `/process on` permits model-triggered
-verification commands and grants them the host process's filesystem, network,
-environment, and external-service authority. The isolated workspace protects
-the apply boundary; it is not an operating-system sandbox. Enable processes
-only for repositories and toolchains you trust.
+`/tools` lists every model-visible tool with its capability, risk class, and
+read-only/idempotent/parallel-safe annotations. The markers distinguish bounded
+reads, isolated candidate mutations, and trusted host execution. This view uses
+the same registry descriptors sent to the model.
+
+Consecutive parallel-safe reads may overlap. Mutations remain serial and close
+any read batch; the trace records whether each call was scheduled in parallel or
+serially.
+
+## Command palette
+
+| Group | Command | Purpose |
+|---|---|---|
+| Work | `/review [run]` | Show receipt and immutable diff. |
+| Work | `/diff [run]` | Show candidate changes. |
+| Work | `/trace [run]` | Show the verified execution timeline. |
+| Work | `/apply [run]` | Land a ready candidate after safety checks. |
+| Work | `/discard [run]` | Reject a candidate and preserve evidence. |
+| Work | `/runs` | Browse durable history. |
+| Work | `/inspect [run]` | Show a receipt without its diff. |
+| Memory | `/memory [query]` | Browse or search active workspace memory. |
+| Memory | `/remember [kind] <text>` | Save a human-authored memory. |
+| Memory | `/forget <id>` | Soft-delete a memory by full/unique ID prefix. |
+| Model | `/models` | Discover models from the endpoint. |
+| Model | `/model <name\|number>` | Select and persist a model. |
+| Model | `/connect <url> <model>` | Configure a compatible endpoint and model. |
+| Model | `/provider <kind> [url]` | Switch provider adapter. |
+| Model | `/endpoint <url>` | Change only the endpoint. |
+| Model | `/key-env <name>` | Select the key environment variable. |
+| Kernel | `/tools` | Inspect typed tools, capabilities, and risk. |
+| Safety | `/process on\|off` | Control trusted native execution. |
+| Safety | `/context <tokens>` | Set declared context capacity. |
+| Safety | `/output-tokens <tokens>` | Set per-turn output limit. |
+| Safety | `/turns <count>` | Set the model-turn safety bound. |
+| Session | `/status` | Show model, limits, policy, memory, and review state. |
+| Session | `/doctor` | Inspect runtimes and isolation boundaries. |
+| Session | `/help [command]` | Browse grouped or focused help. |
+| Session | `/clear` | Clear the terminal. |
+| Session | `/quit` | End the session. |
+
+Tab completes commands, arrow keys browse persistent history, and Ctrl-R
+searches it. Ctrl-C cancels the current input and Ctrl-D exits. Prefix a task
+with `//` when the task text itself begins with `/`. Unknown commands provide a
+bounded typo suggestion when the match is unambiguous.
+
+## Native process safety
+
+`/process off` is the default. `/process on` lets registered verification
+commands run from the candidate directory, but the child is not confined by an
+OS or container sandbox. It may reach host files, network, inherited operational
+environment, or external services. Pactrail records this effective authority in
+the task contract; enable it only for trusted repositories.
 
 ## Automation
 
-No-subcommand mode deliberately requires an interactive terminal. Scripts,
-redirected input, and CI should use the stable subcommand interface:
+No-subcommand mode requires an interactive terminal. Scripts, redirected input,
+and CI should use stable subcommands:
 
 ```console
 pactrail run "Fix the parser" --model qwen3-coder --output json
+pactrail trace <RUN_ID> --json
 pactrail inspect <RUN_ID> --json
 pactrail apply <RUN_ID> --json
 ```
 
-Generate completion scripts with `pactrail completion <shell>`. Supported
-shells are Bash, Elvish, Fish, PowerShell (`powershell` or `pwsh`), and Zsh.
+Generate native completion with `pactrail completion <shell>`. Supported shells
+are Bash, Elvish, Fish, PowerShell (`powershell` or `pwsh`), and Zsh.

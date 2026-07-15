@@ -1,0 +1,47 @@
+name: Feature or design proposal
+description: Propose a user-facing capability or architectural change.
+title: "proposal: "
+labels: [proposal, triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: Describe the workflow or failure that needs improvement, independent of a preferred implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: design
+    attributes:
+      label: Proposed design
+      description: Include API/CLI shape and alternatives considered.
+    validations:
+      required: true
+  - type: textarea
+    id: authority
+    attributes:
+      label: Trust and capability impact
+      description: What new filesystem, process, network, secret, memory, provider, or external authority is introduced?
+    validations:
+      required: true
+  - type: textarea
+    id: durability
+    attributes:
+      label: Durability and recovery
+      description: Describe format/state changes, interruption behavior, replay, rollback, and compatibility.
+    validations:
+      required: true
+  - type: textarea
+    id: observability
+    attributes:
+      label: UX, traces, and failure mode
+      description: How will a user understand success, partial work, denial, and failure?
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Verification plan
+      description: List deterministic, adversarial, cross-platform, and integration tests.
+    validations:
+      required: true

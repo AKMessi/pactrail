@@ -302,4 +302,18 @@ mod tests {
         .unwrap_or_else(|error| unreachable!("fixture: {error}"));
         assert!(matches!(store.load(), Err(SettingsError::Invalid(_))));
     }
+
+    #[test]
+    fn output_budget_must_leave_room_for_model_input() {
+        let settings = InteractiveSettings {
+            context_tokens: 4_096,
+            max_output_tokens: 4_096,
+            ..InteractiveSettings::default()
+        };
+
+        assert!(matches!(
+            settings.validate(),
+            Err(SettingsError::Invalid(_))
+        ));
+    }
 }

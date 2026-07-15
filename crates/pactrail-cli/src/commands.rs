@@ -19,7 +19,7 @@ use pactrail_models::{
     ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
 use pactrail_store::{EventStore, StoreError};
-use pactrail_tools::{PolicyEngine, ToolError, builtin_registry};
+use pactrail_tools::{PolicyEngine, ToolError, ToolRisk, builtin_registry};
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
 use secrecy::SecretString;
@@ -787,19 +787,42 @@ fn tools(json_output: bool) -> Result<(), CliError> {
     if json_output {
         write_json(&descriptors)
     } else {
-        let text = descriptors
-            .iter()
-            .map(|tool| {
-                format!(
-                    "{:<16} {:<14} {}",
-                    tool.name,
-                    tool.required_capability.to_string(),
-                    tool.description
-                )
-            })
+        let mut lines = vec![format!(
+            "Tool kernel · {} typed contracts",
+            descriptors.len()
+        )];
+        lines.push(format!(
+            "{:<20} {:<8} {:<14} {}",
+            "NAME", "RISK", "CAPABILITY", "BEHAVIOR"
+        ));
+        for tool in &descriptors {
+            let risk = match tool.annotations.risk {
+                ToolRisk::ReadOnly => "read",
+                ToolRisk::WorkspaceMutation => "edit",
+                ToolRisk::HostExecution => "host",
+            };
+            let annotations = [
+                tool.annotations.read_only.then_some("read-only"),
+                tool.annotations.idempotent.then_some("idempotent"),
+                tool.annotations.parallel_safe.then_some("parallel-safe"),
+            ]
+            .into_iter()
+            .flatten()
             .collect::<Vec<_>>()
-            .join("\n");
-        write_human_stdout(&format!("{text}\n")).map_err(CliError::Output)
+            .join(", ");
+            lines.push(format!(
+                "{:<20} {risk:<8} {:<14} {}",
+                tool.name,
+                tool.required_capability.to_string(),
+                if annotations.is_empty() {
+                    "serial side effect"
+                } else {
+                    &annotations
+                }
+            ));
+            lines.push(format!("  {}", tool.description));
+        }
+        write_human_stdout(&format!("{}\n", lines.join("\n"))).map_err(CliError::Output)
     }
 }
 
