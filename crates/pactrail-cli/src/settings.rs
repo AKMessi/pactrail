@@ -76,9 +76,9 @@ impl InteractiveSettings {
                 "maximum output tokens must be between 1 and 131,072".to_owned(),
             ));
         }
-        if self.max_output_tokens > self.context_tokens {
+        if self.max_output_tokens >= self.context_tokens {
             return Err(SettingsError::Invalid(
-                "maximum output tokens cannot exceed context tokens".to_owned(),
+                "maximum output tokens must be smaller than context tokens".to_owned(),
             ));
         }
         if self.max_turns == 0 || self.max_turns > 256 {

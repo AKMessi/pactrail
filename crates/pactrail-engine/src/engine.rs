@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
-use pactrail_context::{ContextError, ContextFragment, ContextPack, RepositoryIndex};
+use pactrail_context::{
+    ContextBudget, ContextError, ContextFragment, ContextPack, RepositoryIndex,
+};
 use pactrail_core::{
     ActionRecord, ChangeReceipt, ContractError, Evidence, EvidenceGrade, EvidenceId, EvidenceKind,
     EvidenceStatus, ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState,
@@ -36,6 +38,15 @@ When the implementation is complete, return a concise summary of the change and 
 pub enum RunProgress {
     /// The durable run lifecycle entered a new state.
     StateChanged { state: RunState },
+    /// Repository discovery and bounded context assembly completed.
+    ContextBuilt {
+        indexed_files: usize,
+        cited_files: usize,
+        rendered_bytes: usize,
+        budget_bytes: usize,
+        truncated: bool,
+        duration_ms: u64,
+    },
     /// A model request is about to begin.
     ModelTurnStarted { turn: u16, max_turns: u16 },
     /// A model request completed and returned control to the engine.
@@ -255,9 +266,65 @@ impl<'a> RunEngine<'a> {
         transition(&mut journal, &mut state, RunState::Investigating, observer)?;
 
         info!(%run_id, "building repository evidence graph");
+        let context_started = Instant::now();
         let index = RepositoryIndex::build(transaction.workspace_root())?;
-        let context_pack =
-            ContextPack::compile_with_fragments(&contract, &index, &self.context_fragments)?;
+        let model_capabilities = self.model.capabilities();
+        let context_budget = ContextBudget::from_model_limits(
+            model_capabilities.context_tokens,
+            model_capabilities.max_output_tokens,
+        );
+        let context_pack = ContextPack::compile_with_budget(
+            &contract,
+            &index,
+            &self.context_fragments,
+            context_budget,
+        )?;
+        let context_duration_ms = elapsed_millis(context_started);
+        observer.on_progress(&RunProgress::ContextBuilt {
+            indexed_files: index.files.len(),
+            cited_files: context_pack.cited_files.len(),
+            rendered_bytes: context_pack.rendered_bytes,
+            budget_bytes: context_pack.budget_bytes,
+            truncated: context_pack.truncated,
+            duration_ms: context_duration_ms,
+        });
+        journal.append(RunEvent::ActionCompleted(ActionRecord {
+            actor: "context".to_owned(),
+            action: "compile_repository_context".to_owned(),
+            summary: format!(
+                "indexed {} files and cited {} within a {}-byte context pack",
+                index.files.len(),
+                context_pack.cited_files.len(),
+                context_pack.rendered_bytes
+            ),
+            declared_effects: Vec::new(),
+            observed_effects: Vec::new(),
+            succeeded: true,
+            duration_ms: context_duration_ms,
+            attributes: BTreeMap::from([
+                (
+                    "budget_bytes".to_owned(),
+                    context_pack.budget_bytes.to_string(),
+                ),
+                (
+                    "cited_files".to_owned(),
+                    context_pack.cited_files.len().to_string(),
+                ),
+                (
+                    "instructions".to_owned(),
+                    context_pack.included_instructions.len().to_string(),
+                ),
+                (
+                    "memory_fragments".to_owned(),
+                    context_pack.included_fragments.len().to_string(),
+                ),
+                (
+                    "rendered_bytes".to_owned(),
+                    context_pack.rendered_bytes.to_string(),
+                ),
+                ("truncated".to_owned(), context_pack.truncated.to_string()),
+            ]),
+        }))?;
         journal.append(RunEvent::CheckpointCreated {
             checkpoint: format!("context:{}", context_pack.repository_digest),
         })?;

@@ -302,6 +302,21 @@ impl RunObserver for RunActivity {
                     self.progress.set_message(message);
                 }
             }
+            RunProgress::ContextBuilt {
+                indexed_files,
+                cited_files,
+                rendered_bytes,
+                truncated,
+                duration_ms,
+                ..
+            } => {
+                let bounded = if *truncated { " · bounded" } else { "" };
+                self.set_message(format!(
+                    "context · {indexed_files} files · {cited_files} cited · {} · {}{bounded}",
+                    format_bytes(*rendered_bytes as u64),
+                    format_duration(Duration::from_millis(*duration_ms))
+                ));
+            }
             RunProgress::ModelTurnStarted { turn, max_turns } => {
                 self.turn.store(*turn, Ordering::Relaxed);
                 self.set_message(format!(
@@ -1463,7 +1478,9 @@ fn render_trace_event(
 }
 
 fn render_trace_action(theme: &Theme, time: &str, action: &ActionRecord) -> Vec<String> {
-    let (marker, label) = if action.actor.starts_with("model:") {
+    let (marker, label) = if action.actor == "context" {
+        (theme.brand("◆"), theme.brand(&format!("{:<8}", "context")))
+    } else if action.actor.starts_with("model:") {
         (theme.brand("●"), theme.accent(&format!("{:<8}", "model")))
     } else if action.actor.starts_with("tool:") {
         (theme.accent("●"), theme.text(&format!("{:<8}", "tool")))

@@ -16,6 +16,13 @@ const MAX_SYMBOLS_PER_FILE: usize = 2_000;
 const MAX_CONTEXT_FRAGMENTS: usize = 64;
 const MAX_CONTEXT_FRAGMENT_BYTES: usize = 64 * 1024;
 const MAX_CONTEXT_FRAGMENTS_BYTES: usize = 256 * 1024;
+const DEFAULT_CONTEXT_PACK_BYTES: usize = 128 * 1024;
+const MIN_CONTEXT_PACK_BYTES: usize = 4 * 1024;
+const MAX_CONTEXT_PACK_BYTES: usize = 512 * 1024;
+const ESTIMATED_BYTES_PER_TOKEN: u64 = 3;
+const CONTEXT_PACK_INPUT_SHARE: u64 = 4;
+const TRUNCATION_NOTICE: &str =
+    "\n\n[Context pack reached its model-derived budget. Use tools to inspect omitted sources.]";
 
 /// Coarse language classification used by the context compiler.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -65,8 +72,66 @@ pub struct IndexedFile {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct InstructionFile {
     pub path: String,
+    /// Virtual directory subtree governed by this file. `.` is repository-wide.
+    pub scope: String,
     pub digest: String,
     pub content: String,
+}
+
+/// Conservative byte budget for one provider-neutral repository context pack.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ContextBudget {
+    max_bytes: usize,
+}
+
+impl ContextBudget {
+    /// Derives a pack budget from the model's declared input and output limits.
+    ///
+    /// Pactrail reserves most of the window for system instructions, tool
+    /// schemas, conversation growth, and tool results. Bytes are used as a
+    /// deterministic provider-neutral upper bound; providers still perform the
+    /// authoritative token count.
+    #[must_use]
+    pub fn from_model_limits(context_tokens: u64, max_output_tokens: u64) -> Self {
+        let input_tokens = context_tokens.saturating_sub(max_output_tokens);
+        let allocated_tokens = input_tokens / CONTEXT_PACK_INPUT_SHARE;
+        let estimated_bytes = allocated_tokens.saturating_mul(ESTIMATED_BYTES_PER_TOKEN);
+        Self {
+            max_bytes: usize::try_from(estimated_bytes)
+                .unwrap_or(MAX_CONTEXT_PACK_BYTES)
+                .clamp(MIN_CONTEXT_PACK_BYTES, MAX_CONTEXT_PACK_BYTES),
+        }
+    }
+
+    /// Creates an explicit bounded budget, primarily for embedders and tests.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error outside Pactrail's supported deterministic bounds.
+    pub fn new(max_bytes: usize) -> Result<Self, ContextError> {
+        if !(MIN_CONTEXT_PACK_BYTES..=MAX_CONTEXT_PACK_BYTES).contains(&max_bytes) {
+            return Err(ContextError::InvalidBudget {
+                minimum: MIN_CONTEXT_PACK_BYTES,
+                maximum: MAX_CONTEXT_PACK_BYTES,
+                actual: max_bytes,
+            });
+        }
+        Ok(Self { max_bytes })
+    }
+
+    /// Returns the deterministic rendered byte ceiling.
+    #[must_use]
+    pub const fn max_bytes(self) -> usize {
+        self.max_bytes
+    }
+}
+
+impl Default for ContextBudget {
+    fn default() -> Self {
+        Self {
+            max_bytes: DEFAULT_CONTEXT_PACK_BYTES,
+        }
+    }
 }
 
 /// Bounded context supplied by another provenance-aware subsystem.
@@ -131,6 +196,7 @@ impl RepositoryIndex {
             {
                 instructions.push(InstructionFile {
                     path: relative.clone(),
+                    scope: instruction_scope(&relative),
                     digest: digest.clone(),
                     content: content.to_owned(),
                 });
@@ -233,6 +299,11 @@ pub struct ContextPack {
     pub repository_digest: String,
     pub rendered: String,
     pub cited_files: Vec<String>,
+    pub included_instructions: Vec<String>,
+    pub included_fragments: Vec<String>,
+    pub rendered_bytes: usize,
+    pub budget_bytes: usize,
+    pub truncated: bool,
 }
 
 impl ContextPack {
@@ -242,7 +313,7 @@ impl ContextPack {
     ///
     /// Returns an error if the contract cannot be serialized.
     pub fn compile(contract: &TaskContract, index: &RepositoryIndex) -> Result<Self, ContextError> {
-        Self::compile_with_fragments(contract, index, &[])
+        Self::compile_with_budget(contract, index, &[], ContextBudget::default())
     }
 
     /// Compiles task and repository context with bounded, provenance-labelled fragments.
@@ -256,86 +327,213 @@ impl ContextPack {
         index: &RepositoryIndex,
         fragments: &[ContextFragment],
     ) -> Result<Self, ContextError> {
+        Self::compile_with_budget(contract, index, fragments, ContextBudget::default())
+    }
+
+    /// Compiles context under an explicit deterministic byte budget.
+    ///
+    /// The task contract and root `AGENTS.md` are required and fail closed when
+    /// they cannot fit. Scoped instructions, memories, and topology are added
+    /// as complete provenance-labelled entries in priority order; Pactrail
+    /// never cuts an instruction in the middle.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid fragments or when authoritative context
+    /// cannot fit in the supplied budget.
+    pub fn compile_with_budget(
+        contract: &TaskContract,
+        index: &RepositoryIndex,
+        fragments: &[ContextFragment],
+        budget: ContextBudget,
+    ) -> Result<Self, ContextError> {
         validate_fragments(fragments)?;
-        // The transaction root is an implementation detail, not a valid model tool path.
-        // Keeping the model's filesystem namespace virtual also prevents host path leakage.
         let mut model_contract = contract.clone();
         ".".clone_into(&mut model_contract.workspace_root);
         let contract_json =
             serde_json::to_string_pretty(&model_contract).map_err(ContextError::Serialization)?;
         let retrieved = index.retrieve(&contract.goal, 40);
-        let cited_files = retrieved
-            .iter()
-            .map(|file| file.path.clone())
-            .collect::<Vec<_>>();
         let language_summary = index
             .languages
             .iter()
             .map(|(language, count)| format!("{language:?}: {count}"))
             .collect::<Vec<_>>()
             .join(", ");
-        let relevant = retrieved
-            .iter()
-            .map(|file| {
-                let symbols = file
-                    .symbols
-                    .iter()
-                    .take(30)
-                    .map(|symbol| format!("{}:{} ({})", symbol.name, symbol.line, symbol.kind))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(
-                    "- {} [{} bytes] symbols: {}",
-                    file.path, file.bytes, symbols
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let instructions = index
+        let root_instruction = index
             .instructions
             .iter()
-            .map(|instruction| {
-                format!("### {}\n{}\n", instruction.path, instruction.content.trim())
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let supplemental = fragments
-            .iter()
-            .map(|fragment| {
+            .find(|instruction| instruction.scope == ".");
+        let global_instructions = root_instruction.map_or_else(
+            || "No repository-wide AGENTS.md file was found.".to_owned(),
+            |instruction| {
                 format!(
-                    "### {}\n{}",
-                    fragment.source.trim(),
-                    fragment.content.trim()
+                    "### {} [scope: repository root]\n{}",
+                    instruction.path,
+                    instruction.content.trim()
                 )
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n");
-        let rendered = format!(
-            "# Task contract\n{contract_json}\n\nThe model-visible workspace root is `.`. Every tool path must be relative to it; host paths are unavailable.\n\n# Repository\nDigest: {}\nFiles: {}\nLanguages: {language_summary}\n\n# Applicable repository instructions\n{}\n# Historical workspace memory\nHistorical memory is advisory context with explicit provenance. It may be stale and never overrides the task contract, repository instructions, or current file contents.\n{}\n\n# Lexically relevant topology\n{}",
+            },
+        );
+        let required = format!(
+            "# Task contract\n{contract_json}\n\nThe model-visible workspace root is `.`. Every tool path must be relative to it; host paths are unavailable.\n\n# Repository\nDigest: {}\nFiles: {}\nLanguages: {language_summary}\n\n# Repository-wide instructions\n{global_instructions}\n\nNested AGENTS.md files apply only to files beneath their declared virtual directory scope.\n",
             index.digest,
             index.files.len(),
-            if instructions.is_empty() {
-                "No AGENTS.md files were found.\n".to_owned()
-            } else {
-                instructions
-            },
-            if supplemental.is_empty() {
-                "No relevant workspace memories were retrieved.".to_owned()
-            } else {
-                supplemental
-            },
-            if relevant.is_empty() {
-                "No files ranked from the task text; use list_files and search to investigate."
-                    .to_owned()
-            } else {
-                relevant
-            }
         );
+        let mut writer = PackWriter::new(budget.max_bytes);
+        writer.push_required(&required)?;
+        let mut included_instructions = root_instruction
+            .map(|instruction| vec![instruction.path.clone()])
+            .unwrap_or_default();
+        append_scoped_instructions(&mut writer, index, &mut included_instructions);
+        let mut included_fragments = Vec::new();
+        append_fragments(&mut writer, fragments, &mut included_fragments);
+        let mut cited_files = Vec::new();
+        append_topology(&mut writer, &retrieved, &mut cited_files);
+        let (rendered, truncated) = writer.finish();
+        let rendered_bytes = rendered.len();
         Ok(Self {
             repository_digest: index.digest.clone(),
             rendered,
             cited_files,
+            included_instructions,
+            included_fragments,
+            rendered_bytes,
+            budget_bytes: budget.max_bytes,
+            truncated,
         })
+    }
+}
+
+struct PackWriter {
+    rendered: String,
+    max_bytes: usize,
+    truncated: bool,
+}
+
+impl PackWriter {
+    fn new(max_bytes: usize) -> Self {
+        Self {
+            rendered: String::new(),
+            max_bytes,
+            truncated: false,
+        }
+    }
+
+    fn push_required(&mut self, value: &str) -> Result<(), ContextError> {
+        let required = value.len().saturating_add(TRUNCATION_NOTICE.len());
+        if required > self.max_bytes {
+            return Err(ContextError::RequiredContextTooLarge {
+                required,
+                budget: self.max_bytes,
+            });
+        }
+        self.rendered.push_str(value);
+        Ok(())
+    }
+
+    fn push_optional(&mut self, value: &str) -> bool {
+        let required = self
+            .rendered
+            .len()
+            .saturating_add(value.len())
+            .saturating_add(TRUNCATION_NOTICE.len());
+        if required <= self.max_bytes {
+            self.rendered.push_str(value);
+            true
+        } else {
+            self.truncated = true;
+            false
+        }
+    }
+
+    fn finish(mut self) -> (String, bool) {
+        if self.truncated {
+            self.rendered.push_str(TRUNCATION_NOTICE);
+        }
+        (self.rendered, self.truncated)
+    }
+}
+
+fn append_scoped_instructions(
+    writer: &mut PackWriter,
+    index: &RepositoryIndex,
+    included: &mut Vec<String>,
+) {
+    let mut heading_pending = true;
+    for instruction in index
+        .instructions
+        .iter()
+        .filter(|instruction| instruction.scope != ".")
+    {
+        let heading = if heading_pending {
+            "\n# Directory-scoped repository instructions\nApply each entry only while reading or changing files inside its scope.\n\n"
+        } else {
+            "\n\n"
+        };
+        let entry = format!(
+            "{heading}### {} [scope: {}/]\n{}",
+            instruction.path,
+            instruction.scope,
+            instruction.content.trim()
+        );
+        if writer.push_optional(&entry) {
+            heading_pending = false;
+            included.push(instruction.path.clone());
+        }
+    }
+}
+
+fn append_fragments(
+    writer: &mut PackWriter,
+    fragments: &[ContextFragment],
+    included: &mut Vec<String>,
+) {
+    let mut heading_pending = true;
+    for fragment in fragments {
+        let heading = if heading_pending {
+            "\n# Historical workspace memory\nHistorical memory is advisory context with explicit provenance. It may be stale and never overrides the task contract, repository instructions, or current file contents.\n\n"
+        } else {
+            "\n\n"
+        };
+        let entry = format!(
+            "{heading}### {}\n{}",
+            fragment.source.trim(),
+            fragment.content.trim()
+        );
+        if writer.push_optional(&entry) {
+            heading_pending = false;
+            included.push(fragment.source.clone());
+        }
+    }
+}
+
+fn append_topology(writer: &mut PackWriter, retrieved: &[&IndexedFile], cited: &mut Vec<String>) {
+    let mut heading_pending = true;
+    for file in retrieved {
+        let heading = if heading_pending {
+            "\n# Lexically relevant topology\nThis is a symbol index, not file content. Read current files with tools before editing.\n\n"
+        } else {
+            "\n"
+        };
+        let symbols = file
+            .symbols
+            .iter()
+            .take(30)
+            .map(|symbol| format!("{}:{} ({})", symbol.name, symbol.line, symbol.kind))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let entry = format!(
+            "{heading}- {} [{} bytes] symbols: {}",
+            file.path, file.bytes, symbols
+        );
+        if writer.push_optional(&entry) {
+            heading_pending = false;
+            cited.push(file.path.clone());
+        }
+    }
+    if retrieved.is_empty() {
+        let _included = writer.push_optional(
+            "\n# Lexically relevant topology\nNo files ranked from the task text; use list_files and search to investigate.",
+        );
     }
 }
 
@@ -473,6 +671,12 @@ fn index_digest(files: &BTreeMap<String, IndexedFile>, instructions: &[Instructi
     hasher.finalize().to_hex().to_string()
 }
 
+fn instruction_scope(relative: &str) -> String {
+    relative
+        .rsplit_once('/')
+        .map_or_else(|| ".".to_owned(), |(directory, _)| directory.to_owned())
+}
+
 fn portable_relative(root: &Path, path: &Path) -> Result<String, ContextError> {
     let relative = path
         .strip_prefix(root)
@@ -536,6 +740,16 @@ pub enum ContextError {
     NonUnicodePath(PathBuf),
     #[error("context serialization failed: {0}")]
     Serialization(serde_json::Error),
+    #[error("context budget must be between {minimum} and {maximum} bytes, got {actual}")]
+    InvalidBudget {
+        minimum: usize,
+        maximum: usize,
+        actual: usize,
+    },
+    #[error(
+        "authoritative task and root instructions require {required} bytes, exceeding the {budget}-byte context budget"
+    )]
+    RequiredContextTooLarge { required: usize, budget: usize },
     #[error("supplemental context is invalid: {0}")]
     InvalidFragment(String),
 }
@@ -641,5 +855,86 @@ mod tests {
             }],
         );
         assert!(matches!(oversized, Err(ContextError::InvalidFragment(_))));
+    }
+
+    #[test]
+    fn nested_instructions_are_explicitly_directory_scoped() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::create_dir_all(root.path().join("crates/api"))
+            .unwrap_or_else(|error| unreachable!("directories: {error}"));
+        fs::write(root.path().join("AGENTS.md"), "Global rule.")
+            .unwrap_or_else(|error| unreachable!("root instructions: {error}"));
+        fs::write(
+            root.path().join("crates/api/AGENTS.md"),
+            "API subtree rule.",
+        )
+        .unwrap_or_else(|error| unreachable!("scoped instructions: {error}"));
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let contract = TaskContract::new("change api", root.path().display().to_string());
+        let context = ContextPack::compile(&contract, &index)
+            .unwrap_or_else(|error| unreachable!("context: {error}"));
+
+        assert_eq!(index.instructions[0].scope, ".");
+        assert_eq!(index.instructions[1].scope, "crates/api");
+        assert!(
+            context
+                .rendered
+                .contains("AGENTS.md [scope: repository root]")
+        );
+        assert!(context.rendered.contains("[scope: crates/api/]"));
+        assert!(context.rendered.contains("apply only"));
+    }
+
+    #[test]
+    fn model_budget_omits_whole_optional_entries_with_a_visible_notice() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        for index in 0..30 {
+            fs::write(
+                root.path().join(format!("memory_{index}.rs")),
+                format!("pub fn memory_{index}() {{}}\n"),
+            )
+            .unwrap_or_else(|error| unreachable!("fixture: {error}"));
+        }
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let contract = TaskContract::new("change memory", root.path().display().to_string());
+        let fragments = (0..20)
+            .map(|index| ContextFragment {
+                source: format!("memory:{index}"),
+                content: "advisory evidence ".repeat(40),
+            })
+            .collect::<Vec<_>>();
+        let budget = ContextBudget::new(MIN_CONTEXT_PACK_BYTES)
+            .unwrap_or_else(|error| unreachable!("budget: {error}"));
+        let context = ContextPack::compile_with_budget(&contract, &index, &fragments, budget)
+            .unwrap_or_else(|error| unreachable!("context: {error}"));
+
+        assert!(context.truncated);
+        assert!(context.rendered_bytes <= budget.max_bytes);
+        assert!(
+            context
+                .rendered
+                .contains("reached its model-derived budget")
+        );
+        assert!(context.included_fragments.len() < fragments.len());
+    }
+
+    #[test]
+    fn oversized_authoritative_instructions_fail_closed() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::write(root.path().join("AGENTS.md"), "x".repeat(8 * 1024))
+            .unwrap_or_else(|error| unreachable!("instructions: {error}"));
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let contract = TaskContract::new("change file", root.path().display().to_string());
+        let budget = ContextBudget::new(MIN_CONTEXT_PACK_BYTES)
+            .unwrap_or_else(|error| unreachable!("budget: {error}"));
+        let context = ContextPack::compile_with_budget(&contract, &index, &[], budget);
+
+        assert!(matches!(
+            context,
+            Err(ContextError::RequiredContextTooLarge { .. })
+        ));
     }
 }

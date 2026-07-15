@@ -117,6 +117,7 @@ async fn execute_run_inner(
     args: RunArgs,
     observer: Option<&dyn RunObserver>,
 ) -> Result<CompletedRun, CliError> {
+    validate_model_limits(&args)?;
     let (mut contract, workspace) = load_contract(cli_workspace, &args)?;
     contract.workspace_root = workspace.display().to_string();
     if args.task.is_none() {
@@ -203,6 +204,26 @@ async fn execute_run_inner(
         receipt,
         tokens: outcome.usage.total(),
     })
+}
+
+fn validate_model_limits(args: &RunArgs) -> Result<(), CliError> {
+    if !(1_024..=4_194_304).contains(&args.context_tokens) {
+        return Err(CliError::Argument(
+            "context tokens must be between 1,024 and 4,194,304".to_owned(),
+        ));
+    }
+    if args.max_output_tokens == 0 || args.max_output_tokens >= args.context_tokens {
+        return Err(CliError::Argument(
+            "maximum output tokens must be greater than zero and smaller than context tokens"
+                .to_owned(),
+        ));
+    }
+    if args.max_turns == 0 || args.max_turns > 256 {
+        return Err(CliError::Argument(
+            "maximum turns must be between 1 and 256".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 fn load_contract(
