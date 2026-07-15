@@ -1,10 +1,12 @@
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::atomic::{AtomicU16, AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
-use pactrail_core::{ChangeReceipt, ReceiptOutcome, RunId};
+use pactrail_core::{ChangeReceipt, ReceiptOutcome, RunId, RunState};
+use pactrail_engine::{RunObserver, RunProgress};
 use reedline::{
     DefaultCompleter, DefaultValidator, FileBackedHistory, Prompt, PromptEditMode,
     PromptHistorySearch, PromptHistorySearchStatus, PromptViMode, Reedline, Signal,
@@ -96,6 +98,140 @@ struct Session {
     theme: Theme,
     last_run: Option<RunId>,
     known_models: Vec<String>,
+}
+
+struct RunActivity {
+    progress: ProgressBar,
+    model: String,
+    turn: AtomicU16,
+    tool_calls: AtomicUsize,
+    started: Instant,
+}
+
+impl RunActivity {
+    fn new(model: &str) -> Self {
+        let progress = ProgressBar::new_spinner();
+        let style =
+            ProgressStyle::with_template("{spinner:.cyan}  {msg}  {elapsed_precise:.bright_black}")
+                .unwrap_or_else(|_| ProgressStyle::default_spinner())
+                .tick_strings(&["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"]);
+        progress.set_style(style);
+        progress.set_message("starting isolated transaction");
+        progress.enable_steady_tick(Duration::from_millis(90));
+        Self {
+            progress,
+            model: truncate(model, 32),
+            turn: AtomicU16::new(0),
+            tool_calls: AtomicUsize::new(0),
+            started: Instant::now(),
+        }
+    }
+
+    fn finish(&self) {
+        self.progress.finish_and_clear();
+    }
+
+    fn summary(&self, theme: &Theme) -> String {
+        let turns = self.turn.load(Ordering::Relaxed);
+        let tools = self.tool_calls.load(Ordering::Relaxed);
+        let turn_word = plural(turns.into(), "turn", "turns");
+        let tool_word = plural(tools, "tool", "tools");
+        let elapsed = format_duration(self.started.elapsed());
+        let duration = theme.muted(&elapsed);
+        format!(
+            "{} {turns} {turn_word}  {tools} {tool_word}  {duration}\n",
+            theme.success("\u{2713}"),
+        )
+    }
+
+    fn set_message(&self, message: String) {
+        self.progress.set_message(message);
+    }
+}
+
+impl RunObserver for RunActivity {
+    fn on_progress(&self, progress: &RunProgress) {
+        match progress {
+            RunProgress::StateChanged { state } => {
+                if let Some(message) = state_activity(*state) {
+                    self.progress.set_message(message);
+                }
+            }
+            RunProgress::ModelTurnStarted { turn, max_turns } => {
+                self.turn.store(*turn, Ordering::Relaxed);
+                self.set_message(format!(
+                    "turn {turn}/{max_turns} \u{00b7} asking {}",
+                    self.model
+                ));
+            }
+            RunProgress::ModelTurnCompleted {
+                turn, tool_calls, ..
+            } => {
+                self.set_message(if *tool_calls == 0 {
+                    format!("turn {turn} \u{00b7} model finished")
+                } else {
+                    format!(
+                        "turn {turn} \u{00b7} received {tool_calls} {}",
+                        plural(*tool_calls, "action", "actions")
+                    )
+                });
+            }
+            RunProgress::ToolStarted { name } => {
+                self.tool_calls.fetch_add(1, Ordering::Relaxed);
+                self.set_message(format!(
+                    "turn {} \u{00b7} {}",
+                    self.turn.load(Ordering::Relaxed),
+                    tool_activity(name)
+                ));
+            }
+            RunProgress::ToolCompleted {
+                name,
+                succeeded,
+                changed_files,
+            } => {
+                let turn = self.turn.load(Ordering::Relaxed);
+                if let Some(path) = changed_files.first() {
+                    self.set_message(format!(
+                        "turn {turn} \u{00b7} changed {}",
+                        truncate(path, 48)
+                    ));
+                } else if *succeeded {
+                    self.set_message(format!("turn {turn} \u{00b7} {name} complete"));
+                } else {
+                    self.set_message(format!(
+                        "turn {turn} \u{00b7} {name} rejected; steering model"
+                    ));
+                }
+            }
+            RunProgress::VerificationStarted { commands } => {
+                self.set_message(if *commands == 0 {
+                    "grading available evidence".to_owned()
+                } else {
+                    format!(
+                        "preparing {commands} verification {}",
+                        plural(*commands, "check", "checks")
+                    )
+                });
+            }
+            RunProgress::VerificationCommandStarted {
+                description,
+                index,
+                total,
+            } => self.set_message(format!(
+                "verifying {index}/{total} \u{00b7} {}",
+                truncate(description, 52)
+            )),
+            RunProgress::VerificationCommandCompleted {
+                description,
+                succeeded,
+            } => self.set_message(format!(
+                "{} \u{00b7} {}",
+                if *succeeded { "passed" } else { "inconclusive" },
+                truncate(description, 52)
+            )),
+            _ => {}
+        }
+    }
 }
 
 impl Session {
@@ -197,6 +333,7 @@ impl Session {
             )?;
             return Ok(());
         };
+        let activity = RunActivity::new(&model);
         let args = RunArgs {
             goal: Some(goal),
             task: None,
@@ -213,18 +350,18 @@ impl Session {
             output: OutputFormat::Human,
         };
 
-        let spinner = ProgressBar::new_spinner();
-        let style = ProgressStyle::with_template("{spinner:.cyan}  {msg}")
-            .unwrap_or_else(|_| ProgressStyle::default_spinner())
-            .tick_strings(&["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"]);
-        spinner.set_style(style);
-        spinner.set_message("building context and negotiating tools");
-        spinner.enable_steady_tick(Duration::from_millis(90));
-        let result = commands::execute_run(&self.workspace, Some(&self.state), args).await;
-        spinner.finish_and_clear();
+        let result = commands::execute_run_with_observer(
+            &self.workspace,
+            Some(&self.state),
+            args,
+            &activity,
+        )
+        .await;
+        activity.finish();
 
         match result {
             Ok(completed) => {
+                self.emit(&activity.summary(&self.theme))?;
                 self.last_run = Some(completed.receipt.run_id);
                 self.render_completed(&completed)?;
             }
@@ -791,6 +928,50 @@ impl Session {
         } else {
             write_human_stdout(value).map_err(CliError::Output)
         }
+    }
+}
+
+fn state_activity(state: RunState) -> Option<String> {
+    match state {
+        RunState::Contracting => Some("validating task contract".to_owned()),
+        RunState::Investigating => Some("indexing repository and instructions".to_owned()),
+        RunState::Planning => Some("assembling model context".to_owned()),
+        RunState::Executing => Some("starting model loop".to_owned()),
+        RunState::Verifying => Some("detecting repository checks".to_owned()),
+        RunState::Reviewing => Some("sealing evidence receipt".to_owned()),
+        RunState::AwaitingApply => Some("candidate ready for review".to_owned()),
+        RunState::Failed => Some("run failed".to_owned()),
+        RunState::Created | RunState::Applied | RunState::Discarded | RunState::Cancelled => None,
+    }
+}
+
+fn tool_activity(name: &str) -> &'static str {
+    match name {
+        "list_files" => "mapping workspace files",
+        "read_file" => "reading source",
+        "search" => "searching workspace",
+        "write_file" => "writing candidate file",
+        "replace_text" => "editing candidate file",
+        "remove_file" => "removing candidate file",
+        "run_process" => "running trusted process",
+        _ => "running typed tool",
+    }
+}
+
+fn plural(value: usize, singular: &'static str, plural: &'static str) -> &'static str {
+    if value == 1 { singular } else { plural }
+}
+
+fn format_duration(duration: Duration) -> String {
+    let seconds = duration.as_secs_f64();
+    if seconds < 60.0 {
+        format!("{seconds:.1}s")
+    } else {
+        format!(
+            "{}m {:02}s",
+            duration.as_secs() / 60,
+            duration.as_secs() % 60
+        )
     }
 }
 

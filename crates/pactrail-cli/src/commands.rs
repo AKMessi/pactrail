@@ -9,7 +9,7 @@ use pactrail_core::{
     Capability, ChangeReceipt, ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState,
     TaskContract,
 };
-use pactrail_engine::{EngineError, RunEngine};
+use pactrail_engine::{EngineError, RunEngine, RunObserver};
 use pactrail_models::{
     ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
@@ -82,6 +82,24 @@ pub(crate) async fn execute_run(
     state_override: Option<&Path>,
     args: RunArgs,
 ) -> Result<CompletedRun, CliError> {
+    execute_run_inner(cli_workspace, state_override, args, None).await
+}
+
+pub(crate) async fn execute_run_with_observer(
+    cli_workspace: &Path,
+    state_override: Option<&Path>,
+    args: RunArgs,
+    observer: &dyn RunObserver,
+) -> Result<CompletedRun, CliError> {
+    execute_run_inner(cli_workspace, state_override, args, Some(observer)).await
+}
+
+async fn execute_run_inner(
+    cli_workspace: &Path,
+    state_override: Option<&Path>,
+    args: RunArgs,
+    observer: Option<&dyn RunObserver>,
+) -> Result<CompletedRun, CliError> {
     let (mut contract, workspace) = load_contract(cli_workspace, &args)?;
     contract.workspace_root = workspace.display().to_string();
     if args.task.is_none() {
@@ -120,9 +138,18 @@ pub(crate) async fn execute_run(
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
     let engine = RunEngine::new(&driver, &registry, &policy).with_max_turns(args.max_turns);
-    let outcome = engine
-        .execute_with_id(run_id, contract, &transaction, &mut store)
-        .await?;
+    let outcome = match observer {
+        Some(observer) => {
+            engine
+                .execute_with_id_and_observer(run_id, contract, &transaction, &mut store, observer)
+                .await?
+        }
+        None => {
+            engine
+                .execute_with_id(run_id, contract, &transaction, &mut store)
+                .await?
+        }
+    };
     let mut receipt = outcome.receipt;
     write_receipt(&run_root, &receipt)?;
     crate::diff::write_receipt_diff(&run_root, &receipt)

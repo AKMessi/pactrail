@@ -27,6 +27,58 @@ Work only through the provided typed tools. All tool paths are relative to the v
 
 When the implementation is complete, return a concise summary of the change and any verification still needed. Do not emit tool-call JSON as prose.";
 
+/// High-level, provider-neutral activity emitted while a run is executing.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum RunProgress {
+    /// The durable run lifecycle entered a new state.
+    StateChanged { state: RunState },
+    /// A model request is about to begin.
+    ModelTurnStarted { turn: u16, max_turns: u16 },
+    /// A model request completed and returned control to the engine.
+    ModelTurnCompleted {
+        turn: u16,
+        tool_calls: usize,
+        text_bytes: usize,
+    },
+    /// A typed tool call is about to begin.
+    ToolStarted { name: String },
+    /// A typed tool call completed.
+    ToolCompleted {
+        name: String,
+        succeeded: bool,
+        changed_files: Vec<String>,
+    },
+    /// Deterministic repository verification is about to begin.
+    VerificationStarted { commands: usize },
+    /// One detected verification command is about to begin.
+    VerificationCommandStarted {
+        description: String,
+        index: usize,
+        total: usize,
+    },
+    /// One detected verification command completed.
+    VerificationCommandCompleted {
+        description: String,
+        succeeded: bool,
+    },
+}
+
+/// Receives synchronous progress notifications from the execution engine.
+///
+/// Implementations should return quickly and must not perform model or tool
+/// work. Progress is observational and never changes durable run semantics.
+pub trait RunObserver: Send + Sync {
+    /// Observes one execution activity update.
+    fn on_progress(&self, progress: &RunProgress);
+}
+
+struct SilentRunObserver;
+
+impl RunObserver for SilentRunObserver {
+    fn on_progress(&self, _progress: &RunProgress) {}
+}
+
 /// Successful result of one complete engine run.
 #[derive(Debug)]
 pub struct RunOutcome {
@@ -99,11 +151,30 @@ impl<'a> RunEngine<'a> {
         transaction: &WorkspaceTransaction,
         store: &mut EventStore,
     ) -> Result<RunOutcome, EngineError> {
+        self.execute_with_id_and_observer(run_id, contract, transaction, store, &SilentRunObserver)
+            .await
+    }
+
+    /// Runs a task under a caller-supplied identifier while reporting live activity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EngineError`] under the same hard-invariant conditions as
+    /// [`Self::execute_with_id`]. Observer notifications are best-effort UI
+    /// signals; the durable event journal remains the source of truth.
+    pub async fn execute_with_id_and_observer(
+        &self,
+        run_id: RunId,
+        contract: TaskContract,
+        transaction: &WorkspaceTransaction,
+        store: &mut EventStore,
+        observer: &dyn RunObserver,
+    ) -> Result<RunOutcome, EngineError> {
         contract.validate()?;
         let wall_time_seconds = contract.budget.wall_time_seconds;
         let result = tokio::time::timeout(
             std::time::Duration::from_secs(wall_time_seconds),
-            self.execute_inner(run_id, contract, transaction, store),
+            self.execute_inner(run_id, contract, transaction, store, observer),
         )
         .await;
         let Ok(outcome) = result else {
@@ -117,6 +188,9 @@ impl<'a> RunEngine<'a> {
                         to: RunState::Failed,
                     },
                 )?;
+                observer.on_progress(&RunProgress::StateChanged {
+                    state: RunState::Failed,
+                });
             }
             return Err(EngineError::WallTimeExceeded { wall_time_seconds });
         };
@@ -132,6 +206,7 @@ impl<'a> RunEngine<'a> {
         contract: TaskContract,
         transaction: &WorkspaceTransaction,
         store: &mut EventStore,
+        observer: &dyn RunObserver,
     ) -> Result<RunOutcome, EngineError> {
         let overgrants = self.policy.overgrants(&contract.permissions);
         if !overgrants.is_empty() {
@@ -147,8 +222,8 @@ impl<'a> RunEngine<'a> {
         let mut journal = Journal::new(run_id, store);
         journal.append(RunEvent::ContractRegistered(contract.clone()))?;
         let mut state = RunState::Created;
-        transition(&mut journal, &mut state, RunState::Contracting)?;
-        transition(&mut journal, &mut state, RunState::Investigating)?;
+        transition(&mut journal, &mut state, RunState::Contracting, observer)?;
+        transition(&mut journal, &mut state, RunState::Investigating, observer)?;
 
         info!(%run_id, "building repository evidence graph");
         let index = RepositoryIndex::build(transaction.workspace_root())?;
@@ -156,8 +231,8 @@ impl<'a> RunEngine<'a> {
         journal.append(RunEvent::CheckpointCreated {
             checkpoint: format!("context:{}", context.repository_digest),
         })?;
-        transition(&mut journal, &mut state, RunState::Planning)?;
-        transition(&mut journal, &mut state, RunState::Executing)?;
+        transition(&mut journal, &mut state, RunState::Planning, observer)?;
+        transition(&mut journal, &mut state, RunState::Executing, observer)?;
 
         let mut conversation = vec![
             ConversationItem::Message(Message::system(SYSTEM_PROMPT)),
@@ -174,6 +249,10 @@ impl<'a> RunEngine<'a> {
         let mut recovery_risk = None;
 
         for turn in 0..max_turns {
+            observer.on_progress(&RunProgress::ModelTurnStarted {
+                turn: turn + 1,
+                max_turns,
+            });
             let request = ModelRequest {
                 conversation: conversation.clone(),
                 tools: self.tools.descriptors(),
@@ -183,13 +262,18 @@ impl<'a> RunEngine<'a> {
             let response = match self.model.invoke(&request).await {
                 Ok(response) => response,
                 Err(error) => {
-                    transition(&mut journal, &mut state, RunState::Failed)?;
+                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
                     return Err(EngineError::Model(error));
                 }
             };
+            observer.on_progress(&RunProgress::ModelTurnCompleted {
+                turn: turn + 1,
+                tool_calls: response.tool_calls.len(),
+                text_bytes: response.text.len(),
+            });
             usage = usage.saturating_add(response.usage);
             if contract.budget.model_tokens != 0 && usage.total() > contract.budget.model_tokens {
-                transition(&mut journal, &mut state, RunState::Failed)?;
+                transition(&mut journal, &mut state, RunState::Failed, observer)?;
                 return Err(EngineError::BudgetExceeded {
                     used: usage.total(),
                     limit: contract.budget.model_tokens,
@@ -211,13 +295,13 @@ impl<'a> RunEngine<'a> {
 
             if response.tool_calls.is_empty() {
                 if response.finish_reason == FinishReason::ToolCalls {
-                    transition(&mut journal, &mut state, RunState::Failed)?;
+                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
                     return Err(EngineError::Protocol(
                         "model stopped for tool calls but returned none".to_owned(),
                     ));
                 }
                 if response.finish_reason == FinishReason::Length && response.text.is_empty() {
-                    transition(&mut journal, &mut state, RunState::Failed)?;
+                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
                     return Err(EngineError::Protocol(
                         "model exhausted output tokens without a result".to_owned(),
                     ));
@@ -231,7 +315,7 @@ impl<'a> RunEngine<'a> {
 
             for call in &response.tool_calls {
                 if !call_ids.insert(call.id.clone()) {
-                    transition(&mut journal, &mut state, RunState::Failed)?;
+                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
                     return Err(EngineError::Protocol(format!(
                         "model reused tool call id {:?}",
                         call.id
@@ -255,6 +339,9 @@ impl<'a> RunEngine<'a> {
             });
             let mut any_tool_succeeded = false;
             for call in response.tool_calls {
+                observer.on_progress(&RunProgress::ToolStarted {
+                    name: call.name.clone(),
+                });
                 let before = change_map(transaction.changes()?);
                 let tool_context = ToolContext {
                     workspace: transaction,
@@ -265,7 +352,11 @@ impl<'a> RunEngine<'a> {
                     .execute(&call.name, &tool_context, call.arguments)
                     .await;
                 let after = change_map(transaction.changes()?);
-                let observed_effects = changed_effects(&before, &after);
+                let changed_files = changed_paths(&before, &after);
+                let observed_effects = changed_files
+                    .iter()
+                    .map(|path| format!("fs.changed:{path}"))
+                    .collect();
                 let (tool_result, succeeded, summary) = match result {
                     Ok(output) => (
                         ToolResult {
@@ -293,6 +384,11 @@ impl<'a> RunEngine<'a> {
                     }
                 };
                 any_tool_succeeded |= succeeded;
+                observer.on_progress(&RunProgress::ToolCompleted {
+                    name: call.name.clone(),
+                    succeeded,
+                    changed_files,
+                });
                 journal.append(RunEvent::ActionCompleted(ActionRecord {
                     actor: format!("tool:{}", call.name),
                     action: call.name,
@@ -330,7 +426,7 @@ impl<'a> RunEngine<'a> {
                     message: message.clone(),
                 })?;
                 if transaction.changes()?.is_empty() {
-                    transition(&mut journal, &mut state, RunState::Failed)?;
+                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
                     return Err(EngineError::Stalled {
                         consecutive_turns,
                         reason,
@@ -346,14 +442,23 @@ impl<'a> RunEngine<'a> {
         }
 
         if final_text.is_empty() {
-            transition(&mut journal, &mut state, RunState::Failed)?;
+            transition(&mut journal, &mut state, RunState::Failed, observer)?;
             return Err(EngineError::MaxTurns(max_turns));
         }
 
-        transition(&mut journal, &mut state, RunState::Verifying)?;
+        transition(&mut journal, &mut state, RunState::Verifying, observer)?;
         let verification_commands = detect_verification_commands(transaction.workspace_root());
+        observer.on_progress(&RunProgress::VerificationStarted {
+            commands: verification_commands.len(),
+        });
         let mut verification = self
-            .verify(&contract, transaction, &verification_commands, &mut journal)
+            .verify(
+                &contract,
+                transaction,
+                &verification_commands,
+                &mut journal,
+                observer,
+            )
             .await?;
         if let Some(risk) = recovery_risk {
             verification.risks.push(risk);
@@ -367,14 +472,14 @@ impl<'a> RunEngine<'a> {
         }
 
         let outcome = if failed {
-            transition(&mut journal, &mut state, RunState::Failed)?;
+            transition(&mut journal, &mut state, RunState::Failed, observer)?;
             ReceiptOutcome::Failed
         } else {
-            transition(&mut journal, &mut state, RunState::Reviewing)?;
+            transition(&mut journal, &mut state, RunState::Reviewing, observer)?;
             journal.append(RunEvent::NoteRecorded {
                 message: "model summary retained as implementation account; verification evidence remains independently graded".to_owned(),
             })?;
-            transition(&mut journal, &mut state, RunState::AwaitingApply)?;
+            transition(&mut journal, &mut state, RunState::AwaitingApply, observer)?;
             ReceiptOutcome::ReadyToApply
         };
 
@@ -405,6 +510,7 @@ impl<'a> RunEngine<'a> {
         transaction: &WorkspaceTransaction,
         commands: &[VerificationCommand],
         journal: &mut Journal<'_>,
+        observer: &dyn RunObserver,
     ) -> Result<VerificationResult, EngineError> {
         if commands.is_empty() {
             return Ok(VerificationResult::unverified(
@@ -413,7 +519,8 @@ impl<'a> RunEngine<'a> {
             ));
         }
         let mut command_results = Vec::new();
-        for command in commands {
+        for (index, command) in commands.iter().enumerate() {
+            report_verification_start(observer, command, index, commands.len());
             let context = ToolContext {
                 workspace: transaction,
                 policy: self.policy,
@@ -426,6 +533,7 @@ impl<'a> RunEngine<'a> {
             });
             match self.tools.execute("run_process", &context, value).await {
                 Ok(output) => {
+                    report_verification_end(observer, command, output.succeeded);
                     journal.append(RunEvent::ActionCompleted(ActionRecord {
                         actor: "verifier".to_owned(),
                         action: command.description.clone(),
@@ -437,12 +545,14 @@ impl<'a> RunEngine<'a> {
                     command_results.push((command.description.clone(), output.succeeded));
                 }
                 Err(ToolError::ApprovalRequired { .. } | ToolError::Denied(_)) => {
+                    report_verification_end(observer, command, false);
                     return Ok(VerificationResult::unverified(
                         contract,
                         "Verification commands require process permission",
                     ));
                 }
                 Err(error) => {
+                    report_verification_end(observer, command, false);
                     journal.append(RunEvent::ActionCompleted(ActionRecord {
                         actor: "verifier".to_owned(),
                         action: command.description.clone(),
@@ -502,6 +612,30 @@ impl<'a> RunEngine<'a> {
     }
 }
 
+fn report_verification_start(
+    observer: &dyn RunObserver,
+    command: &VerificationCommand,
+    index: usize,
+    total: usize,
+) {
+    observer.on_progress(&RunProgress::VerificationCommandStarted {
+        description: command.description.clone(),
+        index: index + 1,
+        total,
+    });
+}
+
+fn report_verification_end(
+    observer: &dyn RunObserver,
+    command: &VerificationCommand,
+    succeeded: bool,
+) {
+    observer.on_progress(&RunProgress::VerificationCommandCompleted {
+        description: command.description.clone(),
+        succeeded,
+    });
+}
+
 struct VerificationResult {
     evidence: Vec<Evidence>,
     risks: Vec<String>,
@@ -558,12 +692,14 @@ fn transition(
     journal: &mut Journal<'_>,
     state: &mut RunState,
     next: RunState,
+    observer: &dyn RunObserver,
 ) -> Result<(), EngineError> {
     journal.append(RunEvent::StateChanged {
         from: *state,
         to: next,
     })?;
     *state = next;
+    observer.on_progress(&RunProgress::StateChanged { state: next });
     Ok(())
 }
 
@@ -576,7 +712,7 @@ fn change_map(
         .collect()
 }
 
-fn changed_effects(
+fn changed_paths(
     before: &BTreeMap<String, (Option<String>, Option<u32>)>,
     after: &BTreeMap<String, (Option<String>, Option<u32>)>,
 ) -> Vec<String> {
@@ -586,7 +722,7 @@ fn changed_effects(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .filter(|path| before.get(*path) != after.get(*path))
-        .map(|path| format!("fs.changed:{path}"))
+        .cloned()
         .collect()
 }
 
@@ -652,6 +788,29 @@ mod tests {
 
     struct SlowModel {
         capabilities: ModelCapabilities,
+    }
+
+    #[derive(Default)]
+    struct RecordingObserver {
+        events: Mutex<Vec<RunProgress>>,
+    }
+
+    impl RunObserver for RecordingObserver {
+        fn on_progress(&self, progress: &RunProgress) {
+            self.events
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(progress.clone());
+        }
+    }
+
+    impl RecordingObserver {
+        fn events(&self) -> Vec<RunProgress> {
+            self.events
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone()
+        }
     }
 
     #[async_trait]
@@ -822,8 +981,15 @@ mod tests {
             .permissions
             .allow
             .insert(pactrail_core::Capability::FileWrite);
+        let observer = RecordingObserver::default();
         let outcome = engine
-            .execute(contract, &transaction, &mut store)
+            .execute_with_id_and_observer(
+                RunId::new(),
+                contract,
+                &transaction,
+                &mut store,
+                &observer,
+            )
             .await
             .unwrap_or_else(|error| unreachable!("run: {error}"));
 
@@ -834,6 +1000,25 @@ mod tests {
             .snapshot(outcome.run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
         assert_eq!(snapshot.state, RunState::AwaitingApply);
+        let progress = observer.events();
+        assert!(progress.contains(&RunProgress::ModelTurnStarted {
+            turn: 1,
+            max_turns: DEFAULT_MAX_TURNS,
+        }));
+        assert!(progress.iter().any(|event| matches!(
+            event,
+            RunProgress::ToolCompleted {
+                name,
+                succeeded: true,
+                changed_files,
+            } if name == "write_file" && changed_files == &["README.md"]
+        )));
+        assert_eq!(
+            progress.last(),
+            Some(&RunProgress::StateChanged {
+                state: RunState::AwaitingApply,
+            })
+        );
     }
 
     #[tokio::test]
