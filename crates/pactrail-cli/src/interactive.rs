@@ -1591,7 +1591,12 @@ fn render_trace_event(
 }
 
 fn render_trace_action(theme: &Theme, time: &str, action: &ActionRecord) -> Vec<String> {
-    let (marker, label) = if action.actor == "context" {
+    let (marker, label) = if action.action == "recover_read_only_answer" {
+        (
+            theme.warning("↻"),
+            theme.warning(&format!("{:<8}", "recover")),
+        )
+    } else if action.actor == "context" {
         (theme.brand("◆"), theme.brand(&format!("{:<8}", "context")))
     } else if action.actor.starts_with("model:") {
         (theme.brand("●"), theme.accent(&format!("{:<8}", "model")))
@@ -2134,5 +2139,24 @@ mod tests {
         let applied = receipt(ReceiptOutcome::Applied, true);
 
         assert_eq!(run_focus(&[pending, applied]), (Some(pending_id), 1));
+    }
+
+    #[test]
+    fn recovery_turn_has_a_distinct_trace_lane() {
+        let action = ActionRecord {
+            actor: "model:test/tiny".to_owned(),
+            action: "recover_read_only_answer".to_owned(),
+            summary: "bounded recovery produced an answer".to_owned(),
+            declared_effects: Vec::new(),
+            observed_effects: Vec::new(),
+            succeeded: true,
+            duration_ms: 12,
+            attributes: std::collections::BTreeMap::new(),
+        };
+
+        let rendered = render_trace_action(&Theme::plain(), "  12ms", &action).join("\n");
+
+        assert!(rendered.contains("↻ recover"));
+        assert!(rendered.contains("bounded recovery produced an answer"));
     }
 }
