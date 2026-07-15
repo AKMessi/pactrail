@@ -11,6 +11,11 @@ while retaining Pactrail's explicit transaction boundary. The model works in a
 run-local copy. Source files change only after `/apply` validates the receipt,
 candidate contents, and baseline state.
 
+The activity line reports the engine's real lifecycle rather than displaying a
+generic waiting animation: repository indexing, model turn number, typed tool,
+changed file, verification command, and receipt sealing. Internal diagnostic
+logs stay out of the normal transcript unless `RUST_LOG` is explicitly set.
+
 ## First session
 
 Pactrail uses local Ollama by default. When no model has been selected, startup
@@ -34,6 +39,11 @@ and switches the provider atomically. Remote endpoints must use HTTPS, URLs
 containing credentials are rejected, and API keys are read only from the
 environment variable selected with `/key-env`.
 
+Some compatible APIs do not implement `GET /models`. In that case `/models`
+explains that discovery is unavailable without clearing the configured model;
+use `/model <known-id>` to select it directly. `/status` reports only whether
+the selected environment variable is present and never displays its value.
+
 ## Task and review loop
 
 Enter a natural-language task without a leading slash:
@@ -55,11 +65,16 @@ and `/runs` to select an older completed run. Run IDs may be abbreviated to any
 unique prefix shown by `/runs`. Review diffs are immutable run artifacts, so
 they remain available after apply or discard.
 
+When one or more candidates are waiting, the right side of the prompt displays
+the review count. Commands without a run ID focus the newest ready candidate,
+including after a restart or after landing another candidate. This prevents an
+older review from becoming hidden behind a newer applied or discarded run.
+
 ## Commands
 
 | Command | Purpose |
 |---|---|
-| `/help` | Show the command palette and editing shortcuts. |
+| `/help [command]` | Show the grouped command palette or focused command help. |
 | `/status` | Show workspace, provider, model, limits, and process policy. |
 | `/models` | Discover models from the active endpoint. |
 | `/model <name\|number>` | Persist a model selection. |
@@ -83,6 +98,9 @@ they remain available after apply or discard.
 Arrow keys navigate persistent history and Ctrl-R searches it. Ctrl-C cancels
 the current input; Ctrl-D closes the session. Prefix a task with `//` when the
 task itself must begin with `/`.
+
+Command completion is available with Tab. Unknown slash commands include a
+bounded typo suggestion when there is a close unambiguous match.
 
 ## Process safety
 

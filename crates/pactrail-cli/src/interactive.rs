@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
-use pactrail_core::{ChangeReceipt, ReceiptOutcome, RunId, RunState};
+use pactrail_core::{ChangeReceipt, FileChange, ReceiptOutcome, RunId, RunState};
 use pactrail_engine::{RunObserver, RunProgress};
 use reedline::{
     DefaultCompleter, DefaultValidator, FileBackedHistory, Prompt, PromptEditMode,
@@ -23,28 +23,85 @@ use crate::theme::Theme;
 
 const HISTORY_CAPACITY: usize = 2_000;
 const MAX_MODEL_LIST_BYTES: usize = 1024 * 1024;
-const COMMANDS: &[&str] = &[
-    "/help",
-    "/status",
-    "/models",
-    "/model",
-    "/connect",
-    "/provider",
-    "/endpoint",
-    "/key-env",
-    "/context",
-    "/output-tokens",
-    "/turns",
-    "/process",
-    "/runs",
-    "/inspect",
-    "/review",
-    "/diff",
-    "/apply",
-    "/discard",
-    "/clear",
-    "/quit",
+const HELP_GROUPS: &[&str] = &["Work", "Model", "Safety", "Session"];
+const COMMANDS: &[CommandHelp] = &[
+    CommandHelp::new("Work", "/review [run]", "show receipt and immutable diff"),
+    CommandHelp::new("Work", "/diff [run]", "review candidate changes"),
+    CommandHelp::new("Work", "/apply [run]", "land a verified candidate"),
+    CommandHelp::new(
+        "Work",
+        "/discard [run]",
+        "reject a candidate; retain evidence",
+    ),
+    CommandHelp::new("Work", "/runs", "browse durable run history"),
+    CommandHelp::new(
+        "Work",
+        "/inspect [run]",
+        "inspect a receipt without its diff",
+    ),
+    CommandHelp::new("Model", "/models", "discover models from the endpoint"),
+    CommandHelp::new("Model", "/model <name|#>", "select and persist a model"),
+    CommandHelp::new(
+        "Model",
+        "/connect <url> <model>",
+        "connect any compatible endpoint",
+    ),
+    CommandHelp::new("Model", "/provider <kind> [url]", "switch provider adapter"),
+    CommandHelp::new("Model", "/endpoint <url>", "change the active API endpoint"),
+    CommandHelp::new(
+        "Model",
+        "/key-env <name>",
+        "select the API-key environment variable",
+    ),
+    CommandHelp::new(
+        "Safety",
+        "/process on|off",
+        "control trusted native verification",
+    ),
+    CommandHelp::new("Safety", "/context <tokens>", "set model context capacity"),
+    CommandHelp::new(
+        "Safety",
+        "/output-tokens <tokens>",
+        "set output budget per turn",
+    ),
+    CommandHelp::new(
+        "Safety",
+        "/turns <count>",
+        "set the model-turn safety bound",
+    ),
+    CommandHelp::new(
+        "Session",
+        "/status",
+        "show model, limits, safety, and review state",
+    ),
+    CommandHelp::new(
+        "Session",
+        "/help [command]",
+        "show commands or focused help",
+    ),
+    CommandHelp::new("Session", "/clear", "clear the terminal"),
+    CommandHelp::new("Session", "/quit", "close the session; retain all receipts"),
 ];
+
+struct CommandHelp {
+    group: &'static str,
+    usage: &'static str,
+    description: &'static str,
+}
+
+impl CommandHelp {
+    const fn new(group: &'static str, usage: &'static str, description: &'static str) -> Self {
+        Self {
+            group,
+            usage,
+            description,
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        self.usage.split_whitespace().next().unwrap_or(self.usage)
+    }
+}
 
 pub(crate) async fn launch(
     workspace: &Path,
@@ -63,13 +120,17 @@ pub(crate) async fn launch(
     let settings = preferences
         .load()
         .map_err(|error| CliError::Argument(format!("settings failed: {error}")))?;
-    let last_run = commands::completed_runs(&state)?
-        .last()
-        .map(|receipt| receipt.run_id);
+    let receipts = commands::completed_runs(&state)?;
+    let (last_run, pending_runs) = run_focus(&receipts);
     let history = FileBackedHistory::with_file(HISTORY_CAPACITY, preferences.history_path())
         .map_err(|error| CliError::Argument(format!("history failed: {error}")))?;
     let mut completer = DefaultCompleter::with_inclusions(&['/', '-']);
-    completer.insert(COMMANDS.iter().map(ToString::to_string).collect());
+    completer.insert(
+        COMMANDS
+            .iter()
+            .map(|command| command.name().to_owned())
+            .collect(),
+    );
     let editor = Reedline::create()
         .with_history(Box::new(history))
         .with_completer(Box::new(completer))
@@ -83,6 +144,7 @@ pub(crate) async fn launch(
         editor,
         theme: Theme::detect(),
         last_run,
+        pending_runs,
         known_models: Vec::new(),
     };
     session.bootstrap().await?;
@@ -97,6 +159,7 @@ struct Session {
     editor: Reedline,
     theme: Theme,
     last_run: Option<RunId>,
+    pending_runs: usize,
     known_models: Vec<String>,
 }
 
@@ -252,7 +315,7 @@ impl Session {
 
     async fn run(&mut self) -> Result<(), CliError> {
         loop {
-            let prompt = SessionPrompt::new(self.settings.effective_model());
+            let prompt = SessionPrompt::new(self.settings.effective_model(), self.pending_runs);
             match self.editor.read_line(&prompt) {
                 Ok(Signal::Success(line)) => {
                     let line = line.trim();
@@ -297,8 +360,8 @@ impl Session {
     async fn handle_command(&mut self, line: &str) -> Result<SessionControl, CliError> {
         let (command, arguments) = split_command(line);
         match command {
-            "/help" | "/?" => self.render_help()?,
-            "/status" | "/settings" => self.render_status()?,
+            "/help" | "/?" => self.render_help(arguments)?,
+            "/status" | "/settings" | "/config" => self.render_status()?,
             "/models" => self.refresh_models().await?,
             "/model" => self.set_model(arguments)?,
             "/connect" => self.connect(arguments)?,
@@ -309,7 +372,7 @@ impl Session {
             "/output-tokens" => self.set_output_tokens(arguments)?,
             "/turns" => self.set_turns(arguments)?,
             "/process" => self.set_process_access(arguments)?,
-            "/runs" => self.render_runs()?,
+            "/runs" | "/history" => self.render_runs()?,
             "/inspect" => self.inspect_run(arguments, false)?,
             "/review" => self.inspect_run(arguments, true)?,
             "/diff" => self.render_diff(self.resolve_run(arguments)?)?,
@@ -318,8 +381,11 @@ impl Session {
             "/clear" => write_stdout("\u{1b}[2J\u{1b}[H").map_err(CliError::Output)?,
             "/quit" | "/exit" => return Ok(SessionControl::Exit),
             _ => {
+                let suggestion = closest_command(command).map_or_else(String::new, |candidate| {
+                    format!("; did you mean {candidate}?")
+                });
                 return Err(CliError::Argument(format!(
-                    "unknown command {command:?}; use /help"
+                    "unknown command {command:?}{suggestion} Use /help to browse commands"
                 )));
             }
         }
@@ -363,6 +429,7 @@ impl Session {
             Ok(completed) => {
                 self.emit(&activity.summary(&self.theme))?;
                 self.last_run = Some(completed.receipt.run_id);
+                self.refresh_pending_runs()?;
                 self.render_completed(&completed)?;
             }
             Err(error) => {
@@ -382,87 +449,89 @@ impl Session {
             .settings
             .effective_model()
             .unwrap_or_else(|| "not configured".to_owned());
-        let banner = format!(
-            "\n{}\n{}\n\n  {}  {}\n  {}  {}\n  {}  {}\n\n{}\n\n",
-            self.theme.brand("  P A C T R A I L"),
-            self.theme.muted("  verification-native coding agent"),
-            self.theme.muted("workspace"),
-            self.theme.text(&self.workspace.display().to_string()),
-            self.theme.muted("model    "),
-            self.theme.accent(&model),
-            self.theme.muted("policy   "),
-            if self.settings.allow_process {
-                self.theme
-                    .warning("edits isolated · native processes trusted")
-            } else {
-                self.theme
-                    .success("edits isolated · native processes blocked")
-            },
+        let process = if self.settings.allow_process {
             self.theme
-                .muted("  Type a task, or /help for commands. Use // to start a task with '/'."),
+                .warning("isolated edits · native processes trusted")
+        } else {
+            self.theme
+                .success("isolated edits · native processes blocked")
+        };
+        let review = if self.pending_runs == 0 {
+            self.theme.muted("no candidates waiting")
+        } else {
+            self.theme.warning(&format!(
+                "{} {} waiting · /review",
+                self.pending_runs,
+                plural(self.pending_runs, "candidate", "candidates")
+            ))
+        };
+        let banner = format!(
+            "\n  {}  {}\n  {}\n\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n\n  {}\n",
+            self.theme.brand("P A C T R A I L"),
+            self.theme.muted(env!("CARGO_PKG_VERSION")),
+            self.theme
+                .muted("verification-native coding · every change carries evidence"),
+            "workspace",
+            self.theme.text(&display_path(&self.workspace)),
+            "model",
+            self.theme.accent(&model),
+            "safety",
+            process,
+            "review",
+            review,
+            self.theme.muted(
+                "Describe a change, or use /help. Prefix a task with // when it starts with /."
+            ),
         );
-        self.emit(&banner)
+        self.emit(&banner)?;
+        if self.settings.effective_model().is_none() {
+            self.emit(&format!(
+                "\n  {}\n  {}\n\n",
+                self.theme.warning("No model configured."),
+                self.theme.muted(
+                    "Use /models for local Ollama, or /connect <url> <model> for any compatible API."
+                )
+            ))
+        } else {
+            self.emit("\n")
+        }
     }
 
-    fn render_help(&self) -> Result<(), CliError> {
-        self.emit(&format!(
-            "\n{}\n\
-             {}\n\
-             {}\n\
-             {}\n\
-             {}\n\
-             {}\n\
-             {}\n\
-             {}\n\
-             {}\n\
-             {}\n\
-             {}\n\
-             {}\n\n\
-             {}\n",
-            self.theme.heading("Commands"),
-            command_line(
-                &self.theme,
-                "/status",
-                "workspace, model, endpoint, and safety policy"
-            ),
-            command_line(
-                &self.theme,
-                "/models",
-                "discover models from the current endpoint"
-            ),
-            command_line(&self.theme, "/model <name|#>", "select and persist a model"),
-            command_line(
-                &self.theme,
-                "/connect <url> <model>",
-                "configure a compatible local/API endpoint"
-            ),
-            command_line(
-                &self.theme,
-                "/process on|off",
-                "control unsandboxed verification commands"
-            ),
-            command_line(&self.theme, "/runs", "show durable run history"),
-            command_line(
-                &self.theme,
-                "/review [run]",
-                "inspect evidence and show the diff"
-            ),
-            command_line(
-                &self.theme,
-                "/apply [run]",
-                "land a receipt-bound transaction"
-            ),
-            command_line(
-                &self.theme,
-                "/discard [run]",
-                "discard an isolated transaction"
-            ),
-            command_line(&self.theme, "/clear", "clear the terminal"),
-            command_line(&self.theme, "/quit", "leave the session"),
-            self.theme.muted(
-                "Arrow keys browse history. Ctrl-R searches it. Ctrl-C cancels input; Ctrl-D exits."
-            ),
-        ))
+    fn render_help(&self, topic: &str) -> Result<(), CliError> {
+        if !topic.is_empty() {
+            let requested = format!("/{}", topic.trim_start_matches('/'));
+            let command = COMMANDS
+                .iter()
+                .find(|command| command.name() == requested)
+                .ok_or_else(|| {
+                    let suggestion = closest_command(&requested)
+                        .map_or_else(String::new, |candidate| format!("; try /help {candidate}"));
+                    CliError::Argument(format!("no help for {topic:?}{suggestion}"))
+                })?;
+            return self.emit(&format!(
+                "\n{}\n  {}\n  {}\n\n",
+                self.theme.heading(command.name()),
+                self.theme.code(command.usage),
+                self.theme.text(command.description),
+            ));
+        }
+
+        let mut lines = vec![self.theme.heading("Command palette")];
+        for group in HELP_GROUPS {
+            lines.push(String::new());
+            lines.push(self.theme.muted(&group.to_uppercase()));
+            lines.extend(
+                COMMANDS
+                    .iter()
+                    .filter(|command| command.group == *group)
+                    .map(|command| command_line(&self.theme, command.usage, command.description)),
+            );
+        }
+        lines.push(String::new());
+        lines.push(self.theme.muted(
+            "Tab completes commands · arrows browse history · Ctrl-R searches · Ctrl-C cancels input · Ctrl-D exits",
+        ));
+        self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn render_status(&self) -> Result<(), CliError> {
@@ -473,29 +542,59 @@ impl Session {
         let endpoint =
             provider_base_url(&self.settings).unwrap_or_else(|| "not configured".to_owned());
         let process = if self.settings.allow_process {
-            self.theme.warning("enabled (unsandboxed host authority)")
+            self.theme
+                .warning("trusted · host/network/secrets available")
         } else {
-            self.theme.success("disabled")
+            self.theme.success("blocked")
+        };
+        let key = if self.settings.provider == ProviderKind::Ollama {
+            self.theme.muted("not required for Ollama")
+        } else if std::env::var_os(&self.settings.api_key_env).is_some() {
+            self.theme
+                .success(&format!("{} is set", self.settings.api_key_env))
+        } else if self
+            .settings
+            .effective_base_url()
+            .as_deref()
+            .is_some_and(is_loopback_url)
+        {
+            self.theme.muted(&format!(
+                "{} is not set (optional for local endpoints)",
+                self.settings.api_key_env
+            ))
+        } else {
+            self.theme
+                .warning(&format!("{} is not set", self.settings.api_key_env))
+        };
+        let review = if self.pending_runs == 0 {
+            self.theme.muted("none waiting")
+        } else {
+            self.theme.warning(&format!(
+                "{} {} waiting",
+                self.pending_runs,
+                plural(self.pending_runs, "candidate", "candidates")
+            ))
         };
         self.emit(&format!(
-            "\n{}\n  {:<14} {}\n  {:<14} {}\n  {:<14} {}\n  {:<14} {}\n  {:<14} {}\n  {:<14} {}\n  {:<14} {}\n  {:<14} {}\n\n",
+            "\n{}\n  {:<12} {}\n  {:<12} {} · {}\n  {:<12} {}\n  {:<12} {}\n  {:<12} {} context · {} output · {} turns\n  {:<12} {}\n  {:<12} {}\n\n",
             self.theme.heading("Session"),
             "workspace",
-            self.theme.text(&self.workspace.display().to_string()),
-            "provider",
-            provider_label(self.settings.provider),
-            "model",
+            self.theme.text(&display_path(&self.workspace)),
+            "runtime",
             self.theme.accent(&model),
+            provider_label(self.settings.provider),
             "endpoint",
             self.theme.text(&endpoint),
-            "context",
+            "credential",
+            key,
+            "limits",
             format_count(self.settings.context_tokens),
-            "max output",
             format_count(self.settings.max_output_tokens),
-            "max turns",
             self.settings.max_turns,
             "processes",
             process,
+            "review",
+            review,
         ))
     }
 
@@ -505,7 +604,20 @@ impl Session {
         spinner.set_message("discovering models");
         let models = available_models(&self.settings).await;
         spinner.finish_and_clear();
-        self.known_models = models.map_err(|error| CliError::Argument(error.to_string()))?;
+        self.known_models = match models {
+            Ok(models) => models,
+            Err(ModelListError::Provider(404, _)) => {
+                return self.emit(&format!(
+                    "{}\n{}\n",
+                    self.theme
+                        .warning("This endpoint does not expose model discovery."),
+                    self.theme.muted(
+                        "Your configured model is unchanged. Select a known identifier with /model <name>."
+                    )
+                ));
+            }
+            Err(error) => return Err(CliError::Argument(error.to_string())),
+        };
         if self.known_models.is_empty() {
             return self.emit(&format!(
                 "{}\n",
@@ -725,13 +837,27 @@ impl Session {
                 self.theme.muted("No completed runs in this workspace.")
             ));
         }
-        let mut lines = vec![self.theme.heading("Recent completed runs")];
+        let mut lines = vec![format!(
+            "{}  {}",
+            self.theme.heading("Run history"),
+            self.theme.muted(&format!(
+                "{} total · {} waiting",
+                receipts.len(),
+                self.pending_runs
+            ))
+        )];
         for receipt in receipts.iter().rev().take(12) {
+            let marker = if self.last_run == Some(receipt.run_id) {
+                self.theme.accent("●")
+            } else {
+                self.theme.muted("○")
+            };
             lines.push(format!(
-                "  {}  {:<15}  {:>2} files  {}",
+                "  {marker} {}  {}  {} {}  {}",
                 self.theme.code(&short_run_id(receipt.run_id)),
                 outcome_text(&self.theme, receipt.outcome),
                 receipt.changes.len(),
+                plural(receipt.changes.len(), "file", "files"),
                 self.theme.text(&truncate(&receipt.contract.goal, 56)),
             ));
         }
@@ -758,7 +884,18 @@ impl Session {
         let receipt = commands::read_receipt(&run_root)?;
         let diff = render_receipt_diff(&run_root, &receipt)
             .map_err(|error| CliError::Argument(format!("diff failed: {error}")))?;
-        let mut output = format!("\n{}\n", self.theme.heading("Diff"));
+        let (bytes_added, bytes_removed) = change_bytes(&receipt);
+        let mut output = format!(
+            "\n{}  {}\n",
+            self.theme.heading("Diff"),
+            self.theme.muted(&format!(
+                "{} {} · {} added · {} removed",
+                receipt.changes.len(),
+                plural(receipt.changes.len(), "file", "files"),
+                format_bytes(bytes_added),
+                format_bytes(bytes_removed)
+            ))
+        );
         for line in diff.lines() {
             let rendered = if line.starts_with("+++") || line.starts_with("---") {
                 self.theme.heading(line)
@@ -781,21 +918,27 @@ impl Session {
     fn apply_run(&mut self, run_id: RunId) -> Result<(), CliError> {
         let receipt = commands::apply_run(&self.state, run_id)?;
         self.last_run = Some(run_id);
+        self.refresh_pending_runs()?;
         self.emit(&format!(
-            "{} {} files landed in {}\n",
-            self.theme.success("Applied."),
+            "\n{} Applied {} {}\n  {}\n\n",
+            self.theme.success("✓"),
             receipt.changes.len(),
-            self.theme.text(&receipt.contract.workspace_root)
+            plural(receipt.changes.len(), "file", "files"),
+            self.theme
+                .text(&display_path_text(&receipt.contract.workspace_root))
         ))
     }
 
     fn discard_run(&mut self, run_id: RunId) -> Result<(), CliError> {
         commands::discard_run(&self.state, run_id)?;
         self.last_run = Some(run_id);
+        self.refresh_pending_runs()?;
         self.emit(&format!(
-            "{} {}\n",
-            self.theme.warning("Discarded isolated run"),
-            self.theme.code(&run_id.to_string())
+            "\n{} Candidate discarded\n  {}\n  {}\n\n",
+            self.theme.warning("◇"),
+            self.theme.code(&run_id.to_string()),
+            self.theme
+                .muted("Receipt and immutable review evidence were retained.")
         ))
     }
 
@@ -806,21 +949,23 @@ impl Session {
         } else {
             completed.model_summary.trim()
         };
+        let tokens = format_count(completed.tokens);
         self.emit(&format!(
-            "{}\n{}\n\n{} {}\n",
-            self.theme.heading("Model summary"),
+            "{}\n{}\n\n{} {tokens} tokens\n",
+            self.theme.heading("Model report"),
             self.theme.text(summary),
-            self.theme.muted("Tokens"),
-            format_count(completed.tokens),
+            self.theme.muted("usage"),
         ))?;
         if completed.receipt.outcome == ReceiptOutcome::ReadyToApply {
             let message = if completed.receipt.changes.is_empty() {
-                self.theme.warning(
-                    "No file changes were produced; the model may not support tool calling. Nothing needs applying.",
-                )
+                self.theme
+                    .warning("No file changes were produced. Nothing needs applying.")
             } else {
-                self.theme.muted(
-                    "Review with /diff, then /apply or /discard. The source workspace is still untouched.",
+                format!(
+                    "{}  {}  {}",
+                    self.theme.code("/diff review"),
+                    self.theme.code("/apply land"),
+                    self.theme.code("/discard reject")
                 )
             };
             self.emit(&format!("{message}\n\n"))?;
@@ -830,23 +975,32 @@ impl Session {
 
     fn render_receipt(&self, receipt: &ChangeReceipt) -> Result<(), CliError> {
         let integrity = receipt.verify_integrity()?;
+        let (bytes_added, bytes_removed) = change_bytes(receipt);
         let mut lines = vec![format!(
             "{}  {}",
             outcome_text(&self.theme, receipt.outcome),
             self.theme.code(&receipt.run_id.to_string())
         )];
+        for (index, line) in wrap_text(&receipt.contract.goal, 88).iter().enumerate() {
+            lines.push(format!(
+                "  {} {}",
+                self.theme
+                    .muted(if index == 0 { "goal     " } else { "         " }),
+                self.theme.text(line)
+            ));
+        }
         lines.push(format!(
-            "  {} {}",
-            self.theme.muted("goal     "),
-            self.theme.text(&receipt.contract.goal)
+            "  {} {} {} · {} added · {} removed",
+            self.theme.muted("candidate"),
+            receipt.changes.len(),
+            plural(receipt.changes.len(), "file", "files"),
+            format_bytes(bytes_added),
+            format_bytes(bytes_removed),
         ));
         lines.push(format!(
-            "  {} {} passed · {} failed · {} inconclusive · {} skipped",
+            "  {} {}",
             self.theme.muted("evidence "),
-            receipt.verification.passed,
-            receipt.verification.failed,
-            receipt.verification.inconclusive,
-            receipt.verification.skipped,
+            evidence_summary(&self.theme, receipt)
         ));
         lines.push(format!(
             "  {} {}",
@@ -857,26 +1011,34 @@ impl Session {
                 self.theme.danger("INVALID")
             }
         ));
+
+        lines.push(String::new());
+        lines.push(self.theme.heading("Changes"));
         if receipt.changes.is_empty() {
-            lines.push(format!("  {} (none)", self.theme.muted("changes  ")));
-        } else {
+            lines.push(format!("  {}", self.theme.muted("(none)")));
+        }
+        for change in &receipt.changes {
+            let path = format!("{:<62}", truncate(&change.path, 62));
             lines.push(format!(
-                "  {} {}",
-                self.theme.muted("changes  "),
-                receipt
-                    .changes
-                    .iter()
-                    .map(|change| self.theme.code(&change.path))
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "  {}  {} {}",
+                change_marker(&self.theme, change),
+                self.theme.code(&path),
+                self.theme.muted(&change_delta(change)),
             ));
         }
-        for risk in &receipt.unresolved_risks {
-            lines.push(format!(
-                "  {} {}",
-                self.theme.warning("risk     "),
-                self.theme.text(risk)
-            ));
+
+        if !receipt.unresolved_risks.is_empty() {
+            lines.push(String::new());
+            lines.push(self.theme.heading("Review notes"));
+            for risk in &receipt.unresolved_risks {
+                for (index, line) in wrap_text(risk, 86).iter().enumerate() {
+                    lines.push(format!(
+                        "  {} {}",
+                        self.theme.warning(if index == 0 { "!" } else { " " }),
+                        self.theme.text(line)
+                    ));
+                }
+            }
         }
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
@@ -911,6 +1073,14 @@ impl Session {
             .save(&settings)
             .map_err(|error| CliError::Argument(format!("settings failed: {error}")))?;
         self.settings = settings;
+        Ok(())
+    }
+
+    fn refresh_pending_runs(&mut self) -> Result<(), CliError> {
+        let receipts = commands::completed_runs(&self.state)?;
+        let (last_run, pending_runs) = run_focus(&receipts);
+        self.last_run = last_run;
+        self.pending_runs = pending_runs;
         Ok(())
     }
 
@@ -981,13 +1151,18 @@ enum SessionControl {
 }
 
 struct SessionPrompt {
-    model: String,
+    right: String,
 }
 
 impl SessionPrompt {
-    fn new(model: Option<String>) -> Self {
+    fn new(model: Option<String>, pending_runs: usize) -> Self {
+        let model = truncate(&model.unwrap_or_else(|| "no model".to_owned()), 32);
         Self {
-            model: model.unwrap_or_else(|| "no model".to_owned()),
+            right: if pending_runs == 0 {
+                model
+            } else {
+                format!("{pending_runs} review · {model}")
+            },
         }
     }
 }
@@ -998,7 +1173,7 @@ impl Prompt for SessionPrompt {
     }
 
     fn render_prompt_right(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.model)
+        Cow::Borrowed(&self.right)
     }
 
     fn render_prompt_indicator(&self, edit_mode: PromptEditMode) -> Cow<'_, str> {
@@ -1125,6 +1300,30 @@ fn provider_base_url(settings: &InteractiveSettings) -> Option<String> {
         })
 }
 
+fn is_loopback_url(value: &str) -> bool {
+    Url::parse(value)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+        .is_some_and(|host| {
+            host.eq_ignore_ascii_case("localhost")
+                || host
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback())
+        })
+}
+
+fn display_path(path: &Path) -> String {
+    display_path_text(&path.display().to_string())
+}
+
+fn display_path_text(value: &str) -> String {
+    value
+        .strip_prefix("\\\\?\\UNC\\")
+        .map(|path| format!("\\\\{path}"))
+        .or_else(|| value.strip_prefix("\\\\?\\").map(str::to_owned))
+        .unwrap_or_else(|| value.to_owned())
+}
+
 fn parse_provider(value: &str) -> Option<ProviderKind> {
     match value {
         "ollama" => Some(ProviderKind::Ollama),
@@ -1199,6 +1398,134 @@ fn truncate(value: &str, max_chars: usize) -> String {
     }
 }
 
+fn run_focus(receipts: &[ChangeReceipt]) -> (Option<RunId>, usize) {
+    let pending_runs = receipts
+        .iter()
+        .filter(|receipt| is_pending(receipt))
+        .count();
+    let focused = receipts
+        .iter()
+        .rev()
+        .find(|receipt| is_pending(receipt))
+        .or_else(|| receipts.last())
+        .map(|receipt| receipt.run_id);
+    (focused, pending_runs)
+}
+
+fn is_pending(receipt: &ChangeReceipt) -> bool {
+    receipt.outcome == ReceiptOutcome::ReadyToApply && !receipt.changes.is_empty()
+}
+
+fn closest_command(value: &str) -> Option<&'static str> {
+    COMMANDS
+        .iter()
+        .map(|command| (edit_distance(value, command.name()), command.name()))
+        .filter(|(distance, _)| *distance <= 3)
+        .min_by_key(|(distance, command)| (*distance, command.len().abs_diff(value.len())))
+        .map(|(_, command)| command)
+}
+
+fn edit_distance(left: &str, right: &str) -> usize {
+    let right = right.chars().collect::<Vec<_>>();
+    let mut previous = (0..=right.len()).collect::<Vec<_>>();
+    let mut current = vec![0; right.len() + 1];
+    for (left_index, left_character) in left.chars().enumerate() {
+        current[0] = left_index + 1;
+        for (right_index, right_character) in right.iter().enumerate() {
+            let substitution =
+                previous[right_index] + usize::from(left_character != *right_character);
+            current[right_index + 1] = (current[right_index] + 1)
+                .min(previous[right_index + 1] + 1)
+                .min(substitution);
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+    previous[right.len()]
+}
+
+fn wrap_text(value: &str, width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in value.split_whitespace() {
+        let separator = usize::from(!line.is_empty());
+        if !line.is_empty() && line.chars().count() + separator + word.chars().count() > width {
+            lines.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    if !line.is_empty() || lines.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
+fn change_bytes(receipt: &ChangeReceipt) -> (u64, u64) {
+    receipt
+        .changes
+        .iter()
+        .fold((0, 0), |(added, removed), change| {
+            (
+                added.saturating_add(change.bytes_added),
+                removed.saturating_add(change.bytes_removed),
+            )
+        })
+}
+
+fn format_bytes(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format_binary_unit(bytes, 1024, "KiB")
+    } else {
+        format_binary_unit(bytes, 1024 * 1024, "MiB")
+    }
+}
+
+fn format_binary_unit(bytes: u64, unit: u64, suffix: &str) -> String {
+    let tenths = u128::from(bytes) * 10 / u128::from(unit);
+    format!("{}.{:01} {suffix}", tenths / 10, tenths % 10)
+}
+
+fn change_marker(theme: &Theme, change: &FileChange) -> String {
+    match (&change.before_digest, &change.after_digest) {
+        (None, Some(_)) => theme.addition("A"),
+        (Some(_), None) => theme.deletion("D"),
+        _ => theme.accent("M"),
+    }
+}
+
+fn change_delta(change: &FileChange) -> String {
+    if change.bytes_added == 0 && change.bytes_removed == 0 {
+        "mode changed".to_owned()
+    } else {
+        format!(
+            "+{}  -{}",
+            format_bytes(change.bytes_added),
+            format_bytes(change.bytes_removed)
+        )
+    }
+}
+
+fn evidence_summary(theme: &Theme, receipt: &ChangeReceipt) -> String {
+    let summary = format!(
+        "{} passed · {} failed · {} inconclusive · {} skipped",
+        receipt.verification.passed,
+        receipt.verification.failed,
+        receipt.verification.inconclusive,
+        receipt.verification.skipped,
+    );
+    if receipt.verification.failed > 0 {
+        theme.danger(&summary)
+    } else if receipt.verification.inconclusive > 0 {
+        theme.warning(&summary)
+    } else {
+        theme.success(&summary)
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 enum ModelListError {
     #[error("no endpoint is configured; use /connect <base-url> <model>")]
@@ -1217,13 +1544,45 @@ enum ModelListError {
 
 #[cfg(test)]
 mod tests {
+    use pactrail_core::{Evidence, EvidenceKind, FileChange, ReceiptInput, TaskContract};
+
     use super::*;
+
+    fn receipt(outcome: ReceiptOutcome, has_change: bool) -> ChangeReceipt {
+        let contract = TaskContract::new("test task", ".");
+        let evidence =
+            Evidence::deterministic_pass(contract.obligations[0].id, EvidenceKind::Test, "passed");
+        ChangeReceipt::build(ReceiptInput {
+            run_id: RunId::new(),
+            contract,
+            outcome,
+            baseline_digest: "baseline".to_owned(),
+            final_event_hash: "event".to_owned(),
+            changes: has_change
+                .then(|| FileChange {
+                    path: "src/lib.rs".to_owned(),
+                    before_digest: None,
+                    after_digest: Some("after".to_owned()),
+                    before_unix_mode: None,
+                    after_unix_mode: None,
+                    bytes_added: 2_048,
+                    bytes_removed: 0,
+                })
+                .into_iter()
+                .collect(),
+            evidence: vec![evidence],
+            unresolved_risks: Vec::new(),
+        })
+        .unwrap_or_else(|error| unreachable!("receipt: {error}"))
+    }
 
     #[test]
     fn endpoints_reject_remote_http_and_url_credentials() {
         assert!(validate_base_url("http://example.com/v1").is_err());
         assert!(validate_base_url("https://user:pass@example.com/v1").is_err());
         assert!(validate_base_url("http://127.0.0.1:8080/v1").is_ok());
+        assert!(is_loopback_url("http://localhost:8080/v1"));
+        assert!(!is_loopback_url("https://models.example.com/v1"));
     }
 
     #[test]
@@ -1231,5 +1590,26 @@ mod tests {
         assert_eq!(format_count(1_234_567), "1,234,567");
         assert_eq!(truncate("abcdef", 3), "abc\u{2026}");
         assert_eq!(truncate("abc", 3), "abc");
+        assert_eq!(format_bytes(2_048), "2.0 KiB");
+        assert_eq!(
+            display_path_text(r"\\?\C:\Users\aarya\project"),
+            r"C:\Users\aarya\project"
+        );
+    }
+
+    #[test]
+    fn command_help_corrects_typos_and_wraps_review_text() {
+        assert_eq!(closest_command("/modle"), Some("/model"));
+        assert_eq!(closest_command("/unrelated"), None);
+        assert_eq!(wrap_text("one two three", 7), ["one two", "three"]);
+    }
+
+    #[test]
+    fn pending_candidate_is_focused_over_a_newer_terminal_run() {
+        let pending = receipt(ReceiptOutcome::ReadyToApply, true);
+        let pending_id = pending.run_id;
+        let applied = receipt(ReceiptOutcome::Applied, true);
+
+        assert_eq!(run_focus(&[pending, applied]), (Some(pending_id), 1));
     }
 }

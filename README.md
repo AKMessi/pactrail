@@ -26,7 +26,8 @@ evidence-backed software transaction.
 - Automatic Rust, Go, Python, and JavaScript test discovery.
 - Evidence grades that distinguish deterministic results from observations and model opinions.
 - An interactive, persistent terminal session with model discovery, history,
-  completion, review, diff, apply, and discard commands.
+  completion, truthful live engine activity, review-aware prompts, evidence
+  rendering, diff, apply, and discard commands.
 - Scriptable human-readable and JSON output, task files, receipts, inspection,
   and run listing.
 
@@ -82,8 +83,10 @@ inside the session:
 ```
 
 Use `/help` for the command palette and `/status` for the active endpoint,
-model, token limits, and safety policy. Settings and input history persist
-across sessions.
+model, credential presence, token limits, safety policy, and pending review
+count. Settings and input history persist across sessions. Ready candidates
+remain visible in the prompt and become the default target for `/review`,
+`/diff`, `/apply`, and `/discard`.
 
 The non-interactive interface remains available for scripts and CI. Run with a
 local Ollama model:
