@@ -59,6 +59,12 @@ Open a terminal in the repository you want to work on and start Pactrail:
 pactrail
 ```
 
+Start the session and submit its first task in one command:
+
+```console
+pactrail "Fix the failing parser tests and add a regression test"
+```
+
 The interactive session discovers models from local Ollama on first launch.
 Type a software task directly, or use `/models` and `/model` to choose a model:
 
@@ -87,6 +93,13 @@ model, credential presence, token limits, safety policy, and pending review
 count. Settings and input history persist across sessions. Ready candidates
 remain visible in the prompt and become the default target for `/review`,
 `/diff`, `/apply`, and `/discard`.
+
+Generate native shell completions with `pactrail completion bash`, `fish`,
+`zsh`, `elvish`, or `powershell`. For example, in PowerShell:
+
+```powershell
+pactrail completion powershell | Out-String | Invoke-Expression
+```
 
 The non-interactive interface remains available for scripts and CI. Run with a
 local Ollama model:

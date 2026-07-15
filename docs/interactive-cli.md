@@ -6,6 +6,13 @@ Start Pactrail from the root of any Git or plain-directory workspace:
 pactrail
 ```
 
+An optional positional task starts the same interactive session and executes
+immediately before opening the next prompt:
+
+```console
+pactrail "Refactor the parser error type and update its regression tests"
+```
+
 The session keeps the familiar coding-agent flow—type a task and press Enter—
 while retaining Pactrail's explicit transaction boundary. The model works in a
 run-local copy. Source files change only after `/apply` validates the receipt,
@@ -14,7 +21,9 @@ candidate contents, and baseline state.
 The activity line reports the engine's real lifecycle rather than displaying a
 generic waiting animation: repository indexing, model turn number, typed tool,
 changed file, verification command, and receipt sealing. Internal diagnostic
-logs stay out of the normal transcript unless `RUST_LOG` is explicitly set.
+logs stay out of the normal transcript even when another tool exported
+`RUST_LOG`. Set the Pactrail-specific `PACTRAIL_LOG` filter when diagnosing an
+interactive session; non-interactive commands continue to honor `RUST_LOG`.
 
 ## First session
 
@@ -76,6 +85,7 @@ older review from becoming hidden behind a newer applied or discarded run.
 |---|---|
 | `/help [command]` | Show the grouped command palette or focused command help. |
 | `/status` | Show workspace, provider, model, limits, and process policy. |
+| `/doctor` | Check local runtimes and explain the native isolation boundary. |
 | `/models` | Discover models from the active endpoint. |
 | `/model <name\|number>` | Persist a model selection. |
 | `/connect <url> <model>` | Configure an OpenAI-compatible endpoint and model. |
@@ -120,3 +130,6 @@ pactrail run "Fix the parser" --model qwen3-coder --output json
 pactrail inspect <RUN_ID> --json
 pactrail apply <RUN_ID> --json
 ```
+
+Generate completion scripts with `pactrail completion <shell>`. Supported
+shells are Bash, Elvish, Fish, PowerShell (`powershell` or `pwsh`), and Zsh.

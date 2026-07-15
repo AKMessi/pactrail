@@ -74,6 +74,7 @@ const COMMANDS: &[CommandHelp] = &[
         "/status",
         "show model, limits, safety, and review state",
     ),
+    CommandHelp::new("Session", "/doctor", "check local runtimes and isolation"),
     CommandHelp::new(
         "Session",
         "/help [command]",
@@ -106,6 +107,7 @@ impl CommandHelp {
 pub(crate) async fn launch(
     workspace: &Path,
     state_override: Option<&Path>,
+    initial_goal: Option<&str>,
 ) -> Result<(), CliError> {
     let workspace = std::fs::canonicalize(workspace).map_err(|source| CliError::Io {
         path: workspace.to_path_buf(),
@@ -148,6 +150,9 @@ pub(crate) async fn launch(
         known_models: Vec::new(),
     };
     session.bootstrap().await?;
+    if let Some(goal) = initial_goal {
+        session.execute_goal(goal.to_owned()).await?;
+    }
     session.run().await
 }
 
@@ -362,6 +367,7 @@ impl Session {
         match command {
             "/help" | "/?" => self.render_help(arguments)?,
             "/status" | "/settings" | "/config" => self.render_status()?,
+            "/doctor" => commands::doctor(false)?,
             "/models" => self.refresh_models().await?,
             "/model" => self.set_model(arguments)?,
             "/connect" => self.connect(arguments)?,
@@ -549,7 +555,8 @@ impl Session {
         };
         let key = if self.settings.provider == ProviderKind::Ollama {
             self.theme.muted("not required for Ollama")
-        } else if std::env::var_os(&self.settings.api_key_env).is_some() {
+        } else if std::env::var(&self.settings.api_key_env).is_ok_and(|api_key| !api_key.is_empty())
+        {
             self.theme
                 .success(&format!("{} is set", self.settings.api_key_env))
         } else if self

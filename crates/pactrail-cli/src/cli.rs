@@ -21,6 +21,9 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub state_dir: Option<PathBuf>,
 
+    /// Optional task to execute immediately when the interactive session opens.
+    pub prompt: Option<String>,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -54,12 +57,28 @@ pub enum Command {
         /// Natural-language software task.
         goal: String,
     },
+    /// Generate a shell completion script on standard output.
+    Completion {
+        /// Target shell.
+        #[arg(value_enum)]
+        shell: CompletionShell,
+    },
     /// Report local execution dependencies and sandbox limitations.
     Doctor {
         /// Emit machine-readable JSON.
         #[arg(long)]
         json: bool,
     },
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CompletionShell {
+    Bash,
+    Elvish,
+    Fish,
+    #[value(name = "powershell", alias = "power-shell", alias = "pwsh")]
+    PowerShell,
+    Zsh,
 }
 
 #[derive(Debug, Args)]

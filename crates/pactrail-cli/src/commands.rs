@@ -5,6 +5,8 @@ use std::process::Command as ProcessCommand;
 use std::str::FromStr;
 use std::time::Duration;
 
+use clap::CommandFactory;
+use clap_complete::{generate, shells};
 use pactrail_core::{
     Capability, ChangeReceipt, ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState,
     TaskContract,
@@ -22,7 +24,7 @@ use serde_json::json;
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-use crate::cli::{Cli, Command, OutputFormat, ProviderKind, RunArgs, RunIdArgs};
+use crate::cli::{Cli, Command, CompletionShell, OutputFormat, ProviderKind, RunArgs, RunIdArgs};
 use crate::output::{escape_json_terminal_controls, write_human_stdout, write_stdout};
 
 pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
@@ -49,6 +51,7 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
         Command::Tools { json } => tools(json),
         Command::Schema => schema(),
         Command::TaskTemplate { goal } => task_template(&cli.workspace, goal),
+        Command::Completion { shell } => completion(shell),
         Command::Doctor { json } => doctor(json),
     }
 }
@@ -242,6 +245,7 @@ fn build_driver(
             model,
             api_key: std::env::var(&args.api_key_env)
                 .ok()
+                .filter(|api_key| !api_key.is_empty())
                 .map(SecretString::from),
             timeout: Duration::from_mins(5),
             capabilities,
@@ -251,11 +255,15 @@ fn build_driver(
 }
 
 fn api_key_from_env(name: &str) -> Result<SecretString, CliError> {
-    std::env::var(name).map(SecretString::from).map_err(|_| {
-        CliError::Argument(format!(
-            "required API key environment variable {name:?} is not set"
-        ))
-    })
+    std::env::var(name)
+        .ok()
+        .filter(|api_key| !api_key.is_empty())
+        .map(SecretString::from)
+        .ok_or_else(|| {
+            CliError::Argument(format!(
+                "required API key environment variable {name:?} is not set or is empty"
+            ))
+        })
 }
 
 fn configure_native_process_permissions(
@@ -645,7 +653,26 @@ fn task_template(workspace: &Path, goal: String) -> Result<(), CliError> {
     write_stdout(&text).map_err(CliError::Output)
 }
 
-fn doctor(json_output: bool) -> Result<(), CliError> {
+fn completion(shell: CompletionShell) -> Result<(), CliError> {
+    let mut command = Cli::command();
+    let mut output = Vec::new();
+    match shell {
+        CompletionShell::Bash => generate(shells::Bash, &mut command, "pactrail", &mut output),
+        CompletionShell::Elvish => {
+            generate(shells::Elvish, &mut command, "pactrail", &mut output);
+        }
+        CompletionShell::Fish => generate(shells::Fish, &mut command, "pactrail", &mut output),
+        CompletionShell::PowerShell => {
+            generate(shells::PowerShell, &mut command, "pactrail", &mut output);
+        }
+        CompletionShell::Zsh => generate(shells::Zsh, &mut command, "pactrail", &mut output),
+    }
+    let output = String::from_utf8(output)
+        .map_err(|error| CliError::Argument(format!("completion output was not UTF-8: {error}")))?;
+    write_stdout(&output).map_err(CliError::Output)
+}
+
+pub(crate) fn doctor(json_output: bool) -> Result<(), CliError> {
     let commands = ["git", "cargo", "rustc", "docker", "podman", "ollama"];
     let checks = commands
         .iter()

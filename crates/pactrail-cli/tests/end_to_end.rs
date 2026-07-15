@@ -120,6 +120,51 @@ fn no_subcommand_fails_fast_without_a_terminal() {
     ));
 }
 
+#[test]
+fn completion_is_generated_and_prompt_cannot_shadow_a_subcommand() {
+    let completion = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args(["completion", "powershell"])
+        .output()
+        .unwrap_or_else(|error| unreachable!("completion command: {error}"));
+    assert!(completion.status.success());
+    assert!(
+        String::from_utf8_lossy(&completion.stdout)
+            .contains("Register-ArgumentCompleter -Native -CommandName 'pactrail'")
+    );
+
+    let conflict = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args(["initial task", "doctor"])
+        .output()
+        .unwrap_or_else(|error| unreachable!("conflicting prompt: {error}"));
+    assert!(!conflict.status.success());
+    assert!(
+        String::from_utf8_lossy(&conflict.stderr)
+            .contains("an interactive PROMPT cannot be combined with a subcommand")
+    );
+
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let empty_key = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "run",
+            "test empty credential handling",
+            "--provider",
+            "open-ai",
+            "--model",
+            "mock-coder",
+            "--api-key-env",
+            "PACTRAIL_TEST_EMPTY_KEY",
+        ])
+        .env("PACTRAIL_TEST_EMPTY_KEY", "")
+        .output()
+        .unwrap_or_else(|error| unreachable!("empty API key command: {error}"));
+    assert!(!empty_key.status.success());
+    assert!(String::from_utf8_lossy(&empty_key.stderr).contains(
+        "required API key environment variable \"PACTRAIL_TEST_EMPTY_KEY\" is not set or is empty"
+    ));
+}
+
 fn serve_model(listener: &TcpListener) {
     let responses = [
         json!({
