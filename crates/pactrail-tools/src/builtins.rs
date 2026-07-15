@@ -152,7 +152,7 @@ impl Tool for ListFilesTool {
     fn descriptor(&self) -> ToolDescriptor {
         descriptor::<ListFilesInput>(
             "list_files",
-            "List non-ignored regular files below a workspace-relative directory.",
+            "List non-ignored regular files below a workspace-relative directory. Call once per directory, then read suggested or relevant files; repeating the same listing returns no new evidence.",
             Capability::FileRead,
         )
     }
@@ -195,13 +195,44 @@ impl Tool for ListFilesTool {
             }
         }
         let count = files.len();
+        let mut suggested_reads = files
+            .iter()
+            .filter_map(|path| project_anchor_rank(path).map(|rank| (rank, path)))
+            .collect::<Vec<_>>();
+        suggested_reads.sort_by(|(left_rank, left), (right_rank, right)| {
+            left_rank.cmp(right_rank).then_with(|| left.cmp(right))
+        });
+        let suggested_reads = suggested_reads
+            .into_iter()
+            .take(8)
+            .map(|(_, path)| path)
+            .collect::<Vec<_>>();
         Ok(ToolOutput {
-            content: json!({ "files": files }),
+            content: json!({
+                "files": files,
+                "suggested_reads": suggested_reads,
+                "guidance": "Do not repeat this identical listing. Use read_many_files for suggested or task-relevant files, or answer from evidence already collected.",
+            }),
             summary: format!("listed {count} files below {relative}"),
             observed_effects: vec![format!("fs.list:{relative}")],
             succeeded: true,
             truncated,
         })
+    }
+}
+
+fn project_anchor_rank(path: &str) -> Option<u8> {
+    let normalized = path.to_ascii_lowercase();
+    let file_name = normalized.rsplit('/').next().unwrap_or(&normalized);
+    match file_name {
+        "readme" | "readme.md" | "readme.mdx" | "readme.rst" | "readme.txt" => Some(0),
+        "cargo.toml" | "package.json" | "pyproject.toml" | "go.mod" | "pom.xml"
+        | "build.gradle" | "build.gradle.kts" | "mix.exs" | "composer.json" => Some(1),
+        _ => match normalized.as_str() {
+            "src/main.rs" | "src/lib.rs" | "main.py" | "app.py" | "src/index.ts"
+            | "src/index.js" | "cmd/main.go" => Some(2),
+            _ => None,
+        },
     }
 }
 
@@ -636,6 +667,37 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("list: {error}"));
         assert_eq!(output.content["files"], json!(["a.txt", "b.txt"]));
         assert!(output.truncated);
+    }
+
+    #[tokio::test]
+    async fn file_listing_steers_models_toward_project_anchors() {
+        let (_source, _control, transaction) = fixture();
+        for name in ["README.md", "Cargo.toml", "src/lib.rs", "notes.txt"] {
+            transaction
+                .write_file(name, b"fixture")
+                .unwrap_or_else(|error| unreachable!("candidate file: {error}"));
+        }
+        let policy = PolicyEngine::local_default();
+        let context = ToolContext {
+            workspace: &transaction,
+            policy: &policy,
+            memory: None,
+        };
+
+        let output = ListFilesTool
+            .execute(&context, json!({}))
+            .await
+            .unwrap_or_else(|error| unreachable!("list: {error}"));
+
+        assert_eq!(
+            output.content["suggested_reads"],
+            json!(["README.md", "Cargo.toml", "src/lib.rs"])
+        );
+        assert!(
+            output.content["guidance"]
+                .as_str()
+                .is_some_and(|guidance| guidance.contains("Do not repeat"))
+        );
     }
 
     #[test]
