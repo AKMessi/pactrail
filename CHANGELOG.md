@@ -60,6 +60,8 @@ follow [Semantic Versioning](https://semver.org/).
   from the durable event head after the candidate workspace has been removed.
 - Memory lookup accepts canonical or compact UUID prefixes beyond the first
   hyphen, so nearby UUIDv7 entries remain individually addressable.
+- Bounded run-goal and memory previews now end with a visible ellipsis instead
+  of silently dropping continuation text.
 
 ## [0.1.0] - 2026-07-15
 

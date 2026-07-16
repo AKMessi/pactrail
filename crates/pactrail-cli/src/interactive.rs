@@ -1148,13 +1148,11 @@ impl Session {
                 self.theme.muted("id"),
                 self.theme.code(&memory.id.to_string())
             ));
-            for content in wrap_text(
+            for content in wrapped_preview(
                 &memory.content.replace('\n', " "),
                 content_width(columns, 6, 78),
-            )
-            .into_iter()
-            .take(2)
-            {
+                2,
+            ) {
                 lines.push(format!("      {}", self.theme.muted(&content)));
             }
         }
@@ -1494,9 +1492,8 @@ impl Session {
                 plural(run.changes, "file", "files"),
             ));
             lines.extend(
-                wrap_text(&run.goal, content_width(columns, 6, 82))
+                wrapped_preview(&run.goal, content_width(columns, 6, 82), 2)
                     .into_iter()
-                    .take(2)
                     .map(|line| format!("      {}", self.theme.text(&line))),
             );
         }
@@ -2652,6 +2649,27 @@ fn wrap_text(value: &str, width: usize) -> Vec<String> {
     lines
 }
 
+fn wrapped_preview(value: &str, width: usize, max_lines: usize) -> Vec<String> {
+    if max_lines == 0 {
+        return Vec::new();
+    }
+    let width = width.max(1);
+    let mut lines = wrap_text(value, width);
+    if lines.len() <= max_lines {
+        return lines;
+    }
+    lines.truncate(max_lines);
+    let last = lines
+        .last_mut()
+        .unwrap_or_else(|| unreachable!("non-zero preview always retains one line"));
+    let prefix = last
+        .chars()
+        .take(width.saturating_sub(1))
+        .collect::<String>();
+    *last = format!("{}…", prefix.trim_end());
+    lines
+}
+
 fn change_bytes(receipt: &ChangeReceipt) -> (u64, u64) {
     receipt
         .changes
@@ -2838,6 +2856,10 @@ mod tests {
         assert_eq!(closest_command("/modle"), Some("/model"));
         assert_eq!(closest_command("/unrelated"), None);
         assert_eq!(wrap_text("one two three", 7), ["one two", "three"]);
+        assert_eq!(
+            wrapped_preview("one two three four five", 7, 2),
+            ["one two", "three…"]
+        );
         assert_eq!(
             wrap_text("https://example.com/a/very/long/path", 10),
             ["https://ex", "ample.com/", "a/very/lon", "g/path"]
