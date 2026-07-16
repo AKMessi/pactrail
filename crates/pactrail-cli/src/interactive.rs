@@ -29,6 +29,8 @@ use crate::theme::Theme;
 
 const HISTORY_CAPACITY: usize = 2_000;
 const MAX_MODEL_LIST_BYTES: usize = 1024 * 1024;
+const MAX_DISCOVERED_MODELS: usize = 1_000;
+const MAX_DISCOVERED_MODEL_BYTES: usize = 512;
 const DEFAULT_TERMINAL_COLUMNS: usize = 100;
 const MIN_TERMINAL_COLUMNS: usize = 40;
 const MAX_TERMINAL_COLUMNS: usize = 240;
@@ -2218,16 +2220,31 @@ async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>,
         let message = String::from_utf8_lossy(&bytes).chars().take(500).collect();
         return Err(ModelListError::Provider(status.as_u16(), message));
     }
-    let value: Value = serde_json::from_slice(&bytes)?;
-    let mut models = value
+    parse_model_list(&serde_json::from_slice(&bytes)?)
+}
+
+fn parse_model_list(value: &Value) -> Result<Vec<String>, ModelListError> {
+    let entries = value
         .get("data")
         .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    if entries.len() > MAX_DISCOVERED_MODELS {
+        return Err(ModelListError::TooManyModels);
+    }
+    let mut models = Vec::with_capacity(entries.len());
+    for model in entries
+        .iter()
         .filter_map(|entry| entry.get("id").and_then(Value::as_str))
-        .filter(|model| !model.trim().is_empty())
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
+    {
+        if model.trim().is_empty()
+            || model.len() > MAX_DISCOVERED_MODEL_BYTES
+            || model.chars().any(char::is_control)
+        {
+            return Err(ModelListError::InvalidModelIdentifier);
+        }
+        models.push(model.to_owned());
+    }
     models.sort();
     models.dedup();
     Ok(models)
@@ -2711,6 +2728,10 @@ enum ModelListError {
     Provider(u16, String),
     #[error("model endpoint returned more than {MAX_MODEL_LIST_BYTES} bytes")]
     ResponseTooLarge,
+    #[error("model endpoint returned more than {MAX_DISCOVERED_MODELS} model entries")]
+    TooManyModels,
+    #[error("model endpoint returned an empty, oversized, or control-character model identifier")]
+    InvalidModelIdentifier,
     #[error("model endpoint returned invalid JSON: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -2756,6 +2777,32 @@ mod tests {
         assert!(validate_base_url("http://127.0.0.1:8080/v1").is_ok());
         assert!(is_loopback_url("http://localhost:8080/v1"));
         assert!(!is_loopback_url("https://models.example.com/v1"));
+    }
+
+    #[test]
+    fn model_discovery_is_bounded_and_rejects_unsafe_identifiers() {
+        let models = parse_model_list(&serde_json::json!({
+            "data": [
+                {"id": "coder-b"},
+                {"id": "coder-a"},
+                {"id": "coder-b"},
+                {"not_an_id": true}
+            ]
+        }))
+        .unwrap_or_else(|error| unreachable!("model list: {error}"));
+        assert_eq!(models, ["coder-a", "coder-b"]);
+        assert!(matches!(
+            parse_model_list(&serde_json::json!({"data": [{"id": "bad\u{001b}[2J"}]})),
+            Err(ModelListError::InvalidModelIdentifier)
+        ));
+
+        let entries = (0..=MAX_DISCOVERED_MODELS)
+            .map(|index| serde_json::json!({"id": format!("model-{index}")}))
+            .collect::<Vec<_>>();
+        assert!(matches!(
+            parse_model_list(&serde_json::json!({"data": entries})),
+            Err(ModelListError::TooManyModels)
+        ));
     }
 
     #[test]

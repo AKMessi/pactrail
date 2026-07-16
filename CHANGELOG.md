@@ -51,6 +51,8 @@ follow [Semantic Versioning](https://semver.org/).
 - Tool errors provide local models with virtual workspace-path recovery guidance.
 - `doctor` now distinguishes Pactrail's shipped transaction isolation from an
   externally managed container boundary for hostile repositories.
+- Model discovery now bounds entry count and identifier size and rejects
+  control-character identifiers before they reach selection or settings.
 
 ### Fixed
 
