@@ -6,8 +6,23 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-16
+
 ### Added
 
+- Checksum-verifying one-command installers for Windows x86_64, Linux x86_64,
+  and Apple Silicon macOS, backed by attested GitHub release artifacts.
+- Initial verification-native Rust harness, versioned task contracts,
+  capability policy, isolated workspace transactions, evidence grading,
+  receipts, apply and discard.
+- Hash-linked SQLite event journal and compressed content-addressed storage
+  primitive.
+- OpenAI-compatible model transport supporting Ollama and local/hosted
+  compatible APIs.
+- Typed read/search/write/replace/remove/process tools and automatic repository
+  verification discovery.
+- Interactive persistent CLI, immutable review diffs, run history, model
+  discovery/configuration, native completion, doctor, and JSON automation.
 - Provenance-aware workspace memory with explicit user commands, model read-only
   recall, and integrity-checked applied-receipt history.
 - Tool Kernel v2 batch read, atomic multi-edit, candidate-change inspection, and
@@ -62,22 +77,6 @@ follow [Semantic Versioning](https://semver.org/).
   hyphen, so nearby UUIDv7 entries remain individually addressable.
 - Bounded run-goal and memory previews now end with a visible ellipsis instead
   of silently dropping continuation text.
-
-## [0.1.0] - 2026-07-15
-
-### Added
-
-- Initial verification-native Rust harness, versioned task contracts, capability
-  policy, isolated workspace transactions, evidence grading, receipts, apply and
-  discard.
-- Hash-linked SQLite event journal and compressed content-addressed storage
-  primitive.
-- OpenAI-compatible model transport supporting Ollama and local/hosted compatible
-  APIs.
-- Typed read/search/write/replace/remove/process tools and automatic repository
-  verification discovery.
-- Interactive persistent CLI, immutable review diffs, run history, model
-  discovery/configuration, native completion, doctor, and JSON automation.
 
 [Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/AKMessi/pactrail/releases/tag/v0.1.0

@@ -31,6 +31,13 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - name: Validate Unix installer syntax
+        if: runner.os != 'Windows'
+        run: sh -n install.sh
+      - name: Validate PowerShell installer syntax
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '[ScriptBlock]::Create((Get-Content -Raw install.ps1)) | Out-Null'
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - run: cargo test --workspace --all-features --locked

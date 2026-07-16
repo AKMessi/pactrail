@@ -65,10 +65,13 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
           merge-multiple: true
+      - name: Include one-command installers
+        run: cp install.sh install.ps1 artifacts/
       - name: Generate checksums
         run: sha256sum artifacts/* > artifacts/SHA256SUMS
       - name: Attest release artifacts
@@ -78,4 +81,32 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" artifacts/* --verify-tag --generate-notes
+        run: >-
+          gh release create "$GITHUB_REF_NAME" artifacts/* --verify-tag
+          --generate-notes --title "Pactrail $GITHUB_REF_NAME"
+
+  install-smoke:
+    name: Installer smoke / ${{ matrix.os }}
+    needs: publish
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install published Unix release
+        if: runner.os != 'Windows'
+        env:
+          PACTRAIL_INSTALL_DIR: ${{ runner.temp }}/pactrail-bin
+          PACTRAIL_VERSION: ${{ github.ref_name }}
+        run: |
+          sh install.sh
+          "$PACTRAIL_INSTALL_DIR/pactrail" --version
+      - name: Install published Windows release
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP "pactrail-bin"
+          .\install.ps1 -InstallDir $installDir -Version $env:GITHUB_REF_NAME -NoModifyPath
+          & (Join-Path $installDir "pactrail.exe") --version

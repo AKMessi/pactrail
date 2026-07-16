@@ -1,6 +1,7 @@
 # Pactrail
 
 [![CI](https://github.com/AKMessi/pactrail/actions/workflows/ci.yml/badge.svg)](https://github.com/AKMessi/pactrail/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/AKMessi/pactrail)](https://github.com/AKMessi/pactrail/releases/latest)
 [![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange.svg)](rust-toolchain.toml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
@@ -117,7 +118,32 @@ pactrail ❯ Fix the parser regression and add a test.
 
 ## Install
 
-Install the current source from GitHub:
+Install the latest checksum-verified release without Rust.
+
+Windows PowerShell 5.1 or newer:
+
+```powershell
+irm https://raw.githubusercontent.com/AKMessi/pactrail/main/install.ps1 | iex
+```
+
+Linux x86_64 or Apple Silicon macOS:
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://raw.githubusercontent.com/AKMessi/pactrail/main/install.sh | sh
+```
+
+The Windows installer uses
+`%LOCALAPPDATA%\Programs\Pactrail\bin` and adds it to the user `PATH`. The Unix
+installer uses `~/.local/bin` by default and reports when that directory is not
+on `PATH`. Both download the release checksum manifest and reject an archive
+whose SHA-256 digest does not match. Set `PACTRAIL_INSTALL_DIR` to choose a Unix
+destination or pass `-InstallDir` when running a downloaded PowerShell script.
+
+Prebuilt binaries and checksums are also available on the
+[latest release](https://github.com/AKMessi/pactrail/releases/latest). Current
+release targets are Windows x86_64, Linux x86_64, and Apple Silicon macOS.
+
+To build the current source with Rust 1.95 or newer:
 
 ```console
 cargo install --git https://github.com/AKMessi/pactrail.git --locked pactrail
@@ -129,9 +155,8 @@ Or from a local checkout:
 cargo install --path crates/pactrail-cli --locked --force
 ```
 
-Building requires Rust 1.95 or newer. Cargo normally installs the executable in
-`~/.cargo/bin`; put that directory on `PATH` and `pactrail` will start from any
-terminal.
+Cargo normally installs the executable in `~/.cargo/bin`; put that directory on
+`PATH` and `pactrail` will start from any terminal.
 
 ## Quick start
 
