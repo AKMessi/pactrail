@@ -232,24 +232,17 @@ impl<'a> RunEngine<'a> {
             self.execute_inner(run_id, contract, transaction, store, observer),
         )
         .await;
-        let Ok(outcome) = result else {
-            let snapshot = store.snapshot(run_id)?;
-            if !snapshot.state.is_terminal() {
-                store.append(
-                    run_id,
-                    snapshot.last_sequence.map_or(0, |sequence| sequence + 1),
-                    RunEvent::StateChanged {
-                        from: snapshot.state,
-                        to: RunState::Failed,
-                    },
-                )?;
-                observer.on_progress(&RunProgress::StateChanged {
-                    state: RunState::Failed,
-                });
+        match result {
+            Ok(Ok(outcome)) => Ok(outcome),
+            Ok(Err(error)) => {
+                ensure_failed_state(store, run_id, observer);
+                Err(error)
             }
-            return Err(EngineError::WallTimeExceeded { wall_time_seconds });
-        };
-        outcome
+            Err(_) => {
+                ensure_failed_state(store, run_id, observer);
+                Err(EngineError::WallTimeExceeded { wall_time_seconds })
+            }
+        }
     }
 
     // This method intentionally keeps lifecycle transitions visible in one place;
@@ -1316,6 +1309,38 @@ fn transition(
     Ok(())
 }
 
+/// Best-effort lifecycle repair for errors that escape an in-progress run.
+///
+/// The original engine error remains the primary diagnostic. A store failure
+/// while recording the terminal transition is logged instead of replacing it.
+fn ensure_failed_state(store: &mut EventStore, run_id: RunId, observer: &dyn RunObserver) {
+    let snapshot = match store.snapshot(run_id) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            warn!(%run_id, %error, "could not inspect failed run lifecycle");
+            return;
+        }
+    };
+    if snapshot.last_sequence.is_none() || snapshot.state.is_terminal() {
+        return;
+    }
+    let sequence = snapshot.last_sequence.map_or(0, |value| value + 1);
+    if let Err(error) = store.append(
+        run_id,
+        sequence,
+        RunEvent::StateChanged {
+            from: snapshot.state,
+            to: RunState::Failed,
+        },
+    ) {
+        warn!(%run_id, %error, "could not finalize failed run lifecycle");
+        return;
+    }
+    observer.on_progress(&RunProgress::StateChanged {
+        state: RunState::Failed,
+    });
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum GoalIntent {
     Informational,
@@ -1679,6 +1704,46 @@ mod tests {
                 wall_time_seconds: 1
             })
         ));
+        let snapshot = store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        assert_eq!(snapshot.state, RunState::Failed);
+    }
+
+    #[tokio::test]
+    async fn context_failure_finalizes_the_started_run() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "test".to_owned(),
+            responses: Mutex::new(VecDeque::new()),
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        std::fs::remove_dir_all(transaction.workspace_root())
+            .unwrap_or_else(|error| unreachable!("remove transaction workspace: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let engine = RunEngine::new(&model, &registry, &policy);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let mut contract =
+            TaskContract::new("Inspect the workspace", source.path().display().to_string());
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let run_id = RunId::new();
+
+        let result = engine
+            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .await;
+        assert!(matches!(result, Err(EngineError::Context(_))));
         let snapshot = store
             .snapshot(run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
