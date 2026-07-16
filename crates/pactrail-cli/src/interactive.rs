@@ -1058,10 +1058,14 @@ impl Session {
                 MemoryKind::AppliedRun => self.theme.muted("✓"),
             };
             lines.push(format!(
-                "  {marker} {}  {}  {}",
-                self.theme.code(&memory.id.to_string()[..8]),
+                "  {marker} {}  {}",
                 self.theme.muted(&memory.kind.to_string()),
                 self.theme.text(&truncate(&memory.title, 62))
+            ));
+            lines.push(format!(
+                "      {}  {}",
+                self.theme.muted("id"),
+                self.theme.code(&memory.id.to_string())
             ));
             for content in wrap_text(&memory.content.replace('\n', " "), 78)
                 .into_iter()
@@ -1382,6 +1386,10 @@ impl Session {
                 self.pending_runs
             ))
         )];
+        let run_ids = runs
+            .iter()
+            .map(|run| run.run_id.to_string())
+            .collect::<Vec<_>>();
         for run in runs.iter().take(12) {
             let marker = if self.last_run == Some(run.run_id) {
                 self.theme.accent("●")
@@ -1394,7 +1402,8 @@ impl Session {
             );
             lines.push(format!(
                 "  {marker} {}  {}  {} {}  {}",
-                self.theme.code(&short_run_id(run.run_id)),
+                self.theme
+                    .code(&unique_id_prefix(&run.run_id.to_string(), &run_ids)),
                 status,
                 run.changes,
                 plural(run.changes, "file", "files"),
@@ -2199,7 +2208,22 @@ fn format_count(value: u64) -> String {
 }
 
 fn short_run_id(run_id: RunId) -> String {
-    run_id.to_string().chars().take(8).collect()
+    run_id.to_string().chars().take(13).collect()
+}
+
+fn unique_id_prefix(value: &str, candidates: &[String]) -> String {
+    for length in 8..=value.chars().count() {
+        let prefix = value.chars().take(length).collect::<String>();
+        if candidates
+            .iter()
+            .filter(|candidate| candidate.starts_with(&prefix))
+            .count()
+            == 1
+        {
+            return prefix;
+        }
+    }
+    value.to_owned()
 }
 
 fn truncate(value: &str, max_chars: usize) -> String {
@@ -2408,6 +2432,22 @@ mod tests {
         assert_eq!(
             display_path_text(r"\\?\C:\Users\aarya\project"),
             r"C:\Users\aarya\project"
+        );
+        let ids = [
+            "019f6b15-ac0a-7000-8000-000000000001".to_owned(),
+            "019f6b15-ac0a-7000-8000-000000000002".to_owned(),
+        ];
+        assert_eq!(
+            unique_id_prefix(&ids[0], &ids),
+            "019f6b15-ac0a-7000-8000-000000000001"
+        );
+        assert_eq!(
+            short_run_id(
+                ids[0]
+                    .parse::<RunId>()
+                    .unwrap_or_else(|error| unreachable!("run id: {error}"))
+            ),
+            "019f6b15-ac0a"
         );
     }
 
