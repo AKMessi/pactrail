@@ -1178,6 +1178,7 @@ dependencies = [
  "serde_json",
  "similar",
  "tempfile",
+ "terminal_size",
  "thiserror",
  "tokio",
  "toml",

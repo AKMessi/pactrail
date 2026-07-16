@@ -36,6 +36,9 @@ follow [Semantic Versioning](https://semver.org/).
 - A unified framed terminal dashboard, integrity receipt cards, clearer
   answer/review handoffs, and sequence-numbered `/trace` inspection with a
   verified run summary and legend.
+- Width-aware layouts for dashboards, help, tools, status, receipts, run
+  history, and complete trace continuations, with narrow-terminal ConPTY
+  validation and resolvable durable identifiers.
 
 ### Changed
 

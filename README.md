@@ -73,6 +73,8 @@ pactrail ❯ Fix the parser regression and add a test.
   a persistent live execution timeline instead of simulated or disappearing
   activity. Completed context, model, tool, recovery, state, and verification
   rows stay visible above one current-operation spinner.
+- Width-aware rendering keeps dashboards, receipts, tools, help, history, and
+  complete trace continuations legible in narrow or wide terminals.
 - `/tools` risk/capability inspector, `/trace` execution timeline, `/memory`
   browser, `/runs`, `/review`, immutable `/diff`, explicit `/apply` and
   `/discard`, `/doctor`, model discovery, and persistent provider settings.

@@ -39,6 +39,12 @@ tokens, model time, wall time, and bounded-output count. Untrusted provider,
 model, tool, path, goal, and summary text is terminal-control sanitized before
 it reaches either the timeline or spinner.
 
+The renderer reads the active terminal width. Framed dashboards, command help,
+status fields, tool contracts, receipts, run history, and trace continuations
+wrap deliberately in narrow terminals; long paths and URLs are hard-wrapped
+instead of overflowing or disappearing. Diffs remain byte-faithful and are the
+only view intentionally allowed to use the terminal's native wrapping.
+
 `/trace` renders the complete durable timeline after a run. Its header shows the
 terminal state, duration, event/action/evidence counts, and verified hash-chain
 status. Every event has an explicit sequence number. Context, model, tool,
@@ -113,9 +119,12 @@ whats this directory about
 The trace shows project-profile grounding, any model/tool activity, verification
 availability, and the terminal `Completed` state.
 
-Run IDs accept any unique prefix shown by `/runs`. Commands without an ID focus
-the newest ready candidate, including after restart or after another candidate
-is applied. The prompt's right side shows how many reviews are waiting.
+Run IDs accept the dynamically unique prefix shown by `/runs`; Pactrail expands
+time-adjacent UUIDv7 prefixes until they are unambiguous. Commands without an ID
+focus the newest ready candidate, including after restart or after another
+candidate is applied. The prompt's right side shows how many reviews are
+waiting. Memory views show complete IDs so `/forget` never advertises an
+ambiguous timestamp prefix.
 
 ## Workspace memory
 

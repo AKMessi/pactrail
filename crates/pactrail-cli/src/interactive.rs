@@ -18,6 +18,7 @@ use reedline::{
 };
 use reqwest::{StatusCode, Url};
 use serde_json::Value;
+use terminal_size::{Width, terminal_size};
 
 use crate::cli::{OutputFormat, ProviderKind, RunArgs};
 use crate::commands::{self, CliError, CompletedRun};
@@ -28,6 +29,9 @@ use crate::theme::Theme;
 
 const HISTORY_CAPACITY: usize = 2_000;
 const MAX_MODEL_LIST_BYTES: usize = 1024 * 1024;
+const DEFAULT_TERMINAL_COLUMNS: usize = 100;
+const MIN_TERMINAL_COLUMNS: usize = 40;
+const MAX_TERMINAL_COLUMNS: usize = 240;
 const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Kernel", "Safety", "Session"];
 const COMMANDS: &[CommandHelp] = &[
     CommandHelp::new("Work", "/review [run]", "show receipt and immutable diff"),
@@ -228,20 +232,31 @@ impl TimelineTone {
 
 fn timeline_row(
     theme: &Theme,
+    columns: usize,
     elapsed_ms: u64,
     marker: &str,
     label: &str,
     detail: &str,
     tone: TimelineTone,
-) -> String {
+) -> Vec<String> {
     let time = theme.muted(&format!("{:>7}", trace_duration(elapsed_ms)));
     let marker = tone.paint(theme, marker);
     let label = tone.paint(theme, &format!("{label:<9}"));
-    format!(
-        "  {} {time}  {marker} {label} {}",
-        theme.muted("│"),
-        theme.text(detail)
-    )
+    wrap_text(detail, content_width(columns, 25, 96))
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            if index == 0 {
+                format!(
+                    "  {} {time}  {marker} {label} {}",
+                    theme.muted("│"),
+                    theme.text(&line)
+                )
+            } else {
+                format!("                         {}", theme.text(&line))
+            }
+        })
+        .collect()
 }
 
 fn elapsed_millis(started: Instant) -> u64 {
@@ -276,6 +291,7 @@ struct RunActivity {
     model_time_ms: AtomicU64,
     truncated_outputs: AtomicUsize,
     started: Instant,
+    columns: usize,
 }
 
 impl RunActivity {
@@ -299,6 +315,7 @@ impl RunActivity {
             model_time_ms: AtomicU64::new(0),
             truncated_outputs: AtomicUsize::new(0),
             started: Instant::now(),
+            columns: terminal_columns(),
         }
     }
 
@@ -318,22 +335,41 @@ impl RunActivity {
         let elapsed = format_duration(self.started.elapsed());
         let duration = self.theme.muted(&elapsed);
         let truncated = self.truncated_outputs.load(Ordering::Relaxed);
-        let truncation = if truncated == 0 {
+        let truncation_text = if truncated == 0 {
             String::new()
         } else {
-            format!("  {}", self.theme.warning(&format!("{truncated} bounded")))
+            format!(" · {truncated} bounded")
         };
-        format!(
-            "  {} {}  {turns} {turn_word} · {tools} {tool_word} · {} tokens · {} model · {duration}{truncation}\n",
-            self.theme.muted("╰─"),
-            if succeeded {
-                self.theme.success("✓ complete")
-            } else {
-                self.theme.danger("× stopped")
-            },
+        let outcome = if succeeded {
+            self.theme.success("✓ complete")
+        } else {
+            self.theme.danger("× stopped")
+        };
+        let metrics = format!(
+            "{turns} {turn_word} · {tools} {tool_word} · {} tokens · {model_time} model · {elapsed}{truncation_text}",
             format_count(tokens),
-            self.theme.muted(&model_time),
-        )
+        );
+        if self.columns < 80 {
+            let mut lines = vec![format!("  {} {outcome}", self.theme.muted("╰─"))];
+            lines.extend(
+                wrap_text(&metrics, content_width(self.columns, 5, 96))
+                    .into_iter()
+                    .map(|line| format!("     {}", self.theme.muted(&line))),
+            );
+            format!("{}\n", lines.join("\n"))
+        } else {
+            format!(
+                "  {} {outcome}  {turns} {turn_word} · {tools} {tool_word} · {} tokens · {} model · {duration}{truncation}\n",
+                self.theme.muted("╰─"),
+                format_count(tokens),
+                self.theme.muted(&model_time),
+                truncation = if truncated == 0 {
+                    String::new()
+                } else {
+                    format!("  {}", self.theme.warning(&format!("{truncated} bounded")))
+                },
+            )
+        }
     }
 
     fn set_message(&self, message: impl AsRef<str>) {
@@ -342,14 +378,17 @@ impl RunActivity {
     }
 
     fn row(&self, marker: &str, label: &str, detail: &str, tone: TimelineTone) {
-        self.progress.println(timeline_row(
+        for line in timeline_row(
             &self.theme,
+            self.columns,
             elapsed_millis(self.started),
             marker,
             label,
             detail,
             tone,
-        ));
+        ) {
+            self.progress.println(line);
+        }
     }
 
     fn on_run_started(&self, progress: &RunProgress) {
@@ -363,13 +402,16 @@ impl RunActivity {
                 "\n  {} {}  {}",
                 self.theme.brand("╭─ RUN"),
                 self.theme.code(&short_run_id(*run_id)),
-                self.theme.muted(&truncate(model, 42)),
+                self.theme
+                    .muted(&truncate(model, content_width(self.columns, 26, 42))),
             ));
-            self.progress.println(format!(
-                "  {} {}",
-                self.theme.muted("│"),
-                self.theme.text(&truncate(goal, 88))
-            ));
+            for line in wrap_text(goal, content_width(self.columns, 4, 88)) {
+                self.progress.println(format!(
+                    "  {} {}",
+                    self.theme.muted("│"),
+                    self.theme.text(&line)
+                ));
+            }
         }
     }
 
@@ -790,81 +832,77 @@ impl Session {
     }
 
     fn render_banner(&self) -> Result<(), CliError> {
+        let columns = terminal_columns();
         let model = self
             .settings
             .effective_model()
             .unwrap_or_else(|| "not configured".to_owned());
-        let process = if self.settings.allow_process {
-            self.theme
-                .warning("isolated edits · native processes trusted")
+        let process = banner_process(self.settings.allow_process);
+        let review = banner_review(self.pending_runs);
+        let memory = banner_memory(self.memory_count);
+        let mut lines = vec![format!(
+            "  {}  {}",
+            self.theme.brand("╭─ P A C T R A I L"),
+            self.theme.muted(&format!("v{}", env!("CARGO_PKG_VERSION")))
+        )];
+        lines.extend(frame_note(
+            &self.theme,
+            columns,
+            "verification-native coding · every change carries evidence",
+        ));
+        lines.push(format!("  {}", self.theme.muted("├─")));
+        lines.extend(frame_field(
+            &self.theme,
+            columns,
+            "workspace",
+            &display_path(&self.workspace),
+            TimelineTone::Normal,
+        ));
+        lines.extend(frame_field(
+            &self.theme,
+            columns,
+            "runtime",
+            &format!("{} · {}", model, provider_label(self.settings.provider)),
+            TimelineTone::Accent,
+        ));
+        lines.extend(frame_field(
+            &self.theme,
+            columns,
+            "safety",
+            &process.0,
+            process.1,
+        ));
+        lines.extend(frame_field(
+            &self.theme,
+            columns,
+            "trace",
+            "live timeline · durable hash chain · /trace",
+            TimelineTone::Brand,
+        ));
+        lines.extend(frame_field(
+            &self.theme,
+            columns,
+            "review",
+            &review.0,
+            review.1,
+        ));
+        lines.extend(frame_field(
+            &self.theme,
+            columns,
+            "memory",
+            &memory.0,
+            memory.1,
+        ));
+        let footer = if columns < 76 {
+            "Task · /help · // escapes /"
         } else {
-            self.theme
-                .success("isolated edits · native processes blocked")
+            "Describe a task · /help commands · // escapes a leading slash"
         };
-        let review = if self.pending_runs == 0 {
-            self.theme.muted("no candidates waiting")
-        } else {
-            self.theme.warning(&format!(
-                "{} {} waiting · /review",
-                self.pending_runs,
-                plural(self.pending_runs, "candidate", "candidates")
-            ))
-        };
-        let memory = if self.memory_count == 0 {
-            self.theme
-                .muted("empty · /remember to teach this workspace")
-        } else {
-            self.theme.accent(&format!(
-                "{} {} · /memory",
-                self.memory_count,
-                plural(self.memory_count, "memory", "memories")
-            ))
-        };
-        let field = |label: &str, value: String| {
-            format!(
-                "  {} {} {value}",
-                self.theme.muted("│"),
-                self.theme.muted(&format!("{label:<10}"))
-            )
-        };
-        let lines = [
-            format!(
-                "  {}  {}",
-                self.theme.brand("╭─ P A C T R A I L"),
-                self.theme.muted(&format!("v{}", env!("CARGO_PKG_VERSION")))
-            ),
-            format!(
-                "  {}  {}",
-                self.theme.muted("│"),
-                self.theme
-                    .muted("verification-native coding · every change carries evidence")
-            ),
-            format!("  {}", self.theme.muted("├─")),
-            field("workspace", self.theme.text(&display_path(&self.workspace))),
-            field(
-                "runtime",
-                format!(
-                    "{}  {}",
-                    self.theme.accent(&model),
-                    self.theme
-                        .muted(&format!("· {}", provider_label(self.settings.provider)))
-                ),
-            ),
-            field("safety", process),
-            field(
-                "trace",
-                self.theme
-                    .brand("live timeline · durable hash chain · /trace"),
-            ),
-            field("review", review),
-            field("memory", memory),
-            format!(
-                "  {}  {}",
-                self.theme.muted("╰─"),
-                self.theme
-                    .muted("Describe a task · /help commands · // escapes a leading slash")
-            ),
-        ];
+        lines.push(format!(
+            "  {}  {}",
+            self.theme.muted("╰─"),
+            self.theme.muted(footer)
+        ));
         self.emit(&format!("\n{}\n", lines.join("\n")))?;
         if self.settings.effective_model().is_none() {
             self.emit(&format!(
@@ -880,6 +918,7 @@ impl Session {
     }
 
     fn render_help(&self, topic: &str) -> Result<(), CliError> {
+        let columns = terminal_columns();
         if !topic.is_empty() {
             let requested = format!("/{}", topic.trim_start_matches('/'));
             let command = COMMANDS
@@ -906,17 +945,25 @@ impl Session {
                 COMMANDS
                     .iter()
                     .filter(|command| command.group == *group)
-                    .map(|command| command_line(&self.theme, command.usage, command.description)),
+                    .flat_map(|command| {
+                        command_lines(&self.theme, columns, command.usage, command.description)
+                    }),
             );
         }
         lines.push(String::new());
-        lines.push(self.theme.muted(
-            "Tab completes commands · arrows browse history · Ctrl-R searches · Ctrl-C cancels input · Ctrl-D exits",
-        ));
+        lines.extend(
+            wrap_text(
+                "Tab completes commands · arrows browse history · Ctrl-R searches · Ctrl-C cancels input · Ctrl-D exits",
+                content_width(columns, 2, 96),
+            )
+            .into_iter()
+            .map(|line| self.theme.muted(&line)),
+        );
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn render_tools(&self) -> Result<(), CliError> {
+        let columns = terminal_columns();
         let descriptors = builtin_registry()?.descriptors();
         let parallel_reads = descriptors
             .iter()
@@ -931,16 +978,22 @@ impl Session {
             ))
         )];
         for descriptor in &descriptors {
-            lines.extend(render_tool_descriptor(&self.theme, descriptor));
+            lines.extend(render_tool_descriptor(&self.theme, columns, descriptor));
         }
         lines.push(String::new());
-        lines.push(self.theme.muted(
-            "Every call is schema-validated, capability-gated, output-bounded, and recorded in /trace.",
-        ));
+        lines.extend(
+            wrap_text(
+                "Every call is schema-validated, capability-gated, output-bounded, and recorded in /trace.",
+                content_width(columns, 2, 96),
+            )
+            .into_iter()
+            .map(|line| self.theme.muted(&line)),
+        );
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn render_status(&self) -> Result<(), CliError> {
+        let columns = terminal_columns();
         let model = self
             .settings
             .effective_model()
@@ -948,75 +1001,100 @@ impl Session {
         let endpoint =
             provider_base_url(&self.settings).unwrap_or_else(|| "not configured".to_owned());
         let process = if self.settings.allow_process {
-            self.theme
-                .warning("trusted · host/network/secrets available")
+            (
+                "trusted · host/network/secrets available".to_owned(),
+                TimelineTone::Warning,
+            )
         } else {
-            self.theme.success("blocked")
+            ("blocked".to_owned(), TimelineTone::Success)
         };
         let key = if self.settings.provider == ProviderKind::Ollama {
-            self.theme.muted("not required for Ollama")
+            ("not required for Ollama".to_owned(), TimelineTone::Muted)
         } else if std::env::var(&self.settings.api_key_env).is_ok_and(|api_key| !api_key.is_empty())
         {
-            self.theme
-                .success(&format!("{} is set", self.settings.api_key_env))
+            (
+                format!("{} is set", self.settings.api_key_env),
+                TimelineTone::Success,
+            )
         } else if self
             .settings
             .effective_base_url()
             .as_deref()
             .is_some_and(is_loopback_url)
         {
-            self.theme.muted(&format!(
-                "{} is not set (optional for local endpoints)",
-                self.settings.api_key_env
-            ))
+            (
+                format!(
+                    "{} is not set (optional for local endpoints)",
+                    self.settings.api_key_env
+                ),
+                TimelineTone::Muted,
+            )
         } else {
-            self.theme
-                .warning(&format!("{} is not set", self.settings.api_key_env))
+            (
+                format!("{} is not set", self.settings.api_key_env),
+                TimelineTone::Warning,
+            )
         };
         let review = if self.pending_runs == 0 {
-            self.theme.muted("none waiting")
+            ("none waiting".to_owned(), TimelineTone::Muted)
         } else {
-            self.theme.warning(&format!(
-                "{} {} waiting",
-                self.pending_runs,
-                plural(self.pending_runs, "candidate", "candidates")
-            ))
+            (
+                format!(
+                    "{} {} waiting",
+                    self.pending_runs,
+                    plural(self.pending_runs, "candidate", "candidates")
+                ),
+                TimelineTone::Warning,
+            )
         };
         let memory = if self.memory_count == 0 {
-            self.theme.muted("empty")
+            ("empty".to_owned(), TimelineTone::Muted)
         } else {
-            self.theme.accent(&format!(
-                "{} active {}",
-                self.memory_count,
-                plural(self.memory_count, "entry", "entries")
-            ))
+            (
+                format!(
+                    "{} active {}",
+                    self.memory_count,
+                    plural(self.memory_count, "entry", "entries")
+                ),
+                TimelineTone::Accent,
+            )
         };
-        self.emit(&format!(
-            "\n{}\n  {:<12} {}\n  {:<12} {} · {}\n  {:<12} {}\n  {:<12} {}\n  {:<12} {} context · {} output · {} turns\n  {:<12} {}\n  {:<12} {}\n  {:<12} {}\n\n",
-            self.theme.heading("Session"),
-            "workspace",
-            self.theme.text(&display_path(&self.workspace)),
-            "runtime",
-            self.theme.accent(&model),
-            provider_label(self.settings.provider),
-            "endpoint",
-            self.theme.text(&endpoint),
-            "credential",
-            key,
-            "limits",
-            format_count(self.settings.context_tokens),
-            format_count(self.settings.max_output_tokens),
-            self.settings.max_turns,
-            "processes",
-            process,
-            "review",
-            review,
-            "memory",
-            memory,
-        ))
+        let fields = [
+            (
+                "workspace",
+                display_path(&self.workspace),
+                TimelineTone::Normal,
+            ),
+            (
+                "runtime",
+                format!("{} · {}", model, provider_label(self.settings.provider)),
+                TimelineTone::Accent,
+            ),
+            ("endpoint", endpoint, TimelineTone::Normal),
+            ("credential", key.0, key.1),
+            (
+                "limits",
+                format!(
+                    "{} context · {} output · {} turns",
+                    format_count(self.settings.context_tokens),
+                    format_count(self.settings.max_output_tokens),
+                    self.settings.max_turns
+                ),
+                TimelineTone::Normal,
+            ),
+            ("processes", process.0, process.1),
+            ("review", review.0, review.1),
+            ("memory", memory.0, memory.1),
+        ];
+        let mut lines = vec![self.theme.heading("Session")];
+        for (label, value, tone) in fields {
+            lines.extend(labelled_rows(&self.theme, columns, label, &value, tone));
+        }
+        self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn render_memories(&self, query: &str) -> Result<(), CliError> {
+        let columns = terminal_columns();
         let memories = if query.trim().is_empty() {
             commands::list_memories(&self.state, 20)?
         } else {
@@ -1060,16 +1138,20 @@ impl Session {
             lines.push(format!(
                 "  {marker} {}  {}",
                 self.theme.muted(&memory.kind.to_string()),
-                self.theme.text(&truncate(&memory.title, 62))
+                self.theme
+                    .text(&truncate(&memory.title, content_width(columns, 20, 62)))
             ));
             lines.push(format!(
                 "      {}  {}",
                 self.theme.muted("id"),
                 self.theme.code(&memory.id.to_string())
             ));
-            for content in wrap_text(&memory.content.replace('\n', " "), 78)
-                .into_iter()
-                .take(2)
+            for content in wrap_text(
+                &memory.content.replace('\n', " "),
+                content_width(columns, 6, 78),
+            )
+            .into_iter()
+            .take(2)
             {
                 lines.push(format!("      {}", self.theme.muted(&content)));
             }
@@ -1370,6 +1452,7 @@ impl Session {
     }
 
     fn render_runs(&self) -> Result<(), CliError> {
+        let columns = terminal_columns();
         let runs = commands::run_history(&self.state)?;
         if runs.is_empty() {
             return self.emit(&format!(
@@ -1401,23 +1484,33 @@ impl Session {
                 |outcome| outcome_text(&self.theme, outcome),
             );
             lines.push(format!(
-                "  {marker} {}  {}  {} {}  {}",
+                "  {marker} {}  {}  {} {}",
                 self.theme
                     .code(&unique_id_prefix(&run.run_id.to_string(), &run_ids)),
                 status,
                 run.changes,
                 plural(run.changes, "file", "files"),
-                self.theme.text(&truncate(&run.goal, 56)),
             ));
+            lines.extend(
+                wrap_text(&run.goal, content_width(columns, 6, 82))
+                    .into_iter()
+                    .take(2)
+                    .map(|line| format!("      {}", self.theme.text(&line))),
+            );
         }
-        lines.push(
-            self.theme
-                .muted("Commands accept a full run ID or the unique prefix shown above."),
+        lines.extend(
+            wrap_text(
+                "Commands accept a full run ID or the unique prefix shown above.",
+                content_width(columns, 2, 96),
+            )
+            .into_iter()
+            .map(|line| self.theme.muted(&line)),
         );
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn render_trace(&self, run_id: RunId) -> Result<(), CliError> {
+        let columns = terminal_columns();
         let events = commands::load_trace(&self.state, run_id)?;
         if events.is_empty() {
             return self.emit(&format!(
@@ -1449,11 +1542,17 @@ impl Session {
         });
         let mut lines = vec![
             format!(
-                "{} {}  {}",
+                "{} {}",
                 self.theme.brand("╭─ EXECUTION TRACE"),
                 self.theme.code(&short_run_id(run_id)),
-                terminal_state
-                    .map_or_else(String::new, |state| { run_state_text(&self.theme, state) })
+            ),
+            format!(
+                "{} state · {}",
+                self.theme.muted("│"),
+                terminal_state.map_or_else(
+                    || self.theme.muted("unknown"),
+                    |state| run_state_text(&self.theme, state)
+                )
             ),
             format!(
                 "{} {} events · {action_count} actions · {evidence_count} evidence · {}",
@@ -1466,27 +1565,30 @@ impl Session {
                 self.theme.muted("╰─"),
                 self.theme.success("BLAKE3 hash chain verified")
             ),
-            format!(
-                "  {}  {}  {}  {}  {}  {}",
-                self.theme.brand("◆ context"),
-                self.theme.accent("● model"),
-                self.theme.text("● tool"),
-                self.theme.warning("↻ recover"),
-                self.theme.success("✓ evidence"),
-                self.theme.muted("◇ state")
-            ),
             String::new(),
         ];
+        let legend = "◆ context · ● model · ● tool · ↻ recover · ✓ evidence · ◇ state";
+        lines.extend(
+            wrap_text(legend, content_width(columns, 2, 96))
+                .into_iter()
+                .map(|line| format!("  {}", self.theme.muted(&line))),
+        );
+        lines.push(String::new());
         for envelope in &events {
-            lines.extend(render_trace_event(&self.theme, started, envelope));
+            lines.extend(render_trace_event(&self.theme, columns, started, envelope));
         }
         lines.push(String::new());
-        lines.push(self.theme.muted(&format!(
-            "Portable JSONL · {}",
-            commands::run_root(&self.state, run_id)
-                .join("trace.jsonl")
-                .display()
-        )));
+        lines.extend(
+            wrap_text(
+                &format!(
+                    "Portable JSONL · {}",
+                    display_path(&commands::run_root(&self.state, run_id).join("trace.jsonl"))
+                ),
+                content_width(columns, 2, 110),
+            )
+            .into_iter()
+            .map(|line| self.theme.muted(&line)),
+        );
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
@@ -1606,6 +1708,7 @@ impl Session {
     }
 
     fn render_receipt(&self, receipt: &ChangeReceipt) -> Result<(), CliError> {
+        let columns = terminal_columns();
         let integrity = receipt.verify_integrity()?;
         let (bytes_added, bytes_removed) = change_bytes(receipt);
         let mut lines = vec![format!(
@@ -1614,7 +1717,10 @@ impl Session {
             outcome_text(&self.theme, receipt.outcome),
             self.theme.code(&receipt.run_id.to_string())
         )];
-        for (index, line) in wrap_text(&receipt.contract.goal, 88).iter().enumerate() {
+        for (index, line) in wrap_text(&receipt.contract.goal, content_width(columns, 13, 88))
+            .iter()
+            .enumerate()
+        {
             lines.push(format!(
                 "{} {} {}",
                 self.theme.muted("│"),
@@ -1658,7 +1764,12 @@ impl Session {
                 lines.push(format!("  {}", self.theme.muted("(none)")));
             }
             for change in &receipt.changes {
-                let path = format!("{:<62}", truncate(&change.path, 62));
+                let path_width = content_width(columns, 24, 62);
+                let path = format!(
+                    "{:<width$}",
+                    truncate(&change.path, path_width),
+                    width = path_width
+                );
                 lines.push(format!(
                     "  {}  {} {}",
                     change_marker(&self.theme, change),
@@ -1672,7 +1783,10 @@ impl Session {
             lines.push(String::new());
             lines.push(self.theme.heading("Review notes"));
             for risk in &receipt.unresolved_risks {
-                for (index, line) in wrap_text(risk, 86).iter().enumerate() {
+                for (index, line) in wrap_text(risk, content_width(columns, 6, 86))
+                    .iter()
+                    .enumerate()
+                {
                     lines.push(format!(
                         "  {} {}",
                         self.theme.warning(if index == 0 { "!" } else { " " }),
@@ -1796,7 +1910,7 @@ fn format_duration(duration: Duration) -> String {
     }
 }
 
-fn render_tool_descriptor(theme: &Theme, tool: &ToolDescriptor) -> Vec<String> {
+fn render_tool_descriptor(theme: &Theme, columns: usize, tool: &ToolDescriptor) -> Vec<String> {
     let (marker, risk) = match tool.annotations.risk {
         ToolRisk::ReadOnly => (
             theme.success("◇"),
@@ -1819,22 +1933,37 @@ fn render_tool_descriptor(theme: &Theme, tool: &ToolDescriptor) -> Vec<String> {
     .flatten()
     .collect::<Vec<_>>()
     .join(" · ");
-    let mut lines = vec![format!(
-        "\n  {marker} {}  {risk} {}",
-        theme.code(&format!("{:<20}", tool.name)),
-        theme.muted(&tool.required_capability.to_string())
-    )];
-    for text in wrap_text(&tool.description, 76).into_iter().take(2) {
+    let mut lines = if columns < 72 {
+        vec![
+            format!("\n  {marker} {}", theme.code(&tool.name)),
+            format!(
+                "     {risk} {}",
+                theme.muted(&tool.required_capability.to_string())
+            ),
+        ]
+    } else {
+        vec![format!(
+            "\n  {marker} {}  {risk} {}",
+            theme.code(&format!("{:<20}", tool.name)),
+            theme.muted(&tool.required_capability.to_string())
+        )]
+    };
+    for text in wrap_text(&tool.description, content_width(columns, 5, 76)) {
         lines.push(format!("     {}", theme.text(&text)));
     }
     if !flags.is_empty() {
-        lines.push(format!("     {}", theme.muted(&flags)));
+        lines.extend(
+            wrap_text(&flags, content_width(columns, 5, 76))
+                .into_iter()
+                .map(|line| format!("     {}", theme.muted(&line))),
+        );
     }
     lines
 }
 
 fn render_trace_event(
     theme: &Theme,
+    columns: usize,
     started: &EventEnvelope,
     envelope: &EventEnvelope,
 ) -> Vec<String> {
@@ -1843,45 +1972,72 @@ fn render_trace_event(
     let time = theme.muted(&format!("{:>7}", trace_duration(elapsed_ms)));
     let sequence = theme.muted(&format!("#{:03}", envelope.sequence));
     match &envelope.event {
-        RunEvent::ContractRegistered(contract) => vec![format!(
-            "  {time} {sequence}  {} {}",
-            theme.accent("◆"),
-            theme.text(&format!("contract · {}", contract.goal))
-        )],
-        RunEvent::StateChanged { from, to } => vec![format!(
-            "  {time} {sequence}  {} {}",
-            theme.muted("◇"),
-            theme.muted(&format!("state · {from:?} → {to:?}"))
-        )],
-        RunEvent::ActionCompleted(action) => render_trace_action(theme, &time, &sequence, action),
-        RunEvent::EvidenceRecorded(evidence) => vec![format!(
-            "  {time} {sequence}  {} {}",
-            theme.success("✓"),
-            theme.text(&format!(
+        RunEvent::ContractRegistered(contract) => trace_detail_rows(
+            theme,
+            columns,
+            &time,
+            &sequence,
+            "◆",
+            &format!("contract · {}", contract.goal),
+            TimelineTone::Normal,
+        ),
+        RunEvent::StateChanged { from, to } => trace_detail_rows(
+            theme,
+            columns,
+            &time,
+            &sequence,
+            "◇",
+            &format!("state · {from:?} → {to:?}"),
+            TimelineTone::Muted,
+        ),
+        RunEvent::ActionCompleted(action) => {
+            render_trace_action(theme, columns, &time, &sequence, action)
+        }
+        RunEvent::EvidenceRecorded(evidence) => trace_detail_rows(
+            theme,
+            columns,
+            &time,
+            &sequence,
+            "✓",
+            &format!(
                 "evidence · {:?}/{:?} · {}",
                 evidence.grade, evidence.status, evidence.summary
-            ))
-        )],
-        RunEvent::PolicyEvaluated(decision) => vec![format!(
-            "  {time} {sequence}  {} {}",
-            theme.warning("!"),
-            theme.text(&format!("policy · {decision:?}"))
-        )],
-        RunEvent::CheckpointCreated { checkpoint } => vec![format!(
-            "  {time} {sequence}  {} {}",
-            theme.muted("•"),
-            theme.muted(&format!("checkpoint · {checkpoint}"))
-        )],
-        RunEvent::NoteRecorded { message } => vec![format!(
-            "  {time} {sequence}  {} {}",
-            theme.muted("•"),
-            theme.muted(&format!("note · {message}"))
-        )],
+            ),
+            TimelineTone::Normal,
+        ),
+        RunEvent::PolicyEvaluated(decision) => trace_detail_rows(
+            theme,
+            columns,
+            &time,
+            &sequence,
+            "!",
+            &format!("policy · {decision:?}"),
+            TimelineTone::Warning,
+        ),
+        RunEvent::CheckpointCreated { checkpoint } => trace_detail_rows(
+            theme,
+            columns,
+            &time,
+            &sequence,
+            "•",
+            &format!("checkpoint · {checkpoint}"),
+            TimelineTone::Muted,
+        ),
+        RunEvent::NoteRecorded { message } => trace_detail_rows(
+            theme,
+            columns,
+            &time,
+            &sequence,
+            "•",
+            &format!("note · {message}"),
+            TimelineTone::Muted,
+        ),
     }
 }
 
 fn render_trace_action(
     theme: &Theme,
+    columns: usize,
     time: &str,
     sequence: &str,
     action: &ActionRecord,
@@ -1914,7 +2070,8 @@ fn render_trace_action(
         "  {time} {sequence}  {marker} {label} {}  {outcome}",
         theme.muted(&trace_duration(action.duration_ms))
     )];
-    for summary in wrap_text(&action.summary, 78).into_iter().take(3) {
+    let detail_width = content_width(columns, 18, 88);
+    for summary in wrap_text(&action.summary, detail_width) {
         lines.push(format!("                  {}", theme.text(&summary)));
     }
     if !action.attributes.is_empty() {
@@ -1924,13 +2081,13 @@ fn render_trace_action(
             .map(|(key, value)| format!("{key}={value}"))
             .collect::<Vec<_>>()
             .join("  ");
-        for text in wrap_text(&attributes, 78).into_iter().take(3) {
+        for text in wrap_text(&attributes, detail_width) {
             lines.push(format!("                  {}", theme.muted(&text)));
         }
     }
     if !action.observed_effects.is_empty() {
         let effects = format!("effects · {}", action.observed_effects.join(", "));
-        for text in wrap_text(&effects, 78).into_iter().take(2) {
+        for text in wrap_text(&effects, detail_width) {
             lines.push(format!("                  {}", theme.muted(&text)));
         }
     }
@@ -1953,6 +2110,34 @@ fn trace_duration(milliseconds: u64) -> String {
             (milliseconds / 1_000) % 60
         )
     }
+}
+
+fn trace_detail_rows(
+    theme: &Theme,
+    columns: usize,
+    time: &str,
+    sequence: &str,
+    marker: &str,
+    detail: &str,
+    tone: TimelineTone,
+) -> Vec<String> {
+    let marker = match marker {
+        "◆" => theme.accent(marker),
+        "✓" => theme.success(marker),
+        "!" => theme.warning(marker),
+        _ => theme.muted(marker),
+    };
+    wrap_text(detail, content_width(columns, 18, 88))
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            if index == 0 {
+                format!("  {time} {sequence}  {marker} {}", tone.paint(theme, &line))
+            } else {
+                format!("                  {}", tone.paint(theme, &line))
+            }
+        })
+        .collect()
 }
 
 enum SessionControl {
@@ -2183,9 +2368,135 @@ fn split_command(line: &str) -> (&str, &str) {
         })
 }
 
-fn command_line(theme: &Theme, command: &str, description: &str) -> String {
-    let command = format!("{command:<29}");
-    format!("  {} {}", theme.code(&command), theme.muted(description))
+fn terminal_columns() -> usize {
+    terminal_size()
+        .map(|(Width(columns), _)| usize::from(columns))
+        .or_else(|| {
+            std::env::var("COLUMNS")
+                .ok()
+                .and_then(|value| value.parse::<usize>().ok())
+        })
+        .unwrap_or(DEFAULT_TERMINAL_COLUMNS)
+        .clamp(MIN_TERMINAL_COLUMNS, MAX_TERMINAL_COLUMNS)
+}
+
+fn content_width(columns: usize, prefix: usize, maximum: usize) -> usize {
+    columns.saturating_sub(prefix).clamp(12, maximum)
+}
+
+fn banner_process(enabled: bool) -> (String, TimelineTone) {
+    if enabled {
+        (
+            "isolated edits · native processes trusted".to_owned(),
+            TimelineTone::Warning,
+        )
+    } else {
+        (
+            "isolated edits · native processes blocked".to_owned(),
+            TimelineTone::Success,
+        )
+    }
+}
+
+fn banner_review(pending: usize) -> (String, TimelineTone) {
+    if pending == 0 {
+        ("no candidates waiting".to_owned(), TimelineTone::Muted)
+    } else {
+        (
+            format!(
+                "{pending} {} waiting · /review",
+                plural(pending, "candidate", "candidates")
+            ),
+            TimelineTone::Warning,
+        )
+    }
+}
+
+fn banner_memory(count: usize) -> (String, TimelineTone) {
+    if count == 0 {
+        (
+            "empty · /remember to teach this workspace".to_owned(),
+            TimelineTone::Muted,
+        )
+    } else {
+        (
+            format!("{count} {} · /memory", plural(count, "memory", "memories")),
+            TimelineTone::Accent,
+        )
+    }
+}
+
+fn frame_field(
+    theme: &Theme,
+    columns: usize,
+    label: &str,
+    value: &str,
+    tone: TimelineTone,
+) -> Vec<String> {
+    wrap_text(value, content_width(columns, 16, 120))
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            format!(
+                "  {} {} {}",
+                theme.muted("│"),
+                theme.muted(&format!("{:<10}", if index == 0 { label } else { "" })),
+                tone.paint(theme, &line)
+            )
+        })
+        .collect()
+}
+
+fn frame_note(theme: &Theme, columns: usize, value: &str) -> Vec<String> {
+    wrap_text(value, content_width(columns, 5, 120))
+        .into_iter()
+        .map(|line| format!("  {}  {}", theme.muted("│"), theme.muted(&line)))
+        .collect()
+}
+
+fn labelled_rows(
+    theme: &Theme,
+    columns: usize,
+    label: &str,
+    value: &str,
+    tone: TimelineTone,
+) -> Vec<String> {
+    wrap_text(value, content_width(columns, 16, 120))
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            format!(
+                "  {} {}",
+                theme.muted(&format!("{:<12}", if index == 0 { label } else { "" })),
+                tone.paint(theme, &line)
+            )
+        })
+        .collect()
+}
+
+fn command_lines(theme: &Theme, columns: usize, command: &str, description: &str) -> Vec<String> {
+    if columns < 72 {
+        let mut lines = vec![format!("  {}", theme.code(command))];
+        lines.extend(
+            wrap_text(description, content_width(columns, 4, 88))
+                .into_iter()
+                .map(|line| format!("    {}", theme.muted(&line))),
+        );
+        lines
+    } else {
+        wrap_text(description, content_width(columns, 33, 88))
+            .into_iter()
+            .enumerate()
+            .map(|(index, line)| {
+                let command = if index == 0 { command } else { "" };
+                format!(
+                    "  {} {}",
+                    theme.code(&format!("{command:<29}")),
+                    theme.muted(&line)
+                )
+            })
+            .collect()
+    }
 }
 
 fn parse_count(value: &str, name: &str) -> Result<u64, CliError> {
@@ -2227,13 +2538,17 @@ fn unique_id_prefix(value: &str, candidates: &[String]) -> String {
 }
 
 fn truncate(value: &str, max_chars: usize) -> String {
-    let mut characters = value.chars();
-    let prefix = characters.by_ref().take(max_chars).collect::<String>();
-    if characters.next().is_some() {
-        format!("{prefix}\u{2026}")
-    } else {
-        prefix
+    if value.chars().count() <= max_chars {
+        return value.to_owned();
     }
+    if max_chars == 0 {
+        return String::new();
+    }
+    let prefix = value
+        .chars()
+        .take(max_chars.saturating_sub(1))
+        .collect::<String>();
+    format!("{prefix}\u{2026}")
 }
 
 fn run_focus(receipts: &[ChangeReceipt]) -> (Option<RunId>, usize) {
@@ -2282,17 +2597,37 @@ fn edit_distance(left: &str, right: &str) -> usize {
 }
 
 fn wrap_text(value: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
     let mut lines = Vec::new();
     let mut line = String::new();
     for word in value.split_whitespace() {
-        let separator = usize::from(!line.is_empty());
-        if !line.is_empty() && line.chars().count() + separator + word.chars().count() > width {
-            lines.push(std::mem::take(&mut line));
+        let mut remaining = word;
+        loop {
+            let line_length = line.chars().count();
+            let separator = usize::from(!line.is_empty());
+            let capacity = width.saturating_sub(line_length + separator);
+            if remaining.chars().count() <= capacity {
+                if !line.is_empty() {
+                    line.push(' ');
+                }
+                line.push_str(remaining);
+                break;
+            }
+            if capacity == 0 || !line.is_empty() {
+                lines.push(std::mem::take(&mut line));
+                continue;
+            }
+            let split = remaining
+                .char_indices()
+                .nth(width)
+                .map_or(remaining.len(), |(index, _)| index);
+            let (chunk, rest) = remaining.split_at(split);
+            lines.push(chunk.to_owned());
+            remaining = rest;
+            if remaining.is_empty() {
+                break;
+            }
         }
-        if !line.is_empty() {
-            line.push(' ');
-        }
-        line.push_str(word);
     }
     if !line.is_empty() || lines.is_empty() {
         lines.push(line);
@@ -2426,7 +2761,7 @@ mod tests {
     #[test]
     fn counts_and_text_truncation_are_stable() {
         assert_eq!(format_count(1_234_567), "1,234,567");
-        assert_eq!(truncate("abcdef", 3), "abc\u{2026}");
+        assert_eq!(truncate("abcdef", 3), "ab\u{2026}");
         assert_eq!(truncate("abc", 3), "abc");
         assert_eq!(format_bytes(2_048), "2.0 KiB");
         assert_eq!(
@@ -2456,6 +2791,10 @@ mod tests {
         assert_eq!(closest_command("/modle"), Some("/model"));
         assert_eq!(closest_command("/unrelated"), None);
         assert_eq!(wrap_text("one two three", 7), ["one two", "three"]);
+        assert_eq!(
+            wrap_text("https://example.com/a/very/long/path", 10),
+            ["https://ex", "ample.com/", "a/very/lon", "g/path"]
+        );
     }
 
     #[test]
@@ -2480,7 +2819,8 @@ mod tests {
             attributes: std::collections::BTreeMap::new(),
         };
 
-        let rendered = render_trace_action(&Theme::plain(), "  12ms", "#008", &action).join("\n");
+        let rendered =
+            render_trace_action(&Theme::plain(), 80, "  12ms", "#008", &action).join("\n");
 
         assert!(rendered.contains("#008  ↻ recover"));
         assert!(rendered.contains("bounded recovery produced an answer"));
@@ -2490,16 +2830,67 @@ mod tests {
     fn live_timeline_neutralizes_untrusted_terminal_controls() {
         let rendered = timeline_row(
             &Theme::plain(),
+            80,
             12,
             "●",
             "tool",
             "read_file\u{1b}[2J · src/lib.rs",
             TimelineTone::Normal,
-        );
+        )
+        .join("\n");
         let activity = RunActivity::new("model\u{1b}[2J", Theme::plain());
 
         assert!(!rendered.contains('\u{1b}'));
         assert!(rendered.contains("read_file\u{fffd}[2J"));
         assert!(!activity.model.contains('\u{1b}'));
+    }
+
+    #[test]
+    fn structured_views_fit_a_narrow_terminal() {
+        let theme = Theme::plain();
+        let columns = 60;
+        let timeline = timeline_row(
+            &theme,
+            columns,
+            12,
+            "●",
+            "tool",
+            "read_file · https://example.com/a/very/long/path/that/must/remain/visible",
+            TimelineTone::Normal,
+        );
+        let fields = frame_field(
+            &theme,
+            columns,
+            "workspace",
+            r"C:\Users\builder\a-very-long-workspace-name\project",
+            TimelineTone::Normal,
+        );
+        let commands = command_lines(
+            &theme,
+            columns,
+            "/output-tokens <tokens>",
+            "set the maximum model output budget per turn",
+        );
+        let tool = builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"))
+            .descriptors()
+            .into_iter()
+            .find(|tool| tool.name == "list_files")
+            .unwrap_or_else(|| unreachable!("list_files descriptor"));
+        let tools = render_tool_descriptor(&theme, columns, &tool);
+
+        for line in timeline
+            .iter()
+            .chain(&fields)
+            .chain(&commands)
+            .chain(&tools)
+            .flat_map(|line| line.lines())
+        {
+            assert!(
+                line.chars().count() <= columns,
+                "line exceeded {columns} columns: {line:?}"
+            );
+        }
+        assert!(timeline.join("").contains("remain/visible"));
     }
 }
