@@ -49,11 +49,15 @@ follow [Semantic Versioning](https://semver.org/).
 - Model-limit validation now rejects output limits equal to the full context
   window.
 - Tool errors provide local models with virtual workspace-path recovery guidance.
+- `doctor` now distinguishes Pactrail's shipped transaction isolation from an
+  externally managed container boundary for hostile repositories.
 
 ### Fixed
 
 - Repeated `discard` calls and interrupted discard receipt writes now recover
   from the durable event head after the candidate workspace has been removed.
+- Memory lookup accepts canonical or compact UUID prefixes beyond the first
+  hyphen, so nearby UUIDv7 entries remain individually addressable.
 
 ## [0.1.0] - 2026-07-15
 

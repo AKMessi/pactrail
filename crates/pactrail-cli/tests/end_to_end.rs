@@ -330,6 +330,57 @@ fn ready_run_can_be_discarded_idempotently() {
     assert_eq!(runs[0]["outcome"], "discarded");
 }
 
+#[test]
+fn task_contract_can_apply_immediately() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let template = pactrail(workspace.path(), ["task-template", "Create a README"]);
+    assert!(template.status.success());
+    let task_path = workspace.path().join("task.toml");
+    std::fs::write(&task_path, &template.stdout)
+        .unwrap_or_else(|error| unreachable!("write task contract: {error}"));
+
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|error| unreachable!("mock provider: {error}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|error| unreachable!("provider address: {error}"));
+    let server = thread::spawn(move || serve_model(&listener));
+    let output = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "run",
+            "--task",
+            path_text(&task_path),
+            "--provider",
+            "open-ai-compatible",
+            "--base-url",
+            &format!("http://{address}/v1"),
+            "--model",
+            "mock-coder",
+            "--apply",
+            "--output",
+            "json",
+        ])
+        .output()
+        .unwrap_or_else(|error| unreachable!("task run: {error}"));
+    server
+        .join()
+        .unwrap_or_else(|_| unreachable!("provider thread panicked"));
+    assert!(
+        output.status.success(),
+        "task run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| unreachable!("task run JSON: {error}"));
+    assert_eq!(result["outcome"], "applied");
+    assert_eq!(
+        std::fs::read_to_string(workspace.path().join("README.md")).ok(),
+        Some("# Created by Pactrail\n".to_owned())
+    );
+}
+
 fn assert_applied_memory(workspace: &Path, run_id: &str) {
     let memory = Command::new(env!("CARGO_BIN_EXE_pactrail"))
         .args([
@@ -436,6 +487,113 @@ fn completion_is_generated_and_prompt_cannot_shadow_a_subcommand() {
     ));
 }
 
+#[test]
+fn static_commands_and_memory_lifecycle_are_scriptable() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+
+    let tools = pactrail(workspace.path(), ["tools", "--json"]);
+    assert!(tools.status.success());
+    let tools: Value = serde_json::from_slice(&tools.stdout)
+        .unwrap_or_else(|error| unreachable!("tools JSON: {error}"));
+    let tools = tools
+        .as_array()
+        .unwrap_or_else(|| unreachable!("tool descriptors were not an array"));
+    assert_eq!(tools.len(), 11);
+    assert!(tools.iter().any(|tool| tool["name"] == "run_process"));
+
+    let schema = pactrail(workspace.path(), ["schema"]);
+    assert!(schema.status.success());
+    let schema: Value = serde_json::from_slice(&schema.stdout)
+        .unwrap_or_else(|error| unreachable!("schema JSON: {error}"));
+    assert_eq!(schema["title"], "TaskContract");
+
+    let template = pactrail(workspace.path(), ["task-template", "Audit the CLI"]);
+    assert!(template.status.success());
+    let template: toml::Value = toml::from_slice(&template.stdout)
+        .unwrap_or_else(|error| unreachable!("task template TOML: {error}"));
+    assert_eq!(template["schema_version"].as_integer(), Some(1));
+    assert_eq!(template["goal"].as_str(), Some("Audit the CLI"));
+
+    let doctor = pactrail(workspace.path(), ["doctor", "--json"]);
+    assert!(doctor.status.success());
+    let doctor: Value = serde_json::from_slice(&doctor.stdout)
+        .unwrap_or_else(|error| unreachable!("doctor JSON: {error}"));
+    assert_eq!(doctor["commands"].as_array().map(Vec::len), Some(6));
+    assert!(
+        doctor["native_process_isolation"]
+            .as_str()
+            .is_some_and(|value| value.contains("not a host-filesystem or network sandbox"))
+    );
+
+    for shell in ["bash", "elvish", "fish", "powershell", "zsh"] {
+        let completion = pactrail(workspace.path(), ["completion", shell]);
+        assert!(completion.status.success(), "{shell} completion failed");
+        assert!(
+            completion.stdout.len() > 100,
+            "{shell} completion was unexpectedly empty"
+        );
+    }
+
+    let add = pactrail_with_state(
+        workspace.path(),
+        [
+            "memory",
+            "add",
+            "Run cargo fmt before committing",
+            "--title",
+            "Formatting convention",
+            "--kind",
+            "convention",
+            "--tag",
+            "rust",
+            "--json",
+        ],
+    );
+    assert!(add.status.success());
+    let added: Value = serde_json::from_slice(&add.stdout)
+        .unwrap_or_else(|error| unreachable!("memory add JSON: {error}"));
+    let memory_id = added["id"]
+        .as_str()
+        .unwrap_or_else(|| unreachable!("memory id missing"));
+
+    let human_list = pactrail_with_state(workspace.path(), ["memory", "list"]);
+    assert!(human_list.status.success());
+    assert!(String::from_utf8_lossy(&human_list.stdout).contains(memory_id));
+
+    let search = pactrail_with_state(
+        workspace.path(),
+        ["memory", "search", "cargo fmt", "--json"],
+    );
+    assert!(search.status.success());
+    let matches: Value = serde_json::from_slice(&search.stdout)
+        .unwrap_or_else(|error| unreachable!("memory search JSON: {error}"));
+    assert_eq!(matches[0]["memory"]["id"], memory_id);
+
+    let prefix = memory_id
+        .get(..13)
+        .unwrap_or_else(|| unreachable!("memory UUID was too short"));
+    let forget = pactrail_with_state(workspace.path(), ["memory", "forget", prefix, "--json"]);
+    assert!(forget.status.success());
+    let forgotten: Value = serde_json::from_slice(&forget.stdout)
+        .unwrap_or_else(|error| unreachable!("memory forget JSON: {error}"));
+    assert_eq!(forgotten["forgotten"], memory_id);
+
+    let list = pactrail_with_state(workspace.path(), ["memory", "list", "--json"]);
+    assert!(list.status.success());
+    assert_eq!(
+        serde_json::from_slice::<Value>(&list.stdout).ok(),
+        Some(json!([]))
+    );
+    assert!(
+        workspace
+            .path()
+            .join("state")
+            .join("memory.sqlite3")
+            .is_file()
+    );
+    assert!(!workspace.path().join(".pactrail").exists());
+}
+
 fn pactrail<const N: usize>(workspace: &Path, arguments: [&str; N]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_pactrail"))
         .arg("--workspace")
@@ -443,6 +601,19 @@ fn pactrail<const N: usize>(workspace: &Path, arguments: [&str; N]) -> std::proc
         .args(arguments)
         .output()
         .unwrap_or_else(|error| unreachable!("pactrail command: {error}"))
+}
+
+fn pactrail_with_state<const N: usize>(
+    workspace: &Path,
+    arguments: [&str; N],
+) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .arg("--workspace")
+        .arg(path_text(workspace))
+        .args(["--state-dir", "state"])
+        .args(arguments)
+        .output()
+        .unwrap_or_else(|error| unreachable!("pactrail state command: {error}"))
 }
 
 fn serve_model(listener: &TcpListener) {

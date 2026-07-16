@@ -1073,14 +1073,28 @@ pub(crate) fn resolve_memory_id(state: &Path, value: &str) -> Result<MemoryId, C
     if let Ok(id) = MemoryId::from_str(value) {
         return Ok(id);
     }
-    if value.len() < 4 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+    let canonical_prefix = value.to_ascii_lowercase();
+    let separators_are_canonical = canonical_prefix.bytes().enumerate().all(|(index, byte)| {
+        byte.is_ascii_hexdigit() || (byte == b'-' && matches!(index, 8 | 13 | 18 | 23))
+    });
+    let compact_prefix = canonical_prefix.replace('-', "");
+    if !(4..=32).contains(&compact_prefix.len())
+        || !separators_are_canonical
+        || !compact_prefix.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
         return Err(CliError::Argument(format!(
-            "memory id {value:?} is not a UUID or hexadecimal prefix"
+            "memory id {value:?} is not a UUID or canonical hexadecimal UUID prefix"
         )));
     }
     let matches = list_memories(state, 100)?
         .into_iter()
-        .filter(|memory| memory.id.to_string().starts_with(value))
+        .filter(|memory| {
+            memory
+                .id
+                .to_string()
+                .replace('-', "")
+                .starts_with(&compact_prefix)
+        })
         .map(|memory| memory.id)
         .collect::<Vec<_>>();
     match matches.as_slice() {
@@ -1152,7 +1166,7 @@ pub(crate) fn doctor(json_output: bool) -> Result<(), CliError> {
         .collect::<Vec<_>>();
     let report = json!({
         "native_process_isolation": "workspace transaction only; not a host-filesystem or network sandbox",
-        "recommended_hostile_repo_backend": "OCI via Docker or Podman",
+        "recommended_hostile_repo_backend": "run Pactrail inside an externally managed OCI container",
         "commands": checks,
     });
     if json_output {
@@ -1161,7 +1175,7 @@ pub(crate) fn doctor(json_output: bool) -> Result<(), CliError> {
         let mut lines = vec![
             "Native execution protects the working tree but is not a host-filesystem/network sandbox."
                 .to_owned(),
-            "Use Docker or Podman for hostile repositories when OCI support is configured."
+            "For hostile repositories, run Pactrail itself inside an externally managed Docker or Podman container."
                 .to_owned(),
         ];
         for check in checks {
