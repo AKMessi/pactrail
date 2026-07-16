@@ -1,4 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use futures_util::future::join_all;
@@ -6,9 +8,9 @@ use pactrail_context::{
     ContextBudget, ContextError, ContextFragment, ContextPack, RepositoryIndex,
 };
 use pactrail_core::{
-    ActionRecord, ChangeReceipt, ContractError, Evidence, EvidenceGrade, EvidenceId, EvidenceKind,
-    EvidenceStatus, ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState,
-    TaskContract,
+    ActionRecord, Capability, ChangeReceipt, ContractError, Evidence, EvidenceGrade, EvidenceId,
+    EvidenceKind, EvidenceStatus, ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent, RunId,
+    RunState, TaskContract,
 };
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
@@ -924,11 +926,20 @@ impl<'a> RunEngine<'a> {
                 "No supported test manifest was detected",
             ));
         }
+        let verification_workspace = contract
+            .permissions
+            .allow
+            .contains(&Capability::ProcessSpawn)
+            .then(|| VerificationWorkspace::create(transaction))
+            .transpose()?;
+        let verification_transaction = verification_workspace
+            .as_ref()
+            .map_or(transaction, VerificationWorkspace::transaction);
         let mut command_results = Vec::new();
         for (index, command) in commands.iter().enumerate() {
             let Some(succeeded) = self
                 .run_verification_command(
-                    transaction,
+                    verification_transaction,
                     command,
                     index,
                     commands.len(),
@@ -1234,6 +1245,10 @@ fn verification_attributes(
     BTreeMap::from([
         ("index".to_owned(), (index + 1).to_string()),
         ("total".to_owned(), total.to_string()),
+        (
+            "workspace".to_owned(),
+            "disposable_candidate_snapshot".to_owned(),
+        ),
         ("output_truncated".to_owned(), output.truncated.to_string()),
         (
             "output_bytes".to_owned(),
@@ -1267,6 +1282,49 @@ impl VerificationResult {
             risks: vec![format!("Verification incomplete: {reason}")],
         }
     }
+}
+
+struct VerificationWorkspace {
+    transaction: WorkspaceTransaction,
+    control_root: PathBuf,
+}
+
+impl VerificationWorkspace {
+    fn create(candidate: &WorkspaceTransaction) -> Result<Self, EngineError> {
+        let control_root = candidate.control_root().join("verification");
+        let transaction = WorkspaceTransaction::create(
+            candidate.workspace_root(),
+            &control_root,
+            &[".".to_owned()],
+        )?;
+        Ok(Self {
+            transaction,
+            control_root,
+        })
+    }
+
+    fn transaction(&self) -> &WorkspaceTransaction {
+        &self.transaction
+    }
+}
+
+impl Drop for VerificationWorkspace {
+    fn drop(&mut self) {
+        if let Err(error) = remove_verification_workspace(&self.control_root) {
+            warn!(
+                path = %self.control_root.display(),
+                %error,
+                "could not remove disposable verification workspace"
+            );
+        }
+    }
+}
+
+fn remove_verification_workspace(path: &Path) -> std::io::Result<()> {
+    if path.exists() {
+        fs::remove_dir_all(path)?;
+    }
+    Ok(())
 }
 
 struct Journal<'a> {
@@ -1726,7 +1784,7 @@ mod tests {
             &[".".to_owned()],
         )
         .unwrap_or_else(|error| unreachable!("transaction: {error}"));
-        std::fs::remove_dir_all(transaction.workspace_root())
+        fs::remove_dir_all(transaction.workspace_root())
             .unwrap_or_else(|error| unreachable!("remove transaction workspace: {error}"));
         let registry = pactrail_tools::builtin_registry()
             .unwrap_or_else(|error| unreachable!("tools: {error}"));
@@ -1748,6 +1806,86 @@ mod tests {
             .snapshot(run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
         assert_eq!(snapshot.state, RunState::Failed);
+    }
+
+    #[tokio::test]
+    async fn verification_build_artifacts_never_pollute_the_candidate() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "test".to_owned(),
+            responses: Mutex::new(VecDeque::new()),
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        fs::write(source.path().join("source.txt"), "candidate input\n")
+            .unwrap_or_else(|error| unreachable!("source file: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let mut contract = TaskContract::new(
+            "Explain this Rust project",
+            source.path().display().to_string(),
+        );
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        contract.permissions.allow.insert(Capability::ProcessSpawn);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let engine = RunEngine::new(&model, &registry, &policy);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let run_id = RunId::new();
+        let mut journal = Journal::new(run_id, &mut store);
+        #[cfg(windows)]
+        let command = VerificationCommand {
+            program: "cmd".to_owned(),
+            args: vec![
+                "/D".to_owned(),
+                "/C".to_owned(),
+                "echo artifact>verification-artifact.txt && if exist verification-artifact.txt (exit 0) else exit 1".to_owned(),
+            ],
+            description: "write verification fixture".to_owned(),
+        };
+        #[cfg(not(windows))]
+        let command = VerificationCommand {
+            program: "sh".to_owned(),
+            args: vec![
+                "-c".to_owned(),
+                "printf artifact > verification-artifact.txt && test -f verification-artifact.txt"
+                    .to_owned(),
+            ],
+            description: "write verification fixture".to_owned(),
+        };
+
+        let verification = engine
+            .verify(
+                &contract,
+                &transaction,
+                &[command],
+                &mut journal,
+                &SilentRunObserver,
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("verification: {error}"));
+
+        assert!(
+            verification
+                .evidence
+                .iter()
+                .all(|evidence| evidence.status == EvidenceStatus::Passed)
+        );
+        assert!(
+            !transaction
+                .workspace_root()
+                .join("verification-artifact.txt")
+                .exists()
+        );
+        assert!(!transaction.control_root().join("verification").exists());
     }
 
     #[tokio::test]
@@ -1969,14 +2107,14 @@ mod tests {
             capabilities: ModelCapabilities::default(),
         };
         let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
-        std::fs::create_dir(source.path().join("src"))
+        fs::create_dir(source.path().join("src"))
             .unwrap_or_else(|error| unreachable!("src: {error}"));
-        std::fs::write(
+        fs::write(
             source.path().join("Cargo.toml"),
             "[package]\nname = \"answer-test\"\n",
         )
         .unwrap_or_else(|error| unreachable!("manifest: {error}"));
-        std::fs::write(source.path().join("src/lib.rs"), "pub fn answer() {}\n")
+        fs::write(source.path().join("src/lib.rs"), "pub fn answer() {}\n")
             .unwrap_or_else(|error| unreachable!("library: {error}"));
         let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
         let transaction = WorkspaceTransaction::create(

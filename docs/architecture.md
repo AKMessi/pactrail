@@ -177,7 +177,10 @@ overwritten.
 
 Manifest discovery selects non-installing checks for Rust, Go, Python, and
 JavaScript projects. Execution is possible only when native process authority is
-granted. Retained output and wall time are bounded.
+granted. Authorized checks run from a disposable snapshot of the finished
+candidate, so compiler output, coverage data, bytecode, and test-runner caches
+cannot enter the reviewed change set. The trace labels this execution workspace
+explicitly. Retained output and wall time are bounded.
 
 Verification results become deterministic evidence. Model statements do not.
 Each required obligation receives a grade and status; missing process permission

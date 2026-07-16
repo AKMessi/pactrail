@@ -152,6 +152,13 @@ impl WorkspaceTransaction {
         &self.workspace_root
     }
 
+    /// Run-local control directory containing transaction metadata and the
+    /// isolated workspace.
+    #[must_use]
+    pub fn control_root(&self) -> &Path {
+        &self.control_root
+    }
+
     /// Original workspace that may receive an explicit apply.
     #[must_use]
     pub fn source_root(&self) -> &Path {

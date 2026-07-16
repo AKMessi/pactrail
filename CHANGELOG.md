@@ -42,6 +42,8 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Deterministic verification now runs from a disposable candidate snapshot so
+  build products and test-runner caches cannot pollute review receipts.
 - Tool results shown to models and retained verification output are bounded to
   256 KiB with explicit narrowing metadata.
 - Model-limit validation now rejects output limits equal to the full context

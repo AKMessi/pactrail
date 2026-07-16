@@ -52,6 +52,8 @@ validation.
 - Every call is capability-gated; denial wins and runtime overgrant fails before
   execution.
 - Tool and process results have retained/model-visible output ceilings.
+- Deterministic verification runs in a disposable candidate snapshot, keeping
+  ordinary build and test artifacts out of the receipt-bound candidate tree.
 - Parallel scheduling is limited to tools explicitly annotated read-only and
   parallel-safe. Mutations and host execution remain serial.
 - Repeated call IDs, impossible finish reasons, token/wall-time overruns, and
@@ -89,10 +91,11 @@ third-party libraries or endpoints. Treat debug logs as potentially sensitive.
 ## Critical limitation: native processes
 
 `--allow-process` or `/process on` is an explicit trust decision. A child starts
-in the candidate workspace with a scrubbed/rebuilt operational environment, but
-Pactrail 0.1 does not provide an OS or container sandbox. The child can attempt
-to read other host files, find secrets, use the network, modify the source tree
-directly, or affect external services.
+in either the candidate workspace or a disposable verification snapshot with a
+scrubbed/rebuilt operational environment, but Pactrail 0.1 does not provide an
+OS or container sandbox. The child can attempt to read other host files, find
+secrets, use the network, modify the source tree directly, or affect external
+services.
 
 The transaction protects normal tool-based landing; it cannot contain hostile
 native code. Pactrail therefore records process, network, secret-use, and
