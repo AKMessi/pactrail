@@ -22,7 +22,7 @@ use serde_json::Value;
 use crate::cli::{OutputFormat, ProviderKind, RunArgs};
 use crate::commands::{self, CliError, CompletedRun};
 use crate::diff::render_receipt_diff;
-use crate::output::{write_human_stdout, write_stdout};
+use crate::output::{sanitize_terminal_text, write_human_stdout, write_stdout};
 use crate::settings::{InteractiveSettings, SettingsStore};
 use crate::theme::Theme;
 
@@ -201,8 +201,74 @@ struct Session {
     known_models: Vec<String>,
 }
 
+#[derive(Clone, Copy)]
+enum TimelineTone {
+    Normal,
+    Muted,
+    Brand,
+    Accent,
+    Success,
+    Warning,
+    Danger,
+}
+
+impl TimelineTone {
+    fn paint(self, theme: &Theme, value: &str) -> String {
+        match self {
+            Self::Normal => theme.text(value),
+            Self::Muted => theme.muted(value),
+            Self::Brand => theme.brand(value),
+            Self::Accent => theme.accent(value),
+            Self::Success => theme.success(value),
+            Self::Warning => theme.warning(value),
+            Self::Danger => theme.danger(value),
+        }
+    }
+}
+
+fn timeline_row(
+    theme: &Theme,
+    elapsed_ms: u64,
+    marker: &str,
+    label: &str,
+    detail: &str,
+    tone: TimelineTone,
+) -> String {
+    let time = theme.muted(&format!("{:>7}", trace_duration(elapsed_ms)));
+    let marker = tone.paint(theme, marker);
+    let label = tone.paint(theme, &format!("{label:<9}"));
+    format!(
+        "  {} {time}  {marker} {label} {}",
+        theme.muted("│"),
+        theme.text(detail)
+    )
+}
+
+fn elapsed_millis(started: Instant) -> u64 {
+    u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+const fn format_state(state: RunState) -> &'static str {
+    match state {
+        RunState::Created => "created",
+        RunState::Contracting => "contracting",
+        RunState::Investigating => "investigating",
+        RunState::Planning => "planning",
+        RunState::Executing => "executing",
+        RunState::Verifying => "verifying",
+        RunState::Reviewing => "reviewing",
+        RunState::Completed => "answered",
+        RunState::AwaitingApply => "ready to apply",
+        RunState::Applied => "applied",
+        RunState::Discarded => "discarded",
+        RunState::Failed => "failed",
+        RunState::Cancelled => "cancelled",
+    }
+}
+
 struct RunActivity {
     progress: ProgressBar,
+    theme: Theme,
     model: String,
     turn: AtomicU16,
     tool_calls: AtomicUsize,
@@ -213,18 +279,20 @@ struct RunActivity {
 }
 
 impl RunActivity {
-    fn new(model: &str) -> Self {
+    fn new(model: &str, theme: Theme) -> Self {
         let progress = ProgressBar::new_spinner();
-        let style =
-            ProgressStyle::with_template("{spinner:.cyan}  {msg}  {elapsed_precise:.bright_black}")
-                .unwrap_or_else(|_| ProgressStyle::default_spinner())
-                .tick_strings(&["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"]);
+        let style = ProgressStyle::with_template(
+            "  {spinner:.cyan}  {msg}  {elapsed_precise:.bright_black}",
+        )
+        .unwrap_or_else(|_| ProgressStyle::default_spinner())
+        .tick_strings(&["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"]);
         progress.set_style(style);
         progress.set_message("starting isolated transaction");
         progress.enable_steady_tick(Duration::from_millis(90));
         Self {
             progress,
-            model: truncate(model, 32),
+            theme,
+            model: truncate(&sanitize_terminal_text(model), 32),
             turn: AtomicU16::new(0),
             tool_calls: AtomicUsize::new(0),
             model_tokens: AtomicU64::new(0),
@@ -238,7 +306,7 @@ impl RunActivity {
         self.progress.finish_and_clear();
     }
 
-    fn summary(&self, theme: &Theme) -> String {
+    fn summary(&self, succeeded: bool) -> String {
         let turns = self.turn.load(Ordering::Relaxed);
         let tools = self.tool_calls.load(Ordering::Relaxed);
         let turn_word = plural(turns.into(), "turn", "turns");
@@ -248,35 +316,219 @@ impl RunActivity {
             self.model_time_ms.load(Ordering::Relaxed),
         ));
         let elapsed = format_duration(self.started.elapsed());
-        let duration = theme.muted(&elapsed);
+        let duration = self.theme.muted(&elapsed);
         let truncated = self.truncated_outputs.load(Ordering::Relaxed);
         let truncation = if truncated == 0 {
             String::new()
         } else {
-            format!("  {}", theme.warning(&format!("{truncated} bounded")))
+            format!("  {}", self.theme.warning(&format!("{truncated} bounded")))
         };
         format!(
-            "{} {turns} {turn_word}  {tools} {tool_word}  {} tokens  {} model  {duration}{truncation}\n",
-            theme.success("\u{2713}"),
+            "  {} {}  {turns} {turn_word} · {tools} {tool_word} · {} tokens · {} model · {duration}{truncation}\n",
+            self.theme.muted("╰─"),
+            if succeeded {
+                self.theme.success("✓ complete")
+            } else {
+                self.theme.danger("× stopped")
+            },
             format_count(tokens),
-            theme.muted(&model_time),
+            self.theme.muted(&model_time),
         )
     }
 
-    fn set_message(&self, message: String) {
-        self.progress.set_message(message);
+    fn set_message(&self, message: impl AsRef<str>) {
+        self.progress
+            .set_message(sanitize_terminal_text(message.as_ref()));
+    }
+
+    fn row(&self, marker: &str, label: &str, detail: &str, tone: TimelineTone) {
+        self.progress.println(timeline_row(
+            &self.theme,
+            elapsed_millis(self.started),
+            marker,
+            label,
+            detail,
+            tone,
+        ));
+    }
+
+    fn on_run_started(&self, progress: &RunProgress) {
+        if let RunProgress::RunStarted {
+            run_id,
+            goal,
+            model,
+        } = progress
+        {
+            self.progress.println(format!(
+                "\n  {} {}  {}",
+                self.theme.brand("╭─ RUN"),
+                self.theme.code(&short_run_id(*run_id)),
+                self.theme.muted(&truncate(model, 42)),
+            ));
+            self.progress.println(format!(
+                "  {} {}",
+                self.theme.muted("│"),
+                self.theme.text(&truncate(goal, 88))
+            ));
+        }
+    }
+
+    fn on_state_progress(&self, progress: &RunProgress) {
+        let RunProgress::StateChanged { state } = progress else {
+            return;
+        };
+        if let Some(message) = state_activity(*state) {
+            let tone = match state {
+                RunState::Completed | RunState::AwaitingApply | RunState::Applied => {
+                    TimelineTone::Success
+                }
+                RunState::Failed => TimelineTone::Danger,
+                RunState::Cancelled | RunState::Discarded => TimelineTone::Warning,
+                _ => TimelineTone::Muted,
+            };
+            self.row(
+                "◇",
+                "state",
+                &format!("{} · {message}", format_state(*state)),
+                tone,
+            );
+            self.set_message(message);
+        }
+    }
+
+    fn on_context_progress(&self, progress: &RunProgress) {
+        let RunProgress::ContextBuilt {
+            indexed_files,
+            cited_files,
+            rendered_bytes,
+            truncated,
+            duration_ms,
+            ..
+        } = progress
+        else {
+            return;
+        };
+        let bounded = if *truncated { " · bounded" } else { "" };
+        self.row(
+            "◆",
+            "context",
+            &format!(
+                "{indexed_files} files · {cited_files} cited · {} · {}{bounded}",
+                format_bytes(u64::try_from(*rendered_bytes).unwrap_or(u64::MAX)),
+                format_duration(Duration::from_millis(*duration_ms))
+            ),
+            TimelineTone::Brand,
+        );
+        self.set_message("context ready");
+    }
+
+    fn on_model_progress(&self, progress: &RunProgress) {
+        match progress {
+            RunProgress::ModelTurnStarted { turn, max_turns } => {
+                self.turn.store(*turn, Ordering::Relaxed);
+                self.set_message(format!("turn {turn}/{max_turns} · asking {}", self.model));
+            }
+            RunProgress::ModelTurnCompleted {
+                turn,
+                tool_calls,
+                duration_ms,
+                input_tokens,
+                output_tokens,
+                ..
+            } => {
+                let tokens = input_tokens.saturating_add(*output_tokens);
+                self.model_tokens.fetch_add(tokens, Ordering::Relaxed);
+                self.model_time_ms
+                    .fetch_add(*duration_ms, Ordering::Relaxed);
+                let duration = format_duration(Duration::from_millis(*duration_ms));
+                let result = if *tool_calls == 0 {
+                    "answer".to_owned()
+                } else {
+                    format!("{tool_calls} {}", plural(*tool_calls, "action", "actions"))
+                };
+                self.row(
+                    "●",
+                    "model",
+                    &format!(
+                        "turn {turn} · {result} · {} tokens · {duration}",
+                        format_count(tokens)
+                    ),
+                    TimelineTone::Accent,
+                );
+                self.set_message(format!("turn {turn} complete · {result}"));
+            }
+            _ => {}
+        }
+    }
+
+    fn on_tool_progress(&self, progress: &RunProgress) {
+        match progress {
+            RunProgress::ToolStarted { name } => {
+                self.tool_calls.fetch_add(1, Ordering::Relaxed);
+                self.set_message(format!(
+                    "turn {} · {}",
+                    self.turn.load(Ordering::Relaxed),
+                    tool_activity(&sanitize_terminal_text(name))
+                ));
+            }
+            RunProgress::ToolCompleted {
+                name,
+                succeeded,
+                changed_files,
+                duration_ms,
+                output_bytes,
+                truncated,
+                ..
+            } => {
+                let turn = self.turn.load(Ordering::Relaxed);
+                if *truncated {
+                    self.truncated_outputs.fetch_add(1, Ordering::Relaxed);
+                }
+                let duration = format_duration(Duration::from_millis(*duration_ms));
+                let (marker, detail, tone) = if let Some(path) = changed_files.first() {
+                    (
+                        "◆",
+                        format!("{name} · changed {} · {duration}", truncate(path, 48)),
+                        TimelineTone::Success,
+                    )
+                } else if *succeeded {
+                    (
+                        "●",
+                        format!(
+                            "{name} · {} · {duration}{}",
+                            format_bytes(u64::try_from(*output_bytes).unwrap_or(u64::MAX)),
+                            if *truncated { " · bounded" } else { "" }
+                        ),
+                        TimelineTone::Normal,
+                    )
+                } else {
+                    (
+                        "!",
+                        format!("{name} · rejected · {duration}"),
+                        TimelineTone::Warning,
+                    )
+                };
+                self.row(marker, "tool", &detail, tone);
+                self.set_message(format!("turn {turn} · {name} complete"));
+            }
+            _ => {}
+        }
     }
 
     fn on_verification_progress(&self, progress: &RunProgress) {
         match progress {
-            RunProgress::VerificationStarted { commands } => self.set_message(if *commands == 0 {
-                "grading available evidence".to_owned()
-            } else {
-                format!(
-                    "preparing {commands} verification {}",
-                    plural(*commands, "check", "checks")
-                )
-            }),
+            RunProgress::VerificationStarted { commands } => {
+                let detail = if *commands == 0 {
+                    "no deterministic commands detected".to_owned()
+                } else {
+                    format!(
+                        "{commands} {} detected",
+                        plural(*commands, "check", "checks")
+                    )
+                };
+                self.row("◆", "verify", &detail, TimelineTone::Brand);
+                self.set_message("grading available evidence");
+            }
             RunProgress::VerificationCommandStarted {
                 description,
                 index,
@@ -289,29 +541,59 @@ impl RunActivity {
                 description,
                 succeeded,
                 duration_ms,
-            } => self.set_message(format!(
-                "{} \u{00b7} {} \u{00b7} {}",
-                if *succeeded { "passed" } else { "inconclusive" },
-                truncate(description, 52),
-                format_duration(Duration::from_millis(*duration_ms))
-            )),
+            } => {
+                let detail = format!(
+                    "{} · {} · {}",
+                    truncate(description, 52),
+                    if *succeeded { "passed" } else { "inconclusive" },
+                    format_duration(Duration::from_millis(*duration_ms))
+                );
+                self.row(
+                    if *succeeded { "✓" } else { "!" },
+                    "verify",
+                    &detail,
+                    if *succeeded {
+                        TimelineTone::Success
+                    } else {
+                        TimelineTone::Warning
+                    },
+                );
+                self.set_message("sealing verification evidence");
+            }
             _ => {}
         }
     }
 
     fn on_recovery_progress(&self, progress: &RunProgress) {
         match progress {
-            RunProgress::RecoveryStarted { repeated_turns, .. } => self.set_message(format!(
-                "loop detected after {repeated_turns} turns · forcing an evidence-bounded answer"
-            )),
+            RunProgress::RecoveryStarted {
+                repeated_turns,
+                reason,
+            } => {
+                self.row(
+                    "↻",
+                    "recover",
+                    &format!("{repeated_turns} repeated turns · {reason}"),
+                    TimelineTone::Warning,
+                );
+                self.set_message("forcing an evidence-bounded answer");
+            }
             RunProgress::RecoveryCompleted {
                 text_bytes,
                 duration_ms,
-            } => self.set_message(format!(
-                "answer recovered · {} · {}",
-                format_bytes(u64::try_from(*text_bytes).unwrap_or(u64::MAX)),
-                format_duration(Duration::from_millis(*duration_ms))
-            )),
+            } => {
+                self.row(
+                    "✓",
+                    "recover",
+                    &format!(
+                        "answer synthesized · {} · {}",
+                        format_bytes(u64::try_from(*text_bytes).unwrap_or(u64::MAX)),
+                        format_duration(Duration::from_millis(*duration_ms))
+                    ),
+                    TimelineTone::Success,
+                );
+                self.set_message("recovery complete");
+            }
             _ => {}
         }
     }
@@ -320,92 +602,14 @@ impl RunActivity {
 impl RunObserver for RunActivity {
     fn on_progress(&self, progress: &RunProgress) {
         match progress {
-            RunProgress::StateChanged { state } => {
-                if let Some(message) = state_activity(*state) {
-                    self.progress.set_message(message);
-                }
+            RunProgress::RunStarted { .. } => self.on_run_started(progress),
+            RunProgress::StateChanged { .. } => self.on_state_progress(progress),
+            RunProgress::ContextBuilt { .. } => self.on_context_progress(progress),
+            RunProgress::ModelTurnStarted { .. } | RunProgress::ModelTurnCompleted { .. } => {
+                self.on_model_progress(progress);
             }
-            RunProgress::ContextBuilt {
-                indexed_files,
-                cited_files,
-                rendered_bytes,
-                truncated,
-                duration_ms,
-                ..
-            } => {
-                let bounded = if *truncated { " · bounded" } else { "" };
-                self.set_message(format!(
-                    "context · {indexed_files} files · {cited_files} cited · {} · {}{bounded}",
-                    format_bytes(*rendered_bytes as u64),
-                    format_duration(Duration::from_millis(*duration_ms))
-                ));
-            }
-            RunProgress::ModelTurnStarted { turn, max_turns } => {
-                self.turn.store(*turn, Ordering::Relaxed);
-                self.set_message(format!(
-                    "turn {turn}/{max_turns} \u{00b7} asking {}",
-                    self.model
-                ));
-            }
-            RunProgress::ModelTurnCompleted {
-                turn,
-                tool_calls,
-                duration_ms,
-                input_tokens,
-                output_tokens,
-                ..
-            } => {
-                self.model_tokens.fetch_add(
-                    input_tokens.saturating_add(*output_tokens),
-                    Ordering::Relaxed,
-                );
-                self.model_time_ms
-                    .fetch_add(*duration_ms, Ordering::Relaxed);
-                let duration = format_duration(Duration::from_millis(*duration_ms));
-                self.set_message(if *tool_calls == 0 {
-                    format!("turn {turn} \u{00b7} model finished in {duration}")
-                } else {
-                    format!(
-                        "turn {turn} \u{00b7} {duration} \u{00b7} received {tool_calls} {}",
-                        plural(*tool_calls, "action", "actions")
-                    )
-                });
-            }
-            RunProgress::ToolStarted { name } => {
-                self.tool_calls.fetch_add(1, Ordering::Relaxed);
-                self.set_message(format!(
-                    "turn {} \u{00b7} {}",
-                    self.turn.load(Ordering::Relaxed),
-                    tool_activity(name)
-                ));
-            }
-            RunProgress::ToolCompleted {
-                name,
-                succeeded,
-                changed_files,
-                duration_ms,
-                truncated,
-                ..
-            } => {
-                let turn = self.turn.load(Ordering::Relaxed);
-                if *truncated {
-                    self.truncated_outputs.fetch_add(1, Ordering::Relaxed);
-                }
-                let duration = format_duration(Duration::from_millis(*duration_ms));
-                if let Some(path) = changed_files.first() {
-                    self.set_message(format!(
-                        "turn {turn} \u{00b7} changed {} \u{00b7} {duration}",
-                        truncate(path, 48)
-                    ));
-                } else if *succeeded {
-                    self.set_message(format!(
-                        "turn {turn} \u{00b7} {name} complete \u{00b7} {duration}"
-                    ));
-                } else {
-                    self.set_message(format!(
-                        "turn {turn} \u{00b7} {name} rejected; steering model"
-                    ));
-                }
+            RunProgress::ToolStarted { .. } | RunProgress::ToolCompleted { .. } => {
+                self.on_tool_progress(progress);
             }
             RunProgress::RecoveryStarted { .. } | RunProgress::RecoveryCompleted { .. } => {
                 self.on_recovery_progress(progress);
@@ -528,7 +732,7 @@ impl Session {
             )?;
             return Ok(());
         };
-        let activity = RunActivity::new(&model);
+        let activity = RunActivity::new(&model, self.theme.clone());
         let args = RunArgs {
             goal: Some(goal),
             task: None,
@@ -556,12 +760,13 @@ impl Session {
 
         match result {
             Ok(completed) => {
-                self.emit(&activity.summary(&self.theme))?;
+                self.emit(&activity.summary(true))?;
                 self.last_run = Some(completed.receipt.run_id);
                 self.refresh_pending_runs()?;
                 self.render_completed(&completed)?;
             }
             Err(error) => {
+                self.emit(&activity.summary(false))?;
                 if let Some(run_id) = error.run_id() {
                     self.last_run = Some(run_id);
                 }
@@ -2158,5 +2363,22 @@ mod tests {
 
         assert!(rendered.contains("↻ recover"));
         assert!(rendered.contains("bounded recovery produced an answer"));
+    }
+
+    #[test]
+    fn live_timeline_neutralizes_untrusted_terminal_controls() {
+        let rendered = timeline_row(
+            &Theme::plain(),
+            12,
+            "●",
+            "tool",
+            "read_file\u{1b}[2J · src/lib.rs",
+            TimelineTone::Normal,
+        );
+        let activity = RunActivity::new("model\u{1b}[2J", Theme::plain());
+
+        assert!(!rendered.contains('\u{1b}'));
+        assert!(rendered.contains("read_file\u{fffd}[2J"));
+        assert!(!activity.model.contains('\u{1b}'));
     }
 }

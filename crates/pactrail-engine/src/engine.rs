@@ -41,6 +41,12 @@ When the implementation is complete, return a concise summary of the change and 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum RunProgress {
+    /// A validated run is beginning under its durable identifier.
+    RunStarted {
+        run_id: RunId,
+        goal: String,
+        model: String,
+    },
     /// The durable run lifecycle entered a new state.
     StateChanged { state: RunState },
     /// Repository discovery and bounded context assembly completed.
@@ -268,6 +274,11 @@ impl<'a> RunEngine<'a> {
                 "max_turns must be greater than zero".to_owned(),
             ));
         }
+        observer.on_progress(&RunProgress::RunStarted {
+            run_id,
+            goal: contract.goal.clone(),
+            model: format!("{}/{}", self.model.name(), self.model.model()),
+        });
         let mut journal = Journal::new(run_id, store);
         journal.append(RunEvent::ContractRegistered(contract.clone()))?;
         let mut state = RunState::Created;
@@ -1840,6 +1851,11 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
         assert_eq!(snapshot.state, RunState::AwaitingApply);
         let progress = observer.events();
+        assert!(progress.iter().any(|event| matches!(
+            event,
+            RunProgress::RunStarted { run_id, goal, .. }
+                if *run_id == outcome.run_id && goal == "Create a README"
+        )));
         assert!(progress.contains(&RunProgress::ModelTurnStarted {
             turn: 1,
             max_turns: DEFAULT_MAX_TURNS,
