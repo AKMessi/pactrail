@@ -30,6 +30,12 @@ follow [Semantic Versioning](https://semver.org/).
   then permits one budgeted tool-free synthesis turn for informational goals.
 - Distinct live and trace presentation for recovery and deterministic answer
   grounding.
+- Persistent live execution timelines with durable run identity, sanitized
+  context/model/tool/state/recovery/verification rows, and success/failure
+  metric footers.
+- A unified framed terminal dashboard, integrity receipt cards, clearer
+  answer/review handoffs, and sequence-numbered `/trace` inspection with a
+  verified run summary and legend.
 
 ### Changed
 

@@ -16,16 +16,28 @@ The central abstraction is not a chat wrapper or an agent persona. It is a
 durable, inspectable software change transaction.
 
 ```text
-  P A C T R A I L  0.1.0
-  verification-native coding · every change carries evidence
-
-  workspace  C:\work\project
-  model      local-coder
-  safety     isolated edits · native processes blocked
-  review     no candidates waiting
-  memory     3 memories · /memory
+  ╭─ P A C T R A I L  v0.1.0
+  │  verification-native coding · every change carries evidence
+  ├─
+  │ workspace  C:\work\project
+  │ runtime    local-coder  · open-ai-compatible
+  │ safety     isolated edits · native processes blocked
+  │ trace      live timeline · durable hash chain · /trace
+  │ review     no candidates waiting
+  │ memory     3 memories · /memory
+  ╰─ Describe a task · /help commands · // escapes a leading slash
 
 pactrail ❯ Fix the parser regression and add a test.
+
+  ╭─ RUN 019f7a31  compatible/local-coder
+  │ Fix the parser regression and add a test.
+  │     0ms  ◇ state     contracting · validating task contract
+  │     4ms  ◆ context   186 files · 8 cited · 12.4 KiB · 4ms
+  │   1.82s  ● model     turn 1 · 2 actions · 3,412 tokens · 1.8s
+  │   1.84s  ● tool      read_many_files · 18.1 KiB · 12ms
+  │   1.86s  ◆ tool      edit_file · changed src/parser.rs · 9ms
+  │   3.21s  ✓ verify    Rust workspace tests · passed · 1.3s
+  ╰─ ✓ complete  2 turns · 4 tools · 6,104 tokens · 2.9s model · 3.2s
 ```
 
 ## Why Pactrail is different
@@ -58,7 +70,9 @@ pactrail ❯ Fix the parser regression and add a test.
 
 - Start from any repository with `pactrail`; optionally pass the first task.
 - Persistent history, completion, typo suggestions, review-aware prompt, and
-  truthful live phases instead of simulated activity.
+  a persistent live execution timeline instead of simulated or disappearing
+  activity. Completed context, model, tool, recovery, state, and verification
+  rows stay visible above one current-operation spinner.
 - `/tools` risk/capability inspector, `/trace` execution timeline, `/memory`
   browser, `/runs`, `/review`, immutable `/diff`, explicit `/apply` and
   `/discard`, `/doctor`, model discovery, and persistent provider settings.
@@ -241,6 +255,11 @@ Pactrail 0.1 is a production-grade developer preview: its invariants and failure
 modes are tested, while Rust APIs and versioned local formats may still evolve
 before 1.0. OCI/OS sandbox backends, MCP, native provider adapters, streaming,
 and richer retrieval are roadmap work—not current security claims.
+
+It is ready for public evaluation, contributions, demos, and social launch as a
+developer preview. Do not describe native process execution as sandboxed: when
+enabled, child processes inherit host filesystem, network, environment, and
+external-service authority.
 
 ## License
 

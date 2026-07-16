@@ -19,7 +19,9 @@ receipt, candidate contents, file modes, and source baseline.
 
 ## What the UI reports
 
-The activity line reflects engine events rather than simulating work. It shows:
+The default run view is a persistent live execution timeline backed by engine
+events rather than simulated activity. Completed rows remain visible above one
+animated current-operation line. It shows:
 
 - repository context size, cited/indexed files, compilation time, and whether
   model-budgeting omitted optional entries;
@@ -31,7 +33,15 @@ The activity line reflects engine events rather than simulating work. It shows:
 - detected verification command, position, result, and duration;
 - final turns, tool calls, tokens, elapsed/model time, and truncation count.
 
-`/trace` renders the durable timeline after a run. Context, model, tool,
+Every run opens with its durable short ID, model, and sanitized goal. Both
+successful and failed runs close the timeline with aggregate turns, tools,
+tokens, model time, wall time, and bounded-output count. Untrusted provider,
+model, tool, path, goal, and summary text is terminal-control sanitized before
+it reaches either the timeline or spinner.
+
+`/trace` renders the complete durable timeline after a run. Its header shows the
+terminal state, duration, event/action/evidence counts, and verified hash-chain
+status. Every event has an explicit sequence number. Context, model, tool,
 verification, policy, evidence, checkpoint, note, and lifecycle events have
 distinct markers and colors. Action attributes and observed effects are shown
 without persisting raw prompts, keys, or raw tool arguments.
