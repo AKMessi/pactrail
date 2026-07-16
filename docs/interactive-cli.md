@@ -106,8 +106,9 @@ Fix the parser error conversion and add a regression test.
 
 When the run stops, Pactrail prints the receipt outcome, evidence counts,
 integrity status, changed paths, risks, model summary, and token usage. `/review`
-combines receipt and diff. `/discard` rejects the candidate while retaining the
-receipt, immutable diff, and trace. `/runs` browses recent history.
+combines receipt and diff. `/discard` idempotently rejects the candidate while
+retaining the receipt, immutable diff, and trace; repeating it is safe. `/runs`
+browses recent history.
 
 For a repository question, use the same prompt directly:
 

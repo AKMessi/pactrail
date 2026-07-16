@@ -624,11 +624,56 @@ pub(crate) fn discard(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
 pub(crate) fn discard_run(state: &Path, run_id: RunId) -> Result<ChangeReceipt, CliError> {
     let run_root = run_root(state, run_id);
     let receipt = read_receipt(&run_root)?;
-    let transaction = WorkspaceTransaction::open(&run_root)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
+    if let Some(discarded) = recover_completed_discard(&run_root, receipt.clone(), &store)? {
+        write_trace_artifact(&run_root, &store, run_id)?;
+        return Ok(discarded);
+    }
+    let transaction = WorkspaceTransaction::open(&run_root)?;
     let discarded = discard_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
     write_trace_artifact(&run_root, &store, run_id)?;
     Ok(discarded)
+}
+
+fn recover_completed_discard(
+    run_root: &Path,
+    receipt: ChangeReceipt,
+    store: &EventStore,
+) -> Result<Option<ChangeReceipt>, CliError> {
+    require_receipt_integrity(&receipt)?;
+    let snapshot = store.snapshot(receipt.run_id)?;
+    if snapshot.state != RunState::Discarded {
+        return Ok(None);
+    }
+    let workspace = run_root.join("workspace");
+    if workspace.exists() {
+        return Err(CliError::Argument(format!(
+            "discarded run still has a transaction workspace at {}",
+            workspace.display()
+        )));
+    }
+    remove_staged_workspace(&run_root.join("discarded-workspace"))?;
+    match receipt.outcome {
+        ReceiptOutcome::Discarded => {
+            if receipt.final_event_hash != snapshot.last_hash.0 {
+                return Err(CliError::Argument(
+                    "discarded receipt does not match the durable event head".to_owned(),
+                ));
+            }
+            Ok(Some(receipt))
+        }
+        ReceiptOutcome::ReadyToApply => {
+            let discarded =
+                rebuild_receipt(receipt, ReceiptOutcome::Discarded, snapshot.last_hash.0)?;
+            write_receipt(run_root, &discarded)?;
+            Ok(Some(discarded))
+        }
+        outcome => Err(state_receipt_mismatch(
+            RunState::Discarded,
+            outcome,
+            "discard",
+        )),
+    }
 }
 
 fn discard_ready_receipt(

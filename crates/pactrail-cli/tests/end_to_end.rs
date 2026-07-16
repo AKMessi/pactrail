@@ -192,6 +192,144 @@ fn failed_run_exports_trace_and_remains_discoverable() {
     assert!(trace_command.status.success());
 }
 
+#[test]
+fn answered_run_is_inspectable_and_has_no_apply_boundary() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|error| unreachable!("mock provider: {error}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|error| unreachable!("provider address: {error}"));
+    let response = json!({
+        "id": "answer-turn",
+        "choices": [{
+            "message": {"content": "This is an empty test workspace."},
+            "finish_reason": "stop"
+        }],
+        "usage": {"prompt_tokens": 12, "completion_tokens": 7}
+    });
+    let server = thread::spawn(move || serve_responses(&listener, &[response]));
+
+    let output = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "run",
+            "What is this directory about?",
+            "--provider",
+            "open-ai-compatible",
+            "--base-url",
+            &format!("http://{address}/v1"),
+            "--model",
+            "mock-coder",
+            "--output",
+            "json",
+        ])
+        .output()
+        .unwrap_or_else(|error| unreachable!("answer run: {error}"));
+    server
+        .join()
+        .unwrap_or_else(|_| unreachable!("provider thread panicked"));
+    assert!(
+        output.status.success(),
+        "answer failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: Value = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| unreachable!("answer JSON: {error}"));
+    let run_id = result["run_id"]
+        .as_str()
+        .unwrap_or_else(|| unreachable!("run id missing"));
+    assert_eq!(result["outcome"], "answered");
+    assert_eq!(result["changes"], json!([]));
+
+    let inspect = pactrail(workspace.path(), ["inspect", run_id, "--json"]);
+    assert!(inspect.status.success());
+    let receipt: Value = serde_json::from_slice(&inspect.stdout)
+        .unwrap_or_else(|error| unreachable!("inspect JSON: {error}"));
+    assert_eq!(receipt["outcome"], "answered");
+
+    let trace = pactrail(workspace.path(), ["trace", run_id]);
+    assert!(trace.status.success());
+    let trace = String::from_utf8_lossy(&trace.stdout);
+    assert!(trace.contains("hash chain verified"));
+    assert!(trace.contains("Reviewing -> Completed"));
+
+    let list = pactrail(workspace.path(), ["list", "--json"]);
+    let runs: Value = serde_json::from_slice(&list.stdout)
+        .unwrap_or_else(|error| unreachable!("list JSON: {error}"));
+    assert_eq!(runs[0]["state"], "completed");
+    assert_eq!(runs[0]["outcome"], "answered");
+}
+
+#[test]
+fn ready_run_can_be_discarded_idempotently() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|error| unreachable!("mock provider: {error}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|error| unreachable!("provider address: {error}"));
+    let server = thread::spawn(move || serve_model(&listener));
+    let output = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "run",
+            "Create a README",
+            "--provider",
+            "open-ai-compatible",
+            "--base-url",
+            &format!("http://{address}/v1"),
+            "--model",
+            "mock-coder",
+            "--output",
+            "json",
+        ])
+        .output()
+        .unwrap_or_else(|error| unreachable!("run command: {error}"));
+    server
+        .join()
+        .unwrap_or_else(|_| unreachable!("provider thread panicked"));
+    assert!(output.status.success());
+    let result: Value = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| unreachable!("run JSON: {error}"));
+    let run_id = result["run_id"]
+        .as_str()
+        .unwrap_or_else(|| unreachable!("run id missing"));
+    let review = workspace
+        .path()
+        .join(".pactrail")
+        .join("runs")
+        .join(run_id)
+        .join("review.diff");
+    let review_before = std::fs::read_to_string(&review)
+        .unwrap_or_else(|error| unreachable!("review diff: {error}"));
+
+    let discarded = pactrail(workspace.path(), ["discard", run_id, "--json"]);
+    assert!(discarded.status.success());
+    let receipt: Value = serde_json::from_slice(&discarded.stdout)
+        .unwrap_or_else(|error| unreachable!("discard JSON: {error}"));
+    assert_eq!(receipt["outcome"], "discarded");
+    assert!(!workspace.path().join("README.md").exists());
+    assert_eq!(
+        std::fs::read_to_string(&review).ok().as_deref(),
+        Some(review_before.as_str())
+    );
+
+    let repeated = pactrail(workspace.path(), ["discard", run_id, "--json"]);
+    assert!(repeated.status.success());
+    let repeated: Value = serde_json::from_slice(&repeated.stdout)
+        .unwrap_or_else(|error| unreachable!("repeated discard JSON: {error}"));
+    assert_eq!(repeated["integrity_hash"], receipt["integrity_hash"]);
+
+    let list = pactrail(workspace.path(), ["list", "--json"]);
+    let runs: Value = serde_json::from_slice(&list.stdout)
+        .unwrap_or_else(|error| unreachable!("list JSON: {error}"));
+    assert_eq!(runs[0]["state"], "discarded");
+    assert_eq!(runs[0]["outcome"], "discarded");
+}
+
 fn assert_applied_memory(workspace: &Path, run_id: &str) {
     let memory = Command::new(env!("CARGO_BIN_EXE_pactrail"))
         .args([
@@ -296,6 +434,15 @@ fn completion_is_generated_and_prompt_cannot_shadow_a_subcommand() {
     assert!(String::from_utf8_lossy(&empty_key.stderr).contains(
         "required API key environment variable \"PACTRAIL_TEST_EMPTY_KEY\" is not set or is empty"
     ));
+}
+
+fn pactrail<const N: usize>(workspace: &Path, arguments: [&str; N]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .arg("--workspace")
+        .arg(path_text(workspace))
+        .args(arguments)
+        .output()
+        .unwrap_or_else(|error| unreachable!("pactrail command: {error}"))
 }
 
 fn serve_model(listener: &TcpListener) {

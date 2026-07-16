@@ -50,6 +50,11 @@ follow [Semantic Versioning](https://semver.org/).
   window.
 - Tool errors provide local models with virtual workspace-path recovery guidance.
 
+### Fixed
+
+- Repeated `discard` calls and interrupted discard receipt writes now recover
+  from the durable event head after the candidate workspace has been removed.
+
 ## [0.1.0] - 2026-07-15
 
 ### Added
