@@ -820,27 +820,52 @@ impl Session {
                 plural(self.memory_count, "memory", "memories")
             ))
         };
-        let banner = format!(
-            "\n  {}  {}\n  {}\n\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n  {:<10} {}\n\n  {}\n",
-            self.theme.brand("P A C T R A I L"),
-            self.theme.muted(env!("CARGO_PKG_VERSION")),
-            self.theme
-                .muted("verification-native coding · every change carries evidence"),
-            "workspace",
-            self.theme.text(&display_path(&self.workspace)),
-            "model",
-            self.theme.accent(&model),
-            "safety",
-            process,
-            "review",
-            review,
-            "memory",
-            memory,
-            self.theme.muted(
-                "Describe a change, or use /help. Prefix a task with // when it starts with /."
+        let field = |label: &str, value: String| {
+            format!(
+                "  {} {} {value}",
+                self.theme.muted("│"),
+                self.theme.muted(&format!("{label:<10}"))
+            )
+        };
+        let lines = [
+            format!(
+                "  {}  {}",
+                self.theme.brand("╭─ P A C T R A I L"),
+                self.theme.muted(&format!("v{}", env!("CARGO_PKG_VERSION")))
             ),
-        );
-        self.emit(&banner)?;
+            format!(
+                "  {}  {}",
+                self.theme.muted("│"),
+                self.theme
+                    .muted("verification-native coding · every change carries evidence")
+            ),
+            format!("  {}", self.theme.muted("├─")),
+            field("workspace", self.theme.text(&display_path(&self.workspace))),
+            field(
+                "runtime",
+                format!(
+                    "{}  {}",
+                    self.theme.accent(&model),
+                    self.theme
+                        .muted(&format!("· {}", provider_label(self.settings.provider)))
+                ),
+            ),
+            field("safety", process),
+            field(
+                "trace",
+                self.theme
+                    .brand("live timeline · durable hash chain · /trace"),
+            ),
+            field("review", review),
+            field("memory", memory),
+            format!(
+                "  {}  {}",
+                self.theme.muted("╰─"),
+                self.theme
+                    .muted("Describe a task · /help commands · // escapes a leading slash")
+            ),
+        ];
+        self.emit(&format!("\n{}\n", lines.join("\n")))?;
         if self.settings.effective_model().is_none() {
             self.emit(&format!(
                 "\n  {}\n  {}\n\n",
@@ -1393,18 +1418,60 @@ impl Session {
             ));
         }
         let started = &events[0];
-        let mut lines = vec![format!(
-            "{}  {}",
-            self.theme.heading("Execution trace"),
-            self.theme.muted(&format!(
-                "{} · {} events · hash chain verified",
-                short_run_id(run_id),
-                events.len()
-            ))
-        )];
+        let action_count = events
+            .iter()
+            .filter(|event| matches!(&event.event, RunEvent::ActionCompleted(_)))
+            .count();
+        let evidence_count = events
+            .iter()
+            .filter(|event| matches!(&event.event, RunEvent::EvidenceRecorded(_)))
+            .count();
+        let terminal_state = events.iter().rev().find_map(|event| match &event.event {
+            RunEvent::StateChanged { to, .. } => Some(*to),
+            _ => None,
+        });
+        let elapsed_ms = events.last().map_or(0, |event| {
+            u64::try_from(
+                (event.timestamp - started.timestamp)
+                    .whole_milliseconds()
+                    .max(0),
+            )
+            .unwrap_or(u64::MAX)
+        });
+        let mut lines = vec![
+            format!(
+                "{} {}  {}",
+                self.theme.brand("╭─ EXECUTION TRACE"),
+                self.theme.code(&short_run_id(run_id)),
+                terminal_state
+                    .map_or_else(String::new, |state| { run_state_text(&self.theme, state) })
+            ),
+            format!(
+                "{} {} events · {action_count} actions · {evidence_count} evidence · {}",
+                self.theme.muted("│"),
+                events.len(),
+                trace_duration(elapsed_ms)
+            ),
+            format!(
+                "{} {}",
+                self.theme.muted("╰─"),
+                self.theme.success("BLAKE3 hash chain verified")
+            ),
+            format!(
+                "  {}  {}  {}  {}  {}  {}",
+                self.theme.brand("◆ context"),
+                self.theme.accent("● model"),
+                self.theme.text("● tool"),
+                self.theme.warning("↻ recover"),
+                self.theme.success("✓ evidence"),
+                self.theme.muted("◇ state")
+            ),
+            String::new(),
+        ];
         for envelope in &events {
             lines.extend(render_trace_event(&self.theme, started, envelope));
         }
+        lines.push(String::new());
         lines.push(self.theme.muted(&format!(
             "Portable JSONL · {}",
             commands::run_root(&self.state, run_id)
@@ -1503,11 +1570,13 @@ impl Session {
             "Model report"
         };
         self.emit(&format!(
-            "{}\n{}\n\n{} {tokens} tokens  {}\n",
+            "{} {}\n{}\n\n{} {tokens} tokens  {}  {}\n",
+            self.theme.accent("◆"),
             self.theme.heading(report_title),
             self.theme.text(summary),
             self.theme.muted("usage"),
-            self.theme.code("/trace inspect evidence"),
+            self.theme.code("/trace full timeline"),
+            self.theme.code("/runs history"),
         ))?;
         if completed.receipt.outcome == ReceiptOutcome::ReadyToApply {
             let message = if completed.receipt.changes.is_empty() {
@@ -1515,7 +1584,8 @@ impl Session {
                     .warning("No file changes were produced. Nothing needs applying.")
             } else {
                 format!(
-                    "{}  {}  {}",
+                    "{}  {}  {}  {}",
+                    self.theme.muted("next"),
                     self.theme.code("/diff review"),
                     self.theme.code("/apply land"),
                     self.theme.code("/discard reject")
@@ -1530,13 +1600,15 @@ impl Session {
         let integrity = receipt.verify_integrity()?;
         let (bytes_added, bytes_removed) = change_bytes(receipt);
         let mut lines = vec![format!(
-            "{}  {}",
+            "{} {}  {}",
+            self.theme.muted("╭─"),
             outcome_text(&self.theme, receipt.outcome),
             self.theme.code(&receipt.run_id.to_string())
         )];
         for (index, line) in wrap_text(&receipt.contract.goal, 88).iter().enumerate() {
             lines.push(format!(
-                "  {} {}",
+                "{} {} {}",
+                self.theme.muted("│"),
                 self.theme
                     .muted(if index == 0 { "goal     " } else { "         " }),
                 self.theme.text(line)
@@ -1544,7 +1616,8 @@ impl Session {
         }
         if receipt.outcome != ReceiptOutcome::Answered {
             lines.push(format!(
-                "  {} {} {} · {} added · {} removed",
+                "{} {} {} {} · {} added · {} removed",
+                self.theme.muted("│"),
                 self.theme.muted("candidate"),
                 receipt.changes.len(),
                 plural(receipt.changes.len(), "file", "files"),
@@ -1553,13 +1626,15 @@ impl Session {
             ));
         }
         lines.push(format!(
-            "  {} {}",
+            "{} {} {}",
+            self.theme.muted("│"),
             self.theme.muted("evidence "),
             evidence_summary(&self.theme, receipt)
         ));
         lines.push(format!(
-            "  {} {}",
-            self.theme.muted("integrity"),
+            "{} {} {}",
+            self.theme.muted("╰─"),
+            self.theme.muted("receipt integrity"),
             if integrity {
                 self.theme.success("verified")
             } else {
@@ -1757,20 +1832,21 @@ fn render_trace_event(
     let elapsed = envelope.timestamp - started.timestamp;
     let elapsed_ms = u64::try_from(elapsed.whole_milliseconds().max(0)).unwrap_or(u64::MAX);
     let time = theme.muted(&format!("{:>7}", trace_duration(elapsed_ms)));
+    let sequence = theme.muted(&format!("#{:03}", envelope.sequence));
     match &envelope.event {
         RunEvent::ContractRegistered(contract) => vec![format!(
-            "  {time}  {} {}",
+            "  {time} {sequence}  {} {}",
             theme.accent("◆"),
             theme.text(&format!("contract · {}", contract.goal))
         )],
         RunEvent::StateChanged { from, to } => vec![format!(
-            "  {time}  {} {}",
+            "  {time} {sequence}  {} {}",
             theme.muted("◇"),
             theme.muted(&format!("state · {from:?} → {to:?}"))
         )],
-        RunEvent::ActionCompleted(action) => render_trace_action(theme, &time, action),
+        RunEvent::ActionCompleted(action) => render_trace_action(theme, &time, &sequence, action),
         RunEvent::EvidenceRecorded(evidence) => vec![format!(
-            "  {time}  {} {}",
+            "  {time} {sequence}  {} {}",
             theme.success("✓"),
             theme.text(&format!(
                 "evidence · {:?}/{:?} · {}",
@@ -1778,24 +1854,29 @@ fn render_trace_event(
             ))
         )],
         RunEvent::PolicyEvaluated(decision) => vec![format!(
-            "  {time}  {} {}",
+            "  {time} {sequence}  {} {}",
             theme.warning("!"),
             theme.text(&format!("policy · {decision:?}"))
         )],
         RunEvent::CheckpointCreated { checkpoint } => vec![format!(
-            "  {time}  {} {}",
+            "  {time} {sequence}  {} {}",
             theme.muted("•"),
             theme.muted(&format!("checkpoint · {checkpoint}"))
         )],
         RunEvent::NoteRecorded { message } => vec![format!(
-            "  {time}  {} {}",
+            "  {time} {sequence}  {} {}",
             theme.muted("•"),
             theme.muted(&format!("note · {message}"))
         )],
     }
 }
 
-fn render_trace_action(theme: &Theme, time: &str, action: &ActionRecord) -> Vec<String> {
+fn render_trace_action(
+    theme: &Theme,
+    time: &str,
+    sequence: &str,
+    action: &ActionRecord,
+) -> Vec<String> {
     let (marker, label) = if action.action == "recover_read_only_answer" {
         (
             theme.warning("↻"),
@@ -1821,11 +1902,11 @@ fn render_trace_action(theme: &Theme, time: &str, action: &ActionRecord) -> Vec<
         theme.danger("failed")
     };
     let mut lines = vec![format!(
-        "  {time}  {marker} {label} {}  {outcome}",
+        "  {time} {sequence}  {marker} {label} {}  {outcome}",
         theme.muted(&trace_duration(action.duration_ms))
     )];
     for summary in wrap_text(&action.summary, 78).into_iter().take(3) {
-        lines.push(format!("             {}", theme.text(&summary)));
+        lines.push(format!("                  {}", theme.text(&summary)));
     }
     if !action.attributes.is_empty() {
         let attributes = action
@@ -1835,13 +1916,13 @@ fn render_trace_action(theme: &Theme, time: &str, action: &ActionRecord) -> Vec<
             .collect::<Vec<_>>()
             .join("  ");
         for text in wrap_text(&attributes, 78).into_iter().take(3) {
-            lines.push(format!("             {}", theme.muted(&text)));
+            lines.push(format!("                  {}", theme.muted(&text)));
         }
     }
     if !action.observed_effects.is_empty() {
         let effects = format!("effects · {}", action.observed_effects.join(", "));
         for text in wrap_text(&effects, 78).into_iter().take(2) {
-            lines.push(format!("             {}", theme.muted(&text)));
+            lines.push(format!("                  {}", theme.muted(&text)));
         }
     }
     lines
@@ -2359,9 +2440,9 @@ mod tests {
             attributes: std::collections::BTreeMap::new(),
         };
 
-        let rendered = render_trace_action(&Theme::plain(), "  12ms", &action).join("\n");
+        let rendered = render_trace_action(&Theme::plain(), "  12ms", "#008", &action).join("\n");
 
-        assert!(rendered.contains("↻ recover"));
+        assert!(rendered.contains("#008  ↻ recover"));
         assert!(rendered.contains("bounded recovery produced an answer"));
     }
 
