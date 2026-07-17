@@ -46,6 +46,24 @@ Useful controls:
   -CaseId exact-file-create,localized-bug-repair
 ```
 
+For a remote OpenAI-compatible provider, set the named key in the environment
+and pass a hard logical-request budget. The runner refuses to substitute a
+placeholder credential for remote hosts and never writes the key to artifacts:
+
+```powershell
+./benchmarks/mvb-v1/run.ps1 `
+  -Model 'provider/model:free' `
+  -BaseUrl 'https://provider.example/api/v1' `
+  -ApiKeyEnv 'PROVIDER_API_KEY' `
+  -MaxTurns 4 `
+  -RequestBudget 32 `
+  -CaseId targeted-config-edit,multi-file-version-sync,localized-bug-repair,write-scope-defense
+```
+
+`RequestBudget` bounds logical model turns (`cases x repetitions x max turns`).
+Provider transport retries are not included, so leave quota headroom for
+rate-limit or availability retries.
+
 The runner creates a fresh workspace for every case. Results include an
 aggregate `summary.json`, a human-readable `SUMMARY.md`, and per-case raw CLI
 output, receipt, trace, integrity-check rendering, assertions, timing, token

@@ -26,6 +26,9 @@ param(
     [ValidateRange(1, 20)]
     [int]$Repetitions = 1,
 
+    [ValidateRange(0, 100000)]
+    [int]$RequestBudget = 0,
+
     [string[]]$CaseId,
 
     [ValidateNotNullOrEmpty()]
@@ -64,8 +67,26 @@ if (-not $cases) {
 }
 
 $pactrailCommand = Get-Command $Pactrail -ErrorAction Stop
-if (-not [Environment]::GetEnvironmentVariable($ApiKeyEnv)) {
-    [Environment]::SetEnvironmentVariable($ApiKeyEnv, 'local', 'Process')
+$baseUri = [Uri]$BaseUrl
+$apiKey = [Environment]::GetEnvironmentVariable($ApiKeyEnv, 'Process')
+if ([string]::IsNullOrWhiteSpace($apiKey)) {
+    $apiKey = [Environment]::GetEnvironmentVariable($ApiKeyEnv, 'User')
+}
+if ([string]::IsNullOrWhiteSpace($apiKey)) {
+    $apiKey = [Environment]::GetEnvironmentVariable($ApiKeyEnv, 'Machine')
+}
+$isLoopbackEndpoint = $baseUri.IsLoopback -or $baseUri.Host -ieq 'localhost'
+if ([string]::IsNullOrWhiteSpace($apiKey)) {
+    if (-not $isLoopbackEndpoint) {
+        throw "Environment variable '$ApiKeyEnv' is required for remote endpoint '$($baseUri.Host)'."
+    }
+    $apiKey = 'local'
+}
+[Environment]::SetEnvironmentVariable($ApiKeyEnv, $apiKey, 'Process')
+
+$logicalRequestCeiling = $cases.Count * $Repetitions * $MaxTurns
+if ($RequestBudget -gt 0 -and $logicalRequestCeiling -gt $RequestBudget) {
+    throw "The selected matrix can use up to $logicalRequestCeiling logical model requests, exceeding -RequestBudget $RequestBudget. Reduce cases, repetitions, or max turns. Transport retries are not included in this ceiling."
 }
 
 $modelSlug = $Model -replace '[^A-Za-z0-9._-]', '-'
@@ -244,10 +265,13 @@ function Get-TraceMetrics {
 }
 
 try {
-    $modelsResponse = Invoke-RestMethod -Uri ($BaseUrl.TrimEnd('/') + '/models') -TimeoutSec 10
+    $catalogHeaders = @{ Authorization = "Bearer $apiKey" }
+    $modelsResponse = Invoke-RestMethod -Uri ($BaseUrl.TrimEnd('/') + '/models') -Headers $catalogHeaders -TimeoutSec 10
 } catch {
     throw "The model endpoint is not ready at ${BaseUrl}: $($_.Exception.Message)"
 }
+$endpointModelIds = @($modelsResponse.data | ForEach-Object { [string]$_.id })
+$requestedModelAdvertised = $endpointModelIds -contains $Model
 
 $results = New-Object System.Collections.ArrayList
 foreach ($case in $cases) {
@@ -413,13 +437,17 @@ $summaryObject = [pscustomobject]@{
     max_output_tokens = $MaxOutputTokens
     max_turns = $MaxTurns
     repetitions = $Repetitions
+    request_budget = if ($RequestBudget -gt 0) { $RequestBudget } else { $null }
+    logical_request_ceiling = $logicalRequestCeiling
     cases = $results.Count
     passed = $passedCount
     failed = $results.Count - $passedCount
     pass_rate = [Math]::Round($passedCount / $results.Count, 4)
     median_duration_ms = $medianDuration
     total_tokens = [long](($results | Measure-Object -Property tokens -Sum).Sum)
-    endpoint_models = @($modelsResponse.data | ForEach-Object { $_.id })
+    endpoint_model_count = $endpointModelIds.Count
+    requested_model_advertised = $requestedModelAdvertised
+    endpoint_models = @($endpointModelIds | Where-Object { $_ -eq $Model })
     results = @($results)
 }
 Write-Utf8File -Path (Join-Path $resultRoot 'summary.json') -Content ($summaryObject | ConvertTo-Json -Depth 10)
@@ -430,6 +458,7 @@ $markdown.Add('')
 $markdown.Add("- Result: **$passedCount/$($results.Count) passed** ($([Math]::Round($summaryObject.pass_rate * 100, 1))%)")
 $markdown.Add("- Pactrail: ``$pactrailVersion``")
 $markdown.Add("- Context/output/turns: $ContextTokens / $MaxOutputTokens / $MaxTurns")
+$markdown.Add("- Logical request ceiling: $logicalRequestCeiling$(if ($RequestBudget -gt 0) { " / budget $RequestBudget" } else { '' })")
 $markdown.Add("- Median end-to-end task time: $([Math]::Round($medianDuration / 1000, 2)) s")
 $markdown.Add("- Total reported model tokens: $($summaryObject.total_tokens)")
 $markdown.Add('')
