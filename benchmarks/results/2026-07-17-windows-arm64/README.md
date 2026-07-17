@@ -4,7 +4,8 @@ Run date: 2026-07-17 UTC
 
 Suite: [`pactrail-mvb-v1`](../../mvb-v1/README.md)
 
-Pactrail: `0.1.0`, built from the source revision containing this report
+Pactrail: `0.1.0`, built from source revision
+[`c564cdb`](https://github.com/AKMessi/pactrail/commit/c564cdbd43e1100e7aa13fb8cc8a5f669a8b8d55)
 
 This is a minimum viable, model-in-the-loop integration benchmark. It is a
 reproducible baseline for Pactrail's transaction, tool, model, and trace path;
