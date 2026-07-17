@@ -1,0 +1,30 @@
+{
+  "changes": [
+    {
+      "after_digest": "19f7d1ff251bdeb9497ce7cd1934c9b48ebeb664d84ff114f140ae3da48766a2",
+      "after_unix_mode": null,
+      "before_digest": "8213376cdb9888631b920fe042a07a99e02ab89a7645e5534717a1189dec1a39",
+      "before_unix_mode": null,
+      "bytes_added": 21,
+      "bytes_removed": 35,
+      "path": "src/version.rs"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012033Z-lfm-230m-multi-file-version-sync\\.pactrail\\runs\\019f6da9-88ee-7bc3-98c0-513a40c6d44a\\receipt.json",
+  "risks": [
+    "Verification incomplete: Verification commands require process permission",
+    "model recovery stopped after 3 consecutive tool turns because the model repeated the same tool request; the model did not return a final summary, so candidate completeness requires human review"
+  ],
+  "run_id": "019f6da9-88ee-7bc3-98c0-513a40c6d44a",
+  "summary": "The model stopped after repeated non-progress tool calls. Candidate changes were preserved for explicit review.",
+  "tokens": 7068,
+  "trace": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012033Z-lfm-230m-multi-file-version-sync\\.pactrail\\runs\\019f6da9-88ee-7bc3-98c0-513a40c6d44a\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

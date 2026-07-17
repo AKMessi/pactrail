@@ -1,0 +1,30 @@
+{
+  "changes": [
+    {
+      "after_digest": "9baa67d1bfc33133fd6558de10cd4a4eb3fdd6e3725b8454846ed99a3da3d0b1",
+      "after_unix_mode": null,
+      "before_digest": "a5d119afb7d2aa7ab271664184f4d6357ff366ef8655d659cbef5e3ffa0693ac",
+      "before_unix_mode": null,
+      "bytes_added": 16,
+      "bytes_removed": 40,
+      "path": "config/app.conf"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012033Z-lfm-230m-targeted-config-edit\\.pactrail\\runs\\019f6da9-69ca-7c61-8bc6-dea19b3e692e\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "model recovery stopped after 3 consecutive tool turns because the model repeated the same tool request; the model did not return a final summary, so candidate completeness requires human review"
+  ],
+  "run_id": "019f6da9-69ca-7c61-8bc6-dea19b3e692e",
+  "summary": "The model stopped after repeated non-progress tool calls. Candidate changes were preserved for explicit review.",
+  "tokens": 7027,
+  "trace": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012033Z-lfm-230m-targeted-config-edit\\.pactrail\\runs\\019f6da9-69ca-7c61-8bc6-dea19b3e692e\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

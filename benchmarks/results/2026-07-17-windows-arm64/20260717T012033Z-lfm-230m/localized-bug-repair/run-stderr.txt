@@ -1,0 +1,5 @@
+2026-07-17T01:21:07.180600Z  WARN pactrail_engine::engine: tool call failed tool=replace_text error=replacement count was 0, expected 1
+2026-07-17T01:21:10.042850Z  WARN pactrail_engine::engine: tool call failed tool=replace_text error=replacement count was 0, expected 1
+2026-07-17T01:21:12.677042Z  WARN pactrail_engine::engine: tool call failed tool=replace_text error=replacement count was 0, expected 1
+error: engine failed for run 019f6da9-ae18-7590-a283-e585e5bf8407: model stalled for 3 consecutive tool turns because the model repeated the same tool request
+Portable trace: \\?\C:\pactrail-bench\workspaces\20260717T012033Z-lfm-230m-localized-bug-repair\.pactrail\runs\019f6da9-ae18-7590-a283-e585e5bf8407\trace.jsonl

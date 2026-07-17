@@ -1,0 +1,57 @@
+{
+    "case_id":  "targeted-config-edit",
+    "repetition":  1,
+    "category":  "precision-edit",
+    "model":  "qwopus3.5-9b-coder-q3km",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f6dad-14ab-74e2-ad0b-86362f060a37",
+    "duration_ms":  232646,
+    "tokens":  13694,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "config/app.conf"
+                      ],
+    "metrics":  {
+                    "events":  20,
+                    "model_calls":  4,
+                    "tool_calls":  3,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  232549,
+                    "tool_duration_ms":  10,
+                    "input_tokens":  13354,
+                    "output_tokens":  340,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:config/app.conf",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [config/app.conf]; observed [config/app.conf]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "The change has been successfully applied. The file now contains `timeout_ms=2500` instead of `timeout_ms=1000`, while all other bytes (including `name=pactrail` and `retries=3`) remain unchanged. The README.md file was not edited as required."
+}

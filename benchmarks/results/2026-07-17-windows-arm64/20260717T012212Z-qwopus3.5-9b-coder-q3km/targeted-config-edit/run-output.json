@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": "6e1f0ae81c0fe4709dd5cb2454706d9817f26468a6b145fad1740e12e010b3c8",
+      "after_unix_mode": null,
+      "before_digest": "a5d119afb7d2aa7ab271664184f4d6357ff366ef8655d659cbef5e3ffa0693ac",
+      "before_unix_mode": null,
+      "bytes_added": 40,
+      "bytes_removed": 40,
+      "path": "config/app.conf"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-targeted-config-edit\\.pactrail\\runs\\019f6dad-14ab-74e2-ad0b-86362f060a37\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f6dad-14ab-74e2-ad0b-86362f060a37",
+  "summary": "The change has been successfully applied. The file now contains `timeout_ms=2500` instead of `timeout_ms=1000`, while all other bytes (including `name=pactrail` and `retries=3`) remain unchanged. The README.md file was not edited as required.",
+  "tokens": 13694,
+  "trace": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-targeted-config-edit\\.pactrail\\runs\\019f6dad-14ab-74e2-ad0b-86362f060a37\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

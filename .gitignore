@@ -1,5 +1,6 @@
 /target/
 /.pactrail/
+benchmark-results/
 *.pactrail-run
 *.swp
 *.swo
@@ -8,4 +9,3 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-

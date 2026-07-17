@@ -1,0 +1,64 @@
+{
+    "case_id":  "multi-file-version-sync",
+    "repetition":  1,
+    "category":  "multi-file-edit",
+    "model":  "qwopus3.5-9b-coder-q3km",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f6db0-a219-7243-9595-b22ddba95ff8",
+    "duration_ms":  299871,
+    "tokens":  26716,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "Cargo.toml",
+                          "README.md",
+                          "src/version.rs"
+                      ],
+    "metrics":  {
+                    "events":  28,
+                    "model_calls":  7,
+                    "tool_calls":  7,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  299743,
+                    "tool_duration_ms":  27,
+                    "input_tokens":  26036,
+                    "output_tokens":  680,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:Cargo.toml",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:src/version.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [Cargo.toml, README.md, src/version.rs]; observed [Cargo.toml, README.md, src/version.rs]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "All three files have been successfully updated. The project version has been changed from 0.1.0 to 0.2.0 in:\n\n1. **Cargo.toml**: `version = \"0.2.0\"`\n2. **src/version.rs**: `pub const VERSION: \u0026str = \"0.2.0\";`\n3. **README.md**: `Current release: 0.2.0`\n\nNo other changes were made as requested."
+}

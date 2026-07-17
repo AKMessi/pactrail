@@ -227,6 +227,22 @@ Other discovery commands include `pactrail tools --json`, `pactrail schema`,
 `pactrail memory list`, `pactrail list`, `pactrail doctor`, and
 `pactrail completion <shell>`.
 
+## Reproducible evaluation
+
+The public [Pactrail MVB v1](benchmarks/mvb-v1/README.md) runner performs seven
+one-shot, model-in-the-loop tasks with exact artifact grading—no LLM judge and
+no favorable-sample selection. Its first Windows ARM64 local baseline recorded:
+
+- Qwopus3.5 9B Coder Q3_K_M: **6/7 strict task passes**;
+- LFM2.5 230M Fable-5 F16: **1/7 strict task passes**;
+- source isolation before apply: **14/14**;
+- integrity-accepted portable traces: **14/14**.
+
+Read the [methodology, environment, limitations, per-case results, model hashes,
+and raw evidence](benchmarks/results/2026-07-17-windows-arm64/README.md). This is
+an integration baseline, not a SWE-bench result or a claim of superiority over
+another harness.
+
 ## Architecture at a glance
 
 ```text

@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "run_id": "019f6da9-88ee-7bc3-98c0-513a40c6d44a",
+  "created_at": "2026-07-17T01:21:04.4196932Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.",
+    "workspace_root": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012033Z-lfm-230m-multi-file-version-sync",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f6da9-88ed-7262-a582-7bcfc33fb44f",
+        "description": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read"
+      ],
+      "deny": [
+        "network",
+        "secret_use",
+        "external_write"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "ded4121db05b9361049ff5e9345158c586530e2296fafa4cbc1a971ce2179626",
+  "final_event_hash": "4d0b96eda7953738cd4dcc57141c246f9c744eff2a3d00b762a3024b9daede6b",
+  "changes": [
+    {
+      "path": "src/version.rs",
+      "before_digest": "8213376cdb9888631b920fe042a07a99e02ab89a7645e5534717a1189dec1a39",
+      "after_digest": "19f7d1ff251bdeb9497ce7cd1934c9b48ebeb664d84ff114f140ae3da48766a2",
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 21,
+      "bytes_removed": 35
+    }
+  ],
+  "evidence": [
+    {
+      "id": "019f6da9-ad6c-7a11-9d5c-a421b6115027",
+      "obligation_id": "019f6da9-88ed-7262-a582-7bcfc33fb44f",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.: Verification commands require process permission",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: Verification commands require process permission",
+    "model recovery stopped after 3 consecutive tool turns because the model repeated the same tool request; the model did not return a final summary, so candidate completeness requires human review"
+  ],
+  "metadata": {},
+  "integrity_hash": "8ef556f2e5982c4e26f456d553b7ba69a2dd2474a687b3f392acea77ffcfce16"
+}

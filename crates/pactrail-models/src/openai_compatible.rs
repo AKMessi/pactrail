@@ -168,11 +168,7 @@ impl ModelDriver for OpenAiCompatibleDriver {
                 self.config.capabilities.max_output_tokens
             )));
         }
-        let messages = request
-            .conversation
-            .iter()
-            .map(conversation_json)
-            .collect::<Result<Vec<_>, _>>()?;
+        let messages = canonical_messages(&request.conversation)?;
         let tools = request
             .tools
             .iter()
@@ -218,6 +214,33 @@ fn message_json(message: &Message) -> Value {
         Role::Assistant => "assistant",
     };
     json!({ "role": role, "content": message.content })
+}
+
+fn canonical_messages(conversation: &[ConversationItem]) -> Result<Vec<Value>, ModelError> {
+    let mut system_instructions = Vec::new();
+    let mut messages = Vec::with_capacity(conversation.len());
+    for item in conversation {
+        if let ConversationItem::Message(Message {
+            role: Role::System,
+            content,
+        }) = item
+        {
+            system_instructions.push(content.as_str());
+        } else {
+            messages.push(conversation_json(item)?);
+        }
+    }
+
+    if !system_instructions.is_empty() {
+        messages.insert(
+            0,
+            json!({
+                "role": "system",
+                "content": system_instructions.join("\n\n"),
+            }),
+        );
+    }
+    Ok(messages)
 }
 
 fn conversation_json(item: &ConversationItem) -> Result<Value, ModelError> {
@@ -407,6 +430,51 @@ mod tests {
         assert_eq!(response.usage.total(), 14);
         assert_eq!(response.finish_reason, FinishReason::ToolCalls);
         assert_eq!(response.extensions["id"], "response-1");
+    }
+
+    #[test]
+    fn coalesces_all_system_instructions_into_one_leading_message() {
+        let conversation = vec![
+            ConversationItem::Message(Message::system("base policy")),
+            ConversationItem::Message(Message::system("repository context")),
+            ConversationItem::Message(Message::user("perform the task")),
+            ConversationItem::Message(Message::assistant("working")),
+            ConversationItem::Message(Message::system("recovery instruction")),
+        ];
+
+        let messages = canonical_messages(&conversation)
+            .unwrap_or_else(|error| unreachable!("valid conversation: {error}"));
+
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[0]["role"], "system");
+        assert_eq!(
+            messages[0]["content"],
+            "base policy\n\nrepository context\n\nrecovery instruction"
+        );
+        assert_eq!(messages[1]["role"], "user");
+        assert_eq!(messages[2]["role"], "assistant");
+        assert_eq!(
+            messages
+                .iter()
+                .filter(|message| message["role"] == "system")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn preserves_conversations_without_system_instructions() {
+        let conversation = vec![
+            ConversationItem::Message(Message::user("question")),
+            ConversationItem::Message(Message::assistant("answer")),
+        ];
+
+        let messages = canonical_messages(&conversation)
+            .unwrap_or_else(|error| unreachable!("valid conversation: {error}"));
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0]["role"], "user");
+        assert_eq!(messages[1]["role"], "assistant");
     }
 
     #[test]

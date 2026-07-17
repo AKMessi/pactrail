@@ -1,0 +1,497 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 0,
+    "timestamp": "2026-07-17T01:33:40.262028Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.",
+        "workspace_root": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-localized-bug-repair",
+        "allowed_write_paths": [
+          "src"
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f6db5-3610-71d2-9df7-f71485b72f3d",
+            "description": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "c20497e3dda1e416146e62983e96c1253ed6930779067e35cc8e58dad25be4bd"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 1,
+    "timestamp": "2026-07-17T01:33:40.2625384Z",
+    "previous_hash": "c20497e3dda1e416146e62983e96c1253ed6930779067e35cc8e58dad25be4bd",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "ab92572b3098474ef5506a2785430c81e8cf7ac813297bba6c452acd64cf957d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 2,
+    "timestamp": "2026-07-17T01:33:40.2627693Z",
+    "previous_hash": "ab92572b3098474ef5506a2785430c81e8cf7ac813297bba6c452acd64cf957d",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "8768f9dccfb506c62f598f42024645cd49f6ff20cb3d631a47bc2dc9234ca5d8"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 3,
+    "timestamp": "2026-07-17T01:33:40.2648335Z",
+    "previous_hash": "8768f9dccfb506c62f598f42024645cd49f6ff20cb3d631a47bc2dc9234ca5d8",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 2 files and cited 2 within a 1679-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1,
+        "attributes": {
+          "budget_bytes": "5760",
+          "cited_files": "2",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1679",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "b3c5c0221b92486780e35c9d7e2515074c216ad085b6b17a3b64fc9d9ff48711"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 4,
+    "timestamp": "2026-07-17T01:33:40.2650738Z",
+    "previous_hash": "b3c5c0221b92486780e35c9d7e2515074c216ad085b6b17a3b64fc9d9ff48711",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:75fd467be02f79257bbda5c83a5a61b0954ba44203db30f1c1b60b23729f5afa"
+      }
+    },
+    "hash": "5a898207b1abace8327cbba021b5f72ecbd8f043839840266fa07cd47c1fcba5"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 5,
+    "timestamp": "2026-07-17T01:33:40.2652599Z",
+    "previous_hash": "5a898207b1abace8327cbba021b5f72ecbd8f043839840266fa07cd47c1fcba5",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "9dc131b42488f477f9809f83528b263c181864c294bb92e6209bc4d5d5e5f39b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 6,
+    "timestamp": "2026-07-17T01:33:40.2654258Z",
+    "previous_hash": "9dc131b42488f477f9809f83528b263c181864c294bb92e6209bc4d5d5e5f39b",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "e1bfbe21947d3ce097b98291d4283d1a40c837f60de9488b09840722319db251"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 7,
+    "timestamp": "2026-07-17T01:36:16.0509839Z",
+    "previous_hash": "e1bfbe21947d3ce097b98291d4283d1a40c837f60de9488b09840722319db251",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/qwopus3.5-9b-coder-q3km",
+        "action": "invoke",
+        "summary": "model turn 1 produced 1 tool call(s) and 99 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 155785,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3085",
+          "output_tokens": "52",
+          "text_bytes": "99",
+          "tool_calls": "1",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "2b3f995b07136e6acc38ce16d79a16c06b5883aa14e4870bd200e386bb572a33"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 8,
+    "timestamp": "2026-07-17T01:36:16.0551818Z",
+    "previous_hash": "2b3f995b07136e6acc38ce16d79a16c06b5883aa14e4870bd200e386bb572a33",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 7 lines from src/math.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 3,
+        "attributes": {
+          "arguments_digest": "5ce837626d0db9aa1624b22844f3504990b27b4f25fdc9581e96b8d7727aea90",
+          "call_id": "JYHKIonmNPrblFEL4mTnGFurIhSteoJd",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "214",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "df4d82f1d6103cb1cc79d7adbc268f7aa49052e8c117635573c3201fe36f139a"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 9,
+    "timestamp": "2026-07-17T01:36:39.3823183Z",
+    "previous_hash": "df4d82f1d6103cb1cc79d7adbc268f7aa49052e8c117635573c3201fe36f139a",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/qwopus3.5-9b-coder-q3km",
+        "action": "invoke",
+        "summary": "model turn 2 produced 1 tool call(s) and 209 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 23326,
+        "attributes": {
+          "cached_input_tokens": "3136",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3235",
+          "output_tokens": "156",
+          "text_bytes": "209",
+          "tool_calls": "1",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "17c8d55f681455321fdca7440e2ee19c3de4cdf4917a447b0af8c6c4627c5bbe"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 10,
+    "timestamp": "2026-07-17T01:36:39.3975277Z",
+    "previous_hash": "17c8d55f681455321fdca7440e2ee19c3de4cdf4917a447b0af8c6c4627c5bbe",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:edit_file",
+        "action": "edit_file",
+        "summary": "applied 1 edits (1 replacements) to src/math.rs",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:src/math.rs",
+          "fs.write:src/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "134278a40438850612ac2b05a6f4bdbc624fbf8bb43bf959676a8753c9cc0baa",
+          "call_id": "AEWHWeUDcbEHso8ibNyQJpieZJekx6Ky",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "68",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "fae8bc98a9d22fa523e28b854d53411d3004ac1cf501873a236bd2bdc6e6f98f"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 11,
+    "timestamp": "2026-07-17T01:36:48.1854303Z",
+    "previous_hash": "fae8bc98a9d22fa523e28b854d53411d3004ac1cf501873a236bd2bdc6e6f98f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/qwopus3.5-9b-coder-q3km",
+        "action": "invoke",
+        "summary": "model turn 3 produced 1 tool call(s) and 101 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 8786,
+        "attributes": {
+          "cached_input_tokens": "3390",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3432",
+          "output_tokens": "48",
+          "text_bytes": "101",
+          "tool_calls": "1",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "7bd629d26b4b348a3531c946f0dc4ee62a4ba4814218fd5ed25d5b2e7fa83a3d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 12,
+    "timestamp": "2026-07-17T01:36:48.1899257Z",
+    "previous_hash": "7bd629d26b4b348a3531c946f0dc4ee62a4ba4814218fd5ed25d5b2e7fa83a3d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 7 lines from src/math.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 3,
+        "attributes": {
+          "arguments_digest": "5ce837626d0db9aa1624b22844f3504990b27b4f25fdc9581e96b8d7727aea90",
+          "call_id": "vinGalJBVsU24jSHyMSEoE2qr0Qpsny4",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "214",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "5b8da12149de6319e997390b02fa7327ba7a91c85dd89ec532cd006bb1bb5acb"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 13,
+    "timestamp": "2026-07-17T01:37:09.2376292Z",
+    "previous_hash": "5b8da12149de6319e997390b02fa7327ba7a91c85dd89ec532cd006bb1bb5acb",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/qwopus3.5-9b-coder-q3km",
+        "action": "invoke",
+        "summary": "model turn 4 produced 0 tool call(s) and 295 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 21047,
+        "attributes": {
+          "cached_input_tokens": "3479",
+          "finish_reason": "complete",
+          "input_tokens": "3578",
+          "output_tokens": "79",
+          "text_bytes": "295",
+          "tool_calls": "0",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "06e9fb78660faee0631167dbbe3de7e3d1c7a9cb693922e6295dab9e8cf363e0"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 14,
+    "timestamp": "2026-07-17T01:37:09.2388877Z",
+    "previous_hash": "06e9fb78660faee0631167dbbe3de7e3d1c7a9cb693922e6295dab9e8cf363e0",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "verifying"
+      }
+    },
+    "hash": "9335540f09fa32426d6bd17c318cd8441182c340e3319f4b756d3e0019c2b91b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 15,
+    "timestamp": "2026-07-17T01:37:09.2394908Z",
+    "previous_hash": "9335540f09fa32426d6bd17c318cd8441182c340e3319f4b756d3e0019c2b91b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "verifier",
+        "action": "Python tests",
+        "summary": "verification process was not authorized",
+        "declared_effects": [
+          "process.spawn"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 0,
+        "attributes": {
+          "authorization": "denied",
+          "index": "1",
+          "total": "1"
+        }
+      }
+    },
+    "hash": "00cf1ee1e08f43bad89044e0efe97f28a4a98a175f5bf89f5b16ec38e9fd19e4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 16,
+    "timestamp": "2026-07-17T01:37:09.2399405Z",
+    "previous_hash": "00cf1ee1e08f43bad89044e0efe97f28a4a98a175f5bf89f5b16ec38e9fd19e4",
+    "event": {
+      "type": "evidence_recorded",
+      "data": {
+        "id": "019f6db8-6677-7b40-b241-74f6f8b882ce",
+        "obligation_id": "019f6db5-3610-71d2-9df7-f71485b72f3d",
+        "grade": "unverified",
+        "kind": "other",
+        "status": "inconclusive",
+        "summary": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.: Verification commands require process permission",
+        "artifact_digest": null,
+        "reproduction": null
+      }
+    },
+    "hash": "42774dc8e97f8b8cbe4ec4fddf0bc1f078ba67100c10f00d8ce6f0e249ab5190"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 17,
+    "timestamp": "2026-07-17T01:37:09.2420187Z",
+    "previous_hash": "42774dc8e97f8b8cbe4ec4fddf0bc1f078ba67100c10f00d8ce6f0e249ab5190",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "verifying",
+        "to": "reviewing"
+      }
+    },
+    "hash": "ab07a10162bc606f1fa114172a18f6367332623b72a159d70e409aee31d581c7"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 18,
+    "timestamp": "2026-07-17T01:37:09.2422945Z",
+    "previous_hash": "ab07a10162bc606f1fa114172a18f6367332623b72a159d70e409aee31d581c7",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model summary retained as implementation account; verification evidence remains independently graded"
+      }
+    },
+    "hash": "764a709e3675167b96c17d69192bcf954b49b45c64c4969fe8730a47b27c3ea5"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 19,
+    "timestamp": "2026-07-17T01:37:09.242467Z",
+    "previous_hash": "764a709e3675167b96c17d69192bcf954b49b45c64c4969fe8730a47b27c3ea5",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "reviewing",
+        "to": "awaiting_apply"
+      }
+    },
+    "hash": "575481ce951babcd33f384a30afc6791ce51c027cbbc4aa4badbd6275a8e254c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6db5-3610-71d2-9df7-f7245c878c2b",
+    "sequence": 20,
+    "timestamp": "2026-07-17T01:37:09.3063225Z",
+    "previous_hash": "575481ce951babcd33f384a30afc6791ce51c027cbbc4aa4badbd6275a8e254c",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "awaiting_apply",
+        "to": "applied"
+      }
+    },
+    "hash": "9853398aaa3394045620ea3316979be30811c6b9c76dca90d16968032c4d54dd"
+  }
+]

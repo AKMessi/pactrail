@@ -1,0 +1,30 @@
+{
+  "changes": [
+    {
+      "after_digest": "1d9572384596595dac070821730eec5d42663924d6991613b7a42ef276fadde0",
+      "after_unix_mode": null,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 26,
+      "bytes_removed": 0,
+      "path": "SMOKE_TEST.md"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012033Z-lfm-230m-exact-file-create\\.pactrail\\runs\\019f6da9-3430-7e80-a119-e306bdaf2e05\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "model recovery stopped after 3 consecutive tool turns because the model repeated the same tool request; the model did not return a final summary, so candidate completeness requires human review"
+  ],
+  "run_id": "019f6da9-3430-7e80-a119-e306bdaf2e05",
+  "summary": "The model stopped after repeated non-progress tool calls. Candidate changes were preserved for explicit review.",
+  "tokens": 6971,
+  "trace": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012033Z-lfm-230m-exact-file-create\\.pactrail\\runs\\019f6da9-3430-7e80-a119-e306bdaf2e05\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

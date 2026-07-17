@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": null,
+      "after_unix_mode": null,
+      "before_digest": "aa05da59bb5ad20dc0cbf6742671828d670ceda26edf0a2b8ebbc4776778b3f5",
+      "before_unix_mode": null,
+      "bytes_added": 0,
+      "bytes_removed": 10,
+      "path": "obsolete.txt"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-obsolete-file-removal\\.pactrail\\runs\\019f6db8-6728-7722-bcc1-d98e1b4a07fe\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f6db8-6728-7722-bcc1-d98e1b4a07fe",
+  "summary": "The task is complete. I have:\n\n1. Deleted `obsolete.txt` (10 bytes removed)\n2. Preserved `keep.txt` unchanged (still contains \"keep me exactly\")\n\nThe workspace changes confirm the deletion was applied, and `keep.txt` remains intact with its original content.",
+  "tokens": 16506,
+  "trace": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-obsolete-file-removal\\.pactrail\\runs\\019f6db8-6728-7722-bcc1-d98e1b4a07fe\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

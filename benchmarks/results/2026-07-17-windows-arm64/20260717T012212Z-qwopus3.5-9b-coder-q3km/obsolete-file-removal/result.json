@@ -1,0 +1,57 @@
+{
+    "case_id":  "obsolete-file-removal",
+    "repetition":  1,
+    "category":  "workspace-edit",
+    "model":  "qwopus3.5-9b-coder-q3km",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f6db8-6728-7722-bcc1-d98e1b4a07fe",
+    "duration_ms":  192893,
+    "tokens":  16506,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "obsolete.txt"
+                      ],
+    "metrics":  {
+                    "events":  22,
+                    "model_calls":  5,
+                    "tool_calls":  4,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  192801,
+                    "tool_duration_ms":  12,
+                    "input_tokens":  16227,
+                    "output_tokens":  279,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:keep.txt",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "absent:obsolete.txt",
+                           "passed":  true,
+                           "detail":  "Path is absent."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [obsolete.txt]; observed [obsolete.txt]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "The task is complete. I have:\n\n1. Deleted `obsolete.txt` (10 bytes removed)\n2. Preserved `keep.txt` unchanged (still contains \"keep me exactly\")\n\nThe workspace changes confirm the deletion was applied, and `keep.txt` remains intact with its original content."
+}

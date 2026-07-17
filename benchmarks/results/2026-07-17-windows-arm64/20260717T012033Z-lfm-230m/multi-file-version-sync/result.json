@@ -1,0 +1,62 @@
+{
+    "case_id":  "multi-file-version-sync",
+    "repetition":  1,
+    "category":  "multi-file-edit",
+    "model":  "lfm-230m",
+    "passed":  false,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f6da9-88ee-7bc3-98c0-513a40c6d44a",
+    "duration_ms":  9383,
+    "tokens":  7068,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "src/version.rs"
+                      ],
+    "metrics":  {
+                    "events":  21,
+                    "model_calls":  3,
+                    "tool_calls":  3,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  9294,
+                    "tool_duration_ms":  20,
+                    "input_tokens":  6912,
+                    "output_tokens":  156,
+                    "recovery_stops":  1
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:Cargo.toml",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "file:src/version.rs",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  false,
+                           "detail":  "Expected [Cargo.toml, README.md, src/version.rs]; observed [src/version.rs]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "The model stopped after repeated non-progress tool calls. Candidate changes were preserved for explicit review."
+}

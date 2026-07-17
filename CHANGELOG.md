@@ -6,6 +6,20 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Public Pactrail MVB v1 model-in-the-loop evaluation runner with seven exact,
+  deterministic cases, source-isolation and trace-integrity assertions,
+  machine-readable results, raw receipts/traces, and a reproducible Windows
+  ARM64 baseline for Qwopus3.5 9B Coder and LFM2.5 230M Fable-5.
+
+### Fixed
+
+- OpenAI-compatible requests now coalesce all system instructions into one
+  leading message. This preserves instruction priority while supporting strict
+  Qwen-style llama.cpp chat templates that reject adjacent or late system
+  messages.
+
 ## [0.1.0] - 2026-07-16
 
 ### Added

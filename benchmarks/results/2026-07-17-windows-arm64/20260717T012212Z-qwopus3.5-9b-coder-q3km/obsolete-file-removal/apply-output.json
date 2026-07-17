@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "run_id": "019f6db8-6728-7722-bcc1-d98e1b4a07fe",
+  "created_at": "2026-07-17T01:40:22.3247222Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Delete obsolete.txt. Preserve keep.txt unchanged.",
+    "workspace_root": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-obsolete-file-removal",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f6db8-6728-7722-bcc1-d975d36a0045",
+        "description": "Delete obsolete.txt. Preserve keep.txt unchanged.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read"
+      ],
+      "deny": [
+        "network",
+        "secret_use",
+        "external_write"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "b6f1864cfb212430b3fbc2ce44ecbf0f3cc8ff06074e3cee57003f6d8099bd3b",
+  "final_event_hash": "20acbd40b926fdf7cb4615c35442db7d7c9164bc7a0b22f2329bbb6b56d2ada9",
+  "changes": [
+    {
+      "path": "obsolete.txt",
+      "before_digest": "aa05da59bb5ad20dc0cbf6742671828d670ceda26edf0a2b8ebbc4776778b3f5",
+      "after_digest": null,
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 0,
+      "bytes_removed": 10
+    }
+  ],
+  "evidence": [
+    {
+      "id": "019f6dbb-587a-79f1-be7c-3cbdb21ccd28",
+      "obligation_id": "019f6db8-6728-7722-bcc1-d975d36a0045",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Delete obsolete.txt. Preserve keep.txt unchanged.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "b5b199f1eb724f18cc266c193ad6f63b0f6e4a6932277d980436845eb7fbbed2"
+}

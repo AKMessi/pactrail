@@ -1,0 +1,19 @@
+{
+  "changes": [],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012033Z-lfm-230m-read-only-repository-summary\\.pactrail\\runs\\019f6daa-2959-7771-9b20-0820a4926c1b\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f6daa-2959-7771-9b20-0820a4926c1b",
+  "summary": "The library provides a list of non‑ignored regular files in the workspace, and it also offers a list of files that are non‑ignored and contain a specific pattern.",
+  "tokens": 2184,
+  "trace": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012033Z-lfm-230m-read-only-repository-summary\\.pactrail\\runs\\019f6daa-2959-7771-9b20-0820a4926c1b\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

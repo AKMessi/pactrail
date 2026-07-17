@@ -1,0 +1,52 @@
+{
+    "case_id":  "exact-file-create",
+    "repetition":  1,
+    "category":  "workspace-edit",
+    "model":  "qwopus3.5-9b-coder-q3km",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f6daa-b691-7780-b821-493b33f6d4d3",
+    "duration_ms":  154836,
+    "tokens":  6195,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "SMOKE_TEST.md"
+                      ],
+    "metrics":  {
+                    "events":  16,
+                    "model_calls":  2,
+                    "tool_calls":  1,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  154728,
+                    "tool_duration_ms":  4,
+                    "input_tokens":  6119,
+                    "output_tokens":  76,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:SMOKE_TEST.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [SMOKE_TEST.md]; observed [SMOKE_TEST.md]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "The SMOKE_TEST.md file has been created with exactly one line: \"Pactrail benchmark passed.\" The file is now ready."
+}

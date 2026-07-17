@@ -1,0 +1,57 @@
+{
+    "case_id":  "obsolete-file-removal",
+    "repetition":  1,
+    "category":  "workspace-edit",
+    "model":  "lfm-230m",
+    "passed":  false,
+    "pactrail_exit_code":  1,
+    "apply_exit_code":  null,
+    "outcome":  "process_error",
+    "run_id":  "019f6da9-ce59-7ed3-ac0a-0b92eda301fa",
+    "duration_ms":  6086,
+    "tokens":  6859,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  15,
+                    "model_calls":  3,
+                    "tool_calls":  3,
+                    "failed_tool_calls":  3,
+                    "model_duration_ms":  6012,
+                    "tool_duration_ms":  6,
+                    "input_tokens":  6745,
+                    "output_tokens":  114,
+                    "recovery_stops":  1
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:keep.txt",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "absent:obsolete.txt",
+                           "passed":  false,
+                           "detail":  "Path still exists."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  false,
+                           "detail":  "Expected [obsolete.txt]; observed []."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  ""
+}

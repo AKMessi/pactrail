@@ -1,0 +1,19 @@
+{
+  "changes": [],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-read-only-repository-summary\\.pactrail\\runs\\019f6dbe-91e5-7693-b6b5-4b201a8ee095\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f6dbe-91e5-7693-b6b5-4b201a8ee095",
+  "summary": "This directory contains a tiny arithmetic library that provides two operations: addition and subtraction.",
+  "tokens": 12966,
+  "trace": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-read-only-repository-summary\\.pactrail\\runs\\019f6dbe-91e5-7693-b6b5-4b201a8ee095\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

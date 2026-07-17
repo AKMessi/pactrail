@@ -1,0 +1,57 @@
+{
+    "case_id":  "localized-bug-repair",
+    "repetition":  1,
+    "category":  "code-repair",
+    "model":  "lfm-230m",
+    "passed":  false,
+    "pactrail_exit_code":  1,
+    "apply_exit_code":  null,
+    "outcome":  "process_error",
+    "run_id":  "019f6da9-ae18-7590-a283-e585e5bf8407",
+    "duration_ms":  8182,
+    "tokens":  7020,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  15,
+                    "model_calls":  3,
+                    "tool_calls":  3,
+                    "failed_tool_calls":  3,
+                    "model_duration_ms":  8107,
+                    "tool_duration_ms":  6,
+                    "input_tokens":  6822,
+                    "output_tokens":  198,
+                    "recovery_stops":  1
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:src/math.rs",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "file:tests/math.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  false,
+                           "detail":  "Expected [src/math.rs]; observed []."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  ""
+}

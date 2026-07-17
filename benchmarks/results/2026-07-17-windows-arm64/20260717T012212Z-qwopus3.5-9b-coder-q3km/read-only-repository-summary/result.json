@@ -1,0 +1,72 @@
+{
+    "case_id":  "read-only-repository-summary",
+    "repetition":  1,
+    "category":  "repository-understanding",
+    "model":  "qwopus3.5-9b-coder-q3km",
+    "passed":  false,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f6dbe-91e5-7693-b6b5-4b201a8ee095",
+    "duration_ms":  182387,
+    "tokens":  12966,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  20,
+                    "model_calls":  4,
+                    "tool_calls":  3,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  182282,
+                    "tool_duration_ms":  9,
+                    "input_tokens":  12870,
+                    "output_tokens":  96,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:src/calculator.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected []; observed []."
+                       },
+                       {
+                           "name":  "summary:calculator",
+                           "passed":  false,
+                           "detail":  "Summary omitted the term."
+                       },
+                       {
+                           "name":  "summary:add",
+                           "passed":  true,
+                           "detail":  "Summary contained the term."
+                       },
+                       {
+                           "name":  "summary:subtract",
+                           "passed":  true,
+                           "detail":  "Summary contained the term."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "This directory contains a tiny arithmetic library that provides two operations: addition and subtraction."
+}

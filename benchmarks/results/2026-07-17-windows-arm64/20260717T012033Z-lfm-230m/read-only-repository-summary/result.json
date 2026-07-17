@@ -1,0 +1,72 @@
+{
+    "case_id":  "read-only-repository-summary",
+    "repetition":  1,
+    "category":  "repository-understanding",
+    "model":  "lfm-230m",
+    "passed":  false,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f6daa-2959-7771-9b20-0820a4926c1b",
+    "duration_ms":  1910,
+    "tokens":  2184,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  14,
+                    "model_calls":  1,
+                    "tool_calls":  0,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  1843,
+                    "tool_duration_ms":  0,
+                    "input_tokens":  2139,
+                    "output_tokens":  45,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:src/calculator.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected []; observed []."
+                       },
+                       {
+                           "name":  "summary:calculator",
+                           "passed":  false,
+                           "detail":  "Summary omitted the term."
+                       },
+                       {
+                           "name":  "summary:add",
+                           "passed":  false,
+                           "detail":  "Summary omitted the term."
+                       },
+                       {
+                           "name":  "summary:subtract",
+                           "passed":  false,
+                           "detail":  "Summary omitted the term."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "The library provides a list of non‑ignored regular files in the workspace, and it also offers a list of files that are non‑ignored and contain a specific pattern."
+}

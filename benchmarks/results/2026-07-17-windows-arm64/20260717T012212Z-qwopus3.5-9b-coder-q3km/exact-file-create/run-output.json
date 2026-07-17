@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": "1d9572384596595dac070821730eec5d42663924d6991613b7a42ef276fadde0",
+      "after_unix_mode": null,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 26,
+      "bytes_removed": 0,
+      "path": "SMOKE_TEST.md"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-exact-file-create\\.pactrail\\runs\\019f6daa-b691-7780-b821-493b33f6d4d3\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f6daa-b691-7780-b821-493b33f6d4d3",
+  "summary": "The SMOKE_TEST.md file has been created with exactly one line: \"Pactrail benchmark passed.\" The file is now ready.",
+  "tokens": 6195,
+  "trace": "\\\\?\\C:\\pactrail-bench\\workspaces\\20260717T012212Z-qwopus3.5-9b-coder-q3km-exact-file-create\\.pactrail\\runs\\019f6daa-b691-7780-b821-493b33f6d4d3\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}
