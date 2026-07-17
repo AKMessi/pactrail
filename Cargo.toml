@@ -34,6 +34,7 @@ directories = "6"
 futures-core = "0.3"
 futures-util = "0.3"
 globset = "0.4"
+httpdate = "1"
 ignore = "0.4"
 indicatif = "0.18"
 miette = { version = "7", features = ["fancy"] }

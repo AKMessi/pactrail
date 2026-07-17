@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 async-trait.workspace = true
 futures-util.workspace = true
+httpdate.workspace = true
 pactrail-tools = { version = "0.1.0", path = "../pactrail-tools" }
 reqwest.workspace = true
 schemars.workspace = true

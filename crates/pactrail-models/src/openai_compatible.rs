@@ -1,8 +1,8 @@
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use reqwest::StatusCode;
+use reqwest::{StatusCode, header::HeaderMap};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 use tracing::warn;
@@ -14,6 +14,9 @@ use crate::{
 
 const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_RETRIES: u32 = 3;
+const MIN_RETRY_DELAY: Duration = Duration::from_millis(250);
+const MAX_RETRY_DELAY: Duration = Duration::from_mins(1);
+const RATE_LIMIT_RETRY_DELAY: Duration = Duration::from_secs(15);
 
 /// Configuration for an `OpenAI` Chat Completions compatible endpoint.
 #[derive(Clone)]
@@ -118,6 +121,7 @@ impl OpenAiCompatibleDriver {
                 .get("x-request-id")
                 .and_then(|header| header.to_str().ok())
                 .map(str::to_owned);
+            let server_retry_after = parse_retry_after(response.headers(), SystemTime::now());
             let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
             let bytes = read_bounded(response, MAX_RESPONSE_BYTES).await?;
             if status.is_success() {
@@ -127,8 +131,13 @@ impl OpenAiCompatibleDriver {
             let message = provider_message(&bytes);
             if retryable && attempt < MAX_RETRIES {
                 attempt += 1;
-                let delay = Duration::from_millis(250_u64.saturating_mul(2_u64.pow(attempt - 1)));
-                warn!(attempt, status = status.as_u16(), "retrying model request");
+                let delay = retry_delay(status, attempt, server_retry_after);
+                warn!(
+                    attempt,
+                    status = status.as_u16(),
+                    delay_ms = delay.as_millis(),
+                    "retrying model request"
+                );
                 tokio::time::sleep(delay).await;
                 continue;
             }
@@ -138,6 +147,28 @@ impl OpenAiCompatibleDriver {
             });
         }
     }
+}
+
+fn parse_retry_after(headers: &HeaderMap, now: SystemTime) -> Option<Duration> {
+    let value = headers.get(reqwest::header::RETRY_AFTER)?.to_str().ok()?;
+    if let Ok(seconds) = value.trim().parse::<u64>() {
+        return Some(Duration::from_secs(seconds));
+    }
+    httpdate::parse_http_date(value)
+        .ok()?
+        .duration_since(now)
+        .ok()
+}
+
+fn retry_delay(status: StatusCode, attempt: u32, server_retry_after: Option<Duration>) -> Duration {
+    let fallback = if status == StatusCode::TOO_MANY_REQUESTS {
+        RATE_LIMIT_RETRY_DELAY.saturating_mul(2_u32.saturating_pow(attempt.saturating_sub(1)))
+    } else {
+        MIN_RETRY_DELAY.saturating_mul(2_u32.saturating_pow(attempt.saturating_sub(1)))
+    };
+    server_retry_after
+        .unwrap_or(fallback)
+        .clamp(MIN_RETRY_DELAY, MAX_RETRY_DELAY)
 }
 
 #[async_trait]
@@ -514,6 +545,40 @@ mod tests {
             OpenAiCompatibleDriver::new(config),
             Err(ModelError::InvalidRequest(_))
         ));
+    }
+
+    #[test]
+    fn retry_after_delta_is_honored_and_bounded() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            "7".parse()
+                .unwrap_or_else(|error| unreachable!("static header value must parse: {error}")),
+        );
+        assert_eq!(
+            parse_retry_after(&headers, SystemTime::UNIX_EPOCH),
+            Some(Duration::from_secs(7))
+        );
+        assert_eq!(
+            retry_delay(
+                StatusCode::TOO_MANY_REQUESTS,
+                1,
+                Some(Duration::from_mins(10))
+            ),
+            MAX_RETRY_DELAY
+        );
+    }
+
+    #[test]
+    fn retry_fallback_distinguishes_rate_limits_from_server_errors() {
+        assert_eq!(
+            retry_delay(StatusCode::TOO_MANY_REQUESTS, 2, None),
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            retry_delay(StatusCode::SERVICE_UNAVAILABLE, 2, None),
+            Duration::from_millis(500)
+        );
     }
 
     #[tokio::test]
