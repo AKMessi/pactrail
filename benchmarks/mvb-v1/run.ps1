@@ -213,6 +213,45 @@ function Add-Assertion {
     [void]$Assertions.Add([pscustomobject]@{ name = $Name; passed = $Passed; detail = $Detail })
 }
 
+function Test-CaseWorkspace {
+    param([string]$Root, $Baseline, $Case)
+    $assertions = New-Object System.Collections.ArrayList
+    foreach ($property in $Case.expected_files.PSObject.Properties) {
+        $relativePath = $property.Name -replace '/', [System.IO.Path]::DirectorySeparatorChar
+        $path = Join-Path $Root $relativePath
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            Add-Assertion $assertions "file:$($property.Name)" $false 'Expected file is missing.'
+            continue
+        }
+        $actual = [System.IO.File]::ReadAllText($path)
+        $expected = [string]$property.Value
+        $matches = (Normalize-Text $actual $Case.allow_terminal_newline) -ceq
+            (Normalize-Text $expected $Case.allow_terminal_newline)
+        $detail = if ($matches) { 'Content matched.' } else { 'Content differed.' }
+        Add-Assertion $assertions "file:$($property.Name)" $matches $detail
+    }
+    foreach ($relative in $Case.expected_absent) {
+        $relativePath = [string]$relative -replace '/', [System.IO.Path]::DirectorySeparatorChar
+        $absent = -not (Test-Path -LiteralPath (Join-Path $Root $relativePath))
+        $detail = if ($absent) { 'Path is absent.' } else { 'Path still exists.' }
+        Add-Assertion $assertions "absent:$relative" $absent $detail
+    }
+
+    $snapshot = Get-VisibleSnapshot -Root $Root
+    $actualChanged = @(Get-ChangedPaths -Before $Baseline -After $snapshot)
+    $expectedChanged = @($Case.expected_changed_paths | ForEach-Object { [string]$_ } | Sort-Object)
+    $changedMatches = @(
+        Compare-Object -ReferenceObject @($expectedChanged) -DifferenceObject @($actualChanged)
+    ).Count -eq 0
+    Add-Assertion $assertions 'changed-paths' $changedMatches "Expected [$($expectedChanged -join ', ')]; observed [$($actualChanged -join ', ')]."
+
+    return [pscustomobject]@{
+        passed = @($assertions | Where-Object { -not $_.passed }).Count -eq 0
+        changed_paths = $actualChanged
+        assertions = @($assertions)
+    }
+}
+
 function Get-TraceMetrics {
     param([string]$TracePath)
     $modelCalls = 0
@@ -316,6 +355,22 @@ foreach ($case in $cases) {
             if ($errorText -match 'run ([0-9a-f-]{36})') { $runId = $Matches[1] }
         }
 
+        $runDirectory = if ($runId) { Join-Path $workspace ".pactrail/runs/$runId" } else { '' }
+        $candidateRoot = if ($runDirectory) { Join-Path $runDirectory 'workspace' } else { '' }
+        $candidateGrade = [pscustomobject]@{
+            passed = $false
+            changed_paths = @()
+            assertions = @([pscustomobject]@{
+                name = 'candidate-workspace'
+                passed = $false
+                detail = 'No durable candidate workspace was available.'
+            })
+        }
+        if ($candidateRoot -and (Test-Path -LiteralPath $candidateRoot -PathType Container)) {
+            $candidateGrade = Test-CaseWorkspace -Root $candidateRoot -Baseline $before -Case $case
+            Copy-Item -LiteralPath $candidateRoot -Destination (Join-Path $artifactDirectory 'candidate-workspace') -Recurse
+        }
+
         $candidateSnapshot = Get-VisibleSnapshot -Root $workspace
         $isolatedBeforeApply = Test-SnapshotEqual -Left $before -Right $candidateSnapshot
         $applyExitCode = $null
@@ -329,34 +384,9 @@ foreach ($case in $cases) {
         $after = Get-VisibleSnapshot -Root $workspace
         $assertions = New-Object System.Collections.ArrayList
         Add-Assertion $assertions 'transaction-isolation' $isolatedBeforeApply 'The source workspace was unchanged before apply.'
-
-        foreach ($property in $case.expected_files.PSObject.Properties) {
-            $relativePath = $property.Name -replace '/', [System.IO.Path]::DirectorySeparatorChar
-            $path = Join-Path $workspace $relativePath
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-                Add-Assertion $assertions "file:$($property.Name)" $false 'Expected file is missing.'
-                continue
-            }
-            $actual = [System.IO.File]::ReadAllText($path)
-            $expected = [string]$property.Value
-            $matches = (Normalize-Text $actual $case.allow_terminal_newline) -ceq
-                (Normalize-Text $expected $case.allow_terminal_newline)
-            $detail = if ($matches) { 'Content matched.' } else { 'Content differed.' }
-            Add-Assertion $assertions "file:$($property.Name)" $matches $detail
-        }
-        foreach ($relative in $case.expected_absent) {
-            $relativePath = [string]$relative -replace '/', [System.IO.Path]::DirectorySeparatorChar
-            $absent = -not (Test-Path -LiteralPath (Join-Path $workspace $relativePath))
-            $detail = if ($absent) { 'Path is absent.' } else { 'Path still exists.' }
-            Add-Assertion $assertions "absent:$relative" $absent $detail
-        }
-
-        $actualChanged = @(Get-ChangedPaths -Before $before -After $after)
-        $expectedChanged = @($case.expected_changed_paths | ForEach-Object { [string]$_ } | Sort-Object)
-        $changedMatches = @(
-            Compare-Object -ReferenceObject @($expectedChanged) -DifferenceObject @($actualChanged)
-        ).Count -eq 0
-        Add-Assertion $assertions 'changed-paths' $changedMatches "Expected [$($expectedChanged -join ', ')]; observed [$($actualChanged -join ', ')]."
+        $workspaceGrade = Test-CaseWorkspace -Root $workspace -Baseline $before -Case $case
+        foreach ($assertion in $workspaceGrade.assertions) { [void]$assertions.Add($assertion) }
+        $actualChanged = $workspaceGrade.changed_paths
 
         $summary = if ($null -ne $runJson) { [string]$runJson.summary } else { '' }
         foreach ($term in $case.expected_summary_terms) {
@@ -372,7 +402,6 @@ foreach ($case in $cases) {
                 -StdoutPath (Join-Path $artifactDirectory 'trace-render.json') `
                 -StderrPath (Join-Path $artifactDirectory 'trace-stderr.txt')
             $traceValid = $traceCheck.ExitCode -eq 0 -and $null -ne (ConvertFrom-PactrailJson -Text $traceCheck.Output)
-            $runDirectory = Join-Path $workspace ".pactrail/runs/$runId"
             $tracePath = Join-Path $runDirectory 'trace.jsonl'
             $receiptPath = Join-Path $runDirectory 'receipt.json'
             if (Test-Path -LiteralPath $tracePath) {
@@ -404,6 +433,9 @@ foreach ($case in $cases) {
             run_id = $runId
             duration_ms = $invoke.DurationMs
             tokens = $reportedTokens
+            candidate_correct = $candidateGrade.passed
+            candidate_changed_paths = $candidateGrade.changed_paths
+            candidate_assertions = $candidateGrade.assertions
             isolation_preserved = $isolatedBeforeApply
             trace_integrity_verified = $traceValid
             changed_paths = $actualChanged
@@ -417,6 +449,7 @@ foreach ($case in $cases) {
 }
 
 $passedCount = @($results | Where-Object { $_.passed }).Count
+$candidatePassedCount = @($results | Where-Object { $_.candidate_correct }).Count
 $durationValues = @($results | ForEach-Object { [long]$_.duration_ms } | Sort-Object)
 $middle = [int][Math]::Floor($durationValues.Count / 2)
 $medianDuration = if ($durationValues.Count % 2 -eq 0) {
@@ -443,6 +476,9 @@ $summaryObject = [pscustomobject]@{
     passed = $passedCount
     failed = $results.Count - $passedCount
     pass_rate = [Math]::Round($passedCount / $results.Count, 4)
+    candidate_correct = $candidatePassedCount
+    candidate_incorrect = $results.Count - $candidatePassedCount
+    candidate_correctness_rate = [Math]::Round($candidatePassedCount / $results.Count, 4)
     median_duration_ms = $medianDuration
     total_tokens = [long](($results | Measure-Object -Property tokens -Sum).Sum)
     endpoint_model_count = $endpointModelIds.Count
@@ -456,20 +492,22 @@ $markdown = New-Object System.Collections.Generic.List[string]
 $markdown.Add("# Pactrail MVB v1 - $Model")
 $markdown.Add('')
 $markdown.Add("- Result: **$passedCount/$($results.Count) passed** ($([Math]::Round($summaryObject.pass_rate * 100, 1))%)")
+$markdown.Add("- Isolated candidate correctness: **$candidatePassedCount/$($results.Count)** ($([Math]::Round($summaryObject.candidate_correctness_rate * 100, 1))%)")
 $markdown.Add("- Pactrail: ``$pactrailVersion``")
 $markdown.Add("- Context/output/turns: $ContextTokens / $MaxOutputTokens / $MaxTurns")
 $markdown.Add("- Logical request ceiling: $logicalRequestCeiling$(if ($RequestBudget -gt 0) { " / budget $RequestBudget" } else { '' })")
 $markdown.Add("- Median end-to-end task time: $([Math]::Round($medianDuration / 1000, 2)) s")
 $markdown.Add("- Total reported model tokens: $($summaryObject.total_tokens)")
 $markdown.Add('')
-$markdown.Add('| Case | Category | Result | Time | Tokens | Model/tool calls | Recovery stop |')
-$markdown.Add('|---|---|---:|---:|---:|---:|---:|')
+$markdown.Add('| Case | Category | Strict result | Candidate | Time | Tokens | Model/tool calls | Recovery stop |')
+$markdown.Add('|---|---|---:|---:|---:|---:|---:|---:|')
 foreach ($result in $results) {
     $mark = if ($result.passed) { 'PASS' } else { 'FAIL' }
-    $markdown.Add("| $($result.case_id) | $($result.category) | $mark | $([Math]::Round($result.duration_ms / 1000, 2)) s | $($result.tokens) | $($result.metrics.model_calls)/$($result.metrics.tool_calls) | $($result.metrics.recovery_stops) |")
+    $candidateMark = if ($result.candidate_correct) { 'CORRECT' } else { 'INCORRECT' }
+    $markdown.Add("| $($result.case_id) | $($result.category) | $mark | $candidateMark | $([Math]::Round($result.duration_ms / 1000, 2)) s | $($result.tokens) | $($result.metrics.model_calls)/$($result.metrics.tool_calls) | $($result.metrics.recovery_stops) |")
 }
 $markdown.Add('')
-$markdown.Add("A pass requires exact final workspace assertions, transaction isolation before apply, and a trace accepted by Pactrail's integrity checker. See ``summary.json`` and each case directory for raw outputs, receipts, and portable JSONL traces.")
+$markdown.Add("A strict pass requires exact final workspace assertions, transaction isolation before apply, and a trace accepted by Pactrail's integrity checker. Candidate correctness separately reports whether the exact expected change existed in Pactrail's isolated transaction, even if the model failed to finish and make it apply-ready. See ``summary.json`` and each case directory for raw outputs, candidate snapshots, receipts, and portable JSONL traces.")
 Write-Utf8File -Path (Join-Path $resultRoot 'SUMMARY.md') -Content ($markdown -join "`n")
 
 Write-Host ''

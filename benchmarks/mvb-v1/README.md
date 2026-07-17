@@ -66,8 +66,15 @@ rate-limit or availability retries.
 
 The runner creates a fresh workspace for every case. Results include an
 aggregate `summary.json`, a human-readable `SUMMARY.md`, and per-case raw CLI
-output, receipt, trace, integrity-check rendering, assertions, timing, token
-counts, and model/tool-call counts.
+output, isolated candidate snapshot, receipt, trace, integrity-check rendering,
+assertions, timing, token counts, and model/tool-call counts.
+
+The primary score is deliberately strict: the model must finish, produce an
+apply-ready candidate, and land exact expected output. A separately labeled
+candidate-correctness metric answers a narrower diagnostic question: did the
+exact expected change exist inside Pactrail's isolated transaction, even if the
+model ran out of turns before its final summary? Candidate correctness never
+converts an incomplete run into a strict pass.
 
 ## How to interpret results
 
