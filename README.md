@@ -243,6 +243,12 @@ and raw evidence](benchmarks/results/2026-07-17-windows-arm64/README.md). This i
 an integration baseline, not a SWE-bench result or a claim of superiority over
 another harness.
 
+A separate [OpenRouter free-tier report](benchmarks/results/2026-07-17-openrouter-free/README.md)
+records a quota-constrained Laguna M.1 run: **1/4 strict completions**, **4/4
+exact isolated candidates**, **4/4 source isolation**, and **4/4
+integrity-accepted traces**. It retains the strict failures and the Qwen
+rate-limit diagnostic that exposed and led to a provider-backoff fix.
+
 ## Architecture at a glance
 
 ```text

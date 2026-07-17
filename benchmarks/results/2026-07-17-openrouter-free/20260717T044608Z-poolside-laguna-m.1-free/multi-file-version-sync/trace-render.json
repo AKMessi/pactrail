@@ -1,0 +1,555 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 0,
+    "timestamp": "2026-07-17T04:46:21.374535Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-openrouter-mvb-final\\20260717T044608Z-poolside-laguna-m.1-free-multi-file-version-sync",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f6e65-9ead-7502-b191-69b0c0d000e5",
+            "description": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "8bb2da24a09c16867b907dbe360944a960db5d774b5c210d59375c2bab2f3243"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 1,
+    "timestamp": "2026-07-17T04:46:21.3747878Z",
+    "previous_hash": "8bb2da24a09c16867b907dbe360944a960db5d774b5c210d59375c2bab2f3243",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "34e57d3ed3eda77380a63eb55e89862963fd5faf8205056ee97820b8e2cef00e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 2,
+    "timestamp": "2026-07-17T04:46:21.3749944Z",
+    "previous_hash": "34e57d3ed3eda77380a63eb55e89862963fd5faf8205056ee97820b8e2cef00e",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "5cf97731c2b95b251a2f94b819b34c6ef2da6e3afe9a47bbf34a01b5f7387c3b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 3,
+    "timestamp": "2026-07-17T04:46:21.376907Z",
+    "previous_hash": "5cf97731c2b95b251a2f94b819b34c6ef2da6e3afe9a47bbf34a01b5f7387c3b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 3 files and cited 3 within a 1978-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1,
+        "attributes": {
+          "budget_bytes": "23040",
+          "cited_files": "3",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1978",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "c6afe0bb98bbe21f9c5cac37c897e64d667293366aa1e7166b81483f70dc4962"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 4,
+    "timestamp": "2026-07-17T04:46:21.3771302Z",
+    "previous_hash": "c6afe0bb98bbe21f9c5cac37c897e64d667293366aa1e7166b81483f70dc4962",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:93336b7bd4c2bd62dcdc2a3fc78ab527386f2c8dc811ffb2480a3cd584219e5e"
+      }
+    },
+    "hash": "5eb3dae3fc07e7b5961d2f3a9a21d48474652ae5763882ec061542d8859b1dda"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 5,
+    "timestamp": "2026-07-17T04:46:21.3773004Z",
+    "previous_hash": "5eb3dae3fc07e7b5961d2f3a9a21d48474652ae5763882ec061542d8859b1dda",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "08bf4c823b969cbbadc9d6469a0ed59b9ddba6aa5101fe253042d21287e5a474"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 6,
+    "timestamp": "2026-07-17T04:46:21.3774504Z",
+    "previous_hash": "08bf4c823b969cbbadc9d6469a0ed59b9ddba6aa5101fe253042d21287e5a474",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "8e2ba7b255de40cede077929a1e292c0952126ce09cae5300637f943b0a9fd84"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 7,
+    "timestamp": "2026-07-17T04:46:25.1795978Z",
+    "previous_hash": "8e2ba7b255de40cede077929a1e292c0952126ce09cae5300637f943b0a9fd84",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 1 produced 1 tool call(s) and 91 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 3801,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3118",
+          "output_tokens": "144",
+          "text_bytes": "91",
+          "tool_calls": "1",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "63eb5934b900ab6ee6f44ab6a8189b88a40f8191e6d96259b8f8973c243d6743"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 8,
+    "timestamp": "2026-07-17T04:46:25.187092Z",
+    "previous_hash": "63eb5934b900ab6ee6f44ab6a8189b88a40f8191e6d96259b8f8973c243d6743",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_many_files",
+        "action": "read_many_files",
+        "summary": "read 3 files (114 bytes)",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:Cargo.toml",
+          "fs.read:README.md",
+          "fs.read:src/version.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 6,
+        "attributes": {
+          "arguments_digest": "f48aa0399a7c60e262a159c84baf65b9edac44129fb5269cfe22ec993fa2a36d",
+          "call_id": "chatcmpl-tool-891fe016f1d84e3d80b0a5a15893c15c",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "327",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "c4813b822c9b1b2d8c44eaca51082eb2641e35af2c2395f0a385e7fc26061ed1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 9,
+    "timestamp": "2026-07-17T04:46:27.4714164Z",
+    "previous_hash": "c4813b822c9b1b2d8c44eaca51082eb2641e35af2c2395f0a385e7fc26061ed1",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 2 produced 1 tool call(s) and 69 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2283,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3307",
+          "output_tokens": "147",
+          "text_bytes": "69",
+          "tool_calls": "1",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "c0daa55cef6428bda5cdc9716ceb5a0877ef38626c61dadc7e1ddf3d91b1ee21"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 10,
+    "timestamp": "2026-07-17T04:46:27.5086593Z",
+    "previous_hash": "c0daa55cef6428bda5cdc9716ceb5a0877ef38626c61dadc7e1ddf3d91b1ee21",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:edit_file",
+        "action": "edit_file",
+        "summary": "applied 1 edits (1 replacements) to Cargo.toml",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:Cargo.toml",
+          "fs.write:Cargo.toml"
+        ],
+        "succeeded": true,
+        "duration_ms": 9,
+        "attributes": {
+          "arguments_digest": "d935e178e7e26a73f015e3d360a8ecc4d9ae63acbd67776655fe6c571057a30c",
+          "call_id": "chatcmpl-tool-8408e86dd9074244aa798ef545e3cfbe",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "66",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "cc8d796743cd252b754ca66fae1d51fa475dbedec3d6ce1ec8059cb23bbdf1ce"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 11,
+    "timestamp": "2026-07-17T04:46:29.2279714Z",
+    "previous_hash": "cc8d796743cd252b754ca66fae1d51fa475dbedec3d6ce1ec8059cb23bbdf1ce",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 3 produced 1 tool call(s) and 1 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1718,
+        "attributes": {
+          "cached_input_tokens": "3104",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3446",
+          "output_tokens": "107",
+          "text_bytes": "1",
+          "tool_calls": "1",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "9e9bc9bbd2e07a58ce42304b2db6bdfede9d810dfd06803c96111851cad9b01e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 12,
+    "timestamp": "2026-07-17T04:46:29.2610163Z",
+    "previous_hash": "9e9bc9bbd2e07a58ce42304b2db6bdfede9d810dfd06803c96111851cad9b01e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:edit_file",
+        "action": "edit_file",
+        "summary": "applied 1 edits (1 replacements) to src/version.rs",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:src/version.rs",
+          "fs.write:src/version.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "b311cfda06764a73c23e040d23d6e2d326d2dbad20414f4edbef096aaa8e23bb",
+          "call_id": "chatcmpl-tool-5f09cb7730464aeba50f64cf14c7312f",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "70",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "9060d2d108f8a57917d8eb826b4fde3a2f4dbbabd3f9737ce3027f7bae9f943c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 13,
+    "timestamp": "2026-07-17T04:46:30.5601991Z",
+    "previous_hash": "9060d2d108f8a57917d8eb826b4fde3a2f4dbbabd3f9737ce3027f7bae9f943c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 4 produced 1 tool call(s) and 1 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1298,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3574",
+          "output_tokens": "86",
+          "text_bytes": "1",
+          "tool_calls": "1",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "990aa2fbcac22e874535b9838918ab7fce249e39757c4e93fb1900258a514360"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 14,
+    "timestamp": "2026-07-17T04:46:30.6078041Z",
+    "previous_hash": "990aa2fbcac22e874535b9838918ab7fce249e39757c4e93fb1900258a514360",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:edit_file",
+        "action": "edit_file",
+        "summary": "applied 1 edits (1 replacements) to README.md",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:README.md",
+          "fs.write:README.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 15,
+        "attributes": {
+          "arguments_digest": "120e940622aea6c6da65d9bc90e96cf835bc455f71e5344a7c55423bf027f468",
+          "call_id": "chatcmpl-tool-aa4e70a17e6c4774b7c510a343684b23",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "65",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "7e9a7014bc4457804a123b85835f563c875b61db1613d1075bed4ebdf0902e8e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 15,
+    "timestamp": "2026-07-17T04:46:31.5921908Z",
+    "previous_hash": "7e9a7014bc4457804a123b85835f563c875b61db1613d1075bed4ebdf0902e8e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 5 produced 1 tool call(s) and 1 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 983,
+        "attributes": {
+          "cached_input_tokens": "3424",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3688",
+          "output_tokens": "47",
+          "text_bytes": "1",
+          "tool_calls": "1",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "6a17d973507733eaee2c64ec3891cbb34ac3156bb1b478963783f4feb62ff9b9"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 16,
+    "timestamp": "2026-07-17T04:46:31.6229853Z",
+    "previous_hash": "6a17d973507733eaee2c64ec3891cbb34ac3156bb1b478963783f4feb62ff9b9",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:workspace_changes",
+        "action": "workspace_changes",
+        "summary": "invalid input for workspace_changes: unknown field `path`, there are no fields",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 3,
+        "attributes": {
+          "arguments_digest": "2eafb1f1c7336630d0a5f0493d05bbc7bcc40382c36408e5f4b53825106d02bc",
+          "call_id": "chatcmpl-tool-3f5f2a901f02461c99062de65cfbfe1b",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "90",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "c9e5dd461969e3ca45c7bc77ee3d4bc9c79536e0382cf83e74fe0807c25c8bac"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 17,
+    "timestamp": "2026-07-17T04:46:32.6056468Z",
+    "previous_hash": "c9e5dd461969e3ca45c7bc77ee3d4bc9c79536e0382cf83e74fe0807c25c8bac",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 6 produced 1 tool call(s) and 1 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 982,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3748",
+          "output_tokens": "21",
+          "text_bytes": "1",
+          "tool_calls": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "43383a0dfb348183f262fcf28132b9376568f92e33a1e4142fe059522015315b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 18,
+    "timestamp": "2026-07-17T04:46:32.6408077Z",
+    "previous_hash": "43383a0dfb348183f262fcf28132b9376568f92e33a1e4142fe059522015315b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:workspace_changes",
+        "action": "workspace_changes",
+        "summary": "inspected 3 candidate file changes",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "transaction.inspect"
+        ],
+        "succeeded": true,
+        "duration_ms": 8,
+        "attributes": {
+          "arguments_digest": "6e46dd10defc9b56c29a6ec56b508c21f54c08192194e4df25bf36f0c9c3c279",
+          "call_id": "chatcmpl-tool-5df8677bafd74fc8962d6d5cb3e6f673",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "874",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "b3b8ec8590df88d383e42b04167890c12d37651e8f5e21e89c9e4a590dad6952"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "sequence": 19,
+    "timestamp": "2026-07-17T04:46:32.6418086Z",
+    "previous_hash": "b3b8ec8590df88d383e42b04167890c12d37651e8f5e21e89c9e4a590dad6952",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "failed"
+      }
+    },
+    "hash": "d3b9c6f02b82933e4b7f871ac2d95f515eb80ca90f30a4f1cb7ef4a59eafbb41"
+  }
+]

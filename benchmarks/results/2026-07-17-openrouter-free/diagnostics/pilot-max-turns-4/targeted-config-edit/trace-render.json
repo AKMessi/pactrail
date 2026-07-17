@@ -1,0 +1,425 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 0,
+    "timestamp": "2026-07-17T04:45:08.0830884Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-openrouter-mvb\\20260717T044507Z-poolside-laguna-m.1-free-targeted-config-edit",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f6e64-8051-7d22-861a-10ac80a0f6af",
+            "description": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "7daae180f195e3bef70017bf510460c5941fe5067234a775f3a98463666777d5"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 1,
+    "timestamp": "2026-07-17T04:45:08.0843045Z",
+    "previous_hash": "7daae180f195e3bef70017bf510460c5941fe5067234a775f3a98463666777d5",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "efc9cbdefd2ac580471b6c8c8eb0d792fd41581595bbe2058c17f4ef492e487d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 2,
+    "timestamp": "2026-07-17T04:45:08.0845437Z",
+    "previous_hash": "efc9cbdefd2ac580471b6c8c8eb0d792fd41581595bbe2058c17f4ef492e487d",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "234aa9f615ff0b85c34c13ee5ed484db8ee5dc16ca7a689df6c82b1d9fe4da73"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 3,
+    "timestamp": "2026-07-17T04:45:08.0868564Z",
+    "previous_hash": "234aa9f615ff0b85c34c13ee5ed484db8ee5dc16ca7a689df6c82b1d9fe4da73",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 2 files and cited 2 within a 1807-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2,
+        "attributes": {
+          "budget_bytes": "23040",
+          "cited_files": "2",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1807",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "4ac7bb9030045cf40bfec2b8db94b989006f4f20ba6ca53103a0bca1314e7863"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 4,
+    "timestamp": "2026-07-17T04:45:08.0870689Z",
+    "previous_hash": "4ac7bb9030045cf40bfec2b8db94b989006f4f20ba6ca53103a0bca1314e7863",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:d547f3dde4047974607b6ee204ae368b4d88c91f9f56d13d8bf8d19b9d5d46c4"
+      }
+    },
+    "hash": "6f0e6742e92806aa339304e3cf35dd100b2ef9c6d5d464798af1dc23d2b3fa26"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 5,
+    "timestamp": "2026-07-17T04:45:08.0872751Z",
+    "previous_hash": "6f0e6742e92806aa339304e3cf35dd100b2ef9c6d5d464798af1dc23d2b3fa26",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "ba3d2ee4f28893873c4c9107d08fa9c05488cee595722c1b8462e48c4e5915cb"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 6,
+    "timestamp": "2026-07-17T04:45:08.0874787Z",
+    "previous_hash": "ba3d2ee4f28893873c4c9107d08fa9c05488cee595722c1b8462e48c4e5915cb",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "08e9e2c6e739b842f97cf4e7aa5040bbdfc01f4e3148209166072f03ebecd681"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 7,
+    "timestamp": "2026-07-17T04:45:10.6794972Z",
+    "previous_hash": "08e9e2c6e739b842f97cf4e7aa5040bbdfc01f4e3148209166072f03ebecd681",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 1 produced 1 tool call(s) and 1 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2591,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3052",
+          "output_tokens": "85",
+          "text_bytes": "1",
+          "tool_calls": "1",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "3a4cb181963ba313f96ee523a7abbd35b00ab592d8e2b1df875aaec51e08df8c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 8,
+    "timestamp": "2026-07-17T04:45:10.6854483Z",
+    "previous_hash": "3a4cb181963ba313f96ee523a7abbd35b00ab592d8e2b1df875aaec51e08df8c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 3 lines from config/app.conf",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:config/app.conf"
+        ],
+        "succeeded": true,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "9c915acb4cebac8ad0ffa217ab3f460760b10ceb16d853f136300218d115388f",
+          "call_id": "chatcmpl-tool-6ef31923a6fb450fba3f3fe6d4337a88",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "124",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "9782878e8d557f04a8090a5117fe7ce230dc9bb6f585e15bd1188b0403bdaa46"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 9,
+    "timestamp": "2026-07-17T04:45:13.4132718Z",
+    "previous_hash": "9782878e8d557f04a8090a5117fe7ce230dc9bb6f585e15bd1188b0403bdaa46",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 2 produced 1 tool call(s) and 1 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2726,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3140",
+          "output_tokens": "145",
+          "text_bytes": "1",
+          "tool_calls": "1",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "5647714c19a935daa153efbe998ef18922fdac567fdfd3dd66396623d7894226"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 10,
+    "timestamp": "2026-07-17T04:45:13.4474531Z",
+    "previous_hash": "5647714c19a935daa153efbe998ef18922fdac567fdfd3dd66396623d7894226",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:edit_file",
+        "action": "edit_file",
+        "summary": "applied 1 edits (1 replacements) to config/app.conf",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:config/app.conf",
+          "fs.write:config/app.conf"
+        ],
+        "succeeded": true,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "1fb7160a14f2f5c6a166d5813ecfe51078bcde7b3ae6ab7e3672f667840f3b4f",
+          "call_id": "chatcmpl-tool-3267e032509b47d88e731691d364f703",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "71",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "e0c811e8bf0e90bfe33243cd9fe88481e52205da51c61f239d52aa485745e5ad"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 11,
+    "timestamp": "2026-07-17T04:45:14.5145984Z",
+    "previous_hash": "e0c811e8bf0e90bfe33243cd9fe88481e52205da51c61f239d52aa485745e5ad",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 3 produced 1 tool call(s) and 1 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1066,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3252",
+          "output_tokens": "50",
+          "text_bytes": "1",
+          "tool_calls": "1",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "9dda35e0fb514d98db67ab101b04f803ef4b5b1f30e01734dfd9a49b37b2f24e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 12,
+    "timestamp": "2026-07-17T04:45:14.5466926Z",
+    "previous_hash": "9dda35e0fb514d98db67ab101b04f803ef4b5b1f30e01734dfd9a49b37b2f24e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 3 lines from config/app.conf",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:config/app.conf"
+        ],
+        "succeeded": true,
+        "duration_ms": 2,
+        "attributes": {
+          "arguments_digest": "9c915acb4cebac8ad0ffa217ab3f460760b10ceb16d853f136300218d115388f",
+          "call_id": "chatcmpl-tool-98f7a43005b845f084b2ec2d006379cd",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "124",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "bce971bf4daf385a17ed3c7a98f2ef813018b2128b2945c46dd2b10dee262c43"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 13,
+    "timestamp": "2026-07-17T04:45:15.8391623Z",
+    "previous_hash": "bce971bf4daf385a17ed3c7a98f2ef813018b2128b2945c46dd2b10dee262c43",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/poolside/laguna-m.1:free",
+        "action": "invoke",
+        "summary": "model turn 4 produced 1 tool call(s) and 1 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1291,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3340",
+          "output_tokens": "67",
+          "text_bytes": "1",
+          "tool_calls": "1",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "f4701a934df9e35d457e39f0650cb96f0c7ced19aef5802e17e472dc518f3135"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 14,
+    "timestamp": "2026-07-17T04:45:15.8703248Z",
+    "previous_hash": "f4701a934df9e35d457e39f0650cb96f0c7ced19aef5802e17e472dc518f3135",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:workspace_changes",
+        "action": "workspace_changes",
+        "summary": "inspected 1 candidate file changes",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "transaction.inspect"
+        ],
+        "succeeded": true,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "6e46dd10defc9b56c29a6ec56b508c21f54c08192194e4df25bf36f0c9c3c279",
+          "call_id": "chatcmpl-tool-702d7a52cb3b4d42a975e2e2ca8acffe",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "334",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "f6e903bad14934ccd4da68ac236c84483e40071106f28b3ed796f99551e622c7"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e64-8052-77b3-9e5f-36464f078938",
+    "sequence": 15,
+    "timestamp": "2026-07-17T04:45:15.8707334Z",
+    "previous_hash": "f6e903bad14934ccd4da68ac236c84483e40071106f28b3ed796f99551e622c7",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "failed"
+      }
+    },
+    "hash": "a13b5113c2e84bbea0add4308e5b30c2e0b9dc9c5017410feb9149e26e76b335"
+  }
+]

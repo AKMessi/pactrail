@@ -1,0 +1,62 @@
+{
+    "case_id":  "multi-file-version-sync",
+    "repetition":  1,
+    "category":  "multi-file-edit",
+    "model":  "qwen/qwen3-coder:free",
+    "passed":  false,
+    "pactrail_exit_code":  1,
+    "apply_exit_code":  null,
+    "outcome":  "process_error",
+    "run_id":  "019f6e61-756a-7853-8261-b300ba05fa5f",
+    "duration_ms":  4846,
+    "tokens":  0,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  8,
+                    "model_calls":  0,
+                    "tool_calls":  0,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  0,
+                    "tool_duration_ms":  0,
+                    "input_tokens":  0,
+                    "output_tokens":  0,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:Cargo.toml",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "file:src/version.rs",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  false,
+                           "detail":  "Expected [Cargo.toml, README.md, src/version.rs]; observed []."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  ""
+}

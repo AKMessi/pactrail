@@ -1,0 +1,57 @@
+{
+    "case_id":  "targeted-config-edit",
+    "repetition":  1,
+    "category":  "precision-edit",
+    "model":  "poolside/laguna-m.1:free",
+    "passed":  false,
+    "pactrail_exit_code":  1,
+    "apply_exit_code":  null,
+    "outcome":  "process_error",
+    "run_id":  "019f6e65-6f6c-7a30-8779-d817ef28d591",
+    "duration_ms":  11951,
+    "tokens":  20292,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  20,
+                    "model_calls":  6,
+                    "tool_calls":  6,
+                    "failed_tool_calls":  1,
+                    "model_duration_ms":  11708,
+                    "tool_duration_ms":  18,
+                    "input_tokens":  19765,
+                    "output_tokens":  527,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:config/app.conf",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  false,
+                           "detail":  "Expected [config/app.conf]; observed []."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  ""
+}

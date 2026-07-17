@@ -1,0 +1,168 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f6e61-61ea-70e3-af6d-4ab67e3ffc48",
+    "sequence": 0,
+    "timestamp": "2026-07-17T04:41:43.6941775Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-openrouter-mvb\\20260717T044143Z-qwen-qwen3-coder-free-targeted-config-edit",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f6e61-61e9-70c2-b55f-6358894f22f7",
+            "description": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "fcc52b9ac1ae492ab6a4fb06a17590b6dcfd69fe4415020c929415322ff3b703"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e61-61ea-70e3-af6d-4ab67e3ffc48",
+    "sequence": 1,
+    "timestamp": "2026-07-17T04:41:43.6947647Z",
+    "previous_hash": "fcc52b9ac1ae492ab6a4fb06a17590b6dcfd69fe4415020c929415322ff3b703",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "220990d1ee0811bf9c2a2444f49405e96d96007df183eabbe04b4021bbe5057d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e61-61ea-70e3-af6d-4ab67e3ffc48",
+    "sequence": 2,
+    "timestamp": "2026-07-17T04:41:43.6948711Z",
+    "previous_hash": "220990d1ee0811bf9c2a2444f49405e96d96007df183eabbe04b4021bbe5057d",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "8886623694a3a8041e36736b169c939a44ae7d95341cd6a44b0b6fd1c21cdf63"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e61-61ea-70e3-af6d-4ab67e3ffc48",
+    "sequence": 3,
+    "timestamp": "2026-07-17T04:41:43.6967962Z",
+    "previous_hash": "8886623694a3a8041e36736b169c939a44ae7d95341cd6a44b0b6fd1c21cdf63",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 2 files and cited 2 within a 1807-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1,
+        "attributes": {
+          "budget_bytes": "23040",
+          "cited_files": "2",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1807",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "482ba0607e3822835240b9f59fd0ed74855a4fb9f2280967014c3e5ea5cde429"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e61-61ea-70e3-af6d-4ab67e3ffc48",
+    "sequence": 4,
+    "timestamp": "2026-07-17T04:41:43.6969667Z",
+    "previous_hash": "482ba0607e3822835240b9f59fd0ed74855a4fb9f2280967014c3e5ea5cde429",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:d547f3dde4047974607b6ee204ae368b4d88c91f9f56d13d8bf8d19b9d5d46c4"
+      }
+    },
+    "hash": "768f99b15017bd6a2130fc5fa56f3ddcbe80af2ba47addd99630a3fe998e2321"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e61-61ea-70e3-af6d-4ab67e3ffc48",
+    "sequence": 5,
+    "timestamp": "2026-07-17T04:41:43.6972448Z",
+    "previous_hash": "768f99b15017bd6a2130fc5fa56f3ddcbe80af2ba47addd99630a3fe998e2321",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "12aabfaf44e1063bc4a353e914cba2e98b55c5cdf402540633e53c4daf684ffb"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e61-61ea-70e3-af6d-4ab67e3ffc48",
+    "sequence": 6,
+    "timestamp": "2026-07-17T04:41:43.6974581Z",
+    "previous_hash": "12aabfaf44e1063bc4a353e914cba2e98b55c5cdf402540633e53c4daf684ffb",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "d6a12f0abea938de3d686f161ff8c17cb08e2885f0336a0ec93cdc94cf79ca50"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f6e61-61ea-70e3-af6d-4ab67e3ffc48",
+    "sequence": 7,
+    "timestamp": "2026-07-17T04:41:48.4033336Z",
+    "previous_hash": "d6a12f0abea938de3d686f161ff8c17cb08e2885f0336a0ec93cdc94cf79ca50",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "failed"
+      }
+    },
+    "hash": "1dfd3838bf667349d9ba7f9bec24f7d5e9e3343a15d21effc96ba315d455c720"
+  }
+]

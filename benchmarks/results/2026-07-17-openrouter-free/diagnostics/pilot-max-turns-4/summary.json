@@ -1,0 +1,84 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-mvb-v1",
+    "started_at":  "20260717T044507Z",
+    "model":  "poolside/laguna-m.1:free",
+    "base_url":  "https://openrouter.ai/api/v1",
+    "pactrail_version":  "pactrail 0.1.0",
+    "context_tokens":  32768,
+    "max_output_tokens":  2048,
+    "max_turns":  4,
+    "repetitions":  1,
+    "request_budget":  4,
+    "logical_request_ceiling":  4,
+    "cases":  1,
+    "passed":  0,
+    "failed":  1,
+    "pass_rate":  0,
+    "median_duration_ms":  7976,
+    "total_tokens":  13131,
+    "endpoint_model_count":  344,
+    "requested_model_advertised":  true,
+    "endpoint_models":  [
+                            "poolside/laguna-m.1:free"
+                        ],
+    "results":  [
+                    {
+                        "case_id":  "targeted-config-edit",
+                        "repetition":  1,
+                        "category":  "precision-edit",
+                        "model":  "poolside/laguna-m.1:free",
+                        "passed":  false,
+                        "pactrail_exit_code":  1,
+                        "apply_exit_code":  null,
+                        "outcome":  "process_error",
+                        "run_id":  "019f6e64-8052-77b3-9e5f-36464f078938",
+                        "duration_ms":  7976,
+                        "tokens":  13131,
+                        "isolation_preserved":  true,
+                        "trace_integrity_verified":  true,
+                        "changed_paths":  [
+
+                                          ],
+                        "metrics":  {
+                                        "events":  16,
+                                        "model_calls":  4,
+                                        "tool_calls":  4,
+                                        "failed_tool_calls":  0,
+                                        "model_duration_ms":  7674,
+                                        "tool_duration_ms":  17,
+                                        "input_tokens":  12784,
+                                        "output_tokens":  347,
+                                        "recovery_stops":  0
+                                    },
+                        "assertions":  [
+                                           {
+                                               "name":  "transaction-isolation",
+                                               "passed":  true,
+                                               "detail":  "The source workspace was unchanged before apply."
+                                           },
+                                           {
+                                               "name":  "file:config/app.conf",
+                                               "passed":  false,
+                                               "detail":  "Content differed."
+                                           },
+                                           {
+                                               "name":  "file:README.md",
+                                               "passed":  true,
+                                               "detail":  "Content matched."
+                                           },
+                                           {
+                                               "name":  "changed-paths",
+                                               "passed":  false,
+                                               "detail":  "Expected [config/app.conf]; observed []."
+                                           },
+                                           {
+                                               "name":  "trace-integrity",
+                                               "passed":  true,
+                                               "detail":  "Pactrail accepted the hash-chained trace."
+                                           }
+                                       ],
+                        "summary":  ""
+                    }
+                ]
+}

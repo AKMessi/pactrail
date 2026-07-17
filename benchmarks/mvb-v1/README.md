@@ -90,8 +90,13 @@ useful protocol and recovery stress test, not a credible coding-quality
 baseline. Larger public claims should use multiple coding models and established
 external benchmarks in addition to this suite.
 
-## Published baseline
+## Published baselines
 
 The first complete local baseline, including all strict failures and raw
 integrity-checked artifacts, is available in the
 [`2026-07-17 Windows ARM64 report`](../results/2026-07-17-windows-arm64/README.md).
+
+A quota-constrained OpenRouter free-tier run, including the scored 1/4 strict
+result, 4/4 exact isolated candidates, rate-limit diagnostic, every failure,
+and raw traces, is available in the
+[`2026-07-17 OpenRouter report`](../results/2026-07-17-openrouter-free/README.md).

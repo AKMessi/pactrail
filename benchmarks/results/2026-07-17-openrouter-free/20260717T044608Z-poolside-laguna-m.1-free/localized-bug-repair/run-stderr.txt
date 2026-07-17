@@ -1,0 +1,4 @@
+2026-07-17T04:46:40.149519Z  WARN pactrail_engine::engine: tool call failed tool=edit_file error=edit 1 replacement count was 2, expected 1
+2026-07-17T04:46:47.211204Z  WARN pactrail_engine::engine: tool call failed tool=workspace_changes error=invalid input for workspace_changes: unknown field `path`, there are no fields
+error: engine failed for run 019f6e65-cb43-71b2-983d-d6331fb56486: model did not complete within 6 turns
+Portable trace: \\?\C:\Users\aarya\AppData\Local\Temp\pactrail-openrouter-mvb-final\20260717T044608Z-poolside-laguna-m.1-free-localized-bug-repair\.pactrail\runs\019f6e65-cb43-71b2-983d-d6331fb56486\trace.jsonl

@@ -1,0 +1,5 @@
+2026-07-17T04:41:44.754383Z  WARN pactrail_models::openai_compatible: retrying model request attempt=1 status=429
+2026-07-17T04:41:45.638890Z  WARN pactrail_models::openai_compatible: retrying model request attempt=2 status=429
+2026-07-17T04:41:46.780381Z  WARN pactrail_models::openai_compatible: retrying model request attempt=3 status=429
+error: engine failed for run 019f6e61-61ea-70e3-af6d-4ab67e3ffc48: model invocation failed: provider rejected the request with HTTP 429: Provider returned error
+Portable trace: \\?\C:\Users\aarya\AppData\Local\Temp\pactrail-openrouter-mvb\20260717T044143Z-qwen-qwen3-coder-free-targeted-config-edit\.pactrail\runs\019f6e61-61ea-70e3-af6d-4ab67e3ffc48\trace.jsonl

@@ -1,0 +1,62 @@
+{
+    "case_id":  "multi-file-version-sync",
+    "repetition":  1,
+    "category":  "multi-file-edit",
+    "model":  "poolside/laguna-m.1:free",
+    "passed":  false,
+    "pactrail_exit_code":  1,
+    "apply_exit_code":  null,
+    "outcome":  "process_error",
+    "run_id":  "019f6e65-9eae-7460-91a5-f5632f0aba3f",
+    "duration_ms":  11328,
+    "tokens":  21433,
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  20,
+                    "model_calls":  6,
+                    "tool_calls":  6,
+                    "failed_tool_calls":  1,
+                    "model_duration_ms":  11065,
+                    "tool_duration_ms":  54,
+                    "input_tokens":  20881,
+                    "output_tokens":  552,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:Cargo.toml",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "file:src/version.rs",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  false,
+                           "detail":  "Expected [Cargo.toml, README.md, src/version.rs]; observed []."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  ""
+}

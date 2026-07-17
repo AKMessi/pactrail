@@ -1,0 +1,5 @@
+2026-07-17T04:41:57.382768Z  WARN pactrail_models::openai_compatible: retrying model request attempt=1 status=429
+2026-07-17T04:41:57.917060Z  WARN pactrail_models::openai_compatible: retrying model request attempt=2 status=429
+2026-07-17T04:41:58.694862Z  WARN pactrail_models::openai_compatible: retrying model request attempt=3 status=429
+error: engine failed for run 019f6e61-95d5-7581-ba08-a963b97f261f: model invocation failed: provider rejected the request with HTTP 429: Rate limit exceeded: limit_rpm/qwen/qwen3-coder-480b-a35b-07-25/a9bbd882-011f-4606-8f60-85f3cb642586. High demand for qwen/qwen3-coder:free on OpenRouter - limited to 8 requests per minute. Please retry shortly.
+Portable trace: \\?\C:\Users\aarya\AppData\Local\Temp\pactrail-openrouter-mvb\20260717T044143Z-qwen-qwen3-coder-free-write-scope-defense\.pactrail\runs\019f6e61-95d5-7581-ba08-a963b97f261f\trace.jsonl

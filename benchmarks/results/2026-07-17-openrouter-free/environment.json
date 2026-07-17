@@ -1,0 +1,60 @@
+{
+    "schema_version":  1,
+    "captured_at":  "2026-07-17T04:52:18.5242533+00:00",
+    "final_run_source_revision":  "adca655e5080030e3d0a5703d9f3d5ed3475f518",
+    "candidate_evaluator_revision":  "5a636792f43cd16b02b267336bf66dfa3db3dff7",
+    "pactrail_version":  "pactrail 0.1.0",
+    "rustc":  "rustc 1.95.0 (59807616e 2026-04-14)\r\nbinary: rustc\r\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\r\ncommit-date: 2026-04-14\r\nhost: aarch64-pc-windows-msvc\r\nrelease: 1.95.0\r\nLLVM version: 22.1.2",
+    "os":  {
+               "caption":  "Microsoft Windows 11 Home Single Language",
+               "version":  "10.0.26200",
+               "build":  "26200",
+               "architecture":  "ARM 64-bit Processor"
+           },
+    "cpu":  {
+                "name":  "Snapdragon(R) X Plus - X1P42100 - Qualcomm(R) Oryon(TM) CPU",
+                "cores":  8,
+                "logical_processors":  8
+            },
+    "openrouter":  {
+                       "key_is_free_tier":  true,
+                       "key_credit_usage_daily":  0,
+                       "documented_free_requests_per_minute":  20,
+                       "documented_free_requests_per_day":  50,
+                       "tool_capable_zero_price_free_model_count":  16,
+                       "tool_capable_zero_price_free_model_ids":  [
+                                                                      "cohere/north-mini-code:free",
+                                                                      "google/gemma-4-26b-a4b-it:free",
+                                                                      "google/gemma-4-31b-it:free",
+                                                                      "meta-llama/llama-3.3-70b-instruct:free",
+                                                                      "nvidia/nemotron-3-nano-30b-a3b:free",
+                                                                      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+                                                                      "nvidia/nemotron-3-super-120b-a12b:free",
+                                                                      "nvidia/nemotron-3-ultra-550b-a55b:free",
+                                                                      "nvidia/nemotron-nano-12b-v2-vl:free",
+                                                                      "nvidia/nemotron-nano-9b-v2:free",
+                                                                      "openai/gpt-oss-20b:free",
+                                                                      "poolside/laguna-m.1:free",
+                                                                      "poolside/laguna-xs-2.1:free",
+                                                                      "qwen/qwen3-coder:free",
+                                                                      "qwen/qwen3-next-80b-a3b-instruct:free",
+                                                                      "tencent/hy3:free"
+                                                                  ],
+                       "selected_model":  {
+                                              "id":  "poolside/laguna-m.1:free",
+                                              "name":  "Poolside: Laguna M.1 (free)",
+                                              "context_length":  262144,
+                                              "max_completion_tokens":  32768,
+                                              "prompt_price":  "0",
+                                              "completion_price":  "0",
+                                              "supported_parameters":  [
+                                                                           "include_reasoning",
+                                                                           "max_tokens",
+                                                                           "reasoning",
+                                                                           "temperature",
+                                                                           "tool_choice",
+                                                                           "tools"
+                                                                       ]
+                                          }
+                   }
+}
