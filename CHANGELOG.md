@@ -6,12 +6,21 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-18
+
 ### Added
 
 - Public Pactrail MVB v1 model-in-the-loop evaluation runner with seven exact,
   deterministic cases, source-isolation and trace-integrity assertions,
   machine-readable results, raw receipts/traces, and a reproducible Windows
   ARM64 baseline for Qwopus3.5 9B Coder and LFM2.5 230M Fable-5.
+- Explicit request-deadline and non-thinking controls for hosted and local
+  OpenAI-compatible models, with bounded handling of provider retry windows.
+- Repeat-run local, OpenRouter, and DeepSeek evaluation evidence with separately
+  graded isolated candidates and cryptographic artifact manifests.
+- A matched OpenCode comparator plus preregistered public and held-out
+  real-issue replay suites for testing repository-scale behavior without
+  changing the protocol after seeing model output.
 
 ### Fixed
 
@@ -106,5 +115,6 @@ follow [Semantic Versioning](https://semver.org/).
 - Bounded run-goal and memory previews now end with a visible ellipsis instead
   of silently dropping continuation text.
 
-[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/AKMessi/pactrail/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AKMessi/pactrail/releases/tag/v0.1.0

@@ -17,7 +17,7 @@ The central abstraction is not a chat wrapper or an agent persona. It is a
 durable, inspectable software change transaction.
 
 ```text
-  ╭─ P A C T R A I L  v0.1.0
+  ╭─ P A C T R A I L  v0.2.0
   │  verification-native coding · every change carries evidence
   ├─
   │ workspace  C:\work\project

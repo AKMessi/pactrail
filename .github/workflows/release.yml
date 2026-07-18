@@ -83,7 +83,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh release create "$GITHUB_REF_NAME" artifacts/* --verify-tag
-          --generate-notes --title "Pactrail $GITHUB_REF_NAME"
+          --notes-file "docs/release-$GITHUB_REF_NAME.md"
+          --title "Pactrail $GITHUB_REF_NAME"
 
   install-smoke:
     name: Installer smoke / ${{ matrix.os }}
