@@ -1,0 +1,532 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 0,
+    "timestamp": "2026-07-18T11:37:41.3787506Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-pro\\20260718T113624Z-deepseek-v4-pro-localized-bug-repair-r2",
+        "allowed_write_paths": [
+          "src"
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f7504-90ef-7cf2-942e-3b5df26d26a9",
+            "description": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "c516ff0d717fbf08e6c16813f9f0784af478faa75c134f8c2c5f7bb9edfaa0be"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 1,
+    "timestamp": "2026-07-18T11:37:41.3791571Z",
+    "previous_hash": "c516ff0d717fbf08e6c16813f9f0784af478faa75c134f8c2c5f7bb9edfaa0be",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "f09184843fc26fb0cda52e334b2313f3fd4a66d878eaca98ed48bf708ec6e1ec"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 2,
+    "timestamp": "2026-07-18T11:37:41.3793597Z",
+    "previous_hash": "f09184843fc26fb0cda52e334b2313f3fd4a66d878eaca98ed48bf708ec6e1ec",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "f6f443e4e014aaf342ec7f226d0b3159574524e5be25f71170fe3591288f7bc6"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 3,
+    "timestamp": "2026-07-18T11:37:41.3815397Z",
+    "previous_hash": "f6f443e4e014aaf342ec7f226d0b3159574524e5be25f71170fe3591288f7bc6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 2 files and cited 2 within a 1679-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1,
+        "attributes": {
+          "budget_bytes": "5760",
+          "cited_files": "2",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1679",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "8999a41100dd435a10d868973c756353fe0485d868f6af331b2e592e916c734f"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 4,
+    "timestamp": "2026-07-18T11:37:41.3817859Z",
+    "previous_hash": "8999a41100dd435a10d868973c756353fe0485d868f6af331b2e592e916c734f",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:75fd467be02f79257bbda5c83a5a61b0954ba44203db30f1c1b60b23729f5afa"
+      }
+    },
+    "hash": "10ca924decf489aa532dfd720c054362d26699334b196b3cff6239d1721ae897"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 5,
+    "timestamp": "2026-07-18T11:37:41.3819113Z",
+    "previous_hash": "10ca924decf489aa532dfd720c054362d26699334b196b3cff6239d1721ae897",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "cc460c5273e87337e72e5bab486a2ef09f54910c13951950bd87e1deeaa05946"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 6,
+    "timestamp": "2026-07-18T11:37:41.3820669Z",
+    "previous_hash": "cc460c5273e87337e72e5bab486a2ef09f54910c13951950bd87e1deeaa05946",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "70a4076f9ee46ca8a3425312b3850e4b2ea8379e339629700908eaceca22245c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 7,
+    "timestamp": "2026-07-18T11:37:43.8396859Z",
+    "previous_hash": "70a4076f9ee46ca8a3425312b3850e4b2ea8379e339629700908eaceca22245c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 1 produced 2 tool call(s) and 70 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2457,
+        "attributes": {
+          "cached_input_tokens": "256",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2961",
+          "output_tokens": "93",
+          "text_bytes": "70",
+          "tool_calls": "2",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "82928d81e285584dfb6d8f5f2dafdbee0a4668c62d92b4ec25762fa44cfc876c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 8,
+    "timestamp": "2026-07-18T11:37:43.84776Z",
+    "previous_hash": "82928d81e285584dfb6d8f5f2dafdbee0a4668c62d92b4ec25762fa44cfc876c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 7 lines from src/math.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "5ce837626d0db9aa1624b22844f3504990b27b4f25fdc9581e96b8d7727aea90",
+          "call_id": "call_00_r91P94GwgCkMal0Eqqf78007",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "214",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "da764a1996f1fd667e3db1ba1fc9f621f412c5df08de9addf7fdfc32d083fb6b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 9,
+    "timestamp": "2026-07-18T11:37:43.8481061Z",
+    "previous_hash": "da764a1996f1fd667e3db1ba1fc9f621f412c5df08de9addf7fdfc32d083fb6b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 1 lines from tests/math.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:tests/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 2,
+        "attributes": {
+          "arguments_digest": "8643f6643632747d3b32bb0f68d0b8209e613da66c5b60e92195f0b764292699",
+          "call_id": "call_01_G0qfhrUTS2JXf1d4BqFV6624",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "111",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "d3767611b21797e75eaadb7d75ae64c8c738ab7c7f2f3a6bd68be390f4414bf4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 10,
+    "timestamp": "2026-07-18T11:37:46.3719048Z",
+    "previous_hash": "d3767611b21797e75eaadb7d75ae64c8c738ab7c7f2f3a6bd68be390f4414bf4",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 2 produced 1 tool call(s) and 85 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2523,
+        "attributes": {
+          "cached_input_tokens": "2944",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3187",
+          "output_tokens": "145",
+          "text_bytes": "85",
+          "tool_calls": "1",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "5f43149f55e732443759bc46d08772786963b9702f1bfc9034fc013d966c5bf4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 11,
+    "timestamp": "2026-07-18T11:37:46.3774789Z",
+    "previous_hash": "5f43149f55e732443759bc46d08772786963b9702f1bfc9034fc013d966c5bf4",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:replace_text",
+        "action": "replace_text",
+        "summary": "replaced 1 exact occurrence(s)",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:src/math.rs",
+          "fs.write:src/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "3d6d3b3f0a972c0ce8c40dd559a9a5ab907431f247a295727b627e1d3a374cf8",
+          "call_id": "call_00_5kY0qb2frmS23JtqhJae1898",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "39",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "51f9cef4678f98eef841cc7255547bf6812c304229e2196d9369056f8679c769"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 12,
+    "timestamp": "2026-07-18T11:37:48.3157855Z",
+    "previous_hash": "51f9cef4678f98eef841cc7255547bf6812c304229e2196d9369056f8679c769",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 3 produced 1 tool call(s) and 36 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1937,
+        "attributes": {
+          "cached_input_tokens": "3072",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3356",
+          "output_tokens": "53",
+          "text_bytes": "36",
+          "tool_calls": "1",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "09b0dd22516005b48e3ba06fd01272cdbc17642bd24bc19ae39825c7f31d9da0"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 13,
+    "timestamp": "2026-07-18T11:37:48.3198189Z",
+    "previous_hash": "09b0dd22516005b48e3ba06fd01272cdbc17642bd24bc19ae39825c7f31d9da0",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 7 lines from src/math.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 3,
+        "attributes": {
+          "arguments_digest": "5ce837626d0db9aa1624b22844f3504990b27b4f25fdc9581e96b8d7727aea90",
+          "call_id": "call_00_zIMwpZgSOwdvRzlIShkk5008",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "214",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "21228c5f4bc275b971d3289c1c58cd4ebaa8d00c4ac7eb2afa80e259138b1813"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 14,
+    "timestamp": "2026-07-18T11:37:50.3793276Z",
+    "previous_hash": "21228c5f4bc275b971d3289c1c58cd4ebaa8d00c4ac7eb2afa80e259138b1813",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 4 produced 0 tool call(s) and 355 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2058,
+        "attributes": {
+          "cached_input_tokens": "3328",
+          "finish_reason": "complete",
+          "input_tokens": "3496",
+          "output_tokens": "102",
+          "text_bytes": "355",
+          "tool_calls": "0",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "f6ce95da39663a71ab84ec1213019d9ab53f76f18accb34bbdb1acb281869c49"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 15,
+    "timestamp": "2026-07-18T11:37:50.379723Z",
+    "previous_hash": "f6ce95da39663a71ab84ec1213019d9ab53f76f18accb34bbdb1acb281869c49",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "verifying"
+      }
+    },
+    "hash": "2bfa99c78d7f151468eec2ad3db3fb0618ce894c7ee42e683360316fc1160197"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 16,
+    "timestamp": "2026-07-18T11:37:50.3800471Z",
+    "previous_hash": "2bfa99c78d7f151468eec2ad3db3fb0618ce894c7ee42e683360316fc1160197",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "verifier",
+        "action": "Python tests",
+        "summary": "verification process was not authorized",
+        "declared_effects": [
+          "process.spawn"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 0,
+        "attributes": {
+          "authorization": "denied",
+          "index": "1",
+          "total": "1"
+        }
+      }
+    },
+    "hash": "55cacbf08e6314cb16440cd6c6524bbbb28d4c12b44696550f3278ab97aa261e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 17,
+    "timestamp": "2026-07-18T11:37:50.3803152Z",
+    "previous_hash": "55cacbf08e6314cb16440cd6c6524bbbb28d4c12b44696550f3278ab97aa261e",
+    "event": {
+      "type": "evidence_recorded",
+      "data": {
+        "id": "019f7504-b42c-7153-bf53-ef8add90e113",
+        "obligation_id": "019f7504-90ef-7cf2-942e-3b5df26d26a9",
+        "grade": "unverified",
+        "kind": "other",
+        "status": "inconclusive",
+        "summary": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.: Verification commands require process permission",
+        "artifact_digest": null,
+        "reproduction": null
+      }
+    },
+    "hash": "a3da4f4e118811779abbced06d26dc46b7797ea8eadeaa0bd463291f3d584cc0"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 18,
+    "timestamp": "2026-07-18T11:37:50.3822038Z",
+    "previous_hash": "a3da4f4e118811779abbced06d26dc46b7797ea8eadeaa0bd463291f3d584cc0",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "verifying",
+        "to": "reviewing"
+      }
+    },
+    "hash": "b7bb643794f564fd984fffdc7ab25628ef50f3a75d55729ccc3fcb58f9f71946"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 19,
+    "timestamp": "2026-07-18T11:37:50.3823844Z",
+    "previous_hash": "b7bb643794f564fd984fffdc7ab25628ef50f3a75d55729ccc3fcb58f9f71946",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model summary retained as implementation account; verification evidence remains independently graded"
+      }
+    },
+    "hash": "3f9c0ede485bee8fa52f133bf879b74ebbea1131cca7bc457c7c22d0c6f7d570"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 20,
+    "timestamp": "2026-07-18T11:37:50.3825075Z",
+    "previous_hash": "3f9c0ede485bee8fa52f133bf879b74ebbea1131cca7bc457c7c22d0c6f7d570",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "reviewing",
+        "to": "awaiting_apply"
+      }
+    },
+    "hash": "b6fd43be56b3c1ebbe725d45582e1d541b6cd83b75310a294dfb14990926e33c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "sequence": 21,
+    "timestamp": "2026-07-18T11:37:50.4404896Z",
+    "previous_hash": "b6fd43be56b3c1ebbe725d45582e1d541b6cd83b75310a294dfb14990926e33c",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "awaiting_apply",
+        "to": "applied"
+      }
+    },
+    "hash": "dd79124968564f0a24da826594c82afc283277804f24417a654f0e7137424db5"
+  }
+]

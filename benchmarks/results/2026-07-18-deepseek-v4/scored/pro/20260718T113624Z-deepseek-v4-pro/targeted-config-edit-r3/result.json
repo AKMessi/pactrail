@@ -1,0 +1,78 @@
+{
+    "case_id":  "targeted-config-edit",
+    "repetition":  3,
+    "category":  "precision-edit",
+    "model":  "deepseek-v4-pro",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f7503-d678-7d92-86a5-ff93109768bd",
+    "duration_ms":  7068,
+    "tokens":  12954,
+    "candidate_correct":  true,
+    "candidate_changed_paths":  [
+                                    "config/app.conf"
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:config/app.conf",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "file:README.md",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  true,
+                                     "detail":  "Expected [config/app.conf]; observed [config/app.conf]."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "config/app.conf"
+                      ],
+    "metrics":  {
+                    "events":  20,
+                    "model_calls":  4,
+                    "tool_calls":  3,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  6853,
+                    "tool_duration_ms":  51,
+                    "input_tokens":  12666,
+                    "output_tokens":  288,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:config/app.conf",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [config/app.conf]; observed [config/app.conf]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "Done. The change is complete:\n\n- **`config/app.conf`**: `timeout_ms` changed from `1000` to `2500`. All other bytes (`name=pactrail`, `retries=3`, line structure) are preserved exactly.\n- **`README.md`**: Not touched."
+}

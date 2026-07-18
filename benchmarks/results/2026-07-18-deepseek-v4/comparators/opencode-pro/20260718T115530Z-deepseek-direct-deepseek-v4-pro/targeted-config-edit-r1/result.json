@@ -1,0 +1,56 @@
+{
+    "case_id":  "targeted-config-edit",
+    "repetition":  1,
+    "category":  "precision-edit",
+    "model":  "deepseek-direct/deepseek-v4-pro",
+    "harness":  "opencode",
+    "passed":  true,
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  9204,
+    "changed_paths":  [
+                          "config/app.conf"
+                      ],
+    "direct_source_write":  true,
+    "source_unchanged_after_run":  false,
+    "metrics":  {
+                    "model_calls":  4,
+                    "tool_calls":  3,
+                    "failed_tool_calls":  0,
+                    "input_tokens":  25560,
+                    "uncached_input_tokens":  4568,
+                    "cached_input_tokens":  20992,
+                    "output_tokens":  314,
+                    "total_tokens":  25874,
+                    "errors":  0,
+                    "summary":  "Done. `timeout_ms` changed from `1000` to `2500` in `config/app.conf`. No other bytes were modified."
+                },
+    "assertions":  [
+                       {
+                           "name":  "file:config/app.conf",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [config/app.conf]; observed [config/app.conf]."
+                       },
+                       {
+                           "name":  "provider-errors",
+                           "passed":  true,
+                           "detail":  "Observed 0 error event(s)."
+                       },
+                       {
+                           "name":  "case-timeout",
+                           "passed":  true,
+                           "detail":  "The case completed within its wall-time limit."
+                       }
+                   ],
+    "summary":  "Done. `timeout_ms` changed from `1000` to `2500` in `config/app.conf`. No other bytes were modified."
+}

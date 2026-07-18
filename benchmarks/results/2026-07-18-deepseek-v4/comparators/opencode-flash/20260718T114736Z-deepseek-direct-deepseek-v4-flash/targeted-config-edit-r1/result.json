@@ -1,0 +1,56 @@
+{
+    "case_id":  "targeted-config-edit",
+    "repetition":  1,
+    "category":  "precision-edit",
+    "model":  "deepseek-direct/deepseek-v4-flash",
+    "harness":  "opencode",
+    "passed":  true,
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  5671,
+    "changed_paths":  [
+                          "config/app.conf"
+                      ],
+    "direct_source_write":  true,
+    "source_unchanged_after_run":  false,
+    "metrics":  {
+                    "model_calls":  3,
+                    "tool_calls":  2,
+                    "failed_tool_calls":  0,
+                    "input_tokens":  19099,
+                    "uncached_input_tokens":  4379,
+                    "cached_input_tokens":  14720,
+                    "output_tokens":  274,
+                    "total_tokens":  19373,
+                    "errors":  0,
+                    "summary":  "Let me read the config file first.\nDone. Changed `timeout_ms` from `1000` to `2500` in `config/app.conf`."
+                },
+    "assertions":  [
+                       {
+                           "name":  "file:config/app.conf",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [config/app.conf]; observed [config/app.conf]."
+                       },
+                       {
+                           "name":  "provider-errors",
+                           "passed":  true,
+                           "detail":  "Observed 0 error event(s)."
+                       },
+                       {
+                           "name":  "case-timeout",
+                           "passed":  true,
+                           "detail":  "The case completed within its wall-time limit."
+                       }
+                   ],
+    "summary":  "Let me read the config file first.\nDone. Changed `timeout_ms` from `1000` to `2500` in `config/app.conf`."
+}

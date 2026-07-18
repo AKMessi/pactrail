@@ -1,0 +1,19 @@
+{
+  "changes": [],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-read-only-repository-summary-r1\\.pactrail\\runs\\019f7502-b7d7-7fb1-b659-ebddbed645b8\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f7502-b7d7-7fb1-b659-ebddbed645b8",
+  "summary": "This directory is a tiny Rust library called **Pocket Calculator** that provides basic arithmetic, exposing two operations: **`add`** (addition) and **`subtract`** (subtraction).",
+  "tokens": 9402,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-read-only-repository-summary-r1\\.pactrail\\runs\\019f7502-b7d7-7fb1-b659-ebddbed645b8\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

@@ -1,0 +1,78 @@
+{
+    "case_id":  "obsolete-file-removal",
+    "repetition":  1,
+    "category":  "workspace-edit",
+    "model":  "deepseek-v4-flash",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f7502-2bd5-74e1-ae90-2bdb68ab651b",
+    "duration_ms":  5364,
+    "tokens":  15759,
+    "candidate_correct":  true,
+    "candidate_changed_paths":  [
+                                    "obsolete.txt"
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:keep.txt",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "absent:obsolete.txt",
+                                     "passed":  true,
+                                     "detail":  "Path is absent."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  true,
+                                     "detail":  "Expected [obsolete.txt]; observed [obsolete.txt]."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "obsolete.txt"
+                      ],
+    "metrics":  {
+                    "events":  22,
+                    "model_calls":  5,
+                    "tool_calls":  4,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  5191,
+                    "tool_duration_ms":  15,
+                    "input_tokens":  15513,
+                    "output_tokens":  246,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:keep.txt",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "absent:obsolete.txt",
+                           "passed":  true,
+                           "detail":  "Path is absent."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [obsolete.txt]; observed [obsolete.txt]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "Done. `obsolete.txt` has been deleted (10 bytes removed). `keep.txt` remains unchanged with its original content \"keep me exactly\\n\"."
+}

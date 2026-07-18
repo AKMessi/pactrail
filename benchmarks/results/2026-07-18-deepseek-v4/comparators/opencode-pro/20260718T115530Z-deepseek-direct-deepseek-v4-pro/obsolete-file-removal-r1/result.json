@@ -1,0 +1,56 @@
+{
+    "case_id":  "obsolete-file-removal",
+    "repetition":  1,
+    "category":  "workspace-edit",
+    "model":  "deepseek-direct/deepseek-v4-pro",
+    "harness":  "opencode",
+    "passed":  false,
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  17709,
+    "changed_paths":  [
+                          "obsolete.txt"
+                      ],
+    "direct_source_write":  true,
+    "source_unchanged_after_run":  false,
+    "metrics":  {
+                    "model_calls":  7,
+                    "tool_calls":  8,
+                    "failed_tool_calls":  0,
+                    "input_tokens":  47785,
+                    "uncached_input_tokens":  5161,
+                    "cached_input_tokens":  42624,
+                    "output_tokens":  735,
+                    "total_tokens":  48520,
+                    "errors":  0,
+                    "summary":  "Done. `obsolete.txt` has been emptied (effectively deleted), and `keep.txt` remains unchanged with its original content \"keep me exactly\"."
+                },
+    "assertions":  [
+                       {
+                           "name":  "file:keep.txt",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "absent:obsolete.txt",
+                           "passed":  false,
+                           "detail":  "Path still exists."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [obsolete.txt]; observed [obsolete.txt]."
+                       },
+                       {
+                           "name":  "provider-errors",
+                           "passed":  true,
+                           "detail":  "Observed 0 error event(s)."
+                       },
+                       {
+                           "name":  "case-timeout",
+                           "passed":  true,
+                           "detail":  "The case completed within its wall-time limit."
+                       }
+                   ],
+    "summary":  "Done. `obsolete.txt` has been emptied (effectively deleted), and `keep.txt` remains unchanged with its original content \"keep me exactly\"."
+}

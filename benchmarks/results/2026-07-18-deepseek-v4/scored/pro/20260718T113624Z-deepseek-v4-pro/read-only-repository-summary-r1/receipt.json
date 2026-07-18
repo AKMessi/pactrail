@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "run_id": "019f7505-810d-7c21-894b-6c79cd089574",
+  "created_at": "2026-07-18T11:38:49.3768604Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Explain this directory in one concise sentence. Mention what the library does and name both operations it provides. Do not modify any files.",
+    "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-pro\\20260718T113624Z-deepseek-v4-pro-read-only-repository-summary-r1",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f7505-810d-7c21-894b-6c600242722d",
+        "description": "Explain this directory in one concise sentence. Mention what the library does and name both operations it provides. Do not modify any files.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read"
+      ],
+      "deny": [
+        "network",
+        "secret_use",
+        "external_write"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "e4a0662614e65457532c1b978c2e176803d2d2d667e82a162d09cc98cf83a9f6",
+  "final_event_hash": "3d9ae1275fe302aff0bdc9221c7e2bb33663e5eb4982476a1d50ac1d7081bc08",
+  "changes": [],
+  "evidence": [
+    {
+      "id": "019f7505-9a6a-73c3-8056-8023a1792eaa",
+      "obligation_id": "019f7505-810d-7c21-894b-6c600242722d",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Explain this directory in one concise sentence. Mention what the library does and name both operations it provides. Do not modify any files.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "581b60f801f9953830de2fa7613c111536509f0c1a3ebdc57e9e0118cd33b9db"
+}

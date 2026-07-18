@@ -1,0 +1,47 @@
+{
+  "changes": [
+    {
+      "after_digest": "c7ba5bf816103e247b6e5cfa0f2d5b14b1dc0533b3043f51755ca862886634b7",
+      "after_unix_mode": null,
+      "before_digest": "7e94d488a30f70190d373a3106053f1f7e1556f399f642e5ced89bfa73d40eb8",
+      "before_unix_mode": null,
+      "bytes_added": 45,
+      "bytes_removed": 45,
+      "path": "Cargo.toml"
+    },
+    {
+      "after_digest": "ea1a709d7230f54f5201448671cfbb9d41c5da76cbfdff10a3f20dce1ad96b92",
+      "after_unix_mode": null,
+      "before_digest": "4a517be8f2156d71f3b54874d8ff18d6812e5966188b193c196d3085e880ac3b",
+      "before_unix_mode": null,
+      "bytes_added": 34,
+      "bytes_removed": 34,
+      "path": "README.md"
+    },
+    {
+      "after_digest": "ef1b2ff3795a4cf33dd3dd9acf84285dc3a41826fbaf44538a658fe0af37bbf9",
+      "after_unix_mode": null,
+      "before_digest": "8213376cdb9888631b920fe042a07a99e02ab89a7645e5534717a1189dec1a39",
+      "before_unix_mode": null,
+      "bytes_added": 35,
+      "bytes_removed": 35,
+      "path": "src/version.rs"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-pro\\20260718T113624Z-deepseek-v4-pro-multi-file-version-sync-r1\\.pactrail\\runs\\019f7503-f286-7191-8994-2339a3f2f273\\receipt.json",
+  "risks": [
+    "Verification incomplete: Verification commands require process permission"
+  ],
+  "run_id": "019f7503-f286-7191-8994-2339a3f2f273",
+  "summary": "All three files now show `0.2.0`. The update is complete.\n\n**Summary:** Updated the version string from `0.1.0` to `0.2.0` in all three required files — `Cargo.toml` (package version), `src/version.rs` (VERSION constant), and `README.md` (Current release line). No other changes were made.",
+  "tokens": 14456,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-pro\\20260718T113624Z-deepseek-v4-pro-multi-file-version-sync-r1\\.pactrail\\runs\\019f7503-f286-7191-8994-2339a3f2f273\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

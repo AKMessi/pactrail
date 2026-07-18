@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "run_id": "019f7503-bafb-7910-bcf9-2d685a7e4d4b",
+  "created_at": "2026-07-18T11:36:53.5392208Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.",
+    "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-pro\\20260718T113624Z-deepseek-v4-pro-targeted-config-edit-r2",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f7503-bafb-7910-bcf9-2d5b6a4ead47",
+        "description": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read"
+      ],
+      "deny": [
+        "network",
+        "secret_use",
+        "external_write"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "748b13dbc1172aa2f029d4ba76107ac8b1cffeabe353ba91a117ddb3ecd86364",
+  "final_event_hash": "00e88d2bce53b806dbac17a1e11a17c1cf1383dde034c847245b36c72beb8280",
+  "changes": [
+    {
+      "path": "config/app.conf",
+      "before_digest": "a5d119afb7d2aa7ab271664184f4d6357ff366ef8655d659cbef5e3ffa0693ac",
+      "after_digest": "6e1f0ae81c0fe4709dd5cb2454706d9817f26468a6b145fad1740e12e010b3c8",
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 40,
+      "bytes_removed": 40
+    }
+  ],
+  "evidence": [
+    {
+      "id": "019f7503-d5dc-7771-91dc-6d0c01918f64",
+      "obligation_id": "019f7503-bafb-7910-bcf9-2d5b6a4ead47",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "070265f3c49235a890b5d5be0d6d9f09a9e4f587e2e3c173e3d96bde0db9a8c4"
+}

@@ -1,0 +1,56 @@
+{
+    "case_id":  "localized-bug-repair",
+    "repetition":  3,
+    "category":  "code-repair",
+    "model":  "deepseek-direct/deepseek-v4-pro",
+    "harness":  "opencode",
+    "passed":  true,
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  51547,
+    "changed_paths":  [
+                          "src/math.rs"
+                      ],
+    "direct_source_write":  true,
+    "source_unchanged_after_run":  false,
+    "metrics":  {
+                    "model_calls":  4,
+                    "tool_calls":  4,
+                    "failed_tool_calls":  1,
+                    "input_tokens":  26583,
+                    "uncached_input_tokens":  4823,
+                    "cached_input_tokens":  21760,
+                    "output_tokens":  553,
+                    "total_tokens":  27136,
+                    "errors":  0,
+                    "summary":  "Let me start by reading the relevant files.\nThe bug is clear: `subtract` uses `+` instead of `-`.\nFixed. The `subtract` function was using `+` instead of `-`. Now `subtract(9, 4)` returns `5`."
+                },
+    "assertions":  [
+                       {
+                           "name":  "file:src/math.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:tests/math.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [src/math.rs]; observed [src/math.rs]."
+                       },
+                       {
+                           "name":  "provider-errors",
+                           "passed":  true,
+                           "detail":  "Observed 0 error event(s)."
+                       },
+                       {
+                           "name":  "case-timeout",
+                           "passed":  true,
+                           "detail":  "The case completed within its wall-time limit."
+                       }
+                   ],
+    "summary":  "Let me start by reading the relevant files.\nThe bug is clear: `subtract` uses `+` instead of `-`.\nFixed. The `subtract` function was using `+` instead of `-`. Now `subtract(9, 4)` returns `5`."
+}

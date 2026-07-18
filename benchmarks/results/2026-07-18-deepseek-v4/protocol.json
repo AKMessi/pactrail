@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-mvb-v1",
+  "suite_manifest": "../../mvb-v1/cases.json",
+  "grading": "Deterministic exact workspace artifacts and required lexical summary terms; no LLM judge",
+  "models": ["deepseek-v4-flash", "deepseek-v4-pro"],
+  "harnesses": ["Pactrail 0.1.0", "OpenCode 1.2.27"],
+  "scored_trials_per_harness": 42,
+  "cases_per_model": 7,
+  "repetitions_per_case": 3,
+  "case_retry_policy": "No case retries, no best-of-n selection, and no favorable-sample replacement",
+  "common_controls": {
+    "provider": "DeepSeek direct API",
+    "base_url": "https://api.deepseek.com",
+    "context_tokens": 8192,
+    "max_output_tokens_per_turn": 512,
+    "temperature": 0.0,
+    "thinking_mode": "disabled",
+    "native_shell_or_process": false,
+    "fresh_workspace_per_trial": true,
+    "fresh_agent_session_per_trial": true,
+    "scoring_manifest": "identical",
+    "task_prompts": "identical"
+  },
+  "pactrail": {
+    "scored_revision": "b2e58665735b670d423decfcb8f0204ca1f6777a",
+    "max_turns_per_case": 12,
+    "request_timeout_seconds": 300,
+    "logical_request_ceiling_per_model_matrix": 252,
+    "process_execution": "disabled",
+    "thinking_control": "--disable-thinking",
+    "workflow": "isolated candidate, deterministic pre-apply grading, explicit apply, final grading, receipt and trace export",
+    "strict_score_additional_requirements": ["source unchanged before apply", "hash-chained trace accepted by Pactrail"]
+  },
+  "opencode": {
+    "version": "1.2.27",
+    "model_provider": "@ai-sdk/openai-compatible",
+    "model_config": "../../mvb-v1/opencode-deepseek.json",
+    "runner": "../../mvb-v1/run-opencode.ps1",
+    "max_case_wall_time_seconds": 180,
+    "logical_turn_limit": null,
+    "allowed_permissions": ["read", "edit", "glob", "grep", "list", "todowrite"],
+    "denied_permissions": "all others, including bash",
+    "thinking_validation": "All scored JSON event streams reported zero reasoning tokens and no reasoning events",
+    "workflow": "direct source-workspace edits followed by deterministic final grading",
+    "runtime_isolation": "Dedicated XDG config, data, cache, and OpenCode config directories per model matrix"
+  },
+  "fairness_note": "OpenCode was not penalized in task correctness for lacking Pactrail's candidate, apply, receipt, or hash-chain concepts. Those are reported separately. Denying OpenCode bash matches Pactrail's process-disabled contract; it also exposes whether each harness offers a bounded native file-deletion tool.",
+  "pilots": {
+    "policy": "One exact-file-create typed-tool pilot per current model and harness was excluded from scored results",
+    "additional_diagnostic": "One OpenCode deepseek-chat compatibility-alias pilot was retained but excluded",
+    "successful_pilots": 6,
+    "retained_pilots": 5,
+    "unretained_pilot_note": "One preliminary successful OpenCode transport smoke preceded the reproducible runner and is included only in the account balance delta.",
+    "pactrail_passed": 2,
+    "opencode_current_model_passed": 2
+  },
+  "account_balance_usd": {
+    "start": "2.00",
+    "after_all_scored_runs_and_pilots": "1.88",
+    "displayed_delta": "0.12",
+    "precision_note": "The balance endpoint displays cents; this delta includes every scored run, five retained pilots, and one preliminary unretained transport smoke."
+  }
+}

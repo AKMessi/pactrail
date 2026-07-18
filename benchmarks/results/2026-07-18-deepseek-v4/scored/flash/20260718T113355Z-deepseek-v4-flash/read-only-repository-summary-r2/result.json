@@ -1,0 +1,93 @@
+{
+    "case_id":  "read-only-repository-summary",
+    "repetition":  2,
+    "category":  "repository-understanding",
+    "model":  "deepseek-v4-flash",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f7502-c5aa-7922-9418-401a86485ab5",
+    "duration_ms":  3357,
+    "tokens":  9395,
+    "candidate_correct":  true,
+    "candidate_changed_paths":  [
+
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:README.md",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "file:src/calculator.rs",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  true,
+                                     "detail":  "Expected []; observed []."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  18,
+                    "model_calls":  3,
+                    "tool_calls":  2,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  3233,
+                    "tool_duration_ms":  7,
+                    "input_tokens":  9257,
+                    "output_tokens":  138,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:src/calculator.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected []; observed []."
+                       },
+                       {
+                           "name":  "summary:calculator",
+                           "passed":  true,
+                           "detail":  "Summary contained the term."
+                       },
+                       {
+                           "name":  "summary:add",
+                           "passed":  true,
+                           "detail":  "Summary contained the term."
+                       },
+                       {
+                           "name":  "summary:subtract",
+                           "passed":  true,
+                           "detail":  "Summary contained the term."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "This directory contains **Pocket Calculator**, a tiny Rust arithmetic library that provides two operations: `add` and `subtract`."
+}

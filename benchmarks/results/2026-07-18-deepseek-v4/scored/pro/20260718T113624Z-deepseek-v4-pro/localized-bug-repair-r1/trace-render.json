@@ -1,0 +1,656 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 0,
+    "timestamp": "2026-07-18T11:37:28.9650235Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-pro\\20260718T113624Z-deepseek-v4-pro-localized-bug-repair-r1",
+        "allowed_write_paths": [
+          "src"
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f7504-6075-7043-a35e-faf75633c476",
+            "description": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "4d01ff569eb5921b9d0c5c19c72a9b74fbbc57c87d162d005e32dc9f9734d2a1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 1,
+    "timestamp": "2026-07-18T11:37:28.9652179Z",
+    "previous_hash": "4d01ff569eb5921b9d0c5c19c72a9b74fbbc57c87d162d005e32dc9f9734d2a1",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "ab5ec91388022acba397edcde94d61661cc59076901aee3c9c8e9ed739ff3691"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 2,
+    "timestamp": "2026-07-18T11:37:28.9653204Z",
+    "previous_hash": "ab5ec91388022acba397edcde94d61661cc59076901aee3c9c8e9ed739ff3691",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "02f2bff96def2fda06e3e3e676b4ba5d80fb17b2b096c65233f799a3ad0be412"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 3,
+    "timestamp": "2026-07-18T11:37:28.9673503Z",
+    "previous_hash": "02f2bff96def2fda06e3e3e676b4ba5d80fb17b2b096c65233f799a3ad0be412",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 2 files and cited 2 within a 1679-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1,
+        "attributes": {
+          "budget_bytes": "5760",
+          "cited_files": "2",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1679",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "176ba9ad50ad87ee12ce27c7a03ad90b40b4805bd10f4577ead781d72e242d59"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 4,
+    "timestamp": "2026-07-18T11:37:28.9675954Z",
+    "previous_hash": "176ba9ad50ad87ee12ce27c7a03ad90b40b4805bd10f4577ead781d72e242d59",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:75fd467be02f79257bbda5c83a5a61b0954ba44203db30f1c1b60b23729f5afa"
+      }
+    },
+    "hash": "d020a8aa08252e831cc6d0fbf327b943cee199117d1a436548dd02a7ca618b1c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 5,
+    "timestamp": "2026-07-18T11:37:28.9677226Z",
+    "previous_hash": "d020a8aa08252e831cc6d0fbf327b943cee199117d1a436548dd02a7ca618b1c",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "e18c67a0d526a113ee6527154561841f4994247e15d5d0d1c6acfe01ccdf5753"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 6,
+    "timestamp": "2026-07-18T11:37:28.9678341Z",
+    "previous_hash": "e18c67a0d526a113ee6527154561841f4994247e15d5d0d1c6acfe01ccdf5753",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "9df6be172db747f5d9607851fa67bcbffd8e1a05cfa9cb477a5c4fbfaabf895e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 7,
+    "timestamp": "2026-07-18T11:37:30.8055785Z",
+    "previous_hash": "9df6be172db747f5d9607851fa67bcbffd8e1a05cfa9cb477a5c4fbfaabf895e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 1 produced 2 tool call(s) and 70 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1837,
+        "attributes": {
+          "cached_input_tokens": "256",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2956",
+          "output_tokens": "93",
+          "text_bytes": "70",
+          "tool_calls": "2",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "f5e5f0781182d3635478edf44cfbd71a0c77d2ef0a09ce1d6f14f807b9825615"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 8,
+    "timestamp": "2026-07-18T11:37:30.8134946Z",
+    "previous_hash": "f5e5f0781182d3635478edf44cfbd71a0c77d2ef0a09ce1d6f14f807b9825615",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 7 lines from src/math.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "5ce837626d0db9aa1624b22844f3504990b27b4f25fdc9581e96b8d7727aea90",
+          "call_id": "call_00_szuvWX5KNuAFP7dr5K0f6219",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "214",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "f6d831ffcaa5a544c72264dbfaffedc8037644538348fca56e648ff70882e928"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 9,
+    "timestamp": "2026-07-18T11:37:30.8137926Z",
+    "previous_hash": "f6d831ffcaa5a544c72264dbfaffedc8037644538348fca56e648ff70882e928",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 1 lines from tests/math.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:tests/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 3,
+        "attributes": {
+          "arguments_digest": "8643f6643632747d3b32bb0f68d0b8209e613da66c5b60e92195f0b764292699",
+          "call_id": "call_01_Fm4bcH1Im427raM1a9UE9805",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "111",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "55cbfa02912665aae1e1975c51cbcd612fc4d95f14d71c937f3a003eb292964c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 10,
+    "timestamp": "2026-07-18T11:37:32.8846907Z",
+    "previous_hash": "55cbfa02912665aae1e1975c51cbcd612fc4d95f14d71c937f3a003eb292964c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 2 produced 1 tool call(s) and 85 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2070,
+        "attributes": {
+          "cached_input_tokens": "2944",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3182",
+          "output_tokens": "127",
+          "text_bytes": "85",
+          "tool_calls": "1",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "617e433d3dc3983d7743710f31224c9d836507158dda6c73c3c2a1964e0b4274"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 11,
+    "timestamp": "2026-07-18T11:37:32.8885041Z",
+    "previous_hash": "617e433d3dc3983d7743710f31224c9d836507158dda6c73c3c2a1964e0b4274",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:replace_text",
+        "action": "replace_text",
+        "summary": "replacement count was 2, expected 1",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 2,
+        "attributes": {
+          "arguments_digest": "0f66f6801aad1addd49c522dd12be74dcd4791b8b36bd1aa0925b07ccce29e23",
+          "call_id": "call_00_hPY1eNlrTiLxKl65Q2135166",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "47",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "c676bf326f4fb3a626b43c7e1cf6d5af867aca2672d07610b7111ec0b9540818"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 12,
+    "timestamp": "2026-07-18T11:37:35.5693786Z",
+    "previous_hash": "c676bf326f4fb3a626b43c7e1cf6d5af867aca2672d07610b7111ec0b9540818",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 3 produced 1 tool call(s) and 191 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2680,
+        "attributes": {
+          "cached_input_tokens": "3200",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3335",
+          "output_tokens": "186",
+          "text_bytes": "191",
+          "tool_calls": "1",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "22192dd8ff3af2c3a5848f6c3b751f935ec52e5f9c6c2395b810d9057a34ff74"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 13,
+    "timestamp": "2026-07-18T11:37:35.5803161Z",
+    "previous_hash": "22192dd8ff3af2c3a5848f6c3b751f935ec52e5f9c6c2395b810d9057a34ff74",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:replace_text",
+        "action": "replace_text",
+        "summary": "replaced 1 exact occurrence(s)",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:src/math.rs",
+          "fs.write:src/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 10,
+        "attributes": {
+          "arguments_digest": "47ff0a953f5ec7a18d1e9f08ea509f2d590ddd4dba63656086213277cc9309aa",
+          "call_id": "call_00_jleZuBo0ltNy6CeaWa7j1059",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "39",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "a7fce2a6d4698c9ae3696bf3d366b8dcd05229256a940f6f78f64dbf2f358741"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 14,
+    "timestamp": "2026-07-18T11:37:36.9512291Z",
+    "previous_hash": "a7fce2a6d4698c9ae3696bf3d366b8dcd05229256a940f6f78f64dbf2f358741",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 4 produced 1 tool call(s) and 40 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1369,
+        "attributes": {
+          "cached_input_tokens": "3456",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3545",
+          "output_tokens": "54",
+          "text_bytes": "40",
+          "tool_calls": "1",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "0593e7b243cdf615761a517e07382b374c6239b2116f9a1294363db8ba6541d6"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 15,
+    "timestamp": "2026-07-18T11:37:36.956191Z",
+    "previous_hash": "0593e7b243cdf615761a517e07382b374c6239b2116f9a1294363db8ba6541d6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 7 lines from src/math.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/math.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 3,
+        "attributes": {
+          "arguments_digest": "5ce837626d0db9aa1624b22844f3504990b27b4f25fdc9581e96b8d7727aea90",
+          "call_id": "call_00_Z7IuNVkWfiHbbLLYmMqi4454",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "214",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "6977b7eeddf3bca205dbf026c9767906f3e4e13843eba6288e528a47cca41799"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 16,
+    "timestamp": "2026-07-18T11:37:38.695091Z",
+    "previous_hash": "6977b7eeddf3bca205dbf026c9767906f3e4e13843eba6288e528a47cca41799",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 5 produced 1 tool call(s) and 57 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1737,
+        "attributes": {
+          "cached_input_tokens": "3584",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3686",
+          "output_tokens": "82",
+          "text_bytes": "57",
+          "tool_calls": "1",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "4a376b321526fe2674b1692d409daa778f9903b3b3e9bc341ced71a6d65808c8"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 17,
+    "timestamp": "2026-07-18T11:37:38.7310227Z",
+    "previous_hash": "4a376b321526fe2674b1692d409daa778f9903b3b3e9bc341ced71a6d65808c8",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:run_process",
+        "action": "run_process",
+        "summary": "process_spawn on \"cargo\" requires approval: process_spawn requires a scoped approval",
+        "declared_effects": [
+          "process_spawn"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "2742ca966de8231f870b91397da17138c2f48d5f5644ce4de3c59739da5b74c1",
+          "call_id": "call_00_oRpzXGMr9GxtnNG45MLo6585",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "98",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "hostexecution",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "17d1c0a2264306cfc10f0796041be70e4b301b7a6f8d557bb2a911c58ea7cd23"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 18,
+    "timestamp": "2026-07-18T11:37:41.1615182Z",
+    "previous_hash": "17d1c0a2264306cfc10f0796041be70e4b301b7a6f8d557bb2a911c58ea7cd23",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 6 produced 0 tool call(s) and 449 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2428,
+        "attributes": {
+          "cached_input_tokens": "3712",
+          "finish_reason": "complete",
+          "input_tokens": "3803",
+          "output_tokens": "117",
+          "text_bytes": "449",
+          "tool_calls": "0",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "a9f31da9229f6596041f36108ca33571c3223adcc8c689d6e1aebb299281e9d0"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 19,
+    "timestamp": "2026-07-18T11:37:41.1907742Z",
+    "previous_hash": "a9f31da9229f6596041f36108ca33571c3223adcc8c689d6e1aebb299281e9d0",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "verifying"
+      }
+    },
+    "hash": "9e6e4e86718a5e75213e0a9486dd292826135a33a2cdfdbc72edfb20ca5f9cbd"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 20,
+    "timestamp": "2026-07-18T11:37:41.1917551Z",
+    "previous_hash": "9e6e4e86718a5e75213e0a9486dd292826135a33a2cdfdbc72edfb20ca5f9cbd",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "verifier",
+        "action": "Python tests",
+        "summary": "verification process was not authorized",
+        "declared_effects": [
+          "process.spawn"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 0,
+        "attributes": {
+          "authorization": "denied",
+          "index": "1",
+          "total": "1"
+        }
+      }
+    },
+    "hash": "85a436a62bc3693e313e66e883e58cf6bfd4d61ea8c647544c206b6c1fe2612b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 21,
+    "timestamp": "2026-07-18T11:37:41.1922005Z",
+    "previous_hash": "85a436a62bc3693e313e66e883e58cf6bfd4d61ea8c647544c206b6c1fe2612b",
+    "event": {
+      "type": "evidence_recorded",
+      "data": {
+        "id": "019f7504-9048-72e0-9525-beb821858069",
+        "obligation_id": "019f7504-6075-7043-a35e-faf75633c476",
+        "grade": "unverified",
+        "kind": "other",
+        "status": "inconclusive",
+        "summary": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.: Verification commands require process permission",
+        "artifact_digest": null,
+        "reproduction": null
+      }
+    },
+    "hash": "29a3bf9fd448998f3c0c2b6c686950b8e45efff2a60add7a11628af038d21a76"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 22,
+    "timestamp": "2026-07-18T11:37:41.1968705Z",
+    "previous_hash": "29a3bf9fd448998f3c0c2b6c686950b8e45efff2a60add7a11628af038d21a76",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "verifying",
+        "to": "reviewing"
+      }
+    },
+    "hash": "386132121ec0a7fd10b9390d1e4c34e0aa183cc4a11706b98cd74f351424af5d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 23,
+    "timestamp": "2026-07-18T11:37:41.1975572Z",
+    "previous_hash": "386132121ec0a7fd10b9390d1e4c34e0aa183cc4a11706b98cd74f351424af5d",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model summary retained as implementation account; verification evidence remains independently graded"
+      }
+    },
+    "hash": "ccdc9a4a4362fb835d7cc55c68277d31e8eb720b715e229e0c49ed90a896da24"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 24,
+    "timestamp": "2026-07-18T11:37:41.1978635Z",
+    "previous_hash": "ccdc9a4a4362fb835d7cc55c68277d31e8eb720b715e229e0c49ed90a896da24",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "reviewing",
+        "to": "awaiting_apply"
+      }
+    },
+    "hash": "830d3c745f6c0078e17f2dce0c3dd0464310428050621606c8726a3f37ff029d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7504-6075-7043-a35e-fb0419c0fb23",
+    "sequence": 25,
+    "timestamp": "2026-07-18T11:37:41.268349Z",
+    "previous_hash": "830d3c745f6c0078e17f2dce0c3dd0464310428050621606c8726a3f37ff029d",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "awaiting_apply",
+        "to": "applied"
+      }
+    },
+    "hash": "71f9c8eca3fe67629558cda3b29786a05cae3727a9d581c1880820169ce5fe03"
+  }
+]

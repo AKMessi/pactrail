@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "run_id": "019f7501-358b-7a80-923e-b0903cfc2e62",
+  "created_at": "2026-07-18T11:34:04.8616318Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.",
+    "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-exact-file-create-r2",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f7501-358a-7bd0-b5ea-75b3ee333a84",
+        "description": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read"
+      ],
+      "deny": [
+        "network",
+        "secret_use",
+        "external_write"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+  "final_event_hash": "f5ca898082b3bb0c83096bf79ce74d4e5c7b9e02549e74b0cfaf8a48c0eca642",
+  "changes": [
+    {
+      "path": "SMOKE_TEST.md",
+      "before_digest": null,
+      "after_digest": "1d9572384596595dac070821730eec5d42663924d6991613b7a42ef276fadde0",
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 26,
+      "bytes_removed": 0
+    }
+  ],
+  "evidence": [
+    {
+      "id": "019f7501-4306-7753-bed6-2a7b6a42e397",
+      "obligation_id": "019f7501-358a-7bd0-b5ea-75b3ee333a84",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "3daa83d86c070da54a7219868cb8d7a277a73e1151f05b8b6be4bc2338b899fd"
+}

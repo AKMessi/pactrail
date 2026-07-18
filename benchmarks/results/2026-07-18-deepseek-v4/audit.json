@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "scored_matrix_summaries": 4,
+  "scored_trials": 84,
+  "summary_recomputed_passes": 78,
+  "artifact_regrade": {
+    "pactrail_trials": 42,
+    "pactrail_passes": 42,
+    "opencode_trials": 42,
+    "opencode_passes": 36,
+    "grade_mismatches": 0,
+    "missing_snapshots": 0
+  },
+  "pactrail_evidence": {
+    "correct_candidates": 42,
+    "isolation_checks_passed": 42,
+    "trace_checks_passed": 42,
+    "portable_trace_files": 42,
+    "receipt_files": 42
+  },
+  "opencode_protocol": {
+    "reasoning_tokens": 0,
+    "reasoning_events": 0,
+    "provider_errors": 0
+  },
+  "artifact_validation": {
+    "malformed_json_files": 0,
+    "malformed_jsonl_lines": 0,
+    "api_key_matches": 0
+  },
+  "repository_verification": {
+    "command": "cargo test --workspace --all-targets",
+    "passed": 106,
+    "failed": 0
+  },
+  "method": "Aggregates were recomputed from per-case records. Exact contents, absent paths, changed-path sets, summary terms, provider errors, and timeouts were then independently regraded from retained Pactrail candidate and OpenCode final-workspace snapshots."
+}

@@ -1,0 +1,68 @@
+{
+    "case_id":  "exact-file-create",
+    "repetition":  2,
+    "category":  "workspace-edit",
+    "model":  "deepseek-v4-flash",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f7501-358b-7a80-923e-b0903cfc2e62",
+    "duration_ms":  3491,
+    "tokens":  9173,
+    "candidate_correct":  true,
+    "candidate_changed_paths":  [
+                                    "SMOKE_TEST.md"
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:SMOKE_TEST.md",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  true,
+                                     "detail":  "Expected [SMOKE_TEST.md]; observed [SMOKE_TEST.md]."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "SMOKE_TEST.md"
+                      ],
+    "metrics":  {
+                    "events":  18,
+                    "model_calls":  3,
+                    "tool_calls":  2,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  3337,
+                    "tool_duration_ms":  10,
+                    "input_tokens":  9024,
+                    "output_tokens":  149,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:SMOKE_TEST.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [SMOKE_TEST.md]; observed [SMOKE_TEST.md]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "Created `SMOKE_TEST.md` with exactly one line: `Pactrail benchmark passed.` (26 bytes, digest `1d957238...`). The change is staged and ready."
+}

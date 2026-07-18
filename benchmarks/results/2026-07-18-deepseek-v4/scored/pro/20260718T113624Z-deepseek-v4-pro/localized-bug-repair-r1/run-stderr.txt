@@ -1,0 +1,2 @@
+2026-07-18T11:37:32.888445Z  WARN pactrail_engine::engine: tool call failed tool=replace_text error=replacement count was 2, expected 1
+2026-07-18T11:37:38.730819Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=process_spawn on "cargo" requires approval: process_spawn requires a scoped approval

@@ -1,0 +1,63 @@
+{
+    "case_id":  "multi-file-version-sync",
+    "repetition":  1,
+    "category":  "multi-file-edit",
+    "model":  "deepseek-direct/deepseek-v4-pro",
+    "harness":  "opencode",
+    "passed":  true,
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  52455,
+    "changed_paths":  [
+                          "Cargo.toml",
+                          "README.md",
+                          "src/version.rs"
+                      ],
+    "direct_source_write":  true,
+    "source_unchanged_after_run":  false,
+    "metrics":  {
+                    "model_calls":  4,
+                    "tool_calls":  9,
+                    "failed_tool_calls":  0,
+                    "input_tokens":  27302,
+                    "uncached_input_tokens":  4902,
+                    "cached_input_tokens":  22400,
+                    "output_tokens":  839,
+                    "total_tokens":  28141,
+                    "errors":  0,
+                    "summary":  "Done. Updated version from `0.1.0` to `0.2.0` in all three files."
+                },
+    "assertions":  [
+                       {
+                           "name":  "file:Cargo.toml",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:src/version.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [Cargo.toml, README.md, src/version.rs]; observed [Cargo.toml, README.md, src/version.rs]."
+                       },
+                       {
+                           "name":  "provider-errors",
+                           "passed":  true,
+                           "detail":  "Observed 0 error event(s)."
+                       },
+                       {
+                           "name":  "case-timeout",
+                           "passed":  true,
+                           "detail":  "The case completed within its wall-time limit."
+                       }
+                   ],
+    "summary":  "Done. Updated version from `0.1.0` to `0.2.0` in all three files."
+}

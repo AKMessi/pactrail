@@ -1,0 +1,78 @@
+{
+    "case_id":  "localized-bug-repair",
+    "repetition":  2,
+    "category":  "code-repair",
+    "model":  "deepseek-v4-pro",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f7504-90f0-7c12-ab6b-850a8d54afd0",
+    "duration_ms":  9059,
+    "tokens":  13393,
+    "candidate_correct":  true,
+    "candidate_changed_paths":  [
+                                    "src/math.rs"
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:src/math.rs",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "file:tests/math.rs",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  true,
+                                     "detail":  "Expected [src/math.rs]; observed [src/math.rs]."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "src/math.rs"
+                      ],
+    "metrics":  {
+                    "events":  22,
+                    "model_calls":  4,
+                    "tool_calls":  4,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  8975,
+                    "tool_duration_ms":  14,
+                    "input_tokens":  13000,
+                    "output_tokens":  393,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:src/math.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:tests/math.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [src/math.rs]; observed [src/math.rs]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "The fix is in place. Here\u0027s a summary:\n\n**Bug:** The `subtract` function in `src/math.rs` was using addition (`left + right`) instead of subtraction (`left - right`), so `subtract(9, 4)` would return 13 instead of 5.\n\n**Fix:** Changed the operator from `+` to `-` on line 6. The `add` function is preserved unchanged, and `tests/math.rs` was not modified."
+}

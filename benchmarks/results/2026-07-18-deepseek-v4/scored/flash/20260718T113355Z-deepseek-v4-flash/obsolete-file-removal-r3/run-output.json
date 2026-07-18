@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": null,
+      "after_unix_mode": null,
+      "before_digest": "aa05da59bb5ad20dc0cbf6742671828d670ceda26edf0a2b8ebbc4776778b3f5",
+      "before_unix_mode": null,
+      "bytes_added": 0,
+      "bytes_removed": 10,
+      "path": "obsolete.txt"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-obsolete-file-removal-r3\\.pactrail\\runs\\019f7502-5752-7d93-880a-ac678da080e8\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f7502-5752-7d93-880a-ac678da080e8",
+  "summary": "Done. Here's the summary:\n\n- **Deleted** `obsolete.txt` (10 bytes, content: `remove me\\n`)\n- **Preserved** `keep.txt` unchanged (16 bytes, content: `keep me exactly\\n`)\n\nNo further verification needed — the workspace changes confirm exactly one file removed with no modifications to `keep.txt`.",
+  "tokens": 15777,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-obsolete-file-removal-r3\\.pactrail\\runs\\019f7502-5752-7d93-880a-ac678da080e8\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

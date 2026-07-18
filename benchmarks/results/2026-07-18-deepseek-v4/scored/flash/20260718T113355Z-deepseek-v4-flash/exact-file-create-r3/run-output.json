@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": "1d9572384596595dac070821730eec5d42663924d6991613b7a42ef276fadde0",
+      "after_unix_mode": null,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 26,
+      "bytes_removed": 0,
+      "path": "SMOKE_TEST.md"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-exact-file-create-r3\\.pactrail\\runs\\019f7501-4395-7660-a52c-deba4a6c9fe1\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f7501-4395-7660-a52c-deba4a6c9fe1",
+  "summary": "Created `SMOKE_TEST.md` with exactly one line: `Pactrail benchmark passed.` (26 bytes, digest `1d957238...`). The workspace contains one new file as required.",
+  "tokens": 9141,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-exact-file-create-r3\\.pactrail\\runs\\019f7501-4395-7660-a52c-deba4a6c9fe1\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

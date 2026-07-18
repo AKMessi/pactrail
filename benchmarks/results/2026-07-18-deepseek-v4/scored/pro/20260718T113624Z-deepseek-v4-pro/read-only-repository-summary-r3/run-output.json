@@ -1,0 +1,19 @@
+{
+  "changes": [],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-pro\\20260718T113624Z-deepseek-v4-pro-read-only-repository-summary-r3\\.pactrail\\runs\\019f7505-b518-7483-ab70-e074730b96dd\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f7505-b518-7483-ab70-e074730b96dd",
+  "summary": "This directory contains **Pocket Calculator**, a tiny arithmetic library that provides two operations: `add` and `subtract`.",
+  "tokens": 9385,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-pro\\20260718T113624Z-deepseek-v4-pro-read-only-repository-summary-r3\\.pactrail\\runs\\019f7505-b518-7483-ab70-e074730b96dd\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

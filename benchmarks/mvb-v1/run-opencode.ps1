@@ -262,6 +262,7 @@ foreach ($case in $cases) {
             (Join-Path $artifactDirectory 'run-output.jsonl') (Join-Path $artifactDirectory 'run-stderr.txt')
         $metrics = Get-OpenCodeMetrics $invoke.Output
         $grade = Test-CaseWorkspace $workspace $before $case
+        Copy-Item -LiteralPath $workspace -Destination (Join-Path $artifactDirectory 'final-workspace') -Recurse
         $assertions = New-Object System.Collections.ArrayList
         foreach ($assertion in $grade.assertions) { [void]$assertions.Add($assertion) }
         foreach ($term in $case.expected_summary_terms) {

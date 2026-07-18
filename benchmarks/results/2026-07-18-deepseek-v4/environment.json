@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-07-18T12:07:12.6209344Z",
+  "timezone": "Asia/Calcutta",
+  "host": {
+    "operating_system": "Microsoft Windows 11 Home Single Language",
+    "os_version": "10.0.26200",
+    "architecture": "ARM64",
+    "cpu": "Snapdragon(R) X Plus - X1P42100 - Qualcomm(R) Oryon(TM) CPU",
+    "logical_processors": 8,
+    "physical_memory_bytes": 16759111680
+  },
+  "toolchain": {
+    "powershell": "5.1.26100.8875",
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)"
+  },
+  "pactrail": {
+    "version": "0.1.0",
+    "scored_revision": "b2e58665735b670d423decfcb8f0204ca1f6777a",
+    "scored_binary_sha256": "a7164e00006607006fe1df69730bea252ec94e9cd71445a20246d9e3ab1adca4",
+    "publication_revision_before_results": "452c2118ff65178e55c077ea393c9e705614726c",
+    "telemetry_note": "Revision 452c211 adds recognition of DeepSeek prompt_cache_hit_tokens after the scored revision. It does not change prompting, tools, model requests, transactions, or grading."
+  },
+  "opencode": {
+    "version": "1.2.27",
+    "platform": "windows-arm64",
+    "binary_sha256": "2c20d6d4a91affab2995d5e3cabcf4c0b25ebf954994186b59a12e52fadad36f"
+  },
+  "provider": {
+    "name": "DeepSeek",
+    "base_url": "https://api.deepseek.com",
+    "advertised_models": ["deepseek-v4-flash", "deepseek-v4-pro"],
+    "starting_balance_usd": "2.00",
+    "ending_balance_usd": "1.88"
+  }
+}

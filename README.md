@@ -249,6 +249,13 @@ exact isolated candidates**, **4/4 source isolation**, and **4/4
 integrity-accepted traces**. It retains the strict failures and the Qwen
 rate-limit diagnostic that exposed and led to a provider-backoff fix.
 
+The latest [DeepSeek V4 matched-harness evaluation](benchmarks/results/2026-07-18-deepseek-v4/README.md)
+ran seven cases three times on both V4 Flash and V4 Pro: **Pactrail passed
+42/42**, while OpenCode 1.2.27 passed **36/42** under the same no-shell policy.
+Pactrail used **59.0% fewer reported model tokens**, preserved pre-apply source
+isolation in **42/42** trials, and produced **42/42 integrity-accepted traces**.
+The report retains every raw run and explicitly limits the claim to this matrix.
+
 ## Architecture at a glance
 
 ```text

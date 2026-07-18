@@ -1,0 +1,99 @@
+{
+  "schema_version": 2,
+  "run_id": "019f7501-a829-7380-9a4a-1660ea06f77b",
+  "created_at": "2026-07-18T11:34:37.2894975Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.",
+    "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-multi-file-version-sync-r2",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f7501-a829-7380-9a4a-165653013535",
+        "description": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read"
+      ],
+      "deny": [
+        "network",
+        "secret_use",
+        "external_write"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "ded4121db05b9361049ff5e9345158c586530e2296fafa4cbc1a971ce2179626",
+  "final_event_hash": "46777934a4901bbeabdb0e353b8d42acdf31f54063b7c1018ed050eb576c80bf",
+  "changes": [
+    {
+      "path": "Cargo.toml",
+      "before_digest": "7e94d488a30f70190d373a3106053f1f7e1556f399f642e5ced89bfa73d40eb8",
+      "after_digest": "c7ba5bf816103e247b6e5cfa0f2d5b14b1dc0533b3043f51755ca862886634b7",
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 45,
+      "bytes_removed": 45
+    },
+    {
+      "path": "README.md",
+      "before_digest": "4a517be8f2156d71f3b54874d8ff18d6812e5966188b193c196d3085e880ac3b",
+      "after_digest": "ea1a709d7230f54f5201448671cfbb9d41c5da76cbfdff10a3f20dce1ad96b92",
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 34,
+      "bytes_removed": 34
+    },
+    {
+      "path": "src/version.rs",
+      "before_digest": "8213376cdb9888631b920fe042a07a99e02ab89a7645e5534717a1189dec1a39",
+      "after_digest": "ef1b2ff3795a4cf33dd3dd9acf84285dc3a41826fbaf44538a658fe0af37bbf9",
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 35,
+      "bytes_removed": 35
+    }
+  ],
+  "evidence": [
+    {
+      "id": "019f7501-c1a0-7ab3-a189-e9cc879acb93",
+      "obligation_id": "019f7501-a829-7380-9a4a-165653013535",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.: Verification commands require process permission",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: Verification commands require process permission"
+  ],
+  "metadata": {},
+  "integrity_hash": "ec215d80fe51bea60f0637da2b7f5fc618c53da8edfa6d5b2a086dff39da117e"
+}

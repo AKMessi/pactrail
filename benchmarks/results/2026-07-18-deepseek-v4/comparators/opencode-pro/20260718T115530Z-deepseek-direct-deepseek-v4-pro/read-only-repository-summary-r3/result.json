@@ -1,0 +1,71 @@
+{
+    "case_id":  "read-only-repository-summary",
+    "repetition":  3,
+    "category":  "repository-understanding",
+    "model":  "deepseek-direct/deepseek-v4-pro",
+    "harness":  "opencode",
+    "passed":  true,
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  19379,
+    "changed_paths":  [
+
+                      ],
+    "direct_source_write":  false,
+    "source_unchanged_after_run":  true,
+    "metrics":  {
+                    "model_calls":  7,
+                    "tool_calls":  5,
+                    "failed_tool_calls":  2,
+                    "input_tokens":  43242,
+                    "uncached_input_tokens":  11882,
+                    "cached_input_tokens":  31360,
+                    "output_tokens":  732,
+                    "total_tokens":  43974,
+                    "errors":  0,
+                    "summary":  "This is a tiny Rust arithmetic library called \"Pocket Calculator\" that provides `add` and `subtract` operations on integers.\n---\n\n## Goal\n\nThe user asked me to explain a directory in one concise sentence, mentioning what the library does and naming both operations it provides, without modifying any files.\n\n## Instructions\n\n- No files were to be modified — this was a read-only summary task.\n- The explanation needed to be a single concise sentence covering: what the library is/does, plus both operations it provides.\n\n## Accomplished\n\nI identified the workspace as a tiny Rust library called \"Pocket Calculator.\" After reading both source files (`src/calculator.rs` and `README.md`), I provided the requested one-sentence summary:\n\n\u003e \"This is a tiny Rust arithmetic library called \u0027Pocket Calculator\u0027 that provides `add` and `subtract` operations on integers.\"\n\n## Relevant files / directories\n\n- `C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-opencode-pro-workspaces\\20260718T115530Z-deepseek-direct-deepseek-v4-pro-read-only-repository-summary-r3\\`\n  - `src\\calculator.rs` — Contains two functions: `add(a, b)` which returns `a + b`, and `subtract(a, b)` which returns `a - b`.\n  - `README.md` — Names the library \"Pocket Calculator\" and describes it as \"A tiny arithmetic library.\"\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nThere are no next steps — the task was a one-time read-only summary, and it\u0027s complete. Let me know if you\u0027d like me to do anything else."
+                },
+    "assertions":  [
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:src/calculator.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected []; observed []."
+                       },
+                       {
+                           "name":  "summary:calculator",
+                           "passed":  true,
+                           "detail":  "Summary contained the term."
+                       },
+                       {
+                           "name":  "summary:add",
+                           "passed":  true,
+                           "detail":  "Summary contained the term."
+                       },
+                       {
+                           "name":  "summary:subtract",
+                           "passed":  true,
+                           "detail":  "Summary contained the term."
+                       },
+                       {
+                           "name":  "provider-errors",
+                           "passed":  true,
+                           "detail":  "Observed 0 error event(s)."
+                       },
+                       {
+                           "name":  "case-timeout",
+                           "passed":  true,
+                           "detail":  "The case completed within its wall-time limit."
+                       }
+                   ],
+    "summary":  "This is a tiny Rust arithmetic library called \"Pocket Calculator\" that provides `add` and `subtract` operations on integers.\n---\n\n## Goal\n\nThe user asked me to explain a directory in one concise sentence, mentioning what the library does and naming both operations it provides, without modifying any files.\n\n## Instructions\n\n- No files were to be modified — this was a read-only summary task.\n- The explanation needed to be a single concise sentence covering: what the library is/does, plus both operations it provides.\n\n## Accomplished\n\nI identified the workspace as a tiny Rust library called \"Pocket Calculator.\" After reading both source files (`src/calculator.rs` and `README.md`), I provided the requested one-sentence summary:\n\n\u003e \"This is a tiny Rust arithmetic library called \u0027Pocket Calculator\u0027 that provides `add` and `subtract` operations on integers.\"\n\n## Relevant files / directories\n\n- `C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-opencode-pro-workspaces\\20260718T115530Z-deepseek-direct-deepseek-v4-pro-read-only-repository-summary-r3\\`\n  - `src\\calculator.rs` — Contains two functions: `add(a, b)` which returns `a + b`, and `subtract(a, b)` which returns `a - b`.\n  - `README.md` — Names the library \"Pocket Calculator\" and describes it as \"A tiny arithmetic library.\"\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nThere are no next steps — the task was a one-time read-only summary, and it\u0027s complete. Let me know if you\u0027d like me to do anything else."
+}

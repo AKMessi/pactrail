@@ -111,3 +111,9 @@ A CPU-only Windows ARM64 comparison of Gemma4 v2 Q4_K_M and Ternary Bonsai
 three-trial `llama-bench` throughput, server logs, exact model hashes, and every
 raw candidate and trace, is available in the
 [`2026-07-18 local-model report`](../results/2026-07-18-local-models/README.md).
+
+A three-repetition matched comparison on DeepSeek V4 Flash and V4 Pro includes
+84 scored trials across Pactrail and OpenCode 1.2.27, deterministic final
+artifact grading, Pactrail candidate/isolation/trace evidence, OpenCode JSONL
+events, spend, exact binary hashes, and every failure in the
+[`2026-07-18 DeepSeek V4 report`](../results/2026-07-18-deepseek-v4/README.md).

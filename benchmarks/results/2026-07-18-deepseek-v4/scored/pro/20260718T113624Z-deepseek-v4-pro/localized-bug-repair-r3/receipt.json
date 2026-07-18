@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "run_id": "019f7504-b4c7-73a0-9de3-bbcacb4cd75d",
+  "created_at": "2026-07-18T11:37:59.04145Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.",
+    "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-pro\\20260718T113624Z-deepseek-v4-pro-localized-bug-repair-r3",
+    "allowed_write_paths": [
+      "src"
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f7504-b4c7-73a0-9de3-bbbee4a5e998",
+        "description": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read"
+      ],
+      "deny": [
+        "network",
+        "secret_use",
+        "external_write"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "cda22a6bd6b242a8616e03f048ca2e36919bd244bdd0d4d50e5f6aaed6330997",
+  "final_event_hash": "fc5822049c7e235f85260b0580f35965828834dee21ea0b53d44744ecc69753e",
+  "changes": [
+    {
+      "path": "src/math.rs",
+      "before_digest": "f132e629501878663e212262761624eb423e225595b9ea25c9a4bc9165e7b8c6",
+      "after_digest": "f5aa3bf06b199e51034d57980e728695607c8e72033ac71b09f5a9ccbea04bd5",
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 130,
+      "bytes_removed": 130
+    }
+  ],
+  "evidence": [
+    {
+      "id": "019f7504-d5c8-7183-b4c6-79631040a809",
+      "obligation_id": "019f7504-b4c7-73a0-9de3-bbbee4a5e998",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix the bug in src/math.rs so subtract(9, 4) returns 5. Preserve the add function and do not modify tests/math.rs.: Verification commands require process permission",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: Verification commands require process permission"
+  ],
+  "metadata": {},
+  "integrity_hash": "1c8842d46745b4688e21ced5628530aba9d1f431e004739629f84b6360f17611"
+}

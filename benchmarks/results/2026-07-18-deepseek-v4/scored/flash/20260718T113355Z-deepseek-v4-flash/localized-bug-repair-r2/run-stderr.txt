@@ -1,0 +1,1 @@
+2026-07-18T11:34:56.011785Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=process_spawn on "cargo" requires approval: process_spawn requires a scoped approval

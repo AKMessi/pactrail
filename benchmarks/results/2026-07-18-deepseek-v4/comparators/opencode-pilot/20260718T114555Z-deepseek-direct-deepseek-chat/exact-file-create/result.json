@@ -1,0 +1,51 @@
+{
+    "case_id":  "exact-file-create",
+    "repetition":  1,
+    "category":  "workspace-edit",
+    "model":  "deepseek-direct/deepseek-chat",
+    "harness":  "opencode",
+    "passed":  true,
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  11788,
+    "changed_paths":  [
+                          "SMOKE_TEST.md"
+                      ],
+    "direct_source_write":  true,
+    "source_unchanged_after_run":  false,
+    "metrics":  {
+                    "model_calls":  2,
+                    "tool_calls":  1,
+                    "failed_tool_calls":  0,
+                    "input_tokens":  12418,
+                    "uncached_input_tokens":  6274,
+                    "cached_input_tokens":  6144,
+                    "output_tokens":  118,
+                    "total_tokens":  12536,
+                    "errors":  0,
+                    "summary":  "Done."
+                },
+    "assertions":  [
+                       {
+                           "name":  "file:SMOKE_TEST.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [SMOKE_TEST.md]; observed [SMOKE_TEST.md]."
+                       },
+                       {
+                           "name":  "provider-errors",
+                           "passed":  true,
+                           "detail":  "Observed 0 error event(s)."
+                       },
+                       {
+                           "name":  "case-timeout",
+                           "passed":  true,
+                           "detail":  "The case completed within its wall-time limit."
+                       }
+                   ],
+    "summary":  "Done."
+}

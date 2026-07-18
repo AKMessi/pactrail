@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": "6e1f0ae81c0fe4709dd5cb2454706d9817f26468a6b145fad1740e12e010b3c8",
+      "after_unix_mode": null,
+      "before_digest": "a5d119afb7d2aa7ab271664184f4d6357ff366ef8655d659cbef5e3ffa0693ac",
+      "before_unix_mode": null,
+      "bytes_added": 40,
+      "bytes_removed": 40,
+      "path": "config/app.conf"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-targeted-config-edit-r2\\.pactrail\\runs\\019f7501-64a2-7930-86ca-7bc22f1b48ef\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f7501-64a2-7930-86ca-7bc22f1b48ef",
+  "summary": "Done. The change is complete:\n\n- **config/app.conf**: `timeout_ms` changed from `1000` to `2500` (line 2). All other bytes preserved.\n- **README.md**: Not touched.",
+  "tokens": 13160,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-deepseek-scored-flash\\20260718T113355Z-deepseek-v4-flash-targeted-config-edit-r2\\.pactrail\\runs\\019f7501-64a2-7930-86ca-7bc22f1b48ef\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}
