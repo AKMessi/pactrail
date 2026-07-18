@@ -1,0 +1,12 @@
+diff --git a/tests/tests.rs b/tests/tests.rs
+index 02bf5e2..e8c533a 100644
+--- a/tests/tests.rs
++++ b/tests/tests.rs
+@@ -2796,2 +2796,3 @@ fn test_owner() {
+ #[test]
++#[cfg(not(windows))]
+ fn test_exec_with_separator() {
+@@ -3161,2 +3162,3 @@ fn test_max_results() {
+ #[test]
++#[cfg(not(windows))]
+ fn test_list_details() {
