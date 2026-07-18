@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-real-issue-heldout-v1",
+  "description": "A preregistered post-hardening held-out comparison on unseen real Rust repository defects.",
+  "preregistered_at": "2026-07-18T14:13:00Z",
+  "development_suite": "pactrail-real-issue-replay-v1",
+  "frozen_pactrail_commit": "988dacb",
+  "controls": {
+    "models": ["deepseek-v4-flash"],
+    "temperature": 0,
+    "thinking": "disabled",
+    "context_tokens": 16384,
+    "max_output_tokens": 2048,
+    "max_steps": 16,
+    "case_repetitions": 1,
+    "case_retry_policy": "No retries, no best-of-n, and no favorable-sample replacement.",
+    "process_execution": "Enabled for both harnesses.",
+    "network_policy": "Task prompts require offline work. Source workspaces have a single synthetic baseline commit and no remote.",
+    "minimum_balance_usd": 1.05,
+    "maximum_case_seconds": 720,
+    "execution_order": [
+      "crossbeam/Pactrail", "crossbeam/OpenCode",
+      "smallvec/OpenCode", "smallvec/Pactrail",
+      "reqwest/Pactrail", "reqwest/OpenCode"
+    ],
+    "stopping_rule": "Stop all model calls at the balance floor. Do not replace an incomplete case."
+  },
+  "tasks": [
+    {
+      "id": "crossbeam-select-cloned-handle",
+      "difficulty": "multi-file-concurrency-bug",
+      "repository": "crossbeam-rs/crossbeam",
+      "repository_url": "https://github.com/crossbeam-rs/crossbeam.git",
+      "issue_url": "https://github.com/crossbeam-rs/crossbeam/issues/1096",
+      "license": "MIT OR Apache-2.0",
+      "base_commit": "148e2a91659762a33bb86d06d1403351e7c325d7",
+      "reference_commit": "ced65bf35b029637888d786fa142721895033fe3",
+      "prompt": "Fix crossbeam-channel issue #1096. A SelectedOperation registered with one Sender or Receiver instance currently panics when completed using a clone of that handle, even though both handles belong to the same channel. Completion with a cloned handle from the same channel must work for unbounded, bounded, and zero-capacity channels, while a handle from a different channel must still be rejected. Cover both Select and the select! machinery coherently. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and implement a production-quality fix. Run relevant tests before finishing.",
+      "setup_patch": null,
+      "setup_copies": [
+        {"source": "build-common.rs", "destination": "crossbeam-utils/build-common.rs"},
+        {"source": "no_atomic.rs", "destination": "crossbeam-utils/no_atomic.rs"},
+        {"source": "crossbeam-utils/src/alloc_helper.rs", "destination": "crossbeam-channel/src/alloc_helper.rs"},
+        {"source": "crossbeam-utils/src/alloc_helper.rs", "destination": "crossbeam-deque/src/alloc_helper.rs"},
+        {"source": "crossbeam-utils/src/alloc_helper.rs", "destination": "crossbeam-epoch/src/alloc_helper.rs"},
+        {"source": "crossbeam-utils/src/alloc_helper.rs", "destination": "crossbeam-queue/src/alloc_helper.rs"},
+        {"source": "crossbeam-utils/src/alloc_helper.rs", "destination": "crossbeam-skiplist/src/alloc_helper.rs"}
+      ],
+      "forbidden_paths": ["crossbeam-channel/tests", "CHANGELOG.md", "README.md"],
+      "hidden_overlay_paths": ["crossbeam-channel/tests/select.rs"],
+      "targeted_test": {
+        "program": "cargo",
+        "args": ["test", "-p", "crossbeam-channel", "--test", "select", "issue_1096"],
+        "timeout_seconds": 300
+      },
+      "regression_test": {
+        "program": "cargo",
+        "args": ["test", "-p", "crossbeam-channel", "--lib"],
+        "timeout_seconds": 300
+      }
+    },
+    {
+      "id": "smallvec-inline-leak-safety",
+      "difficulty": "memory-safety-regression",
+      "repository": "servo/rust-smallvec",
+      "repository_url": "https://github.com/servo/rust-smallvec.git",
+      "issue_url": "https://github.com/advisories/GHSA-5h7v-3586-wm8c",
+      "license": "MIT OR Apache-2.0",
+      "base_commit": "5d76282e96c631dce842ebc99c2aef9dc3a23796",
+      "reference_commit": "339524684344f74ea7e5e05b3b5ae4e5043999f8",
+      "prompt": "Fix the SmallVec::leak memory-safety bug described by GHSA-5h7v-3586-wm8c. leak currently returns a reference to inline stack storage that becomes dangling when the SmallVec is consumed. Reject leaking inline storage before creating ManuallyDrop, but continue to support leaking spilled heap storage. Keep the public API stable and avoid leaking element destructors on the rejected path. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and make the smallest production-quality change. Run relevant tests before finishing.",
+      "setup_patch": null,
+      "forbidden_paths": ["tests", "README.md", "CHANGELOG.md"],
+      "hidden_overlay_paths": [],
+      "local_hidden_overlays": [
+        {"source": "hidden/smallvec-leak-security.rs", "destination": "tests/leak_security.rs"}
+      ],
+      "targeted_test": {
+        "program": "cargo",
+        "args": ["test", "--test", "leak_security", "inline_storage_leak_is_rejected"],
+        "timeout_seconds": 180
+      },
+      "regression_test": {
+        "program": "cargo",
+        "args": ["test", "--lib"],
+        "timeout_seconds": 300
+      }
+    },
+    {
+      "id": "reqwest-blocking-request-parts",
+      "difficulty": "api-conversion-regression",
+      "repository": "seanmonstar/reqwest",
+      "repository_url": "https://github.com/seanmonstar/reqwest.git",
+      "issue_url": "https://github.com/seanmonstar/reqwest/issues/2989",
+      "license": "MIT OR Apache-2.0",
+      "base_commit": "11489b34eda6d32b15ad4033e62beba2ee401350",
+      "reference_commit": "642ce7d55698a282606a872f8cb8d0bcb9a79b94",
+      "prompt": "Fix reqwest issue #2989 in the blocking request conversion. TryFrom<http::Request<T>> for reqwest::blocking::Request preserves method, URI, headers, and body but silently discards other semantically meaningful request parts. Make it consistent with the asynchronous conversion by preserving the HTTP version and type-map extensions as well. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and make a focused production-quality change. Run relevant tests before finishing.",
+      "setup_patch": null,
+      "setup_replacements": [
+        {
+          "path": "Cargo.toml",
+          "old": "default = [\"default-tls\", \"charset\", \"http2\", \"system-proxy\"]",
+          "new": "default = [\"charset\", \"http2\", \"system-proxy\"]"
+        }
+      ],
+      "forbidden_paths": ["tests", "examples", "README.md", "CHANGELOG.md"],
+      "hidden_overlay_paths": [],
+      "local_hidden_appends": [
+        {"source": "hidden/reqwest-request-parts.rs", "destination": "src/blocking/request.rs"}
+      ],
+      "targeted_test": {
+        "program": "cargo",
+        "args": ["test", "--lib", "--no-default-features", "--features", "blocking", "hidden_issue_2989_tests::try_from_http_request_preserves_version_and_extensions"],
+        "timeout_seconds": 420
+      },
+      "regression_test": {
+        "program": "cargo",
+        "args": ["test", "--lib", "--no-default-features", "--features", "blocking"],
+        "timeout_seconds": 600
+      }
+    }
+  ]
+}

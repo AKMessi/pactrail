@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-real-issue-heldout-v1",
+  "validated_at": "2026-07-18T14:14:26.7850106+00:00",
+  "passed": 3,
+  "total": 3,
+  "records": [
+    {
+      "case_id": "crossbeam-select-cloned-handle",
+      "pre_fix_targeted_failed": true,
+      "reference_targeted_passed": true,
+      "reference_regression_passed": true,
+      "valid": true
+    },
+    {
+      "case_id": "smallvec-inline-leak-safety",
+      "pre_fix_targeted_failed": true,
+      "reference_targeted_passed": true,
+      "reference_regression_passed": true,
+      "valid": true
+    },
+    {
+      "case_id": "reqwest-blocking-request-parts",
+      "pre_fix_targeted_failed": true,
+      "reference_targeted_passed": true,
+      "reference_regression_passed": true,
+      "valid": true
+    }
+  ]
+}

@@ -19,6 +19,12 @@ param(
 
     [string[]]$CaseId,
 
+    [ValidateNotNullOrEmpty()]
+    [string]$ManifestPath = (Join-Path $PSScriptRoot 'cases.json'),
+
+    [ValidateNotNullOrEmpty()]
+    [string]$OpenCodeConfig = (Join-Path $PSScriptRoot 'opencode-deepseek.json'),
+
     [switch]$ValidateGraders,
 
     [switch]$KeepWorkspaces,
@@ -36,9 +42,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$suiteRoot = $PSScriptRoot
+$manifestPath = [System.IO.Path]::GetFullPath($ManifestPath)
+$suiteRoot = Split-Path -Parent $manifestPath
+$openCodeConfigPath = [System.IO.Path]::GetFullPath($OpenCodeConfig)
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-$manifest = Get-Content -LiteralPath (Join-Path $suiteRoot 'cases.json') -Raw | ConvertFrom-Json
+$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ($manifest.schema_version -ne 1) {
     throw "Unsupported issue-replay manifest version: $($manifest.schema_version)"
 }
@@ -59,6 +67,16 @@ function Write-Utf8File {
     $parent = Split-Path -Parent $Path
     if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
     [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
+function Get-StringSha256 {
+    param([AllowEmptyString()][string]$Value)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($utf8NoBom.GetBytes($Value)))).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
 }
 
 function ConvertTo-NativeArgument {
@@ -218,11 +236,49 @@ function Export-Revision {
 
 function Apply-SetupPatch {
     param($Case, [string]$Root)
-    if ($null -eq $Case.setup_patch -or [string]::IsNullOrWhiteSpace([string]$Case.setup_patch)) { return }
-    $patchPath = Join-Path $suiteRoot ([string]$Case.setup_patch)
-    $apply = Invoke-CapturedProcess -FileName 'git' -Arguments @('apply', '--unidiff-zero', '--whitespace=nowarn', $patchPath) `
-        -WorkingDirectory $Root -TimeoutSeconds 60 -StdoutPath '' -StderrPath ''
-    if ($apply.exit_code -ne 0) { throw "Setup patch failed for $($Case.id): $($apply.stderr)" }
+    if ($null -ne $Case.setup_patch -and -not [string]::IsNullOrWhiteSpace([string]$Case.setup_patch)) {
+        $patchPath = [System.IO.Path]::GetFullPath((Join-Path $suiteRoot ([string]$Case.setup_patch)))
+        $suitePrefix = [System.IO.Path]::GetFullPath($suiteRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+        if (-not $patchPath.StartsWith($suitePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Setup patch escapes suite directory for $($Case.id): $patchPath"
+        }
+        $apply = Invoke-CapturedProcess -FileName 'git' -Arguments @('apply', '--unidiff-zero', '--whitespace=nowarn', $patchPath) `
+            -WorkingDirectory $Root -TimeoutSeconds 60 -StdoutPath '' -StderrPath ''
+        if ($apply.exit_code -ne 0) { throw "Setup patch failed for $($Case.id): $($apply.stderr)" }
+    }
+    if ($Case.PSObject.Properties.Name -contains 'setup_copies') {
+        $rootPrefix = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+        foreach ($copy in $Case.setup_copies) {
+            $source = [System.IO.Path]::GetFullPath((Join-Path $Root ([string]$copy.source)))
+            $destination = [System.IO.Path]::GetFullPath((Join-Path $Root ([string]$copy.destination)))
+            if (-not $source.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+                -not $destination.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Setup copy escapes workspace for $($Case.id)."
+            }
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+                throw "Setup copy source is missing for $($Case.id): $source"
+            }
+            Copy-Item -LiteralPath $source -Destination $destination -Force
+        }
+    }
+    if ($Case.PSObject.Properties.Name -contains 'setup_replacements') {
+        $rootPrefix = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+        foreach ($replacement in $Case.setup_replacements) {
+            $path = [System.IO.Path]::GetFullPath((Join-Path $Root ([string]$replacement.path)))
+            if (-not $path.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+                -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+                throw "Setup replacement path is invalid for $($Case.id): $path"
+            }
+            $content = [System.IO.File]::ReadAllText($path)
+            $old = [string]$replacement.old
+            $new = [string]$replacement.new
+            $occurrences = ([regex]::Matches($content, [regex]::Escape($old))).Count
+            if ($occurrences -ne 1) {
+                throw "Setup replacement expected exactly one match for $($Case.id), found $occurrences in $path"
+            }
+            Write-Utf8File -Path $path -Content $content.Replace($old, $new)
+        }
+    }
 }
 
 function Prepare-CargoControls {
@@ -257,13 +313,21 @@ function Ensure-Template {
     New-Item -ItemType Directory -Force -Path $templates | Out-Null
     $template = Join-Path $templates ([string]$Case.id)
     $markerPath = Join-Path $templates "$($Case.id).json"
+    $setupCopiesJson = if ($Case.PSObject.Properties.Name -contains 'setup_copies') {
+        ConvertTo-Json -InputObject @($Case.setup_copies) -Depth 5 -Compress
+    } else { '' }
+    $setupReplacementsJson = if ($Case.PSObject.Properties.Name -contains 'setup_replacements') {
+        ConvertTo-Json -InputObject @($Case.setup_replacements) -Depth 5 -Compress
+    } else { '' }
     $expectedMarker = [ordered]@{
-        control_version = 2
+        control_version = 4
         base_commit = [string]$Case.base_commit
         setup_patch = if ($null -eq $Case.setup_patch) { '' } else { [string]$Case.setup_patch }
         setup_patch_sha256 = if ($null -eq $Case.setup_patch) { '' } else {
             (Get-FileHash -LiteralPath (Join-Path $suiteRoot ([string]$Case.setup_patch)) -Algorithm SHA256).Hash.ToLowerInvariant()
         }
+        setup_copies = $setupCopiesJson
+        setup_replacements = $setupReplacementsJson
     }
     $markerMatches = $false
     if ((Test-Path -LiteralPath $markerPath) -and (Test-Path -LiteralPath (Join-Path $template '.git'))) {
@@ -272,7 +336,9 @@ function Ensure-Template {
             $markerMatches = $actual.control_version -eq $expectedMarker.control_version -and
                 $actual.base_commit -eq $expectedMarker.base_commit -and
                 $actual.setup_patch -eq $expectedMarker.setup_patch -and
-                $actual.setup_patch_sha256 -eq $expectedMarker.setup_patch_sha256
+                $actual.setup_patch_sha256 -eq $expectedMarker.setup_patch_sha256 -and
+                $actual.setup_copies -eq $expectedMarker.setup_copies -and
+                $actual.setup_replacements -eq $expectedMarker.setup_replacements
         } catch { $markerMatches = $false }
     }
     if (-not $markerMatches) {
@@ -359,13 +425,65 @@ function Sync-SolutionIntoGrade {
 
 function Overlay-HiddenTests {
     param($Case, [string]$GradeRoot)
-    $repo = Ensure-RepositoryCache -Case $Case
-    foreach ($relative in $Case.hidden_overlay_paths) {
-        $path = [string]$relative
-        $show = Invoke-CapturedProcess -FileName 'git' -Arguments @('-C', $repo, 'show', "$($Case.reference_commit):$path") `
-            -WorkingDirectory $repo -TimeoutSeconds 60 -StdoutPath '' -StderrPath ''
-        if ($show.exit_code -ne 0) { throw "Could not load hidden test $path for $($Case.id)." }
-        Write-Utf8File -Path (Join-Path $GradeRoot ($path -replace '/', [System.IO.Path]::DirectorySeparatorChar)) -Content $show.stdout
+    if ($Case.PSObject.Properties.Name -contains 'hidden_overlay_paths') {
+        $repo = Ensure-RepositoryCache -Case $Case
+        foreach ($relative in $Case.hidden_overlay_paths) {
+            $path = [string]$relative
+            $show = Invoke-CapturedProcess -FileName 'git' -Arguments @('-C', $repo, 'show', "$($Case.reference_commit):$path") `
+                -WorkingDirectory $repo -TimeoutSeconds 60 -StdoutPath '' -StderrPath ''
+            if ($show.exit_code -ne 0) { throw "Could not load hidden test $path for $($Case.id)." }
+            Write-Utf8File -Path (Join-Path $GradeRoot ($path -replace '/', [System.IO.Path]::DirectorySeparatorChar)) -Content $show.stdout
+        }
+    }
+    if ($Case.PSObject.Properties.Name -contains 'local_hidden_overlays') {
+        foreach ($overlay in $Case.local_hidden_overlays) {
+            $source = [System.IO.Path]::GetFullPath((Join-Path $suiteRoot ([string]$overlay.source)))
+            $destination = [System.IO.Path]::GetFullPath((Join-Path $GradeRoot (([string]$overlay.destination) -replace '/', [System.IO.Path]::DirectorySeparatorChar)))
+            $suitePrefix = [System.IO.Path]::GetFullPath($suiteRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+            $gradePrefix = [System.IO.Path]::GetFullPath($GradeRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+            if (-not $source.StartsWith($suitePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Hidden overlay escapes suite directory for $($Case.id): $source"
+            }
+            if (-not $destination.StartsWith($gradePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Hidden overlay escapes grading workspace for $($Case.id): $destination"
+            }
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+                throw "Hidden overlay is missing for $($Case.id): $source"
+            }
+            $parent = Split-Path -Parent $destination
+            if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+            Copy-Item -LiteralPath $source -Destination $destination -Force
+        }
+    }
+    if ($Case.PSObject.Properties.Name -contains 'local_hidden_appends') {
+        foreach ($append in $Case.local_hidden_appends) {
+            $source = [System.IO.Path]::GetFullPath((Join-Path $suiteRoot ([string]$append.source)))
+            $destination = [System.IO.Path]::GetFullPath((Join-Path $GradeRoot (([string]$append.destination) -replace '/', [System.IO.Path]::DirectorySeparatorChar)))
+            $suitePrefix = [System.IO.Path]::GetFullPath($suiteRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+            $gradePrefix = [System.IO.Path]::GetFullPath($GradeRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+            if (-not $source.StartsWith($suitePrefix, [StringComparison]::OrdinalIgnoreCase) -or
+                -not $destination.StartsWith($gradePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Hidden append escapes its allowed directory for $($Case.id)."
+            }
+            if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or
+                -not (Test-Path -LiteralPath $destination -PathType Leaf)) {
+                throw "Hidden append source or destination is missing for $($Case.id)."
+            }
+            $existing = [System.IO.File]::ReadAllText($destination)
+            $addition = [System.IO.File]::ReadAllText($source)
+            Write-Utf8File -Path $destination -Content ($existing.TrimEnd("`r", "`n") + "`n" + $addition.TrimStart("`r", "`n"))
+        }
+    }
+    if ($Case.PSObject.Properties.Name -contains 'hidden_patch' -and
+        -not [string]::IsNullOrWhiteSpace([string]$Case.hidden_patch)) {
+        $patchPath = [System.IO.Path]::GetFullPath((Join-Path $suiteRoot ([string]$Case.hidden_patch)))
+        $suitePrefix = [System.IO.Path]::GetFullPath($suiteRoot).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+        if (-not $patchPath.StartsWith($suitePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Hidden patch escapes suite directory for $($Case.id): $patchPath"
+        }
+        $apply = Invoke-CapturedProcess -FileName 'git' -Arguments @('apply', '--whitespace=nowarn', $patchPath) `
+            -WorkingDirectory $GradeRoot -TimeoutSeconds 60 -StdoutPath '' -StderrPath ''
+        if ($apply.exit_code -ne 0) { throw "Hidden grader patch failed for $($Case.id): $($apply.stderr)" }
     }
 }
 
@@ -525,12 +643,14 @@ function Invoke-PactrailRun {
         'run', '--workspace', $Workspace,
         '--provider', 'open-ai-compatible', '--base-url', 'https://api.deepseek.com',
         '--model', $Model, '--api-key-env', $ApiKeyEnv,
-        '--context-tokens', '16384', '--max-output-tokens', '1024',
-        '--max-turns', '12', '--request-timeout-seconds', '600',
+        '--context-tokens', ([string]$manifest.controls.context_tokens),
+        '--max-output-tokens', ([string]$manifest.controls.max_output_tokens),
+        '--max-turns', ([string]$manifest.controls.max_steps),
+        '--request-timeout-seconds', ([string]$manifest.controls.maximum_case_seconds),
         '--disable-thinking', '--allow-process', '--write-path', '.', '--output', 'json',
         [string]$Case.prompt
     )
-    return Invoke-CapturedProcess -FileName $command.Source -Arguments $arguments -WorkingDirectory $Workspace -TimeoutSeconds 600 `
+    return Invoke-CapturedProcess -FileName $command.Source -Arguments $arguments -WorkingDirectory $Workspace -TimeoutSeconds ([int]$manifest.controls.maximum_case_seconds) `
         -StdoutPath (Join-Path $ArtifactDirectory 'run-output.json') -StderrPath (Join-Path $ArtifactDirectory 'run-stderr.txt') `
         -Environment @{ $ApiKeyEnv = $ApiKey }
 }
@@ -538,7 +658,7 @@ function Invoke-PactrailRun {
 function Invoke-OpenCodeRun {
     param($Case, [string]$Workspace, [string]$ArtifactDirectory, [string]$ApiKey, [string]$RuntimeRoot)
     $command = Get-Command $OpenCode -ErrorAction Stop
-    $config = [System.IO.Path]::GetFullPath((Join-Path $suiteRoot 'opencode-deepseek.json'))
+    $config = $openCodeConfigPath
     $arguments = @('run', '--dir', $Workspace, '--model', "deepseek-direct/$Model", '--agent', 'build', '--format', 'json', [string]$Case.prompt)
     $fileName = $command.Source
     if ($command.CommandType -eq 'ExternalScript') {
@@ -554,7 +674,7 @@ function Invoke-OpenCodeRun {
         'XDG_CACHE_HOME' = (Join-Path $RuntimeRoot 'cache')
     }
     New-Item -ItemType Directory -Force -Path $environment.OPENCODE_CONFIG_DIR | Out-Null
-    return Invoke-CapturedProcess -FileName $fileName -Arguments $arguments -WorkingDirectory $Workspace -TimeoutSeconds 600 `
+    return Invoke-CapturedProcess -FileName $fileName -Arguments $arguments -WorkingDirectory $Workspace -TimeoutSeconds ([int]$manifest.controls.maximum_case_seconds) `
         -StdoutPath (Join-Path $ArtifactDirectory 'run-output.jsonl') -StderrPath (Join-Path $ArtifactDirectory 'run-stderr.txt') `
         -Environment $environment
 }
@@ -580,6 +700,7 @@ function Validate-GradersNow {
         Export-Revision -Repository $repo -Revision ([string]$case.reference_commit) -Destination $reference -MutationRoot $caseRoot
         Apply-SetupPatch -Case $case -Root $reference
         Prepare-CargoControls -Case $case -Root $reference
+        Overlay-HiddenTests -Case $case -GradeRoot $reference
         $referenceTarget = Invoke-GraderCommand -Command $case.targeted_test -GradeRoot $reference -ArtifactDirectory $caseRoot -Name 'reference-targeted'
         $referenceRegression = Invoke-GraderCommand -Command $case.regression_test -GradeRoot $reference -ArtifactDirectory $caseRoot -Name 'reference-regression'
         $valid = (-not $baseResult.passed) -and $referenceTarget.passed -and $referenceRegression.passed
@@ -605,16 +726,16 @@ function Validate-GradersNow {
     Write-Host "All $($output.total) graders reject the base revision and accept the reference revision."
 }
 
-$apiKey = Get-ApiKey
-$balanceBefore = Get-DeepSeekBalance -ApiKey $apiKey
-if ($balanceBefore -lt [decimal]$manifest.controls.minimum_balance_usd) {
-    throw "DeepSeek balance $balanceBefore is below the preregistered floor $($manifest.controls.minimum_balance_usd)."
-}
-
 New-Item -ItemType Directory -Force -Path $OutputDirectory, $WorkspaceDirectory, $CacheDirectory | Out-Null
 if ($ValidateGraders) {
     Validate-GradersNow -SelectedCases $cases
     return
+}
+
+$apiKey = Get-ApiKey
+$balanceBefore = Get-DeepSeekBalance -ApiKey $apiKey
+if ($balanceBefore -lt [decimal]$manifest.controls.minimum_balance_usd) {
+    throw "DeepSeek balance $balanceBefore is below the preregistered floor $($manifest.controls.minimum_balance_usd)."
 }
 
 $runStamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ')
@@ -623,8 +744,26 @@ $resultRoot = Join-Path ([System.IO.Path]::GetFullPath($OutputDirectory)) "score
 $matrixWorkspace = Join-Path ([System.IO.Path]::GetFullPath($WorkspaceDirectory)) "$runStamp-$Harness-$modelSlug"
 New-Item -ItemType Directory -Force -Path $resultRoot, $matrixWorkspace | Out-Null
 
-$pactrailVersion = if ($Harness -eq 'pactrail') { (& $Pactrail --version 2>&1 | Out-String).Trim() } else { $null }
-$openCodeVersion = if ($Harness -eq 'opencode') { (& $OpenCode --version 2>&1 | Out-String).Trim() } else { $null }
+$pactrailCommand = if ($Harness -eq 'pactrail') { Get-Command $Pactrail -ErrorAction Stop } else { $null }
+$openCodeCommand = if ($Harness -eq 'opencode') { Get-Command $OpenCode -ErrorAction Stop } else { $null }
+$pactrailVersion = if ($Harness -eq 'pactrail') { (& $pactrailCommand.Source --version 2>&1 | Out-String).Trim() } else { $null }
+$openCodeVersion = if ($Harness -eq 'opencode') { (& $openCodeCommand.Source --version 2>&1 | Out-String).Trim() } else { $null }
+$harnessExecutableSha256 = if ($Harness -eq 'pactrail') {
+    (Get-FileHash -LiteralPath $pactrailCommand.Source -Algorithm SHA256).Hash.ToLowerInvariant()
+} elseif (Test-Path -LiteralPath $openCodeCommand.Source -PathType Leaf) {
+    (Get-FileHash -LiteralPath $openCodeCommand.Source -Algorithm SHA256).Hash.ToLowerInvariant()
+} else { '' }
+$protocol = [ordered]@{
+    manifest_sha256 = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    runner_sha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    opencode_config_sha256 = (Get-FileHash -LiteralPath $openCodeConfigPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    harness_executable_sha256 = $harnessExecutableSha256
+    context_tokens = [int]$manifest.controls.context_tokens
+    max_output_tokens = [int]$manifest.controls.max_output_tokens
+    max_steps = [int]$manifest.controls.max_steps
+    temperature = [double]$manifest.controls.temperature
+    thinking = [string]$manifest.controls.thinking
+}
 $results = New-Object System.Collections.ArrayList
 
 foreach ($case in $cases) {
@@ -719,6 +858,9 @@ foreach ($case in $cases) {
         case_id = [string]$case.id
         repository = [string]$case.repository
         difficulty = [string]$case.difficulty
+        source_base_commit = [string]$case.base_commit
+        reference_commit = [string]$case.reference_commit
+        prompt_sha256 = Get-StringSha256 -Value ([string]$case.prompt)
         harness = $Harness
         harness_version = if ($Harness -eq 'pactrail') { $pactrailVersion } else { $openCodeVersion }
         model = $Model
@@ -786,6 +928,7 @@ $summary = [pscustomobject]@{
     estimated_cost_usd = [Math]::Round([double](($results | Measure-Object -Property estimated_cost_usd -Sum).Sum), 6)
     balance_before_usd = $balanceBefore.ToString('0.00')
     balance_after_usd = $balanceAfter.ToString('0.00')
+    protocol = $protocol
     results = @($results)
 }
 Write-Utf8File -Path (Join-Path $resultRoot 'summary.json') -Content ($summary | ConvertTo-Json -Depth 12)
