@@ -75,6 +75,20 @@ The declared context and output values must reflect the server configuration.
 Pactrail uses them to budget repository context and reject impossible output
 limits; the inference server remains authoritative for tokenizer-specific limits.
 
+The model-request deadline defaults to 300 seconds. CPU-only serving of large
+local models can exceed that on the first prompt. Increase it for an individual
+scripted run with `--request-timeout-seconds`, or set
+`PACTRAIL_REQUEST_TIMEOUT_SECONDS`; Pactrail rejects values outside 1–3,600
+seconds so an unavailable endpoint cannot wait forever:
+
+```powershell
+pactrail run --provider open-ai-compatible `
+  --base-url http://127.0.0.1:8080/v1 `
+  --model model-id `
+  --request-timeout-seconds 900 `
+  "Describe this repository"
+```
+
 ## Adding a provider
 
 Implement `ModelDriver` and translate the provider protocol to these normalized types:

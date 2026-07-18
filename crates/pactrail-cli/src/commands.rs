@@ -249,6 +249,11 @@ fn validate_model_limits(args: &RunArgs) -> Result<(), CliError> {
             "maximum turns must be between 1 and 256".to_owned(),
         ));
     }
+    if !(1..=3_600).contains(&args.request_timeout_seconds) {
+        return Err(CliError::Argument(
+            "request timeout must be between 1 and 3,600 seconds".to_owned(),
+        ));
+    }
     Ok(())
 }
 
@@ -306,7 +311,7 @@ fn build_driver(
                 .unwrap_or_else(|| "http://127.0.0.1:11434/v1".to_owned()),
             model,
             api_key: None,
-            timeout: Duration::from_mins(5),
+            timeout: Duration::from_secs(args.request_timeout_seconds),
             capabilities,
         },
         ProviderKind::OpenAi => OpenAiCompatibleConfig {
@@ -317,7 +322,7 @@ fn build_driver(
                 .unwrap_or_else(|| "https://api.openai.com/v1".to_owned()),
             model,
             api_key: Some(api_key_from_env(&args.api_key_env)?),
-            timeout: Duration::from_mins(5),
+            timeout: Duration::from_secs(args.request_timeout_seconds),
             capabilities,
         },
         ProviderKind::OpenAiCompatible => OpenAiCompatibleConfig {
@@ -330,7 +335,7 @@ fn build_driver(
                 .ok()
                 .filter(|api_key| !api_key.is_empty())
                 .map(SecretString::from),
-            timeout: Duration::from_mins(5),
+            timeout: Duration::from_secs(args.request_timeout_seconds),
             capabilities,
         },
     };

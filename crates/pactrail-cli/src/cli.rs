@@ -194,6 +194,15 @@ pub struct RunArgs {
     #[arg(long, default_value_t = 4_096)]
     pub max_output_tokens: u64,
 
+    /// HTTP deadline for each model request, in seconds.
+    #[arg(
+        long,
+        env = "PACTRAIL_REQUEST_TIMEOUT_SECONDS",
+        default_value_t = 300,
+        value_parser = clap::value_parser!(u64).range(1..=3_600)
+    )]
+    pub request_timeout_seconds: u64,
+
     /// Result rendering format.
     #[arg(long, value_enum, default_value = "human")]
     pub output: OutputFormat,
@@ -211,6 +220,56 @@ pub enum ProviderKind {
 pub enum OutputFormat {
     Human,
     Json,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Cli, Command};
+    use clap::Parser;
+
+    #[test]
+    fn run_request_timeout_defaults_to_five_minutes() {
+        let cli = Cli::try_parse_from(["pactrail", "run", "--model", "model", "task"])
+            .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Run(args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert_eq!(args.request_timeout_seconds, 300);
+    }
+
+    #[test]
+    fn run_request_timeout_accepts_slow_local_models() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--model",
+            "model",
+            "--request-timeout-seconds",
+            "900",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Run(args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert_eq!(args.request_timeout_seconds, 900);
+    }
+
+    #[test]
+    fn run_request_timeout_rejects_unbounded_values() {
+        assert!(
+            Cli::try_parse_from([
+                "pactrail",
+                "run",
+                "--model",
+                "model",
+                "--request-timeout-seconds",
+                "3601",
+                "task",
+            ])
+            .is_err()
+        );
+    }
 }
 
 #[derive(Debug, Args)]

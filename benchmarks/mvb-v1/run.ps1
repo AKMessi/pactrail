@@ -23,6 +23,9 @@ param(
     [ValidateRange(1, 256)]
     [int]$MaxTurns = 12,
 
+    [ValidateRange(1, 3600)]
+    [int]$RequestTimeoutSeconds = 300,
+
     [ValidateRange(1, 20)]
     [int]$Repetitions = 1,
 
@@ -338,6 +341,7 @@ foreach ($case in $cases) {
             '--context-tokens', $ContextTokens.ToString(),
             '--max-output-tokens', $MaxOutputTokens.ToString(),
             '--max-turns', $MaxTurns.ToString(),
+            '--request-timeout-seconds', $RequestTimeoutSeconds.ToString(),
             '--output', 'json'
         )
         foreach ($writePath in $case.write_paths) {

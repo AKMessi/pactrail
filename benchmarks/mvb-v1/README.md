@@ -64,6 +64,11 @@ placeholder credential for remote hosts and never writes the key to artifacts:
 Provider transport retries are not included, so leave quota headroom for
 rate-limit or availability retries.
 
+Each model request has Pactrail's 300-second deadline by default. For a large,
+CPU-only local model that cannot finish its first turn within that window, pass
+`-RequestTimeoutSeconds 900` (maximum 3,600). Report any non-default deadline;
+it changes runtime compatibility, not the task, turn, or correctness criteria.
+
 The runner creates a fresh workspace for every case. Results include an
 aggregate `summary.json`, a human-readable `SUMMARY.md`, and per-case raw CLI
 output, isolated candidate snapshot, receipt, trace, integrity-check rendering,
