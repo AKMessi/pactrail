@@ -355,9 +355,7 @@ fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResp
         .map_or_else(Usage::default, |usage| Usage {
             input_tokens: number(usage, "prompt_tokens"),
             output_tokens: number(usage, "completion_tokens"),
-            cached_input_tokens: usage
-                .get("prompt_tokens_details")
-                .map_or(0, |details| number(details, "cached_tokens")),
+            cached_input_tokens: cached_input_tokens(usage),
         });
     let mut extensions = serde_json::Map::new();
     for key in ["id", "created", "system_fingerprint"] {
@@ -373,6 +371,14 @@ fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResp
         provider_request_id: request_id,
         extensions,
     })
+}
+
+fn cached_input_tokens(usage: &Value) -> u64 {
+    usage
+        .get("prompt_tokens_details")
+        .and_then(|details| details.get("cached_tokens"))
+        .and_then(Value::as_u64)
+        .unwrap_or_else(|| number(usage, "prompt_cache_hit_tokens"))
 }
 
 fn parse_tool_call(value: &Value) -> Result<ToolCall, ModelError> {
@@ -470,14 +476,29 @@ mod tests {
                 },
                 "finish_reason": "tool_calls"
             }],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 4}
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 4,
+                "prompt_cache_hit_tokens": 6,
+                "prompt_cache_miss_tokens": 4
+            }
         });
         let response = parse_response(&value, Some("request-1".to_owned()))
             .unwrap_or_else(|error| unreachable!("valid response: {error}"));
         assert_eq!(response.tool_calls[0].name, "read_file");
         assert_eq!(response.usage.total(), 14);
+        assert_eq!(response.usage.cached_input_tokens, 6);
         assert_eq!(response.finish_reason, FinishReason::ToolCalls);
         assert_eq!(response.extensions["id"], "response-1");
+    }
+
+    #[test]
+    fn standard_cached_token_detail_takes_precedence_over_provider_extension() {
+        let usage = json!({
+            "prompt_tokens_details": { "cached_tokens": 7 },
+            "prompt_cache_hit_tokens": 6
+        });
+        assert_eq!(cached_input_tokens(&usage), 7);
     }
 
     #[test]
