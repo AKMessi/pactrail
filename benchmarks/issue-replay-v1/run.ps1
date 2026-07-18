@@ -218,7 +218,7 @@ function Apply-SetupPatch {
     param($Case, [string]$Root)
     if ($null -eq $Case.setup_patch -or [string]::IsNullOrWhiteSpace([string]$Case.setup_patch)) { return }
     $patchPath = Join-Path $suiteRoot ([string]$Case.setup_patch)
-    $apply = Invoke-CapturedProcess -FileName 'git' -Arguments @('apply', '--whitespace=nowarn', $patchPath) `
+    $apply = Invoke-CapturedProcess -FileName 'git' -Arguments @('apply', '--unidiff-zero', '--whitespace=nowarn', $patchPath) `
         -WorkingDirectory $Root -TimeoutSeconds 60 -StdoutPath '' -StderrPath ''
     if ($apply.exit_code -ne 0) { throw "Setup patch failed for $($Case.id): $($apply.stderr)" }
 }
