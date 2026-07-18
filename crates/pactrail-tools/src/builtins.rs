@@ -13,6 +13,8 @@ use serde_json::{Value, json};
 use crate::{Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput};
 
 const MAX_READ_BYTES: u64 = 1024 * 1024;
+const DEFAULT_READ_LINES: usize = 300;
+const MAX_READ_LINES: usize = 1_000;
 const MAX_SEARCH_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_EDIT_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -95,13 +97,21 @@ impl Tool for ReadFileTool {
         let text = String::from_utf8(bytes).map_err(|_| ToolError::NonUtf8(path.clone()))?;
         let total_lines = text.lines().count();
         let start = request.start_line.unwrap_or(1);
-        let end = request.end_line.unwrap_or(total_lines.max(1));
+        let end = request
+            .end_line
+            .unwrap_or_else(|| start.saturating_add(DEFAULT_READ_LINES.saturating_sub(1)));
         if start == 0 || end < start {
             return Err(ToolError::InvalidRange(format!(
                 "line range must be 1-based and ordered, got {start}..={end}"
             )));
         }
-        let selected = text
+        let requested_lines = end.saturating_sub(start).saturating_add(1);
+        if requested_lines > MAX_READ_LINES {
+            return Err(ToolError::InvalidRange(format!(
+                "a read may return at most {MAX_READ_LINES} lines; requested {requested_lines}"
+            )));
+        }
+        let selected_lines = text
             .lines()
             .enumerate()
             .filter(|(index, _)| {
@@ -109,24 +119,25 @@ impl Tool for ReadFileTool {
                 line >= start && line <= end
             })
             .map(|(_, line)| line)
-            .collect::<Vec<_>>()
-            .join("\n");
+            .collect::<Vec<_>>();
+        let selected = selected_lines.join("\n");
         let returned_end = end.min(total_lines);
-        Ok(success(
-            json!({
+        let truncated = returned_end < total_lines;
+        let next_start_line = truncated.then(|| returned_end.saturating_add(1));
+        Ok(ToolOutput {
+            content: json!({
                 "path": request.path,
                 "start_line": start,
                 "end_line": returned_end,
                 "total_lines": total_lines,
+                "next_start_line": next_start_line,
                 "content": selected,
             }),
-            format!(
-                "read {} lines from {}",
-                returned_end.saturating_sub(start).saturating_add(1),
-                request.path
-            ),
-            vec![format!("fs.read:{}", request.path)],
-        ))
+            summary: format!("read {} lines from {}", selected_lines.len(), request.path),
+            observed_effects: vec![format!("fs.read:{}", request.path)],
+            succeeded: true,
+            truncated,
+        })
     }
 }
 
@@ -241,7 +252,7 @@ fn project_anchor_rank(path: &str) -> Option<u8> {
 struct SearchInput {
     /// Literal text to find.
     query: String,
-    /// Workspace-relative directory to search. Omit or use `.` for the root; never pass a file or absolute path.
+    /// Workspace-relative file or directory to search. Omit or use `.` for the root. Absolute paths are forbidden.
     path: Option<String>,
     /// Maximum number of matching lines to return.
     #[serde(default = "default_search_limit")]
@@ -270,7 +281,7 @@ impl Tool for SearchTool {
     fn descriptor(&self) -> ToolDescriptor {
         descriptor::<SearchInput>(
             "search",
-            "Search UTF-8 workspace files for a literal string and return cited matching lines.",
+            "Search a workspace-relative UTF-8 file or directory for a literal string and return cited matching lines.",
             Capability::FileRead,
         )
     }
@@ -289,61 +300,60 @@ impl Tool for SearchTool {
                 "max_results must be between 1 and 5000".to_owned(),
             ));
         }
-        let relative = request.path.unwrap_or_else(|| ".".to_owned());
+        let relative = request.path.clone().unwrap_or_else(|| ".".to_owned());
         context.authorize(&Capability::FileRead, relative.clone(), "search")?;
-        let start = resolve_directory(context, &relative)?;
+        let start = if relative == "." {
+            context.workspace.workspace_root().to_path_buf()
+        } else {
+            context.workspace.resolve_read(&relative)?
+        };
+        if !start.is_dir() && !start.is_file() {
+            return Err(ToolError::InvalidRange(format!(
+                "path {relative:?} must name a workspace-relative file or directory"
+            )));
+        }
         let needle = if request.case_sensitive {
             request.query.clone()
         } else {
             request.query.to_lowercase()
         };
         let mut matches = Vec::new();
-        let mut truncated = false;
-        'files: for item in WalkBuilder::new(&start)
-            .hidden(false)
-            .git_ignore(true)
-            .sort_by_file_path(Ord::cmp)
-            .build()
-        {
-            let entry = item.map_err(|source| ToolError::Io {
-                path: start.clone(),
-                source: std::io::Error::other(source),
-            })?;
-            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
-                continue;
-            }
-            let metadata = entry.metadata().map_err(|source| ToolError::Io {
-                path: entry.path().to_path_buf(),
-                source: std::io::Error::other(source),
-            })?;
-            if metadata.len() > MAX_SEARCH_FILE_BYTES {
-                continue;
-            }
-            let file = File::open(entry.path()).map_err(|source| ToolError::Io {
-                path: entry.path().to_path_buf(),
-                source,
-            })?;
-            let bounded = file.take(MAX_SEARCH_FILE_BYTES + 1);
-            for (index, line) in BufReader::new(bounded).lines().enumerate() {
-                let Ok(line) = line else { continue };
-                let haystack = if request.case_sensitive {
-                    line.clone()
-                } else {
-                    line.to_lowercase()
-                };
-                if haystack.contains(&needle) {
-                    matches.push(SearchMatch {
-                        path: portable_relative(context.workspace.workspace_root(), entry.path())?,
-                        line: index + 1,
-                        text: line,
-                    });
-                    if matches.len() == request.max_results {
-                        truncated = true;
-                        break 'files;
-                    }
+        let truncated = if start.is_file() {
+            search_file(
+                context.workspace.workspace_root(),
+                &start,
+                &request,
+                &needle,
+                &mut matches,
+            )?
+        } else {
+            let mut truncated = false;
+            for item in WalkBuilder::new(&start)
+                .hidden(false)
+                .git_ignore(true)
+                .sort_by_file_path(Ord::cmp)
+                .build()
+            {
+                let entry = item.map_err(|source| ToolError::Io {
+                    path: start.clone(),
+                    source: std::io::Error::other(source),
+                })?;
+                if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+                    continue;
+                }
+                if search_file(
+                    context.workspace.workspace_root(),
+                    entry.path(),
+                    &request,
+                    &needle,
+                    &mut matches,
+                )? {
+                    truncated = true;
+                    break;
                 }
             }
-        }
+            truncated
+        };
         Ok(ToolOutput {
             content: serde_json::to_value(&matches).map_err(ToolError::Serialization)?,
             summary: format!("found {} matches for {:?}", matches.len(), request.query),
@@ -352,6 +362,46 @@ impl Tool for SearchTool {
             truncated,
         })
     }
+}
+
+fn search_file(
+    root: &Path,
+    path: &Path,
+    request: &SearchInput,
+    needle: &str,
+    matches: &mut Vec<SearchMatch>,
+) -> Result<bool, ToolError> {
+    let metadata = path.metadata().map_err(|source| ToolError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if metadata.len() > MAX_SEARCH_FILE_BYTES {
+        return Ok(false);
+    }
+    let file = File::open(path).map_err(|source| ToolError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let bounded = file.take(MAX_SEARCH_FILE_BYTES + 1);
+    for (index, line) in BufReader::new(bounded).lines().enumerate() {
+        let Ok(line) = line else { continue };
+        let haystack = if request.case_sensitive {
+            line.clone()
+        } else {
+            line.to_lowercase()
+        };
+        if haystack.contains(needle) {
+            matches.push(SearchMatch {
+                path: portable_relative(root, path)?,
+                line: index + 1,
+                text: line,
+            });
+            if matches.len() == request.max_results {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -645,6 +695,63 @@ mod tests {
             .await
             .unwrap_or_else(|error| unreachable!("read: {error}"));
         assert_eq!(output.content["content"], "second line");
+    }
+
+    #[tokio::test]
+    async fn default_reads_are_paginated_and_report_the_next_line() {
+        let (_source, _control, transaction) = fixture();
+        let lines_text = (1..=350)
+            .map(|line| format!("line {line}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        transaction
+            .write_file("large.txt", lines_text.as_bytes())
+            .unwrap_or_else(|error| unreachable!("large fixture: {error}"));
+        let policy = PolicyEngine::local_default();
+        let context = ToolContext {
+            workspace: &transaction,
+            policy: &policy,
+            memory: None,
+        };
+
+        let output = ReadFileTool
+            .execute(&context, json!({"path":"large.txt"}))
+            .await
+            .unwrap_or_else(|error| unreachable!("read: {error}"));
+
+        assert!(output.truncated);
+        assert_eq!(output.content["start_line"], 1);
+        assert_eq!(output.content["end_line"], DEFAULT_READ_LINES);
+        assert_eq!(output.content["next_start_line"], DEFAULT_READ_LINES + 1);
+        assert_eq!(
+            output.content["content"]
+                .as_str()
+                .map(|text| text.lines().count()),
+            Some(DEFAULT_READ_LINES)
+        );
+    }
+
+    #[tokio::test]
+    async fn search_accepts_a_specific_workspace_file() {
+        let (_source, _control, transaction) = fixture();
+        let policy = PolicyEngine::local_default();
+        let context = ToolContext {
+            workspace: &transaction,
+            policy: &policy,
+            memory: None,
+        };
+
+        let output = SearchTool
+            .execute(
+                &context,
+                json!({"path":"hello.txt","query":"second","max_results":10}),
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("search: {error}"));
+
+        assert_eq!(output.content[0]["path"], "hello.txt");
+        assert_eq!(output.content[0]["line"], 2);
+        assert_eq!(output.content[0]["text"], "second line");
     }
 
     #[tokio::test]

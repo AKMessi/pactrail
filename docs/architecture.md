@@ -187,6 +187,15 @@ Each required obligation receives a grade and status; missing process permission
 creates explicit inconclusive evidence and an unresolved risk rather than a
 fictional pass.
 
+Model exploration is bounded independently of provider context size. A
+`read_file` call without an explicit range returns at most 300 lines and exposes
+the next line cursor; explicit ranges remain available up to 1,000 lines.
+`search` accepts either a workspace-relative directory or a specific file so a
+recoverable path-shape mistake does not consume another model turn. If the turn
+budget ends after real candidate changes, Pactrail records the missing model
+attestation as a risk and still runs deterministic verification. An unchanged
+run still fails at the turn limit.
+
 ## Compatibility policy
 
 Contracts, event envelopes, receipts, memory databases, transaction metadata,

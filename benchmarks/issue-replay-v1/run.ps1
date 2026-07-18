@@ -21,6 +21,8 @@ param(
 
     [switch]$ValidateGraders,
 
+    [switch]$KeepWorkspaces,
+
     [ValidateNotNullOrEmpty()]
     [string]$OutputDirectory = (Join-Path $PWD 'benchmark-results/issue-replay-v1'),
 
@@ -751,6 +753,10 @@ foreach ($case in $cases) {
     }
     [void]$results.Add($record)
     Write-Utf8File -Path (Join-Path $artifact 'result.json') -Content ($record | ConvertTo-Json -Depth 10)
+    if (-not $KeepWorkspaces) {
+        Assert-SafeChildPath -Root $matrixWorkspace -Path $caseRoot
+        Remove-Item -LiteralPath $caseRoot -Recurse -Force
+    }
 }
 
 $balanceAfter = Get-DeepSeekBalance -ApiKey $apiKey

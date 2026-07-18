@@ -588,8 +588,20 @@ impl<'a> RunEngine<'a> {
         }
 
         if final_text.is_empty() {
-            transition(&mut journal, &mut state, RunState::Failed, observer)?;
-            return Err(EngineError::MaxTurns(max_turns));
+            if transaction.changes()?.is_empty() {
+                transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                return Err(EngineError::MaxTurns(max_turns));
+            }
+            final_text = format!(
+                "The model reached the {max_turns}-turn limit without a final summary. Candidate changes were preserved for deterministic verification and explicit review."
+            );
+            let risk = format!(
+                "model reached the {max_turns}-turn limit after producing candidate changes; the model did not attest completeness, so the candidate requires explicit human review"
+            );
+            journal.append(RunEvent::NoteRecorded {
+                message: risk.clone(),
+            })?;
+            recovery_risk = Some(risk);
         }
         if goal_intent == GoalIntent::Informational && is_broad_repository_overview(&contract.goal)
         {
@@ -2220,6 +2232,52 @@ mod tests {
             risk.contains("model did not return a final summary")
                 && risk.contains("candidate completeness requires human review")
         }));
+    }
+
+    #[tokio::test]
+    async fn turn_limit_preserves_changed_candidate_for_verified_review() {
+        let responses = VecDeque::from([tool_response(
+            "call-1",
+            "write_file",
+            json!({"path": "README.md", "content": "verified candidate\n"}),
+        )]);
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "turn-limited-writer".to_owned(),
+            responses: Mutex::new(responses),
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let engine = RunEngine::new(&model, &registry, &policy).with_max_turns(1);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let mut contract = TaskContract::new("Create a README", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+
+        let outcome = engine
+            .execute(contract, &transaction, &mut store)
+            .await
+            .unwrap_or_else(|error| unreachable!("run: {error}"));
+
+        assert_eq!(outcome.receipt.outcome, ReceiptOutcome::ReadyToApply);
+        assert_eq!(outcome.receipt.changes.len(), 1);
+        assert!(outcome.final_text.contains("1-turn limit"));
+        assert!(outcome.receipt.unresolved_risks.iter().any(|risk| {
+            risk.contains("model reached the 1-turn limit")
+                && risk.contains("requires explicit human review")
+        }));
+        assert!(!source.path().join("README.md").exists());
     }
 
     #[tokio::test]

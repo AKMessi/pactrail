@@ -15,6 +15,12 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Tool-loop resilience now accepts a file path in `search`, paginates omitted
+  `read_file` ranges at 300 lines, and reports continuation metadata instead of
+  flooding the model conversation with an entire large source file.
+- Runs that exhaust their model-turn budget after making candidate changes now
+  continue through deterministic verification and explicit review with a
+  completeness risk, rather than failing before the candidate can be assessed.
 - OpenAI-compatible requests now coalesce all system instructions into one
   leading message. This preserves instruction priority while supporting strict
   Qwen-style llama.cpp chat templates that reject adjacent or late system
