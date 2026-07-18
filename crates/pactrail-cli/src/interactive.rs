@@ -791,6 +791,7 @@ impl Session {
             context_tokens: self.settings.context_tokens,
             max_output_tokens: self.settings.max_output_tokens,
             request_timeout_seconds: 300,
+            disable_thinking: false,
             output: OutputFormat::Human,
         };
 

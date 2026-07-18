@@ -313,6 +313,7 @@ fn build_driver(
             api_key: None,
             timeout: Duration::from_secs(args.request_timeout_seconds),
             capabilities,
+            disable_thinking: args.disable_thinking,
         },
         ProviderKind::OpenAi => OpenAiCompatibleConfig {
             name: "openai".to_owned(),
@@ -324,6 +325,7 @@ fn build_driver(
             api_key: Some(api_key_from_env(&args.api_key_env)?),
             timeout: Duration::from_secs(args.request_timeout_seconds),
             capabilities,
+            disable_thinking: args.disable_thinking,
         },
         ProviderKind::OpenAiCompatible => OpenAiCompatibleConfig {
             name: "openai-compatible".to_owned(),
@@ -337,6 +339,7 @@ fn build_driver(
                 .map(SecretString::from),
             timeout: Duration::from_secs(args.request_timeout_seconds),
             capabilities,
+            disable_thinking: args.disable_thinking,
         },
     };
     OpenAiCompatibleDriver::new(config).map_err(CliError::Model)

@@ -89,6 +89,21 @@ pactrail run --provider open-ai-compatible `
   "Describe this repository"
 ```
 
+Some compatible providers default to a reasoning mode that carries
+provider-specific hidden state between tool calls. For providers implementing
+DeepSeek's OpenAI extension, pass `--disable-thinking` to send
+`{"thinking":{"type":"disabled"}}`. Pactrail never sends this non-standard
+field unless it is explicitly requested:
+
+```powershell
+pactrail run --provider open-ai-compatible `
+  --base-url https://api.deepseek.com `
+  --model deepseek-v4-pro `
+  --api-key-env DEEPSEEK_API_KEY `
+  --disable-thinking `
+  "Describe this repository"
+```
+
 ## Adding a provider
 
 Implement `ModelDriver` and translate the provider protocol to these normalized types:

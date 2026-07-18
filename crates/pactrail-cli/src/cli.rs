@@ -203,6 +203,13 @@ pub struct RunArgs {
     )]
     pub request_timeout_seconds: u64,
 
+    /// Send the provider extension `thinking.type=disabled`.
+    ///
+    /// Use this for compatible providers such as `DeepSeek` V4 when Pactrail's
+    /// multi-turn tool protocol should run without hidden reasoning state.
+    #[arg(long)]
+    pub disable_thinking: bool,
+
     /// Result rendering format.
     #[arg(long, value_enum, default_value = "human")]
     pub output: OutputFormat,
@@ -269,6 +276,23 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn run_can_disable_provider_thinking() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--model",
+            "model",
+            "--disable-thinking",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Run(args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert!(args.disable_thinking);
     }
 }
 

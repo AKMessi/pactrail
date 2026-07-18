@@ -27,6 +27,10 @@ pub struct OpenAiCompatibleConfig {
     pub api_key: Option<SecretString>,
     pub timeout: Duration,
     pub capabilities: ModelCapabilities,
+    /// Request the provider's non-thinking mode using the OpenAI-compatible
+    /// `thinking.type=disabled` extension. This is opt-in because the field is
+    /// not part of the core `OpenAI` Chat Completions schema.
+    pub disable_thinking: bool,
 }
 
 impl OpenAiCompatibleConfig {
@@ -40,6 +44,7 @@ impl OpenAiCompatibleConfig {
             api_key: None,
             timeout: Duration::from_mins(5),
             capabilities: ModelCapabilities::default(),
+            disable_thinking: false,
         }
     }
 }
@@ -186,56 +191,67 @@ impl ModelDriver for OpenAiCompatibleDriver {
     }
 
     async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
-        if request.conversation.is_empty() {
-            return Err(ModelError::InvalidRequest(
-                "at least one message is required".to_owned(),
-            ));
-        }
-        if request.max_output_tokens == 0
-            || request.max_output_tokens > self.config.capabilities.max_output_tokens
-        {
-            return Err(ModelError::InvalidRequest(format!(
-                "max_output_tokens must be between 1 and {}",
-                self.config.capabilities.max_output_tokens
-            )));
-        }
-        let messages = canonical_messages(&request.conversation)?;
-        let tools = request
-            .tools
-            .iter()
-            .map(|tool| {
-                json!({
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.input_schema,
-                    }
-                })
-            })
-            .collect::<Vec<_>>();
-        let mut body = json!({
-            "model": self.config.model,
-            "messages": messages,
-            "max_tokens": request.max_output_tokens,
-            "stream": false,
-        });
-        if !tools.is_empty() {
-            body["tools"] = Value::Array(tools);
-            body["tool_choice"] = Value::String("auto".to_owned());
-        }
-        if let Some(temperature) = request.temperature {
-            if !(0.0..=2.0).contains(&temperature) {
-                return Err(ModelError::InvalidRequest(
-                    "temperature must be between 0 and 2".to_owned(),
-                ));
-            }
-            body["temperature"] = json!(temperature);
-        }
-
+        let body = request_body(&self.config, request)?;
         let (response, request_id) = self.send(&body).await?;
         parse_response(&response, request_id)
     }
+}
+
+fn request_body(
+    config: &OpenAiCompatibleConfig,
+    request: &ModelRequest,
+) -> Result<Value, ModelError> {
+    if request.conversation.is_empty() {
+        return Err(ModelError::InvalidRequest(
+            "at least one message is required".to_owned(),
+        ));
+    }
+    if request.max_output_tokens == 0
+        || request.max_output_tokens > config.capabilities.max_output_tokens
+    {
+        return Err(ModelError::InvalidRequest(format!(
+            "max_output_tokens must be between 1 and {}",
+            config.capabilities.max_output_tokens
+        )));
+    }
+    let messages = canonical_messages(&request.conversation)?;
+    let tools = request
+        .tools
+        .iter()
+        .map(|tool| {
+            json!({
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.input_schema,
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    let mut body = json!({
+        "model": config.model,
+        "messages": messages,
+        "max_tokens": request.max_output_tokens,
+        "stream": false,
+    });
+    if config.disable_thinking {
+        body["thinking"] = json!({ "type": "disabled" });
+    }
+    if !tools.is_empty() {
+        body["tools"] = Value::Array(tools);
+        body["tool_choice"] = Value::String("auto".to_owned());
+    }
+    if let Some(temperature) = request.temperature {
+        if !(0.0..=2.0).contains(&temperature) {
+            return Err(ModelError::InvalidRequest(
+                "temperature must be between 0 and 2".to_owned(),
+            ));
+        }
+        body["temperature"] = json!(temperature);
+    }
+
+    Ok(body)
 }
 
 fn message_json(message: &Message) -> Value {
@@ -435,6 +451,7 @@ mod tests {
             api_key: None,
             timeout: Duration::from_secs(1),
             capabilities: ModelCapabilities::default(),
+            disable_thinking: false,
         }
     }
 
@@ -506,6 +523,25 @@ mod tests {
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0]["role"], "user");
         assert_eq!(messages[1]["role"], "assistant");
+    }
+
+    #[test]
+    fn non_thinking_extension_is_explicit_in_request_body() {
+        let request = ModelRequest {
+            conversation: vec![ConversationItem::Message(Message::user("task"))],
+            tools: Vec::new(),
+            max_output_tokens: 128,
+            temperature: Some(0.0),
+        };
+        let default_body = request_body(&config("https://api.example.com/v1"), &request)
+            .unwrap_or_else(|error| unreachable!("valid request: {error}"));
+        assert!(default_body.get("thinking").is_none());
+
+        let mut non_thinking = config("https://api.example.com/v1");
+        non_thinking.disable_thinking = true;
+        let body = request_body(&non_thinking, &request)
+            .unwrap_or_else(|error| unreachable!("valid request: {error}"));
+        assert_eq!(body["thinking"]["type"], "disabled");
     }
 
     #[test]

@@ -32,6 +32,8 @@ param(
     [ValidateRange(0, 100000)]
     [int]$RequestBudget = 0,
 
+    [switch]$DisableThinking,
+
     [string[]]$CaseId,
 
     [ValidateNotNullOrEmpty()]
@@ -344,6 +346,9 @@ foreach ($case in $cases) {
             '--request-timeout-seconds', $RequestTimeoutSeconds.ToString(),
             '--output', 'json'
         )
+        if ($DisableThinking) {
+            $arguments += '--disable-thinking'
+        }
         foreach ($writePath in $case.write_paths) {
             $arguments += @('--write-path', [string]$writePath)
         }
@@ -475,6 +480,7 @@ $summaryObject = [pscustomobject]@{
     max_turns = $MaxTurns
     repetitions = $Repetitions
     request_budget = if ($RequestBudget -gt 0) { $RequestBudget } else { $null }
+    disable_thinking = [bool]$DisableThinking
     logical_request_ceiling = $logicalRequestCeiling
     cases = $results.Count
     passed = $passedCount
@@ -500,6 +506,7 @@ $markdown.Add("- Isolated candidate correctness: **$candidatePassedCount/$($resu
 $markdown.Add("- Pactrail: ``$pactrailVersion``")
 $markdown.Add("- Context/output/turns: $ContextTokens / $MaxOutputTokens / $MaxTurns")
 $markdown.Add("- Logical request ceiling: $logicalRequestCeiling$(if ($RequestBudget -gt 0) { " / budget $RequestBudget" } else { '' })")
+$markdown.Add("- Provider thinking explicitly disabled: $([bool]$DisableThinking)")
 $markdown.Add("- Median end-to-end task time: $([Math]::Round($medianDuration / 1000, 2)) s")
 $markdown.Add("- Total reported model tokens: $($summaryObject.total_tokens)")
 $markdown.Add('')
