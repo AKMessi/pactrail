@@ -1,0 +1,65 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-heldout-v1",
+    "case_id":  "crossbeam-select-cloned-handle",
+    "repository":  "crossbeam-rs/crossbeam",
+    "difficulty":  "multi-file-concurrency-bug",
+    "source_base_commit":  "148e2a91659762a33bb86d06d1403351e7c325d7",
+    "reference_commit":  "ced65bf35b029637888d786fa142721895033fe3",
+    "prompt_sha256":  "6c9b7ca648bdf8d84a20ad2adc8601dcc8d06e2d3bd35b6e0054a04be431089c",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 0.1.0",
+    "model":  "deepseek-v4-flash",
+    "functional_passed":  false,
+    "instructions_passed":  true,
+    "task_passed":  false,
+    "strict_passed":  false,
+    "outcome":  "process_error",
+    "exit_code":  1,
+    "timed_out":  false,
+    "duration_ms":  35649,
+    "grading_duration_ms":  7504,
+    "run_id":  "019f7596-621c-7d32-b53c-5fe589606209",
+    "changed_paths":  [
+                          "Cargo.lock",
+                          "crossbeam-channel/benchmarks/plot.png"
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  0,
+                  "additions":  0,
+                  "deletions":  0,
+                  "bytes":  0
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test -p crossbeam-channel --test select issue_1096",
+                          "exit_code":  -1073740791,
+                          "timed_out":  false,
+                          "duration_ms":  6879,
+                          "passed":  false
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test -p crossbeam-channel --lib",
+                            "exit_code":  0,
+                            "timed_out":  false,
+                            "duration_ms":  625,
+                            "passed":  true
+                        },
+    "input_tokens":  216465,
+    "cached_input_tokens":  175232,
+    "output_tokens":  1689,
+    "total_tokens":  218154,
+    "estimated_cost_usd":  0.006736,
+    "model_calls":  9,
+    "tool_calls":  13,
+    "failed_tool_calls":  0,
+    "provider_errors":  1,
+    "source_isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "applied_candidate_matches":  false,
+    "summary":  ""
+}

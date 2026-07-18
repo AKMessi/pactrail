@@ -1,0 +1,1072 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 0,
+    "timestamp": "2026-07-18T13:29:29.164559Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Fix Pactrail's completed-discard recovery bug. Calling `pactrail discard RUN_ID --json` a second time currently fails after the first call removes the candidate workspace. Discard must be idempotent. It must also recover an interrupted operation where the durable event state is Discarded but the receipt still says ReadyToApply: rebuild and persist the discarded receipt from the durable event head. Preserve receipt integrity, retained review artifacts, and explicit errors for inconsistent state/workspace combinations. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and implement the smallest coherent production-quality fix. Run relevant tests before finishing.",
+        "workspace_root": "\\\\?\\D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\scored\\20260718T132804Z-pactrail-deepseek-v4-pro\\pactrail-idempotent-discard\\workspace",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f756a-e9b3-7163-9889-fe670b3cf811",
+            "description": "Fix Pactrail's completed-discard recovery bug. Calling `pactrail discard RUN_ID --json` a second time currently fails after the first call removes the candidate workspace. Discard must be idempotent. It must also recover an interrupted operation where the durable event state is Discarded but the receipt still says ReadyToApply: rebuild and persist the discarded receipt from the durable event head. Preserve receipt integrity, retained review artifacts, and explicit errors for inconsistent state/workspace combinations. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and implement the smallest coherent production-quality fix. Run relevant tests before finishing.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read",
+            "process_spawn",
+            "network",
+            "secret_use",
+            "external_write"
+          ],
+          "deny": []
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "1ef32bf4575a94068ece773febeb30a4c34d7caf2b9842a11e6b7f71d59c771f"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 1,
+    "timestamp": "2026-07-18T13:29:29.1648335Z",
+    "previous_hash": "1ef32bf4575a94068ece773febeb30a4c34d7caf2b9842a11e6b7f71d59c771f",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "09e55b4489e2bb9887ee56d5219dd4db3a28707bc8fa7d5477a47b7781afc9bf"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 2,
+    "timestamp": "2026-07-18T13:29:29.1649664Z",
+    "previous_hash": "09e55b4489e2bb9887ee56d5219dd4db3a28707bc8fa7d5477a47b7781afc9bf",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "176d9277fc3ba480d6edb4fca933c5e469d129465ca576f0fdf2dbc3b960f7b4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 3,
+    "timestamp": "2026-07-18T13:29:29.176983Z",
+    "previous_hash": "176d9277fc3ba480d6edb4fca933c5e469d129465ca576f0fdf2dbc3b960f7b4",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 76 files and cited 14 within a 11518-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 11,
+        "attributes": {
+          "budget_bytes": "11520",
+          "cited_files": "14",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "11518",
+          "truncated": "true"
+        }
+      }
+    },
+    "hash": "c8a5664126c989a5599a12901a38b9f59f375d94db3f7a57321b01193b68dee1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 4,
+    "timestamp": "2026-07-18T13:29:29.1776841Z",
+    "previous_hash": "c8a5664126c989a5599a12901a38b9f59f375d94db3f7a57321b01193b68dee1",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:6f466405d85ca107c0e218faa85c9563cad4ee5b9671b65c163c673933697e1a"
+      }
+    },
+    "hash": "e39ab966d31e184a9ec5b115f9cc80332e101e83b53827d6405fd1403d9b5798"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 5,
+    "timestamp": "2026-07-18T13:29:29.1778261Z",
+    "previous_hash": "e39ab966d31e184a9ec5b115f9cc80332e101e83b53827d6405fd1403d9b5798",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "61084489d9dbce6c04137002c96c887d56c3b3382fa1e91293891d40ca1fe639"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 6,
+    "timestamp": "2026-07-18T13:29:29.1780172Z",
+    "previous_hash": "61084489d9dbce6c04137002c96c887d56c3b3382fa1e91293891d40ca1fe639",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "c1a4ce0c2fe6cdec147f61e8521f4262059bc1b490f469e8a73fff0dad7c3d1e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 7,
+    "timestamp": "2026-07-18T13:29:32.138776Z",
+    "previous_hash": "c1a4ce0c2fe6cdec147f61e8521f4262059bc1b490f469e8a73fff0dad7c3d1e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 1 produced 2 tool call(s) and 86 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2960,
+        "attributes": {
+          "cached_input_tokens": "256",
+          "finish_reason": "toolcalls",
+          "input_tokens": "5589",
+          "output_tokens": "156",
+          "text_bytes": "86",
+          "tool_calls": "2",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "7caf8255f48a441222646fda583baf31fcbf0768487d2ccd23008eb6820a300e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 8,
+    "timestamp": "2026-07-18T13:29:32.2032066Z",
+    "previous_hash": "7caf8255f48a441222646fda583baf31fcbf0768487d2ccd23008eb6820a300e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 131 lines from crates/pactrail-cli/src/commands.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/pactrail-cli/src/commands.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 17,
+        "attributes": {
+          "arguments_digest": "8ad10aff5637e755bd3b7c0f84b53d2b4b97391af7fe364fc10017e005fa1e6f",
+          "call_id": "call_00_qUD7JBBsz756opP8O6kY2025",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "4521",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "53e27d7fbba7554a52c749b38ccaba70eefc20062b2ad5180ba3b43d1db1eaad"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 9,
+    "timestamp": "2026-07-18T13:29:32.2041866Z",
+    "previous_hash": "53e27d7fbba7554a52c749b38ccaba70eefc20062b2ad5180ba3b43d1db1eaad",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 46 matches for \"discard\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/pactrail-cli/src"
+        ],
+        "succeeded": true,
+        "duration_ms": 19,
+        "attributes": {
+          "arguments_digest": "5d70acd4c699e03c4e8c9c786b98d8ca0122be66db6147f7cc9365fb83029d99",
+          "call_id": "call_01_kTRx8VA4iaYP2FUaMtU45931",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "5808",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "cd67390f439955ea09fd80d6bd068e3a6029a6570e617040c6ad1399b212506a"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 10,
+    "timestamp": "2026-07-18T13:29:34.7951566Z",
+    "previous_hash": "cd67390f439955ea09fd80d6bd068e3a6029a6570e617040c6ad1399b212506a",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 2 produced 2 tool call(s) and 119 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2590,
+        "attributes": {
+          "cached_input_tokens": "5504",
+          "finish_reason": "toolcalls",
+          "input_tokens": "8744",
+          "output_tokens": "193",
+          "text_bytes": "119",
+          "tool_calls": "2",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "78344a64ef577c3216c970da3e4e3eeddc92832663bda606b5e34417056bfd25"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 11,
+    "timestamp": "2026-07-18T13:29:34.8553793Z",
+    "previous_hash": "78344a64ef577c3216c970da3e4e3eeddc92832663bda606b5e34417056bfd25",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 20 lines from crates/pactrail-cli/src/commands.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/pactrail-cli/src/commands.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "0043c1794506aa46df21759b2cb5e65300853aecd4b3097d6461557eee434546",
+          "call_id": "call_00_v1J8bRkra6wRncteSSnD5313",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "979",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "26a76acf208542327717ddce14fd461ac1cf17f34dae1dfef71146317010a073"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 12,
+    "timestamp": "2026-07-18T13:29:34.856512Z",
+    "previous_hash": "26a76acf208542327717ddce14fd461ac1cf17f34dae1dfef71146317010a073",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 61 lines from crates/pactrail-cli/src/commands.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/pactrail-cli/src/commands.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "c72d62f6736baa7b244ee605b6ff7140cf70cd7ddf56d63327093678db4703be",
+          "call_id": "call_01_R8LhYUcpDIAdXnvAtNpW1383",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "2602",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "80f5f45d77b49e26a366f890666bfb563780d3a35e2afba715cd010f7397b1d4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 13,
+    "timestamp": "2026-07-18T13:29:40.6295742Z",
+    "previous_hash": "80f5f45d77b49e26a366f890666bfb563780d3a35e2afba715cd010f7397b1d4",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 3 produced 2 tool call(s) and 1088 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 5772,
+        "attributes": {
+          "cached_input_tokens": "8832",
+          "finish_reason": "toolcalls",
+          "input_tokens": "9965",
+          "output_tokens": "405",
+          "text_bytes": "1088",
+          "tool_calls": "2",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "ad453852b8d45e956c0cfc8f9e798a510b316754e6fa589d5a60287585b8878d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 14,
+    "timestamp": "2026-07-18T13:29:40.6963775Z",
+    "previous_hash": "ad453852b8d45e956c0cfc8f9e798a510b316754e6fa589d5a60287585b8878d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "requested range is invalid: path \"crates/pactrail-cli/src/commands.rs\" must name a workspace-relative directory; omit it or use `.` for the workspace root",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 21,
+        "attributes": {
+          "arguments_digest": "006fe2018a621f0430ce6829c0be3f6bac6720a48a37ff2eb4e203ba913fea91",
+          "call_id": "call_00_ztRfGF8tX8p638Jrquwu8998",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "168",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "80138584a7e8074523dc7407087dca8b83d70d3ef054677c5d668f3f07a3f7ad"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 15,
+    "timestamp": "2026-07-18T13:29:40.6975596Z",
+    "previous_hash": "80138584a7e8074523dc7407087dca8b83d70d3ef054677c5d668f3f07a3f7ad",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "requested range is invalid: path \"crates/pactrail-cli/src/commands.rs\" must name a workspace-relative directory; omit it or use `.` for the workspace root",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 15,
+        "attributes": {
+          "arguments_digest": "19a11deb9b243ca6b3308672bdc8b0d284dd9bb9d7ded191a68a4ce694108716",
+          "call_id": "call_01_FIFZoGnn5uVaQcsvNLFd7257",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "168",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "38f17a297e750c8a4998b94edab08b206968f9294954c425975c88ed03aa89ad"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 16,
+    "timestamp": "2026-07-18T13:29:42.8308992Z",
+    "previous_hash": "38f17a297e750c8a4998b94edab08b206968f9294954c425975c88ed03aa89ad",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 4 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2132,
+        "attributes": {
+          "cached_input_tokens": "10368",
+          "finish_reason": "toolcalls",
+          "input_tokens": "10474",
+          "output_tokens": "123",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "0f712fb669b98a809c1ba245cae073e2e39d6315044a2c48bcf19758522b7d1b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 17,
+    "timestamp": "2026-07-18T13:29:42.8771571Z",
+    "previous_hash": "0f712fb669b98a809c1ba245cae073e2e39d6315044a2c48bcf19758522b7d1b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 1 matches for \"fn read_receipt\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/pactrail-cli/src"
+        ],
+        "succeeded": true,
+        "duration_ms": 25,
+        "attributes": {
+          "arguments_digest": "582e3242ddb7572f68794f8ae794ce5fb2b7b1288e2be8c82c0c4e99e052fca9",
+          "call_id": "call_00_c19AdhLz2QuinpKpxsbj1976",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "150",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "e2fd68c3ef90826774a59b05b2de68ea9f9001e8297105e480b331a51bb7b5a1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 18,
+    "timestamp": "2026-07-18T13:29:42.8774199Z",
+    "previous_hash": "e2fd68c3ef90826774a59b05b2de68ea9f9001e8297105e480b331a51bb7b5a1",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 1 matches for \"fn run_root\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/pactrail-cli/src"
+        ],
+        "succeeded": true,
+        "duration_ms": 20,
+        "attributes": {
+          "arguments_digest": "2f8889a96ed40e1fee3a632416523797134f3d40d2a084325c81773ec5ae7e2b",
+          "call_id": "call_01_YLxSO064gxHS2odnaMTC8566",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "134",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "8ae702c6613d7660c28d8fd7bae66deda6afa532d0f70058a957128466e30972"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 19,
+    "timestamp": "2026-07-18T13:29:44.827926Z",
+    "previous_hash": "8ae702c6613d7660c28d8fd7bae66deda6afa532d0f70058a957128466e30972",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 5 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1950,
+        "attributes": {
+          "cached_input_tokens": "10496",
+          "finish_reason": "toolcalls",
+          "input_tokens": "10713",
+          "output_tokens": "89",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "7f387f0cc26ea0aed9a6e92b5c4ec93e50aec4563be8bac6b4c1044e0638d67d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 20,
+    "timestamp": "2026-07-18T13:29:44.8703115Z",
+    "previous_hash": "7f387f0cc26ea0aed9a6e92b5c4ec93e50aec4563be8bac6b4c1044e0638d67d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 29 lines from crates/pactrail-cli/src/commands.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/pactrail-cli/src/commands.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "6a95411687dfcf489b9050e6b280fe4f6311ea30adbc7362d4cd050f592e6d56",
+          "call_id": "call_00_ffK5qJhlg6z3t6gA0oJ83621",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1178",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "e05b81de9388168e9279b3852cc75d6c49bfa2d5b01cde79c9eeb6ebc2c97dbc"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 21,
+    "timestamp": "2026-07-18T13:29:46.7768131Z",
+    "previous_hash": "e05b81de9388168e9279b3852cc75d6c49bfa2d5b01cde79c9eeb6ebc2c97dbc",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 6 produced 1 tool call(s) and 108 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1905,
+        "attributes": {
+          "cached_input_tokens": "10752",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11198",
+          "output_tokens": "110",
+          "text_bytes": "108",
+          "tool_calls": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "b3a04919d85bd0629c6c1d4156efcaeea6fb2bcf188fe4f5e76305b878335b92"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 22,
+    "timestamp": "2026-07-18T13:29:46.8190499Z",
+    "previous_hash": "b3a04919d85bd0629c6c1d4156efcaeea6fb2bcf188fe4f5e76305b878335b92",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 44 lines from crates/pactrail-workspace/src/transaction.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/pactrail-workspace/src/transaction.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "b0ca50a284428cea226f59fef60453bc7f0b087fcb577ed2841a6c6f386c2963",
+          "call_id": "call_00_OAnifIYBBYMB01R4mefh5245",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1641",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "a5ccab1ee0b25f5ea7f7b512e4c1d9924bf73341304b1d4eb9521aac3660b218"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 23,
+    "timestamp": "2026-07-18T13:29:50.4600189Z",
+    "previous_hash": "a5ccab1ee0b25f5ea7f7b512e4c1d9924bf73341304b1d4eb9521aac3660b218",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 7 produced 1 tool call(s) and 577 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 3639,
+        "attributes": {
+          "cached_input_tokens": "11264",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11736",
+          "output_tokens": "204",
+          "text_bytes": "577",
+          "tool_calls": "1",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "086584ef51b33957b4b7136314040dd39ad66e7965fa16235e698c362d5fe045"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 24,
+    "timestamp": "2026-07-18T13:29:50.5120137Z",
+    "previous_hash": "086584ef51b33957b4b7136314040dd39ad66e7965fa16235e698c362d5fe045",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 3 matches for \"NotDirectory\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/pactrail-workspace/src"
+        ],
+        "succeeded": true,
+        "duration_ms": 18,
+        "attributes": {
+          "arguments_digest": "eb87d732d6f98172ed9765c8f21504583cfe6f8d66b6f68898260bf4c6403fbf",
+          "call_id": "call_00_jLCCWUlohObj9zuozcH09957",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "396",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "7077fad08c9af5feb5c49916e3976946a348238e6bdf8dea54ffe431858a53c9"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 25,
+    "timestamp": "2026-07-18T13:29:56.8879685Z",
+    "previous_hash": "7077fad08c9af5feb5c49916e3976946a348238e6bdf8dea54ffe431858a53c9",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 8 produced 1 tool call(s) and 1442 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 6375,
+        "attributes": {
+          "cached_input_tokens": "11904",
+          "finish_reason": "toolcalls",
+          "input_tokens": "12054",
+          "output_tokens": "413",
+          "text_bytes": "1442",
+          "tool_calls": "1",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "9865dd72eb4fb1fed52ce049440081a8d5d7cfdbe357fb3623ffa633250561b8"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 26,
+    "timestamp": "2026-07-18T13:29:56.9520543Z",
+    "previous_hash": "9865dd72eb4fb1fed52ce049440081a8d5d7cfdbe357fb3623ffa633250561b8",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 47 lines from crates/pactrail-cli/src/commands.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/pactrail-cli/src/commands.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 26,
+        "attributes": {
+          "arguments_digest": "d06af4d8f724adad7223a7d4cd1adca81dfc6ebb01809f5df5e0b9d7d4cef45d",
+          "call_id": "call_00_RcLX7qXJWP2gdH7ik7Hx7824",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1836",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "bc8328ad7462f447445cc0e0510d17b6f71eebeaa9d3811000dae8f98333b218"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 27,
+    "timestamp": "2026-07-18T13:29:59.0366451Z",
+    "previous_hash": "bc8328ad7462f447445cc0e0510d17b6f71eebeaa9d3811000dae8f98333b218",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 9 produced 1 tool call(s) and 94 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2083,
+        "attributes": {
+          "cached_input_tokens": "12416",
+          "finish_reason": "toolcalls",
+          "input_tokens": "12982",
+          "output_tokens": "109",
+          "text_bytes": "94",
+          "tool_calls": "1",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "8c45974c6b327c91e34615551431f475217f9ff81384afe85c6c5910c4432602"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 28,
+    "timestamp": "2026-07-18T13:29:59.0532941Z",
+    "previous_hash": "8c45974c6b327c91e34615551431f475217f9ff81384afe85c6c5910c4432602",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 105 lines from crates/pactrail-cli/src/commands.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/pactrail-cli/src/commands.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 16,
+        "attributes": {
+          "arguments_digest": "2161ecca50fc5b28f44d69c702710ec39fd8387431296de8b1d5c4a008c0ff42",
+          "call_id": "call_00_v1Ix2whesVp8UQtBAamt7550",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "4494",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "f7798e143a0777a9e34bdae18be297fb4b72c1f5af1c8d3871ea22b732f01cb4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 29,
+    "timestamp": "2026-07-18T13:30:07.7672748Z",
+    "previous_hash": "f7798e143a0777a9e34bdae18be297fb4b72c1f5af1c8d3871ea22b732f01cb4",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 10 produced 1 tool call(s) and 1816 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 8713,
+        "attributes": {
+          "cached_input_tokens": "13056",
+          "finish_reason": "toolcalls",
+          "input_tokens": "14290",
+          "output_tokens": "498",
+          "text_bytes": "1816",
+          "tool_calls": "1",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "b2988d2b0bf9dd66a63872030594fe5d748812600e003f146f049d1f5a076de3"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 30,
+    "timestamp": "2026-07-18T13:30:07.828998Z",
+    "previous_hash": "b2988d2b0bf9dd66a63872030594fe5d748812600e003f146f049d1f5a076de3",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 3 matches for \"WORKSPACE_DIRECTORY\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/pactrail-workspace/src"
+        ],
+        "succeeded": true,
+        "duration_ms": 29,
+        "attributes": {
+          "arguments_digest": "466c02de2181baab14c9ee593129f52367d8ac5041edf5399f15cbd173191f22",
+          "call_id": "call_00_pUOHnqqxRssRhkcEFEzX5653",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "414",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "aa120aec90c5043218c1efdf3037aeadfa92ef43c5556470c2910a814de3136b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 31,
+    "timestamp": "2026-07-18T13:30:22.4088905Z",
+    "previous_hash": "aa120aec90c5043218c1efdf3037aeadfa92ef43c5556470c2910a814de3136b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 11 produced 1 tool call(s) and 3611 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 14579,
+        "attributes": {
+          "cached_input_tokens": "14720",
+          "finish_reason": "toolcalls",
+          "input_tokens": "14918",
+          "output_tokens": "923",
+          "text_bytes": "3611",
+          "tool_calls": "1",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "d63876a735203bd62188436d31f70dd15a12f32c066e8924ca43b2bcd0ed0804"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 32,
+    "timestamp": "2026-07-18T13:30:22.4287689Z",
+    "previous_hash": "d63876a735203bd62188436d31f70dd15a12f32c066e8924ca43b2bcd0ed0804",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 1 matches for \"fn write_trace_artifact\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/pactrail-cli/src"
+        ],
+        "succeeded": true,
+        "duration_ms": 18,
+        "attributes": {
+          "arguments_digest": "09668e91e4a21f5dfd55b81b987808f63f8228a656f0ff6365737131bf7a80dc",
+          "call_id": "call_00_oFA2gI4zn9c1Kqbp9brl4239",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "94",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "651b398bc2116a9c4009e98a68284351504575862e2a9b2e2330873120a4ea3f"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 33,
+    "timestamp": "2026-07-18T13:30:24.3897867Z",
+    "previous_hash": "651b398bc2116a9c4009e98a68284351504575862e2a9b2e2330873120a4ea3f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-pro",
+        "action": "invoke",
+        "summary": "model turn 12 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1959,
+        "attributes": {
+          "cached_input_tokens": "15744",
+          "finish_reason": "toolcalls",
+          "input_tokens": "15883",
+          "output_tokens": "89",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "12"
+        }
+      }
+    },
+    "hash": "f1ff4a3c70e25df059a2a2421c19143cc1cdd6e20d081b01ec4429e580a77045"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 34,
+    "timestamp": "2026-07-18T13:30:24.4185262Z",
+    "previous_hash": "f1ff4a3c70e25df059a2a2421c19143cc1cdd6e20d081b01ec4429e580a77045",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 19 lines from crates/pactrail-cli/src/commands.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/pactrail-cli/src/commands.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 17,
+        "attributes": {
+          "arguments_digest": "751d93d43e69bac90625c0e02638acd91f5368606f1e987dd9b26df90ebe80e2",
+          "call_id": "call_00_TrywOjWbdbKDbQvuN5sB5598",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "683",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "12"
+        }
+      }
+    },
+    "hash": "8bce9e06d493ed84fd7cfa234d8d0b2a8241371ea50657c7353c8145b0e83fc0"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f756a-e9b3-7163-9889-fe7129bba777",
+    "sequence": 35,
+    "timestamp": "2026-07-18T13:30:24.419344Z",
+    "previous_hash": "8bce9e06d493ed84fd7cfa234d8d0b2a8241371ea50657c7353c8145b0e83fc0",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "failed"
+      }
+    },
+    "hash": "0cda1dcd03a65bf63331752f553bc216d27bb36cffdfb8eebbc3cd6483919f61"
+  }
+]

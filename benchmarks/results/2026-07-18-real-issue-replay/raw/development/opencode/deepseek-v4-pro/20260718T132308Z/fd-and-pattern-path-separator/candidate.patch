@@ -1,0 +1,80 @@
+diff --git a/src/main.rs b/src/main.rs
+index 704371c..879699a 100644
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -163,31 +163,27 @@ fn set_working_dir(opts: &Opts) -> Result<()> {
+ ///    literally typed a directory path.
+ ///
+ /// See https://github.com/sharkdp/fd/issues/1873.
+-fn ensure_search_pattern_is_not_a_path(opts: &Opts) -> Result<()> {
+-    if opts.full_path {
+-        return Ok(());
+-    }
+-
+-    // Start with the cheap check: '/' is always a path separator, including on
+-    // Windows, and has no regex meaning, so flagging it is safe and catches the
+-    // Linux/macOS mistake of pasting a full path as the pattern.
++fn pattern_contains_path_separator(pattern: &str) -> bool {
+     #[cfg_attr(not(windows), allow(unused_mut))]
+-    let mut should_warn = opts.pattern.contains('/');
++    let mut should_warn = pattern.contains('/');
+ 
+-    // On Windows we additionally accept the native `\` separator, but only when
+-    // the pattern actually resolves to an existing directory - `\` is also the
+-    // regex escape char there, so valid patterns like `\Ac` or `\d+` must still
+-    // run. The is_dir syscall is only needed when `should_warn` is still false,
+-    // so short-circuit via `||` to avoid the stat call on the happy path.
+     #[cfg(windows)]
+     {
+         should_warn = should_warn
+-            || (opts.pattern.contains(std::path::MAIN_SEPARATOR)
+-                && Path::new(&opts.pattern).is_dir());
++            || (pattern.contains(std::path::MAIN_SEPARATOR)
++                && Path::new(pattern).is_dir());
+     }
+ 
+-    if should_warn {
+-        Err(anyhow!(
++    should_warn
++}
++
++fn ensure_search_pattern_is_not_a_path(opts: &Opts) -> Result<()> {
++    if opts.full_path {
++        return Ok(());
++    }
++
++    if pattern_contains_path_separator(&opts.pattern) {
++        return Err(anyhow!(
+             "The search pattern '{pattern}' contains a path-separation character \
+              and will not lead to any search results.\n\n\
+              If you want to search for all files inside the '{pattern}' directory, use a match-all pattern:\n\n  \
+@@ -195,10 +191,26 @@ fn ensure_search_pattern_is_not_a_path(opts: &Opts) -> Result<()> {
+              Instead, if you want your pattern to match the full file path, use:\n\n  \
+              fd --full-path '{pattern}'",
+             pattern = &opts.pattern,
+-        ))
+-    } else {
+-        Ok(())
++        ));
+     }
++
++    if let Some(ref exprs) = opts.exprs {
++        for expr in exprs {
++            if pattern_contains_path_separator(expr) {
++                return Err(anyhow!(
++                    "The search pattern '{pattern}' contains a path-separation character \
++                     and will not lead to any search results.\n\n\
++                     If you want to search for all files inside the '{pattern}' directory, use a match-all pattern:\n\n  \
++                     fd . '{pattern}'\n\n\
++                     Instead, if you want your pattern to match the full file path, use:\n\n  \
++                     fd --full-path '{pattern}'",
++                    pattern = expr,
++                ));
++            }
++        }
++    }
++
++    Ok(())
+ }
+ 
+ fn build_pattern_regex(pattern: &str, opts: &Opts) -> Result<String> {

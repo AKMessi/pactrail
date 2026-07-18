@@ -1,0 +1,15 @@
+   Compiling reqwest v0.13.4 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\heldout-scored\20260718T142735Z-opencode-deepseek-v4-flash\reqwest-blocking-request-parts\grade)
+error: unused import: `Extensions`
+ --> src\blocking\request.rs:5:28
+  |
+5 | use http::{request::Parts, Extensions, Request as HttpRequest, Version};
+  |                            ^^^^^^^^^^
+  |
+note: the lint level is defined here
+ --> src\lib.rs:5:24
+  |
+5 | #![cfg_attr(test, deny(warnings))]
+  |                        ^^^^^^^^
+  = note: `#[deny(unused_imports)]` implied by `#[deny(warnings)]`
+
+error: could not compile `reqwest` (lib test) due to 1 previous error

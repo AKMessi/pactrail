@@ -1,0 +1,61 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-replay-v1",
+    "case_id":  "pactrail-idempotent-discard",
+    "repository":  "AKMessi/pactrail",
+    "difficulty":  "transaction-recovery-bug",
+    "harness":  "opencode",
+    "harness_version":  "1.2.27",
+    "model":  "deepseek-v4-flash",
+    "functional_passed":  false,
+    "instructions_passed":  true,
+    "task_passed":  false,
+    "strict_passed":  false,
+    "outcome":  "completed",
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  49438,
+    "grading_duration_ms":  41633,
+    "run_id":  "",
+    "changed_paths":  [
+
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  0,
+                  "additions":  0,
+                  "deletions":  0,
+                  "bytes":  0
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test --locked -p pactrail --test end_to_end ready_run_can_be_discarded_idempotently",
+                          "exit_code":  101,
+                          "timed_out":  false,
+                          "duration_ms":  34080,
+                          "passed":  false
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test --locked --workspace --all-targets",
+                            "exit_code":  101,
+                            "timed_out":  false,
+                            "duration_ms":  7553,
+                            "passed":  false
+                        },
+    "input_tokens":  192036,
+    "cached_input_tokens":  99840,
+    "output_tokens":  3188,
+    "total_tokens":  195224,
+    "estimated_cost_usd":  0.01408,
+    "model_calls":  12,
+    "tool_calls":  16,
+    "failed_tool_calls":  0,
+    "provider_errors":  0,
+    "source_isolation_preserved":  false,
+    "trace_integrity_verified":  false,
+    "applied_candidate_matches":  false,
+    "summary":  "I\u0027ll start by understanding the codebase structure and the discard flow.\nLet me read the key files related to the discard command and receipt/event state:\nNow let me read the rest of the commands.rs file (the test section) and the workspace transaction:\n## Goal\n\nFix the `pactrail discard RUN_ID --json` idempotency bug. After the first discard call removes the candidate workspace, a second call fails. The fix must:\n1. Make discard idempotent — a second call with state already `Discarded` should succeed\n2. Handle recovery — if the durable event state is `Discarded` but the receipt still says `ReadyToApply`, rebuild and persist the discarded receipt from the durable event head\n3. Preserve receipt integrity, retained review artifacts, and explicit errors for inconsistent state/workspace combinations\n4. Work offline with no git/remote inspection, no test/doc modifications\n\n## Instructions\n\n- Do not modify tests or documentation\n- Implement the smallest coherent production-quality fix\n- Run relevant tests after implementation\n- Work offline\n\n## Discoveries\n\n**Bug Analysis (in `discard_ready_receipt` at commands.rs:634-709):**\n\nThe function has a `RunState::Discarded` branch (lines 645-666) but it only handles the case where `receipt.outcome == ReceiptOutcome::Discarded` or `ReceiptOutcome::ReadyToApply`. However, the first discard call removes the workspace (moves it to `discarded-workspace` then deletes it) and appends the `Discarded` state event. On the **second call**, `read_receipt` succeeds (receipt still says `ReadyToApply` if the first call crashed before `write_receipt`, or `Discarded` if it completed), then `WorkspaceTransaction::open(\u0026run_root)` is called — but this calls `fs::canonicalize` on the run_root, which **succeeds** because the run_root directory still exists. The real problem is:\n\n1. If the first discard **completed fully**: receipt says `Discarded`, workspace is gone. The code enters the `snapshot.state == RunState::Discarded` block. `receipt.outcome == ReceiptOutcome::Discarded` is true, and if hash matches, it returns `Ok(receipt)` — this should work fine.\n\n2. **The actual bug**: If the first discard **partially completed** (event was appended but receipt write failed), then on second call: receipt says `ReadyToApply`, snapshot state is `Discarded`. The code enters the `snapshot.state == RunState::Discarded` block. `receipt.outcome == ReceiptOutcome::ReadyToApply` branch (lines 661-665) rebuilds the receipt. But before that, it checks `if workspace.exists()` (line 646) — **this fails** because the workspace was already removed by `remove_staged_workspace`. Actually wait, it returns an error if workspace exists. Let me re-read.\n\nActually looking more carefully at lines 645-666:\n```rust\nif snapshot.state == RunState::Discarded {\n    if workspace.exists() {  // workspace was already deleted by first call\n        return Err(...)\n    }\n    remove_staged_workspace(\u0026staged)?;  // staged is also gone\n    if receipt.outcome == ReceiptOutcome::Discarded { ... }  // works\n    if receipt.outcome == ReceiptOutcome::ReadyToApply {  // recovery branch\n        let discarded = rebuild_receipt(...) // rebuilds with snapshot hash\n        write_receipt(run_root, \u0026discarded)?; // writes updated receipt\n        return Ok(discarded);\n    }\n}\n```\n\nWait, if the first call completed successfully: receipt says `Discarded`, snapshot says `Discarded` — the code enters the `receipt.outcome == ReceiptOutcome::Discarded` check, hash check passes, returns `Ok(receipt)` — **this should be idempotent and work**.\n\nIf the first call completed but receipt still says `ReadyToApply` (crash after event append, before `write_receipt`): snapshot says `Discarded`, receipt says `ReadyToApply` — code enters `ReadyToApply` branch, rebuilds receipt, writes it — **recovery works**.\n\n**So where does the second call actually fail?** The `WorkspaceTransaction::open(\u0026run_root)` on line 627 calls `fs::canonicalize(control_root)` — but `run_root` is the run directory, not the workspace directory. The workspace is at `run_root/workspace`. **So the run_root still exists**, and `open()` just needs the run_root directory to exist and have `transaction.json` in it.\n\nActually wait — `discard_run` calls `discard_ready_receipt` which first calls `WorkspaceTransaction::open(\u0026run_root)`. The run_root still exists after discard. So `open()` succeeds. Then it enters `discard_ready_receipt`.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nLet me look at the actual code to understand the exact failure path.\nNow let me look at `WorkspaceTransaction::open` to understand what happens when the workspace is already gone:\n## Maximum Steps Reached\n\n### What was accomplished\n1. **Bug analysis completed**: The `discard_ready_receipt` function in `crates/pactrail-cli/src/commands.rs:634-709` was analyzed.\n2. **Root cause identified**: `WorkspaceTransaction::open(\u0026run_root)` at line 627 calls `fs::canonicalize(control_root)` which succeeds (run_root still exists), but then at line 139 it checks `workspace_root.is_dir()` — the workspace subdirectory was already deleted by the first discard call. This returns `TransactionError::NotDirectory`, which propagates up as an unhandled error before `discard_ready_receipt` is even entered.\n3. **The fix location**: The `discard_run` function at line 624 needs to handle the case where `WorkspaceTransaction::open` fails because the workspace is already gone — this is the idempotent second-call scenario.\n\n### Remaining tasks\n- **Implement the fix**: Modify `discard_run` (or `discard_ready_receipt`) to handle the `TransactionError::NotDirectory` case when the workspace was already removed by a prior discard. The fix should either:\n  - Catch the error in `discard_run` and handle the idempotent case (read receipt, check snapshot state, return existing receipt), OR\n  - Make `WorkspaceTransaction::open` tolerate a missing workspace directory when reopening, OR\n  - Restructure so the transaction open is inside `discard_ready_receipt` and the `Discarded` state branch handles the missing workspace before attempting to open the transaction.\n\n### Recommended next steps\n1. Read the `TransactionError` enum to understand error variants\n2. Implement the fix in `discard_run` or `discard_ready_receipt`\n3. Run relevant tests to verify idempotency"
+}

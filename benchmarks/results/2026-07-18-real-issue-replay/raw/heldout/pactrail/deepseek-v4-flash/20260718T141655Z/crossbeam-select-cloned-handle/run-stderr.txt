@@ -1,0 +1,2 @@
+error: engine failed for run 019f7596-621c-7d32-b53c-5fe589606209: model used 265294 tokens, exceeding the 250000-token task budget
+Portable trace: \\?\D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\heldout-scored\20260718T141655Z-pactrail-deepseek-v4-flash\crossbeam-select-cloned-handle\workspace\.pactrail\runs\019f7596-621c-7d32-b53c-5fe589606209\trace.jsonl

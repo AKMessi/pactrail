@@ -1,0 +1,254 @@
+
+running 81 tests
+test box_bytes::get_int_ne ... ok
+test box_bytes::get_int_le ... ok
+test box_bytes::get_int_be ... ok
+test box_bytes::get_int_le_overflow - should panic ... ok
+test box_bytes::get_int_le_zero ... FAILED
+test box_bytes::get_int_be_zero ... FAILED
+test box_bytes::get_int_ne_overflow - should panic ... ok
+test box_bytes::get_int_be_overflow - should panic ... ok
+test box_bytes::get_int_ne_zero ... FAILED
+test bytes::get_int_be ... ok
+test bytes::get_int_le ... ok
+test bytes::get_int_be_zero ... FAILED
+test bytes::get_int_le_zero ... FAILED
+test bytes::get_int_ne ... ok
+test bytes::get_int_be_overflow - should panic ... ok
+test bytes::get_int_le_overflow - should panic ... ok
+test bytes::get_int_ne_overflow - should panic ... ok
+test bytes::get_int_ne_zero ... FAILED
+test bytes_mut::get_int_be ... ok
+test bytes_mut::get_int_le ... ok
+test bytes_mut::get_int_be_overflow - should panic ... ok
+test bytes_mut::get_int_be_zero ... FAILED
+test bytes_mut::get_int_le_overflow - should panic ... ok
+test bytes_mut::get_int_le_zero ... FAILED
+test bytes_mut::get_int_ne_overflow - should panic ... ok
+test bytes_mut::get_int_ne ... ok
+test bytes_mut::get_int_ne_zero ... FAILED
+test chain_limited_slices::get_int_be ... ok
+test chain_limited_slices::get_int_be_overflow - should panic ... ok
+test chain_limited_slices::get_int_le ... ok
+test chain_limited_slices::get_int_be_zero ... FAILED
+test chain_limited_slices::get_int_le_overflow - should panic ... ok
+test chain_limited_slices::get_int_le_zero ... FAILED
+test chain_limited_slices::get_int_ne ... ok
+test chain_limited_slices::get_int_ne_overflow - should panic ... ok
+test chain_small_big_u8_slice::get_int_be ... ok
+test chain_limited_slices::get_int_ne_zero ... FAILED
+test chain_small_big_u8_slice::get_int_be_overflow - should panic ... ok
+test chain_small_big_u8_slice::get_int_be_zero ... FAILED
+test chain_small_big_u8_slice::get_int_le ... ok
+test chain_small_big_u8_slice::get_int_le_overflow - should panic ... ok
+test chain_small_big_u8_slice::get_int_le_zero ... FAILED
+test chain_small_big_u8_slice::get_int_ne ... ok
+test chain_small_big_u8_slice::get_int_ne_zero ... FAILED
+test chain_small_big_u8_slice::get_int_ne_overflow - should panic ... ok
+test chain_u8_slice::get_int_be ... ok
+test chain_u8_slice::get_int_be_overflow - should panic ... ok
+test chain_u8_slice::get_int_be_zero ... FAILED
+test chain_u8_slice::get_int_le ... ok
+test chain_u8_slice::get_int_le_overflow - should panic ... ok
+test chain_u8_slice::get_int_le_zero ... FAILED
+test chain_u8_slice::get_int_ne ... ok
+test chain_u8_slice::get_int_ne_overflow - should panic ... ok
+test chain_u8_slice::get_int_ne_zero ... FAILED
+test cursor::get_int_be ... ok
+test cursor::get_int_be_zero ... FAILED
+test cursor::get_int_be_overflow - should panic ... ok
+test cursor::get_int_le ... ok
+test cursor::get_int_le_overflow - should panic ... ok
+test cursor::get_int_le_zero ... FAILED
+test cursor::get_int_ne ... ok
+test cursor::get_int_ne_overflow - should panic ... ok
+test cursor::get_int_ne_zero ... FAILED
+test u8_slice::get_int_be ... ok
+test u8_slice::get_int_be_overflow - should panic ... ok
+test u8_slice::get_int_be_zero ... FAILED
+test u8_slice::get_int_le ... ok
+test u8_slice::get_int_le_overflow - should panic ... ok
+test u8_slice::get_int_le_zero ... FAILED
+test u8_slice::get_int_ne ... ok
+test u8_slice::get_int_ne_overflow - should panic ... ok
+test u8_slice::get_int_ne_zero ... FAILED
+test vec_deque::get_int_be ... ok
+test vec_deque::get_int_be_zero ... FAILED
+test vec_deque::get_int_be_overflow - should panic ... ok
+test vec_deque::get_int_le ... ok
+test vec_deque::get_int_le_overflow - should panic ... ok
+test vec_deque::get_int_le_zero ... FAILED
+test vec_deque::get_int_ne ... ok
+test vec_deque::get_int_ne_overflow - should panic ... ok
+test vec_deque::get_int_ne_zero ... FAILED
+
+failures:
+
+---- box_bytes::get_int_le_zero stdout ----
+
+thread 'box_bytes::get_int_le_zero' (26588) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- box_bytes::get_int_be_zero stdout ----
+
+thread 'box_bytes::get_int_be_zero' (24472) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- box_bytes::get_int_ne_zero stdout ----
+
+thread 'box_bytes::get_int_ne_zero' (8884) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- bytes::get_int_be_zero stdout ----
+
+thread 'bytes::get_int_be_zero' (20840) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- bytes::get_int_le_zero stdout ----
+
+thread 'bytes::get_int_le_zero' (22532) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- bytes::get_int_ne_zero stdout ----
+
+thread 'bytes::get_int_ne_zero' (27304) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- bytes_mut::get_int_be_zero stdout ----
+
+thread 'bytes_mut::get_int_be_zero' (8172) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- bytes_mut::get_int_le_zero stdout ----
+
+thread 'bytes_mut::get_int_le_zero' (9748) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- bytes_mut::get_int_ne_zero stdout ----
+
+thread 'bytes_mut::get_int_ne_zero' (23900) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- chain_limited_slices::get_int_be_zero stdout ----
+
+thread 'chain_limited_slices::get_int_be_zero' (14272) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- chain_limited_slices::get_int_le_zero stdout ----
+
+thread 'chain_limited_slices::get_int_le_zero' (22088) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- chain_limited_slices::get_int_ne_zero stdout ----
+
+thread 'chain_limited_slices::get_int_ne_zero' (17864) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- chain_small_big_u8_slice::get_int_be_zero stdout ----
+
+thread 'chain_small_big_u8_slice::get_int_be_zero' (17200) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- chain_small_big_u8_slice::get_int_le_zero stdout ----
+
+thread 'chain_small_big_u8_slice::get_int_le_zero' (20388) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- chain_small_big_u8_slice::get_int_ne_zero stdout ----
+
+thread 'chain_small_big_u8_slice::get_int_ne_zero' (13216) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- chain_u8_slice::get_int_be_zero stdout ----
+
+thread 'chain_u8_slice::get_int_be_zero' (22664) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- chain_u8_slice::get_int_le_zero stdout ----
+
+thread 'chain_u8_slice::get_int_le_zero' (15976) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- chain_u8_slice::get_int_ne_zero stdout ----
+
+thread 'chain_u8_slice::get_int_ne_zero' (12732) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- cursor::get_int_be_zero stdout ----
+
+thread 'cursor::get_int_be_zero' (11408) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- cursor::get_int_le_zero stdout ----
+
+thread 'cursor::get_int_le_zero' (22192) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- cursor::get_int_ne_zero stdout ----
+
+thread 'cursor::get_int_ne_zero' (22600) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- u8_slice::get_int_be_zero stdout ----
+
+thread 'u8_slice::get_int_be_zero' (15288) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- u8_slice::get_int_le_zero stdout ----
+
+thread 'u8_slice::get_int_le_zero' (22576) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- u8_slice::get_int_ne_zero stdout ----
+
+thread 'u8_slice::get_int_ne_zero' (24308) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- vec_deque::get_int_be_zero stdout ----
+
+thread 'vec_deque::get_int_be_zero' (16184) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- vec_deque::get_int_le_zero stdout ----
+
+thread 'vec_deque::get_int_le_zero' (19480) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+---- vec_deque::get_int_ne_zero stdout ----
+
+thread 'vec_deque::get_int_ne_zero' (8076) panicked at src\buf\buf_impl.rs:90:5:
+attempt to shift left with overflow
+
+
+failures:
+    box_bytes::get_int_be_zero
+    box_bytes::get_int_le_zero
+    box_bytes::get_int_ne_zero
+    bytes::get_int_be_zero
+    bytes::get_int_le_zero
+    bytes::get_int_ne_zero
+    bytes_mut::get_int_be_zero
+    bytes_mut::get_int_le_zero
+    bytes_mut::get_int_ne_zero
+    chain_limited_slices::get_int_be_zero
+    chain_limited_slices::get_int_le_zero
+    chain_limited_slices::get_int_ne_zero
+    chain_small_big_u8_slice::get_int_be_zero
+    chain_small_big_u8_slice::get_int_le_zero
+    chain_small_big_u8_slice::get_int_ne_zero
+    chain_u8_slice::get_int_be_zero
+    chain_u8_slice::get_int_le_zero
+    chain_u8_slice::get_int_ne_zero
+    cursor::get_int_be_zero
+    cursor::get_int_le_zero
+    cursor::get_int_ne_zero
+    u8_slice::get_int_be_zero
+    u8_slice::get_int_le_zero
+    u8_slice::get_int_ne_zero
+    vec_deque::get_int_be_zero
+    vec_deque::get_int_le_zero
+    vec_deque::get_int_ne_zero
+
+test result: FAILED. 54 passed; 27 failed; 0 ignored; 0 measured; 793 filtered out; finished in 0.01s
+

@@ -1,0 +1,2 @@
+error: engine failed for run 019f756a-5cf2-7270-8998-029b879052ff: model invocation failed: provider response JSON is invalid: EOF while parsing a string at line 1 column 3747
+Portable trace: \\?\D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T132804Z-pactrail-deepseek-v4-pro\fd-and-pattern-path-separator\workspace\.pactrail\runs\019f756a-5cf2-7270-8998-029b879052ff\trace.jsonl

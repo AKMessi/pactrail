@@ -1,0 +1,4 @@
+2026-07-18T13:29:40.680811Z  WARN pactrail_engine::engine: tool call failed tool=search error=requested range is invalid: path "crates/pactrail-cli/src/commands.rs" must name a workspace-relative directory; omit it or use `.` for the workspace root
+2026-07-18T13:29:40.696255Z  WARN pactrail_engine::engine: tool call failed tool=search error=requested range is invalid: path "crates/pactrail-cli/src/commands.rs" must name a workspace-relative directory; omit it or use `.` for the workspace root
+error: engine failed for run 019f756a-e9b3-7163-9889-fe7129bba777: model did not complete within 12 turns
+Portable trace: \\?\D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T132804Z-pactrail-deepseek-v4-pro\pactrail-idempotent-discard\workspace\.pactrail\runs\019f756a-e9b3-7163-9889-fe7129bba777\trace.jsonl

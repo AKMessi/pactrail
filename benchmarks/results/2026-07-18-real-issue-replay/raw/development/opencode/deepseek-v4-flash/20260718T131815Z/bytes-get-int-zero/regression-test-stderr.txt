@@ -1,0 +1,16 @@
+   Compiling bytes v1.11.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\bytes-get-int-zero\grade)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.58s
+     Running unittests src\lib.rs (target\debug\deps\bytes-70ba5d77a38dbacb.exe)
+     Running tests\test_buf.rs (target\debug\deps\test_buf-94c4269f6d4b4020.exe)
+     Running tests\test_buf_mut.rs (target\debug\deps\test_buf_mut-dece6d928da510c8.exe)
+     Running tests\test_bytes.rs (target\debug\deps\test_bytes-9b68b41c1610a216.exe)
+     Running tests\test_bytes_odd_alloc.rs (target\debug\deps\test_bytes_odd_alloc-dc134d7f0955b5db.exe)
+     Running tests\test_bytes_vec_alloc.rs (target\debug\deps\test_bytes_vec_alloc-3e9387f00bac8a9b.exe)
+     Running tests\test_chain.rs (target\debug\deps\test_chain-02a1f1e3de81e788.exe)
+     Running tests\test_debug.rs (target\debug\deps\test_debug-ab8e3d0389290ff6.exe)
+     Running tests\test_iter.rs (target\debug\deps\test_iter-09ae9c4bfc09caf4.exe)
+     Running tests\test_limit.rs (target\debug\deps\test_limit-7d2bc6d1c746525b.exe)
+     Running tests\test_reader.rs (target\debug\deps\test_reader-d6709b8242378258.exe)
+     Running tests\test_serde.rs (target\debug\deps\test_serde-495afe82fe57ae05.exe)
+     Running tests\test_take.rs (target\debug\deps\test_take-e4a64af88d025aa5.exe)
+   Doc-tests bytes

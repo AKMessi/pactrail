@@ -1,0 +1,61 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-replay-v1",
+    "case_id":  "bytes-get-int-zero",
+    "repository":  "tokio-rs/bytes",
+    "difficulty":  "localized-library-bug",
+    "harness":  "opencode",
+    "harness_version":  "1.2.27",
+    "model":  "deepseek-v4-flash",
+    "functional_passed":  true,
+    "instructions_passed":  true,
+    "task_passed":  true,
+    "strict_passed":  true,
+    "outcome":  "completed",
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  92993,
+    "grading_duration_ms":  21651,
+    "run_id":  "",
+    "changed_paths":  [
+                          "src/buf/buf_impl.rs"
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  1,
+                  "additions":  3,
+                  "deletions":  0,
+                  "bytes":  415
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test --test test_buf get_int_",
+                          "exit_code":  0,
+                          "timed_out":  false,
+                          "duration_ms":  4538,
+                          "passed":  true
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test",
+                            "exit_code":  0,
+                            "timed_out":  false,
+                            "duration_ms":  17113,
+                            "passed":  true
+                        },
+    "input_tokens":  130296,
+    "cached_input_tokens":  75136,
+    "output_tokens":  1949,
+    "total_tokens":  132245,
+    "estimated_cost_usd":  0.008479,
+    "model_calls":  9,
+    "tool_calls":  10,
+    "failed_tool_calls":  0,
+    "provider_errors":  0,
+    "source_isolation_preserved":  false,
+    "trace_integrity_verified":  false,
+    "applied_candidate_matches":  false,
+    "summary":  "Let me start by understanding the codebase structure and the issue.\nNow let me find the `sign_extend` function and the `buf_get_impl!` macro to understand the panic:\nNow I see the issue clearly. In `sign_extend` at line 89, when `nbytes` is 0, `shift = (8 - 0) * 8 = 64`, and shifting a `u64` by 64 bits is undefined behavior in Rust (it panics in debug mode).\n\nThe fix: when `nbytes` is 0, `get_uint` already returns 0 and consumes no bytes. The `get_int` variants should also return 0 for `nbytes == 0`. The simplest fix is to guard `sign_extend` for the zero case, or guard in each `get_int*` method.\n\nThe cleanest minimal fix: add an early return in `sign_extend` for `nbytes == 0`.\nNow let me run the tests:\nAll 820 tests in `test_buf.rs` passed, along with all other test suites. The fix is a single early-return guard in `sign_extend` at `src/buf/buf_impl.rs:89` — when `nbytes == 0`, return 0 immediately, avoiding the 64-bit shift that caused the panic. This makes `get_int`, `get_int_le`, and `get_int_ne` consistent with `get_uint` for the zero-width case.\n## Goal\n\nFix issue #798 in the Bytes repository: `Buf::get_int`, `get_int_le`, and `get_int_ne` panic when `nbytes` is 0 because `sign_extend` performs a 64-bit shift (shifting a `u64` by 64 bits). The fix must make these methods behave consistently with `get_uint` — return 0 and consume no bytes — for every Buf implementation and endian variant.\n\n## Instructions\n\n- Work offline — do not inspect git history or any remote resources.\n- Do not modify tests — only modify production code.\n- Make the smallest production-quality implementation change.\n\n## Discoveries\n\n- The `sign_extend` function at `src/buf/buf_impl.rs:89` computes `let shift = (8 - nbytes) * 8`, which becomes `shift = 64` when `nbytes = 0`. Shifting a `u64` by 64 bits is undefined behavior in Rust (panics in debug mode).\n- `get_uint` already handles `nbytes = 0` correctly via the `buf_get_impl!`/`buf_try_get_impl!` macro — it returns 0 and consumes no bytes.\n- `get_int` (line 947), `get_int_le` (line 968), and `get_int_ne` (line 992) all delegate to the corresponding `get_uint*` call and then pass the result through `sign_extend`. The zero-length case in these methods is already handled correctly by `get_uint*`, but `sign_extend` then crashes before returning.\n- The fix adding an early return for `nbytes == 0` in `sign_extend` has been applied and all 820 tests in `test_buf.rs`, plus all other test suites, pass.\n\n## Accomplished\n\n- **Completed:** Modified `src/buf/buf_impl.rs` — added an `if nbytes == 0 { return 0; }` guard at the top of `fn sign_extend` (line 89). This prevents the shift-by-64 panic and returns 0 for zero-width signed integer reads, consistent with `get_uint`.\n- **Completed:** Ran all tests — 820 tests in `test_buf.rs`, plus all other test suites (`test_buf_mut.rs`, `test_bytes.rs`, etc.) and doc-tests — all passed.\n\n## Relevant files / directories\n\n- `src/buf/buf_impl.rs` — the only file modified (the `sign_extend` function and the `get_int*`/`get_uint*` method definitions are here)\n- `tests/test_buf.rs` — relevant test file (not modified, confirmed passing)\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nAll tasks are complete. The fix has been applied and verified — all tests pass. No further steps needed unless you have additional requirements."
+}

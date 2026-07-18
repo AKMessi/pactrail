@@ -1,0 +1,22 @@
+
+running 1 test
+test test_and_pattern_with_forward_slash_is_rejected ... FAILED
+
+failures:
+
+---- test_and_pattern_with_forward_slash_is_rejected stdout ----
+
+thread 'test_and_pattern_with_forward_slash_is_rejected' (23104) panicked at tests\testenv\mod.rs:335:17:
+`fd foo --and nonexistent/path` did not produce the expected output.
+Showing diff between expected and actual:
+-[fd error]: The search pattern 'nonexistent/path' contains a path-separation character and will not lead to any search results.
+-
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    test_and_pattern_with_forward_slash_is_rejected
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 93 filtered out; finished in 0.05s
+

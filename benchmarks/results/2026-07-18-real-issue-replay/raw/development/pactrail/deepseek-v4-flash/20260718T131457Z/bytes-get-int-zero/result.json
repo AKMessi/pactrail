@@ -1,0 +1,61 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-replay-v1",
+    "case_id":  "bytes-get-int-zero",
+    "repository":  "tokio-rs/bytes",
+    "difficulty":  "localized-library-bug",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 0.1.0",
+    "model":  "deepseek-v4-flash",
+    "functional_passed":  false,
+    "instructions_passed":  true,
+    "task_passed":  false,
+    "strict_passed":  false,
+    "outcome":  "process_error",
+    "exit_code":  1,
+    "timed_out":  false,
+    "duration_ms":  24124,
+    "grading_duration_ms":  7126,
+    "run_id":  "019f755d-a16f-7492-bddc-641ef7055980",
+    "changed_paths":  [
+                          "Cargo.lock"
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  0,
+                  "additions":  0,
+                  "deletions":  0,
+                  "bytes":  0
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test --test test_buf get_int_",
+                          "exit_code":  101,
+                          "timed_out":  false,
+                          "duration_ms":  5417,
+                          "passed":  false
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test",
+                            "exit_code":  101,
+                            "timed_out":  false,
+                            "duration_ms":  1709,
+                            "passed":  false
+                        },
+    "input_tokens":  117257,
+    "cached_input_tokens":  105856,
+    "output_tokens":  1643,
+    "total_tokens":  118900,
+    "estimated_cost_usd":  0.002353,
+    "model_calls":  12,
+    "tool_calls":  13,
+    "failed_tool_calls":  1,
+    "provider_errors":  1,
+    "source_isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "applied_candidate_matches":  false,
+    "summary":  ""
+}

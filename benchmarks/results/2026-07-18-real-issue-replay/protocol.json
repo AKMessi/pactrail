@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "preregistered_commit": "77ebbf45746ccf0f1e299e95126064d6463a0a45",
+  "post_benchmark_fix_commit": "4e1dc1d2e540f841aba50aafabede603ba5093e3",
+  "manifest_sha256": "f21f371e49215017fd7dd1fd02b24e28c5991fd8c7338787e3c735d5866d4b3c",
+  "runner_sha256": "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+  "opencode_config_sha256": "71d3b488a1ca94618daa91971291c1630205795363cc743f8c2b67ffdf779ca7",
+  "controls": {
+    "model": "deepseek-v4-flash",
+    "temperature": 0,
+    "thinking": "disabled",
+    "context_tokens": 16384,
+    "max_output_tokens": 2048,
+    "max_steps": 16,
+    "case_repetitions": 1,
+    "maximum_case_seconds": 720,
+    "minimum_balance_usd": 1.05,
+    "process_execution": "enabled_for_both",
+    "source_network": "no_remote_and_prompt_requires_offline",
+    "retry_policy": "none"
+  },
+  "execution_order": [
+    "crossbeam-select-cloned-handle/pactrail",
+    "crossbeam-select-cloned-handle/opencode",
+    "smallvec-inline-leak-safety/opencode",
+    "smallvec-inline-leak-safety/pactrail",
+    "reqwest-blocking-request-parts/pactrail",
+    "reqwest-blocking-request-parts/opencode"
+  ],
+  "gold_validation": {"passed": 3, "total": 3},
+  "spend": {
+    "balance_before_usd": 1.71,
+    "balance_after_usd": 1.66,
+    "displayed_delta_usd": 0.05,
+    "estimated_trial_cost_usd": 0.052239
+  },
+  "known_confounds": [
+    "The scored Pactrail executable retained a 250000 aggregate model-token contract ceiling; OpenCode had no matched aggregate ceiling.",
+    "The automated SmallVec forbidden path list did not include src/tests.rs; manual audit reports its modification without changing the primary score.",
+    "Provider latency and prefix-cache state are not controllable."
+  ],
+  "reruns": 0,
+  "replacement_samples": 0
+}

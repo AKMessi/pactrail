@@ -1,0 +1,61 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-replay-v1",
+    "case_id":  "fd-and-pattern-path-separator",
+    "repository":  "sharkdp/fd",
+    "difficulty":  "cli-behavior-bug",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 0.1.0",
+    "model":  "deepseek-v4-flash",
+    "functional_passed":  false,
+    "instructions_passed":  true,
+    "task_passed":  false,
+    "strict_passed":  false,
+    "outcome":  "process_error",
+    "exit_code":  1,
+    "timed_out":  false,
+    "duration_ms":  26764,
+    "grading_duration_ms":  12376,
+    "run_id":  "019f755e-22ff-7941-9600-150efe735290",
+    "changed_paths":  [
+
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  0,
+                  "additions":  0,
+                  "deletions":  0,
+                  "bytes":  0
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test --locked --test tests test_and_pattern_with_forward_slash_is_rejected",
+                          "exit_code":  101,
+                          "timed_out":  false,
+                          "duration_ms":  10639,
+                          "passed":  false
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test --locked --test tests -- --skip test_exec_with_separator --skip test_list_details",
+                            "exit_code":  101,
+                            "timed_out":  false,
+                            "duration_ms":  1737,
+                            "passed":  false
+                        },
+    "input_tokens":  76455,
+    "cached_input_tokens":  66304,
+    "output_tokens":  1282,
+    "total_tokens":  77737,
+    "estimated_cost_usd":  0.001966,
+    "model_calls":  9,
+    "tool_calls":  16,
+    "failed_tool_calls":  2,
+    "provider_errors":  1,
+    "source_isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "applied_candidate_matches":  false,
+    "summary":  ""
+}

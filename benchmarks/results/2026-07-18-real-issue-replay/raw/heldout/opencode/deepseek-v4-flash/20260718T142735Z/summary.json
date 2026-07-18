@@ -1,0 +1,98 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-heldout-v1",
+    "harness":  "opencode",
+    "harness_version":  "1.2.27",
+    "model":  "deepseek-v4-flash",
+    "started_at":  "20260718T142735Z",
+    "cases":  1,
+    "functional_passed":  0,
+    "task_passed":  0,
+    "strict_passed":  0,
+    "median_duration_ms":  74847,
+    "total_duration_ms":  74847,
+    "total_input_tokens":  184251,
+    "total_cached_input_tokens":  131456,
+    "total_output_tokens":  2872,
+    "total_tokens":  187123,
+    "estimated_cost_usd":  0.008564,
+    "balance_before_usd":  "1.67",
+    "balance_after_usd":  "1.67",
+    "protocol":  {
+                     "manifest_sha256":  "f21f371e49215017fd7dd1fd02b24e28c5991fd8c7338787e3c735d5866d4b3c",
+                     "runner_sha256":  "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+                     "opencode_config_sha256":  "71d3b488a1ca94618daa91971291c1630205795363cc743f8c2b67ffdf779ca7",
+                     "harness_executable_sha256":  "5dd06ecb4ad00910461b7c0d296783e5124bc900566736f0d7b8844c97dfb7eb",
+                     "context_tokens":  16384,
+                     "max_output_tokens":  2048,
+                     "max_steps":  16,
+                     "temperature":  0,
+                     "thinking":  "disabled"
+                 },
+    "results":  [
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-real-issue-heldout-v1",
+                        "case_id":  "reqwest-blocking-request-parts",
+                        "repository":  "seanmonstar/reqwest",
+                        "difficulty":  "api-conversion-regression",
+                        "source_base_commit":  "11489b34eda6d32b15ad4033e62beba2ee401350",
+                        "reference_commit":  "642ce7d55698a282606a872f8cb8d0bcb9a79b94",
+                        "prompt_sha256":  "313040cdb432d5c4f4c823c330c6512dc871ce9f0c8ea33bda5cb24e206328c3",
+                        "harness":  "opencode",
+                        "harness_version":  "1.2.27",
+                        "model":  "deepseek-v4-flash",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "completed",
+                        "exit_code":  0,
+                        "timed_out":  false,
+                        "duration_ms":  74847,
+                        "grading_duration_ms":  18629,
+                        "run_id":  "",
+                        "changed_paths":  [
+                                              "src/blocking/request.rs"
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  1,
+                                      "additions":  5,
+                                      "deletions":  1,
+                                      "bytes":  1069
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --lib --no-default-features --features blocking hidden_issue_2989_tests::try_from_http_request_preserves_version_and_extensions",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  17639,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test --lib --no-default-features --features blocking",
+                                                "exit_code":  101,
+                                                "timed_out":  false,
+                                                "duration_ms":  990,
+                                                "passed":  false
+                                            },
+                        "input_tokens":  184251,
+                        "cached_input_tokens":  131456,
+                        "output_tokens":  2872,
+                        "total_tokens":  187123,
+                        "estimated_cost_usd":  0.008564,
+                        "model_calls":  16,
+                        "tool_calls":  17,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  0,
+                        "source_isolation_preserved":  false,
+                        "trace_integrity_verified":  false,
+                        "applied_candidate_matches":  false,
+                        "summary":  "Let me start by understanding the codebase structure and the relevant code.\nNow let me look at the async implementation\u0027s `TryFrom` to see how it handles version and extensions:\n## Goal\n\nFix reqwest issue #2989: the `TryFrom\u003chttp::Request\u003cT\u003e\u003e for reqwest::blocking::Request` conversion silently discards HTTP version and type-map extensions when converting from an `http::Request`. The fix should make the blocking conversion consistent with the asynchronous conversion (`src/async_impl/request.rs`), which properly preserves both fields.\n\n## Instructions\n\n- Work offline, do not inspect git history or any remote\n- Do not modify tests or documentation\n- Make a focused production-quality change\n- Run relevant tests before finishing\n\n## Discoveries\n\n- The blocking `Request` struct (`src/blocking/request.rs` line 21-24) wraps `async_impl::Request` via an `inner` field and a separate `body` field.\n- The async `Request` struct (`src/async_impl/request.rs` lines 26-33) has `version: Version` and `extensions: Extensions` fields directly.\n- The async `TryFrom` implementation (lines 608-634) destructures `Parts` including `version` and `extensions`, and returns them in the `Request` constructor.\n- The blocking `TryFrom` implementation (lines 656-678) destructures only `method`, `uri`, `headers` from `Parts`, ignoring `version` and `extensions` (using `..`). It creates a new `async_impl::Request` without setting version or extensions.\n- The blocking `Request` has `version()` / `version_mut()` accessors that delegate to `self.inner.version()` / `self.inner.version_mut()`, but there is no public `extensions()` accessor exposed on the blocking Request.\n- The blocking `Request` requires `http` module imports ΓÇö it already imports `Version` and `Parts` from `http` (line 5), but does not yet import `Extensions`.\n\n## Accomplished\n\nWork is just beginning. The codebase has been fully read and analyzed. No code changes have been made yet.\n\n## Relevant files / directories\n\n- **`src/blocking/request.rs`** ΓÇö Contains the `TryFrom\u003chttp::Request\u003cT\u003e\u003e` that needs to be fixed (lines 656-678). The blocking `Request` struct (lines 21-24) wraps `async_impl::Request` and has accessors `version()`/`version_mut()` that delegate to the inner request, but no public `extensions()` accessor.\n- **`src/async_impl/request.rs`** ΓÇö Reference implementation (lines 608-634) that correctly preserves `version` and `extensions`. Also shows the async `Request` struct with its `extensions` field and `extensions()`/`extensions_mut()` methods (lines 106-116).\n- **`src/async_impl/request.rs:159-168`** ΓÇö The `pieces()` method returns all fields including `version` and `extensions`, showing what the inner async request can accept.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nLet me read the blocking request file to make the fix.\nNow I\u0027ll make the fix: destructure `version` and `extensions` from `Parts`, import `Extensions`, and set them on the inner request.\nNow let me verify the async impl has `extensions_mut()` and run the tests.\n## Maximum steps reached\n\n### Accomplished\n- Added `Extensions` to the `http` import in `src/blocking/request.rs:5`\n- Modified the `TryFrom\u003cHttpRequest\u003cT\u003e\u003e` implementation (line 662-678) to destructure `version` and `extensions` from `Parts` instead of using `..`\n- Set `*inner.version_mut() = version` and `*inner.extensions_mut() = extensions` on the inner async request\n\n### Remaining\n- **Run tests** to verify the change compiles and passes. The async impl\u0027s `extensions_mut()` is `pub(crate)` so it\u0027s accessible from the blocking module. The fix should compile and work correctly.\n\n### Recommendation\nRun `cargo test --features blocking` (or the project\u0027s test command) to verify the change."
+                    }
+                ]
+}

@@ -1,0 +1,7 @@
+2026-07-18T14:24:36.733315Z  WARN pactrail_engine::engine: tool call failed tool=edit_file error=edit 1 replacement count was 0, expected 1
+2026-07-18T14:24:40.314210Z  WARN pactrail_engine::engine: tool call failed tool=edit_file error=edit 1 replacement count was 0, expected 1
+2026-07-18T14:24:44.490844Z  WARN pactrail_engine::engine: tool call failed tool=replace_text error=replacement count was 0, expected 1
+2026-07-18T14:24:45.886698Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=process "sed" could not be started: program not found
+2026-07-18T14:24:47.095032Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=process "sed" could not be started: program not found
+error: engine failed for run 019f759d-150a-7c33-b5d7-dde5ae4e8bb0: model stalled for 3 consecutive tool turns because every tool request failed
+Portable trace: \\?\D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\heldout-scored\20260718T142416Z-pactrail-deepseek-v4-flash\smallvec-inline-leak-safety\workspace\.pactrail\runs\019f759d-150a-7c33-b5d7-dde5ae4e8bb0\trace.jsonl

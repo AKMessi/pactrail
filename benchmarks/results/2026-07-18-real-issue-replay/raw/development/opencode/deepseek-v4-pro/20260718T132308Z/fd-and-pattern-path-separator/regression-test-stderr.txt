@@ -1,0 +1,20 @@
+warning: function `create_config_directory_with_global_ignore` is never used
+  --> tests\testenv\mod.rs:65:4
+   |
+65 | fn create_config_directory_with_global_ignore(ignore_file_content: &str) -> io::Result<TempDir> {
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `global_ignore_file` is never used
+   --> tests\testenv\mod.rs:169:12
+    |
+147 | impl TestEnv {
+    | ------------ method in this implementation
+...
+169 |     pub fn global_ignore_file(self, content: &str) -> TestEnv {
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: `fd-find` (test "tests") generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running tests\tests.rs (target\debug\deps\tests-e00843a716e2be2d.exe)

@@ -1,0 +1,143 @@
+
+running 20 tests
+test commands::tests::task_file_cannot_understate_native_process_access ... ok
+test interactive::tests::command_help_corrects_typos_and_wraps_review_text ... ok
+test commands::tests::native_process_opt_in_records_all_effective_capabilities ... ok
+test interactive::tests::counts_and_text_truncation_are_stable ... ok
+test interactive::tests::endpoints_reject_remote_http_and_url_credentials ... ok
+test interactive::tests::live_timeline_neutralizes_untrusted_terminal_controls ... ok
+test interactive::tests::recovery_turn_has_a_distinct_trace_lane ... ok
+test output::tests::escaped_json_keeps_its_value ... ok
+test output::tests::terminal_controls_are_neutralized ... ok
+test interactive::tests::pending_candidate_is_focused_over_a_newer_terminal_run ... ok
+test settings::tests::output_budget_must_leave_room_for_model_input ... ok
+test interactive::tests::structured_views_fit_a_narrow_terminal ... ok
+test theme::tests::themed_untrusted_text_never_preserves_controls ... ok
+test diff::tests::renders_unified_diff_from_transaction_workspace ... ok
+test diff::tests::persisted_review_survives_source_and_candidate_removal ... ok
+test settings::tests::future_settings_schema_fails_closed ... ok
+test settings::tests::settings_round_trip_atomically ... ok
+test commands::tests::discard_repairs_receipt_and_staging_after_terminal_event ... ok
+test commands::tests::apply_rejects_candidate_changes_after_receipt ... ok
+test commands::tests::apply_repairs_receipt_after_terminal_event ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+
+running 6 tests
+test no_subcommand_fails_fast_without_a_terminal ... ok
+test completion_is_generated_and_prompt_cannot_shadow_a_subcommand ... ok
+test failed_run_exports_trace_and_remains_discoverable ... ok
+test ready_run_can_be_discarded_idempotently ... ok
+test answered_run_is_inspectable_and_has_no_apply_boundary ... ok
+test complete_run_is_isolated_then_applies ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+
+running 10 tests
+test tests::model_context_virtualizes_the_workspace_root ... ok
+test tests::indexes_symbols_in_stable_order ... ok
+test tests::retrieved_files_are_task_relevant ... ok
+test tests::oversized_authoritative_instructions_fail_closed ... ok
+test tests::nested_instructions_are_explicitly_directory_scoped ... ok
+test tests::broad_repository_questions_fall_back_to_project_anchors ... ok
+test tests::broad_context_contains_bounded_current_anchor_evidence ... ok
+test tests::supplemental_context_is_provenance_labelled_and_bounded ... ok
+test tests::model_budget_omits_whole_optional_entries_with_a_visible_notice ... ok
+test tests::oversized_files_are_hashed_without_semantic_retention ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 13 tests
+test contract::tests::unsupported_cost_budget_fails_closed ... ok
+test event::tests::legacy_action_records_default_trace_fields ... ok
+test contract::tests::minimal_contract_is_valid ... ok
+test contract::tests::duplicate_obligations_are_rejected ... ok
+test contract::tests::conflicting_permissions_are_rejected ... ok
+test event::tests::illegal_transition_is_rejected ... ok
+test event::tests::state_machine_accepts_fast_path ... ok
+test event::tests::tampered_event_is_rejected ... ok
+test receipt::tests::receipt_rejects_unknown_schema ... ok
+test receipt::tests::receipt_requires_evidence_for_every_required_obligation ... ok
+test receipt::tests::answered_receipts_are_integrity_checked_without_changes ... ok
+test receipt::tests::receipt_detects_tampering ... ok
+test event::tests::read_only_runs_can_complete_without_an_apply_state ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+test engine::tests::informational_goal_classification_is_conservative ... ok
+test engine::tests::context_failure_finalizes_the_started_run ... ok
+test engine::tests::parallel_safe_tool_calls_execute_concurrently_and_record_stable_order ... ok
+test engine::tests::tool_loop_produces_isolated_change_receipt ... ok
+test verification::tests::detects_polyglot_checks_without_install_commands ... ok
+test engine::tests::repeated_invalid_calls_fail_early_without_changes ... ok
+test engine::tests::repeated_tool_calls_preserve_real_changes_for_review ... ok
+test engine::tests::repeated_read_only_question_gets_one_bounded_answer_recovery ... ok
+test engine::tests::verification_build_artifacts_never_pollute_the_candidate ... ok
+test engine::tests::wall_time_budget_cancels_and_fails_the_run ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.95s
+
+
+running 3 tests
+test tests::forgetting_is_idempotently_rejected ... ok
+test tests::explicit_memory_round_trips_and_ranks_relevance ... ok
+test tests::future_schema_fails_closed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.22s
+
+
+running 6 tests
+test openai_compatible::tests::parses_text_tools_usage_and_extensions ... ok
+test openai_compatible::tests::remote_plain_http_is_rejected ... ok
+test openai_compatible::tests::localhost_prefix_confusion_is_rejected ... ok
+test openai_compatible::tests::zero_timeout_is_rejected ... ok
+test openai_compatible::tests::ambiguous_endpoint_components_are_rejected ... ok
+test openai_compatible::tests::redirects_are_not_followed ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 7 tests
+test artifact::tests::rejects_path_like_digests ... ok
+test event_store::tests::optimistic_sequence_prevents_lost_events ... ok
+test event_store::tests::lists_runs_newest_first ... ok
+test event_store::tests::events_round_trip_and_project ... ok
+test event_store::tests::future_database_schema_is_rejected ... ok
+test artifact::tests::existing_corrupt_artifact_is_never_reported_as_stored ... ok
+test artifact::tests::artifacts_round_trip_and_deduplicate ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 12 tests
+test builtins::tests::list_schema_explains_its_virtual_directory_path ... ok
+test policy::tests::default_policy_requires_process_approval ... ok
+test policy::tests::explicit_denial_wins ... ok
+test policy::tests::reports_runtime_grants_missing_from_contract ... ok
+test process::tests::process_requires_explicit_capability ... ok
+test builtins::tests::reads_line_ranges ... ok
+test builtins::tests::replace_requires_exact_count ... ok
+test advanced::tests::multi_edit_validates_every_edit_before_writing ... ok
+test advanced::tests::memory_recall_requires_capability_and_preserves_provenance ... ok
+test builtins::tests::file_listing_is_lexical_and_memory_bounded ... ok
+test builtins::tests::file_listing_steers_models_toward_project_anchors ... ok
+test advanced::tests::batch_read_and_change_inspection_are_bounded_native_tools ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+running 6 tests
+test path::tests::rejects_parent_traversal ... ok
+test path::tests::normalizes_current_directory_segments ... ok
+test transaction::tests::write_scope_is_enforced ... ok
+test transaction::tests::transaction_reopens_from_durable_metadata ... ok
+test transaction::tests::refuses_to_overwrite_concurrent_user_change ... ok
+test transaction::tests::write_is_isolated_until_apply ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

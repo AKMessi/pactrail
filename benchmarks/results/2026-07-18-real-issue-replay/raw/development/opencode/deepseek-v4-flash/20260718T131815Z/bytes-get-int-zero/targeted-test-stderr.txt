@@ -1,0 +1,6 @@
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling bytes v1.11.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\bytes-get-int-zero\grade)
+   Compiling serde_test v1.0.177
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.43s
+     Running tests\test_buf.rs (target\debug\deps\test_buf-94c4269f6d4b4020.exe)

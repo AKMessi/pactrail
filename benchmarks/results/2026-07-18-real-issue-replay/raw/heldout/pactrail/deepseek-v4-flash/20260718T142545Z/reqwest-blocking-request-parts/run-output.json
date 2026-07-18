@@ -1,0 +1,31 @@
+{
+  "changes": [
+    {
+      "after_digest": "14f18e878300e99f26b0d6c5af15b2b99ff1812e4d47fe47f357043d2cfd9ffc",
+      "after_unix_mode": null,
+      "before_digest": "746b9d2102d68af3810ed2f26595cbfce60ad5fadcb00a096688dde510906e40",
+      "before_unix_mode": null,
+      "bytes_added": 35824,
+      "bytes_removed": 35689,
+      "path": "src/blocking/request.rs"
+    }
+  ],
+  "outcome": "failed",
+  "receipt": "\\\\?\\D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\heldout-scored\\20260718T142545Z-pactrail-deepseek-v4-flash\\reqwest-blocking-request-parts\\workspace\\.pactrail\\runs\\019f759e-75a5-75b1-8710-8c2ec8ba442b\\receipt.json",
+  "risks": [
+    "Native verification processes are capability-gated but are not a host-filesystem or network sandbox; use an OCI runner for hostile repositories",
+    "At least one deterministic repository check failed",
+    "model recovery stopped after 3 consecutive tool turns because every tool request failed; the model did not return a final summary, so candidate completeness requires human review"
+  ],
+  "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+  "summary": "The model stopped after repeated non-progress tool calls. Candidate changes were preserved for explicit review.",
+  "tokens": 226332,
+  "trace": "\\\\?\\D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\heldout-scored\\20260718T142545Z-pactrail-deepseek-v4-flash\\reqwest-blocking-request-parts\\workspace\\.pactrail\\runs\\019f759e-75a5-75b1-8710-8c2ec8ba442b\\trace.jsonl",
+  "verification": {
+    "failed": 1,
+    "highest_grade": "deterministic",
+    "inconclusive": 0,
+    "passed": 0,
+    "skipped": 0
+  }
+}

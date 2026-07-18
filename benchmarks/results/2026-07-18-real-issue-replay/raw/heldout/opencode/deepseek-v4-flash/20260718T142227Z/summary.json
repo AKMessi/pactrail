@@ -1,0 +1,99 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-heldout-v1",
+    "harness":  "opencode",
+    "harness_version":  "1.2.27",
+    "model":  "deepseek-v4-flash",
+    "started_at":  "20260718T142227Z",
+    "cases":  1,
+    "functional_passed":  1,
+    "task_passed":  1,
+    "strict_passed":  1,
+    "median_duration_ms":  65160,
+    "total_duration_ms":  65160,
+    "total_input_tokens":  153311,
+    "total_cached_input_tokens":  125184,
+    "total_output_tokens":  2566,
+    "total_tokens":  155877,
+    "estimated_cost_usd":  0.005007,
+    "balance_before_usd":  "1.70",
+    "balance_after_usd":  "1.69",
+    "protocol":  {
+                     "manifest_sha256":  "f21f371e49215017fd7dd1fd02b24e28c5991fd8c7338787e3c735d5866d4b3c",
+                     "runner_sha256":  "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+                     "opencode_config_sha256":  "71d3b488a1ca94618daa91971291c1630205795363cc743f8c2b67ffdf779ca7",
+                     "harness_executable_sha256":  "5dd06ecb4ad00910461b7c0d296783e5124bc900566736f0d7b8844c97dfb7eb",
+                     "context_tokens":  16384,
+                     "max_output_tokens":  2048,
+                     "max_steps":  16,
+                     "temperature":  0,
+                     "thinking":  "disabled"
+                 },
+    "results":  [
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-real-issue-heldout-v1",
+                        "case_id":  "smallvec-inline-leak-safety",
+                        "repository":  "servo/rust-smallvec",
+                        "difficulty":  "memory-safety-regression",
+                        "source_base_commit":  "5d76282e96c631dce842ebc99c2aef9dc3a23796",
+                        "reference_commit":  "339524684344f74ea7e5e05b3b5ae4e5043999f8",
+                        "prompt_sha256":  "4023dadd6e0d9ab996458bf1b6b5fb51592f607ab204ed8639945f1524f963f6",
+                        "harness":  "opencode",
+                        "harness_version":  "1.2.27",
+                        "model":  "deepseek-v4-flash",
+                        "functional_passed":  true,
+                        "instructions_passed":  true,
+                        "task_passed":  true,
+                        "strict_passed":  true,
+                        "outcome":  "completed",
+                        "exit_code":  0,
+                        "timed_out":  false,
+                        "duration_ms":  65160,
+                        "grading_duration_ms":  3759,
+                        "run_id":  "",
+                        "changed_paths":  [
+                                              "src/lib.rs",
+                                              "src/tests.rs"
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  2,
+                                      "additions":  4174,
+                                      "deletions":  4147,
+                                      "bytes":  265337
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --test leak_security inline_storage_leak_is_rejected",
+                                              "exit_code":  0,
+                                              "timed_out":  false,
+                                              "duration_ms":  2789,
+                                              "passed":  true
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test --lib",
+                                                "exit_code":  0,
+                                                "timed_out":  false,
+                                                "duration_ms":  970,
+                                                "passed":  true
+                                            },
+                        "input_tokens":  153311,
+                        "cached_input_tokens":  125184,
+                        "output_tokens":  2566,
+                        "total_tokens":  155877,
+                        "estimated_cost_usd":  0.005007,
+                        "model_calls":  14,
+                        "tool_calls":  14,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  0,
+                        "source_isolation_preserved":  false,
+                        "trace_integrity_verified":  false,
+                        "applied_candidate_matches":  false,
+                        "summary":  "Let me start by understanding the codebase structure and the `leak` function.\nNow let me understand the `SmallVec` struct and its inline/spilled representation:\nNow let me look at how `on_heap` is determined and the `as_mut_ptr` method:\nNow I understand the bug. The `leak` function wraps `self` in `ManuallyDrop` (preventing drop), then returns a `\u0026\u0027a mut [T]` pointing to the data. If the SmallVec is inline, the data lives on the stack frame of `leak` ΓÇö when `leak` returns, the stack frame is popped and the returned reference becomes dangling.\n\nThe fix: check if the SmallVec is inline, and if so, panic (rejecting the operation). For heap storage, proceed as before.\nNow let me check how `on_heap` is accessed from the SmallVec level:\n## Goal\n\nFix the `SmallVec::leak` memory-safety bug (GHSA-5h7v-3586-wm8c). The `leak` method currently returns a `\u0026\u0027a mut [T]` pointing to inline stack storage, which becomes dangling when the SmallVec is consumed.\n\n## Instructions\n\n- Reject leaking inline storage before creating `ManuallyDrop`, but continue to support leaking spilled heap storage.\n- Keep the public API stable and avoid leaking element destructors on the rejected path.\n- Work offline, do not inspect git history or any remote, do not modify tests or documentation.\n- Make the smallest production-quality change.\n- Run relevant tests before finishing.\n\n## Discoveries\n\n- The `leak` function is at line 1684 of `src/lib.rs`.\n- `SmallVec` uses a tagged-length representation: `TaggedLen` stores a flag bit indicating whether the storage is inline or spilled to heap. The `on_heap()` method on `TaggedLen` checks this bit.\n- `SmallVec::on_heap()` at line 1041 delegates to `self.len.on_heap(Self::is_zst())` ΓÇö this is the correct check to determine if storage is inline or heap.\n- For inline storage, `as_mut_ptr()` returns a pointer into the `RawSmallVec::inline` field, which lives in the `SmallVec` struct itself. When `leak` receives `self` by value and wraps it in `ManuallyDrop`, the data is on `leak`\u0027s stack frame. Returning a reference to it creates a dangling reference.\n- For heap storage, `as_mut_ptr()` returns a pointer to heap-allocated memory (via `RawSmallVec::heap.0`), which remains valid after the `SmallVec` is consumed since `ManuallyDrop` prevents deallocation.\n\n## Accomplished\n\n- Identified the root cause and location of the bug.\n- Completed all analysis needed to implement the fix.\n- Implementation not yet started.\n\n## Relevant files / directories\n\n- `src/lib.rs` ΓÇö the sole source file containing `SmallVec` and the `leak` method at line 1684. Key references: `TaggedLen` (line 298), `SmallVec` struct (line 334), `as_mut_ptr` (line 1533), `on_heap` (line 1041).\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nLet me read the `leak` method and surrounding context to implement the fix.\nNow let me check the `on_heap` method and `as_mut_ptr` to understand the API:\nNow I have all the context needed. The fix: in `leak`, check if the data is inline. If it is, panic (reject leaking inline storage). If it\u0027s on the heap, proceed as before.\nNow let me run the tests:\nAll 67 tests pass. The fix adds a panic when `leak` is called on a SmallVec that hasn\u0027t spilled to the heap, preventing the dangling pointer bug. Heap-spilled SmallVecs continue to work as before."
+                    }
+                ]
+}

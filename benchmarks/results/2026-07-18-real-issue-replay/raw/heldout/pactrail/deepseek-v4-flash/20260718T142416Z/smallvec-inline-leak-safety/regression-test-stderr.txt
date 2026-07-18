@@ -1,0 +1,18 @@
+   Compiling smallvec v2.0.0-alpha.11 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\heldout-scored\20260718T142416Z-pactrail-deepseek-v4-flash\smallvec-inline-leak-safety\grade)
+warning: unnecessary `unsafe` block
+   --> src\lib.rs:210:10
+    |
+210 |         (unsafe { addr_of!(self.inline) }) as *const T
+    |          ^^^^^^ unnecessary `unsafe` block
+    |
+    = note: `#[warn(unused_unsafe)]` (part of `#[warn(unused)]`) on by default
+
+warning: unnecessary `unsafe` block
+   --> src\lib.rs:216:10
+    |
+216 |         (unsafe { addr_of_mut!(self.inline) }) as *mut T
+    |          ^^^^^^ unnecessary `unsafe` block
+
+warning: `smallvec` (lib test) generated 2 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.89s
+     Running unittests src\lib.rs (target\debug\deps\smallvec-d48088451df9a03c.exe)

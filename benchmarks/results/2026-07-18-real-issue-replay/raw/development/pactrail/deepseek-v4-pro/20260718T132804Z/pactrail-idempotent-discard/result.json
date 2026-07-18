@@ -1,0 +1,61 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-replay-v1",
+    "case_id":  "pactrail-idempotent-discard",
+    "repository":  "AKMessi/pactrail",
+    "difficulty":  "transaction-recovery-bug",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 0.1.0",
+    "model":  "deepseek-v4-pro",
+    "functional_passed":  false,
+    "instructions_passed":  true,
+    "task_passed":  false,
+    "strict_passed":  false,
+    "outcome":  "process_error",
+    "exit_code":  1,
+    "timed_out":  false,
+    "duration_ms":  55255,
+    "grading_duration_ms":  41335,
+    "run_id":  "019f756a-e9b3-7163-9889-fe7129bba777",
+    "changed_paths":  [
+
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  0,
+                  "additions":  0,
+                  "deletions":  0,
+                  "bytes":  0
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test --locked -p pactrail --test end_to_end ready_run_can_be_discarded_idempotently",
+                          "exit_code":  101,
+                          "timed_out":  false,
+                          "duration_ms":  33777,
+                          "passed":  false
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test --locked --workspace --all-targets",
+                            "exit_code":  101,
+                            "timed_out":  false,
+                            "duration_ms":  7558,
+                            "passed":  false
+                        },
+    "input_tokens":  138546,
+    "cached_input_tokens":  125312,
+    "output_tokens":  3312,
+    "total_tokens":  141858,
+    "estimated_cost_usd":  0.009092,
+    "model_calls":  12,
+    "tool_calls":  16,
+    "failed_tool_calls":  2,
+    "provider_errors":  1,
+    "source_isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "applied_candidate_matches":  false,
+    "summary":  ""
+}

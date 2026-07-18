@@ -1,0 +1,14 @@
+diff --git a/src/buf/buf_impl.rs b/src/buf/buf_impl.rs
+index c8c9e6b..0763395 100644
+--- a/src/buf/buf_impl.rs
++++ b/src/buf/buf_impl.rs
+@@ -86,6 +86,9 @@ macro_rules! buf_get_impl {
+ 
+ // https://en.wikipedia.org/wiki/Sign_extension
+ fn sign_extend(val: u64, nbytes: usize) -> i64 {
++    if nbytes == 0 {
++        return 0;
++    }
+     let shift = (8 - nbytes) * 8;
+     (val << shift) as i64 >> shift
+ }

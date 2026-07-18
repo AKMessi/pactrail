@@ -1,0 +1,4 @@
+2026-07-18T13:15:38.954916Z  WARN pactrail_engine::engine: tool call failed tool=search error=requested range is invalid: path "src/cli.rs" must name a workspace-relative directory; omit it or use `.` for the workspace root
+2026-07-18T13:15:38.964172Z  WARN pactrail_engine::engine: tool call failed tool=search error=requested range is invalid: path "src/cli.rs" must name a workspace-relative directory; omit it or use `.` for the workspace root
+error: engine failed for run 019f755e-22ff-7941-9600-150efe735290: model invocation failed: provider response JSON is invalid: EOF while parsing a string at line 1 column 3514
+Portable trace: \\?\D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131457Z-pactrail-deepseek-v4-flash\fd-and-pattern-path-separator\workspace\.pactrail\runs\019f755e-22ff-7941-9600-150efe735290\trace.jsonl

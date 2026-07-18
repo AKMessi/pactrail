@@ -1,0 +1,207 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-replay-v1",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 0.1.0",
+    "model":  "deepseek-v4-pro",
+    "started_at":  "20260718T132804Z",
+    "cases":  3,
+    "functional_passed":  0,
+    "task_passed":  0,
+    "strict_passed":  0,
+    "median_duration_ms":  38369,
+    "total_duration_ms":  116921,
+    "total_input_tokens":  365229,
+    "total_cached_input_tokens":  310144,
+    "total_output_tokens":  6238,
+    "total_tokens":  371467,
+    "estimated_cost_usd":  0.030513,
+    "balance_before_usd":  "1.79",
+    "balance_after_usd":  "1.74",
+    "recovery_note":  "The third trial model run completed before the disk filled. Only deterministic grading/result serialization was replayed after deleting disposable target directories; no model call was repeated.",
+    "results":  [
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-real-issue-replay-v1",
+                        "case_id":  "bytes-get-int-zero",
+                        "repository":  "tokio-rs/bytes",
+                        "difficulty":  "localized-library-bug",
+                        "harness":  "pactrail",
+                        "harness_version":  "pactrail 0.1.0",
+                        "model":  "deepseek-v4-pro",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "process_error",
+                        "exit_code":  1,
+                        "timed_out":  false,
+                        "duration_ms":  38369,
+                        "grading_duration_ms":  6818,
+                        "run_id":  "019f7569-a554-7782-a97f-f9016e759238",
+                        "changed_paths":  [
+                                              "Cargo.lock"
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  0,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  0
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --test test_buf get_int_",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  4999,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test",
+                                                "exit_code":  101,
+                                                "timed_out":  false,
+                                                "duration_ms":  1819,
+                                                "passed":  false
+                                            },
+                        "input_tokens":  141085,
+                        "cached_input_tokens":  127360,
+                        "output_tokens":  2377,
+                        "total_tokens":  143462,
+                        "estimated_cost_usd":  0.0085,
+                        "model_calls":  12,
+                        "tool_calls":  14,
+                        "failed_tool_calls":  5,
+                        "provider_errors":  1,
+                        "source_isolation_preserved":  true,
+                        "trace_integrity_verified":  true,
+                        "applied_candidate_matches":  false,
+                        "summary":  ""
+                    },
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-real-issue-replay-v1",
+                        "case_id":  "fd-and-pattern-path-separator",
+                        "repository":  "sharkdp/fd",
+                        "difficulty":  "cli-behavior-bug",
+                        "harness":  "pactrail",
+                        "harness_version":  "pactrail 0.1.0",
+                        "model":  "deepseek-v4-pro",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "process_error",
+                        "exit_code":  1,
+                        "timed_out":  false,
+                        "duration_ms":  23297,
+                        "grading_duration_ms":  11047,
+                        "run_id":  "019f756a-5cf2-7270-8998-029b879052ff",
+                        "changed_paths":  [
+
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  0,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  0
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --locked --test tests test_and_pattern_with_forward_slash_is_rejected",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  9328,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test --locked --test tests -- --skip test_exec_with_separator --skip test_list_details",
+                                                "exit_code":  101,
+                                                "timed_out":  false,
+                                                "duration_ms":  1719,
+                                                "passed":  false
+                                            },
+                        "input_tokens":  85598,
+                        "cached_input_tokens":  57472,
+                        "output_tokens":  549,
+                        "total_tokens":  86147,
+                        "estimated_cost_usd":  0.012921,
+                        "model_calls":  4,
+                        "tool_calls":  7,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  1,
+                        "source_isolation_preserved":  true,
+                        "trace_integrity_verified":  true,
+                        "applied_candidate_matches":  false,
+                        "summary":  ""
+                    },
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-real-issue-replay-v1",
+                        "case_id":  "pactrail-idempotent-discard",
+                        "repository":  "AKMessi/pactrail",
+                        "difficulty":  "transaction-recovery-bug",
+                        "harness":  "pactrail",
+                        "harness_version":  "pactrail 0.1.0",
+                        "model":  "deepseek-v4-pro",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "process_error",
+                        "exit_code":  1,
+                        "timed_out":  false,
+                        "duration_ms":  55255,
+                        "grading_duration_ms":  41335,
+                        "run_id":  "019f756a-e9b3-7163-9889-fe7129bba777",
+                        "changed_paths":  [
+
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  0,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  0
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --locked -p pactrail --test end_to_end ready_run_can_be_discarded_idempotently",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  33777,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test --locked --workspace --all-targets",
+                                                "exit_code":  101,
+                                                "timed_out":  false,
+                                                "duration_ms":  7558,
+                                                "passed":  false
+                                            },
+                        "input_tokens":  138546,
+                        "cached_input_tokens":  125312,
+                        "output_tokens":  3312,
+                        "total_tokens":  141858,
+                        "estimated_cost_usd":  0.009092,
+                        "model_calls":  12,
+                        "tool_calls":  16,
+                        "failed_tool_calls":  2,
+                        "provider_errors":  1,
+                        "source_isolation_preserved":  true,
+                        "trace_integrity_verified":  true,
+                        "applied_candidate_matches":  false,
+                        "summary":  ""
+                    }
+                ]
+}

@@ -1,0 +1,19 @@
+     Locking 83 packages to latest compatible versions
+   Compiling libc v0.2.186
+   Compiling windows-link v0.2.1
+   Compiling atomic-maybe-uninit v0.3.20
+   Compiling crossbeam-utils v0.8.21 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\heldout-scored\20260718T141655Z-pactrail-deepseek-v4-flash\crossbeam-select-cloned-handle\grade\crossbeam-utils)
+   Compiling signal-hook v0.4.4
+   Compiling rustversion v1.0.23
+   Compiling fastrand v2.4.1
+   Compiling windows-sys v0.61.2
+   Compiling errno v0.3.14
+   Compiling signal-hook-registry v1.4.8
+   Compiling crossbeam-channel v0.5.15 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\heldout-scored\20260718T141655Z-pactrail-deepseek-v4-flash\crossbeam-select-cloned-handle\grade\crossbeam-channel)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.41s
+     Running tests\select.rs (target\debug\deps\select-93cef3809161d230.exe)
+error: test failed, to rerun pass `-p crossbeam-channel --test select`
+
+Caused by:
+  process didn't exit successfully: `D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\heldout-scored\20260718T141655Z-pactrail-deepseek-v4-flash\crossbeam-select-cloned-handle\grade\target\debug\deps\select-93cef3809161d230.exe issue_1096` (exit code: 0xc0000409, STATUS_STACK_BUFFER_OVERRUN)
+note: test exited abnormally; to see the full output pass --no-capture to the harness.

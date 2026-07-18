@@ -1,0 +1,98 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-heldout-v1",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 0.1.0",
+    "model":  "deepseek-v4-flash",
+    "started_at":  "20260718T142416Z",
+    "cases":  1,
+    "functional_passed":  0,
+    "task_passed":  0,
+    "strict_passed":  0,
+    "median_duration_ms":  30490,
+    "total_duration_ms":  30490,
+    "total_input_tokens":  131088,
+    "total_cached_input_tokens":  120704,
+    "total_output_tokens":  2516,
+    "total_tokens":  133604,
+    "estimated_cost_usd":  0.002496,
+    "balance_before_usd":  "1.68",
+    "balance_after_usd":  "1.68",
+    "protocol":  {
+                     "manifest_sha256":  "f21f371e49215017fd7dd1fd02b24e28c5991fd8c7338787e3c735d5866d4b3c",
+                     "runner_sha256":  "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+                     "opencode_config_sha256":  "71d3b488a1ca94618daa91971291c1630205795363cc743f8c2b67ffdf779ca7",
+                     "harness_executable_sha256":  "e06e79a652799b7c467c7b5393ceed544240a6250ba2e90731a300d73ec21477",
+                     "context_tokens":  16384,
+                     "max_output_tokens":  2048,
+                     "max_steps":  16,
+                     "temperature":  0,
+                     "thinking":  "disabled"
+                 },
+    "results":  [
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-real-issue-heldout-v1",
+                        "case_id":  "smallvec-inline-leak-safety",
+                        "repository":  "servo/rust-smallvec",
+                        "difficulty":  "memory-safety-regression",
+                        "source_base_commit":  "5d76282e96c631dce842ebc99c2aef9dc3a23796",
+                        "reference_commit":  "339524684344f74ea7e5e05b3b5ae4e5043999f8",
+                        "prompt_sha256":  "4023dadd6e0d9ab996458bf1b6b5fb51592f607ab204ed8639945f1524f963f6",
+                        "harness":  "pactrail",
+                        "harness_version":  "pactrail 0.1.0",
+                        "model":  "deepseek-v4-flash",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "process_error",
+                        "exit_code":  1,
+                        "timed_out":  false,
+                        "duration_ms":  30490,
+                        "grading_duration_ms":  3826,
+                        "run_id":  "019f759d-150a-7c33-b5d7-dde5ae4e8bb0",
+                        "changed_paths":  [
+                                              "Cargo.lock"
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  0,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  0
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --test leak_security inline_storage_leak_is_rejected",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  2799,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test --lib",
+                                                "exit_code":  0,
+                                                "timed_out":  false,
+                                                "duration_ms":  1027,
+                                                "passed":  true
+                                            },
+                        "input_tokens":  131088,
+                        "cached_input_tokens":  120704,
+                        "output_tokens":  2516,
+                        "total_tokens":  133604,
+                        "estimated_cost_usd":  0.002496,
+                        "model_calls":  15,
+                        "tool_calls":  20,
+                        "failed_tool_calls":  5,
+                        "provider_errors":  1,
+                        "source_isolation_preserved":  true,
+                        "trace_integrity_verified":  true,
+                        "applied_candidate_matches":  false,
+                        "summary":  ""
+                    }
+                ]
+}

@@ -1,0 +1,42 @@
+diff --git a/crates/pactrail-cli/src/commands.rs b/crates/pactrail-cli/src/commands.rs
+index b758b2a..2bada18 100644
+--- a/crates/pactrail-cli/src/commands.rs
++++ b/crates/pactrail-cli/src/commands.rs
+@@ -624,8 +624,36 @@ pub(crate) fn discard(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+ pub(crate) fn discard_run(state: &Path, run_id: RunId) -> Result<ChangeReceipt, CliError> {
+     let run_root = run_root(state, run_id);
+     let receipt = read_receipt(&run_root)?;
+-    let transaction = WorkspaceTransaction::open(&run_root)?;
+     let mut store = EventStore::open(state.join("events.sqlite3"))?;
++    let snapshot = store.snapshot(run_id)?;
++
++    if snapshot.state == RunState::Discarded {
++        // Idempotent path: transaction workspace may already be gone.
++        // Rebuild the discarded receipt from the durable event head if needed.
++        if receipt.outcome == ReceiptOutcome::Discarded {
++            if receipt.final_event_hash != snapshot.last_hash.0 {
++                return Err(CliError::Argument(
++                    "discarded receipt does not match the durable event head".to_owned(),
++                ));
++            }
++            write_trace_artifact(&run_root, &store, run_id)?;
++            return Ok(receipt);
++        }
++        if receipt.outcome == ReceiptOutcome::ReadyToApply {
++            let discarded =
++                rebuild_receipt(receipt, ReceiptOutcome::Discarded, snapshot.last_hash.0)?;
++            write_receipt(&run_root, &discarded)?;
++            write_trace_artifact(&run_root, &store, run_id)?;
++            return Ok(discarded);
++        }
++        return Err(state_receipt_mismatch(
++            snapshot.state,
++            receipt.outcome,
++            "discard",
++        ));
++    }
++
++    let transaction = WorkspaceTransaction::open(&run_root)?;
+     let discarded = discard_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
+     write_trace_artifact(&run_root, &store, run_id)?;
+     Ok(discarded)

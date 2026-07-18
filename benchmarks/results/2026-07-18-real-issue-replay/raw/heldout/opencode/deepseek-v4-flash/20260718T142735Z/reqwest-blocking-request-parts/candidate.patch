@@ -1,0 +1,29 @@
+diff --git a/src/blocking/request.rs b/src/blocking/request.rs
+index 9172df9..27cf82a 100644
+--- a/src/blocking/request.rs
++++ b/src/blocking/request.rs
+@@ -2,7 +2,7 @@ use std::convert::TryFrom;
+ use std::fmt;
+ use std::time::Duration;
+ 
+-use http::{request::Parts, Request as HttpRequest, Version};
++use http::{request::Parts, Extensions, Request as HttpRequest, Version};
+ #[cfg(any(feature = "query", feature = "form", feature = "json"))]
+ use serde::Serialize;
+ #[cfg(feature = "json")]
+@@ -665,11 +665,15 @@ where
+             method,
+             uri,
+             headers,
++            version,
++            extensions,
+             ..
+         } = parts;
+         let url = Url::parse(&uri.to_string()).map_err(crate::error::builder)?;
+         let mut inner = async_impl::Request::new(method, url);
+         crate::util::replace_headers(inner.headers_mut(), headers);
++        *inner.version_mut() = version;
++        *inner.extensions_mut() = extensions;
+         Ok(Request {
+             body: Some(body.into()),
+             inner,

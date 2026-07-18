@@ -1,0 +1,206 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-real-issue-replay-v1",
+    "harness":  "opencode",
+    "harness_version":  "1.2.27",
+    "model":  "deepseek-v4-flash",
+    "started_at":  "20260718T131815Z",
+    "cases":  3,
+    "functional_passed":  1,
+    "task_passed":  1,
+    "strict_passed":  1,
+    "median_duration_ms":  49438,
+    "total_duration_ms":  187674,
+    "total_input_tokens":  460517,
+    "total_cached_input_tokens":  280192,
+    "total_output_tokens":  8040,
+    "total_tokens":  468557,
+    "estimated_cost_usd":  0.028282,
+    "balance_before_usd":  "1.85",
+    "balance_after_usd":  "1.84",
+    "results":  [
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-real-issue-replay-v1",
+                        "case_id":  "bytes-get-int-zero",
+                        "repository":  "tokio-rs/bytes",
+                        "difficulty":  "localized-library-bug",
+                        "harness":  "opencode",
+                        "harness_version":  "1.2.27",
+                        "model":  "deepseek-v4-flash",
+                        "functional_passed":  true,
+                        "instructions_passed":  true,
+                        "task_passed":  true,
+                        "strict_passed":  true,
+                        "outcome":  "completed",
+                        "exit_code":  0,
+                        "timed_out":  false,
+                        "duration_ms":  92993,
+                        "grading_duration_ms":  21651,
+                        "run_id":  "",
+                        "changed_paths":  [
+                                              "src/buf/buf_impl.rs"
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  1,
+                                      "additions":  3,
+                                      "deletions":  0,
+                                      "bytes":  415
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --test test_buf get_int_",
+                                              "exit_code":  0,
+                                              "timed_out":  false,
+                                              "duration_ms":  4538,
+                                              "passed":  true
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test",
+                                                "exit_code":  0,
+                                                "timed_out":  false,
+                                                "duration_ms":  17113,
+                                                "passed":  true
+                                            },
+                        "input_tokens":  130296,
+                        "cached_input_tokens":  75136,
+                        "output_tokens":  1949,
+                        "total_tokens":  132245,
+                        "estimated_cost_usd":  0.008479,
+                        "model_calls":  9,
+                        "tool_calls":  10,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  0,
+                        "source_isolation_preserved":  false,
+                        "trace_integrity_verified":  false,
+                        "applied_candidate_matches":  false,
+                        "summary":  "Let me start by understanding the codebase structure and the issue.\nNow let me find the `sign_extend` function and the `buf_get_impl!` macro to understand the panic:\nNow I see the issue clearly. In `sign_extend` at line 89, when `nbytes` is 0, `shift = (8 - 0) * 8 = 64`, and shifting a `u64` by 64 bits is undefined behavior in Rust (it panics in debug mode).\n\nThe fix: when `nbytes` is 0, `get_uint` already returns 0 and consumes no bytes. The `get_int` variants should also return 0 for `nbytes == 0`. The simplest fix is to guard `sign_extend` for the zero case, or guard in each `get_int*` method.\n\nThe cleanest minimal fix: add an early return in `sign_extend` for `nbytes == 0`.\nNow let me run the tests:\nAll 820 tests in `test_buf.rs` passed, along with all other test suites. The fix is a single early-return guard in `sign_extend` at `src/buf/buf_impl.rs:89` — when `nbytes == 0`, return 0 immediately, avoiding the 64-bit shift that caused the panic. This makes `get_int`, `get_int_le`, and `get_int_ne` consistent with `get_uint` for the zero-width case.\n## Goal\n\nFix issue #798 in the Bytes repository: `Buf::get_int`, `get_int_le`, and `get_int_ne` panic when `nbytes` is 0 because `sign_extend` performs a 64-bit shift (shifting a `u64` by 64 bits). The fix must make these methods behave consistently with `get_uint` — return 0 and consume no bytes — for every Buf implementation and endian variant.\n\n## Instructions\n\n- Work offline — do not inspect git history or any remote resources.\n- Do not modify tests — only modify production code.\n- Make the smallest production-quality implementation change.\n\n## Discoveries\n\n- The `sign_extend` function at `src/buf/buf_impl.rs:89` computes `let shift = (8 - nbytes) * 8`, which becomes `shift = 64` when `nbytes = 0`. Shifting a `u64` by 64 bits is undefined behavior in Rust (panics in debug mode).\n- `get_uint` already handles `nbytes = 0` correctly via the `buf_get_impl!`/`buf_try_get_impl!` macro — it returns 0 and consumes no bytes.\n- `get_int` (line 947), `get_int_le` (line 968), and `get_int_ne` (line 992) all delegate to the corresponding `get_uint*` call and then pass the result through `sign_extend`. The zero-length case in these methods is already handled correctly by `get_uint*`, but `sign_extend` then crashes before returning.\n- The fix adding an early return for `nbytes == 0` in `sign_extend` has been applied and all 820 tests in `test_buf.rs`, plus all other test suites, pass.\n\n## Accomplished\n\n- **Completed:** Modified `src/buf/buf_impl.rs` — added an `if nbytes == 0 { return 0; }` guard at the top of `fn sign_extend` (line 89). This prevents the shift-by-64 panic and returns 0 for zero-width signed integer reads, consistent with `get_uint`.\n- **Completed:** Ran all tests — 820 tests in `test_buf.rs`, plus all other test suites (`test_buf_mut.rs`, `test_bytes.rs`, etc.) and doc-tests — all passed.\n\n## Relevant files / directories\n\n- `src/buf/buf_impl.rs` — the only file modified (the `sign_extend` function and the `get_int*`/`get_uint*` method definitions are here)\n- `tests/test_buf.rs` — relevant test file (not modified, confirmed passing)\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nAll tasks are complete. The fix has been applied and verified — all tests pass. No further steps needed unless you have additional requirements."
+                    },
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-real-issue-replay-v1",
+                        "case_id":  "fd-and-pattern-path-separator",
+                        "repository":  "sharkdp/fd",
+                        "difficulty":  "cli-behavior-bug",
+                        "harness":  "opencode",
+                        "harness_version":  "1.2.27",
+                        "model":  "deepseek-v4-flash",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "completed",
+                        "exit_code":  0,
+                        "timed_out":  false,
+                        "duration_ms":  45243,
+                        "grading_duration_ms":  11538,
+                        "run_id":  "",
+                        "changed_paths":  [
+
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  0,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  0
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --locked --test tests test_and_pattern_with_forward_slash_is_rejected",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  9817,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test --locked --test tests -- --skip test_exec_with_separator --skip test_list_details",
+                                                "exit_code":  101,
+                                                "timed_out":  false,
+                                                "duration_ms":  1721,
+                                                "passed":  false
+                                            },
+                        "input_tokens":  138185,
+                        "cached_input_tokens":  105216,
+                        "output_tokens":  2903,
+                        "total_tokens":  141088,
+                        "estimated_cost_usd":  0.005723,
+                        "model_calls":  12,
+                        "tool_calls":  16,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  0,
+                        "source_isolation_preserved":  false,
+                        "trace_integrity_verified":  false,
+                        "applied_candidate_matches":  false,
+                        "summary":  "Let me start by understanding the codebase structure and the relevant code.\nNow let me look at the main path-separator diagnostic logic in `src/main.rs`:\nNow let me see how `opts.pattern` and `opts.and_pattern` are defined in the CLI:\n## Goal\n\nFix the fd CLI bug described in PR #2036. The existing path-separator diagnostic validates only the primary positional pattern. An `--and` pattern is matched against the file name in the same way, but `fd foo --and nonexistent/path` currently exits successfully with no results. Apply the same diagnostic to every `--and` pattern while preserving the `--full-path` escape hatch and the existing Windows backslash behavior.\n\n## Instructions\n\n- Work offline, do not inspect git history or any remote\n- Do not modify tests or CHANGELOG.md\n- Make a focused production-quality change\n- Run relevant tests before finishing\n\n## Discoveries\n\nThe relevant function is `ensure_search_pattern_is_not_a_path()` in `src/main.rs` (lines 166-202). It currently checks `opts.pattern` only (the primary positional pattern). The function:\n1. Returns early if `--full-path` is set\n2. Checks if the primary pattern contains `/` (always a path separator on all platforms)\n3. On Windows, additionally checks for `\\` but only if the pattern resolves to an existing directory (to avoid false positives with regex escape sequences like `\\d+` or `\\Ac`)\n4. If triggered, returns an error with a helpful message suggesting `--full-path` or using `.` as a pattern\n\nThe `--and` patterns come from `opts.and_pattern` (or similar field name) in the `Opts` struct defined in `src/cli.rs`. Need to locate exactly how `--and` patterns are stored.\n\nThe existing tests in `tests/tests.rs` (lines 378-400) test the path-separator diagnostic for the primary pattern only. There are no tests for `--and` patterns with path separators.\n\n## Accomplished\n\n- Read the main.rs source to understand the `ensure_search_pattern_is_not_a_path()` function\n- Discovered the path-separator diagnostic only checks `opts.pattern` and ignores `--and` patterns\n- Identified the test file to understand expected behavior\n\n**Work remaining:**\n- Locate the `and_pattern` field definition in `src/cli.rs` to understand how `--and` patterns are stored\n- Modify `ensure_search_pattern_is_not_a_path()` to iterate over all `--and` patterns and apply the same checks\n- Ensure `--full-path` escape hatch still works (it already returns early)\n- Ensure Windows backslash behavior is preserved\n- Run relevant tests\n\n## Relevant files / directories\n\n- `src/main.rs` — contains `ensure_search_pattern_is_not_a_path()` function (lines 166-202) that needs modification\n- `src/cli.rs` — contains `Opts` struct definition; need to find `and_pattern` field\n- `tests/tests.rs` — contains tests for path-separator diagnostic (lines 378-400) and `--and` pattern tests (lines 108-290)\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nLet me continue by finding the `and_pattern` field in `src/cli.rs` and understanding how `--and` patterns are stored.\nThe `and_pattern` field doesn\u0027t seem to exist yet. Let me search more broadly for how `--and` is defined in the CLI.\nLet me search for the `pattern` field and `--and` argument definition in the Opts struct.\n## Maximum Steps Reached\n\n### What was accomplished\n1. Read the `ensure_search_pattern_is_not_a_path()` function in `src/main.rs` (lines 166-202) — it only checks `opts.pattern` (the primary positional pattern).\n2. Located the `Opts` struct in `src/cli.rs` — the `pattern` field is at line 639.\n3. Searched for `--and` pattern storage — no `and_pattern` field exists yet in `src/`. The `--and` argument is likely defined elsewhere in `cli.rs` (probably as a `Vec\u003cString\u003e` using `ArgAction::Append`).\n\n### Remaining tasks\n1. **Find the `--and` argument definition** in `src/cli.rs` — search around lines 670-971 for how `--and` patterns are collected (likely a `Vec\u003cString\u003e` field).\n2. **Modify `ensure_search_pattern_is_not_a_path()`** in `src/main.rs` to iterate over all `--and` patterns and apply the same path-separator checks (forward slash on all platforms, backslash on Windows with `is_dir()` guard).\n3. **Run relevant tests** to verify the change works correctly.\n\n### Recommendation\nRead the rest of `src/cli.rs` (from line 670 onward) to find the `--and` argument definition, then modify the validation function accordingly."
+                    },
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-real-issue-replay-v1",
+                        "case_id":  "pactrail-idempotent-discard",
+                        "repository":  "AKMessi/pactrail",
+                        "difficulty":  "transaction-recovery-bug",
+                        "harness":  "opencode",
+                        "harness_version":  "1.2.27",
+                        "model":  "deepseek-v4-flash",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "completed",
+                        "exit_code":  0,
+                        "timed_out":  false,
+                        "duration_ms":  49438,
+                        "grading_duration_ms":  41633,
+                        "run_id":  "",
+                        "changed_paths":  [
+
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  0,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  0
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --locked -p pactrail --test end_to_end ready_run_can_be_discarded_idempotently",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  34080,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test --locked --workspace --all-targets",
+                                                "exit_code":  101,
+                                                "timed_out":  false,
+                                                "duration_ms":  7553,
+                                                "passed":  false
+                                            },
+                        "input_tokens":  192036,
+                        "cached_input_tokens":  99840,
+                        "output_tokens":  3188,
+                        "total_tokens":  195224,
+                        "estimated_cost_usd":  0.01408,
+                        "model_calls":  12,
+                        "tool_calls":  16,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  0,
+                        "source_isolation_preserved":  false,
+                        "trace_integrity_verified":  false,
+                        "applied_candidate_matches":  false,
+                        "summary":  "I\u0027ll start by understanding the codebase structure and the discard flow.\nLet me read the key files related to the discard command and receipt/event state:\nNow let me read the rest of the commands.rs file (the test section) and the workspace transaction:\n## Goal\n\nFix the `pactrail discard RUN_ID --json` idempotency bug. After the first discard call removes the candidate workspace, a second call fails. The fix must:\n1. Make discard idempotent — a second call with state already `Discarded` should succeed\n2. Handle recovery — if the durable event state is `Discarded` but the receipt still says `ReadyToApply`, rebuild and persist the discarded receipt from the durable event head\n3. Preserve receipt integrity, retained review artifacts, and explicit errors for inconsistent state/workspace combinations\n4. Work offline with no git/remote inspection, no test/doc modifications\n\n## Instructions\n\n- Do not modify tests or documentation\n- Implement the smallest coherent production-quality fix\n- Run relevant tests after implementation\n- Work offline\n\n## Discoveries\n\n**Bug Analysis (in `discard_ready_receipt` at commands.rs:634-709):**\n\nThe function has a `RunState::Discarded` branch (lines 645-666) but it only handles the case where `receipt.outcome == ReceiptOutcome::Discarded` or `ReceiptOutcome::ReadyToApply`. However, the first discard call removes the workspace (moves it to `discarded-workspace` then deletes it) and appends the `Discarded` state event. On the **second call**, `read_receipt` succeeds (receipt still says `ReadyToApply` if the first call crashed before `write_receipt`, or `Discarded` if it completed), then `WorkspaceTransaction::open(\u0026run_root)` is called — but this calls `fs::canonicalize` on the run_root, which **succeeds** because the run_root directory still exists. The real problem is:\n\n1. If the first discard **completed fully**: receipt says `Discarded`, workspace is gone. The code enters the `snapshot.state == RunState::Discarded` block. `receipt.outcome == ReceiptOutcome::Discarded` is true, and if hash matches, it returns `Ok(receipt)` — this should work fine.\n\n2. **The actual bug**: If the first discard **partially completed** (event was appended but receipt write failed), then on second call: receipt says `ReadyToApply`, snapshot state is `Discarded`. The code enters the `snapshot.state == RunState::Discarded` block. `receipt.outcome == ReceiptOutcome::ReadyToApply` branch (lines 661-665) rebuilds the receipt. But before that, it checks `if workspace.exists()` (line 646) — **this fails** because the workspace was already removed by `remove_staged_workspace`. Actually wait, it returns an error if workspace exists. Let me re-read.\n\nActually looking more carefully at lines 645-666:\n```rust\nif snapshot.state == RunState::Discarded {\n    if workspace.exists() {  // workspace was already deleted by first call\n        return Err(...)\n    }\n    remove_staged_workspace(\u0026staged)?;  // staged is also gone\n    if receipt.outcome == ReceiptOutcome::Discarded { ... }  // works\n    if receipt.outcome == ReceiptOutcome::ReadyToApply {  // recovery branch\n        let discarded = rebuild_receipt(...) // rebuilds with snapshot hash\n        write_receipt(run_root, \u0026discarded)?; // writes updated receipt\n        return Ok(discarded);\n    }\n}\n```\n\nWait, if the first call completed successfully: receipt says `Discarded`, snapshot says `Discarded` — the code enters the `receipt.outcome == ReceiptOutcome::Discarded` check, hash check passes, returns `Ok(receipt)` — **this should be idempotent and work**.\n\nIf the first call completed but receipt still says `ReadyToApply` (crash after event append, before `write_receipt`): snapshot says `Discarded`, receipt says `ReadyToApply` — code enters `ReadyToApply` branch, rebuilds receipt, writes it — **recovery works**.\n\n**So where does the second call actually fail?** The `WorkspaceTransaction::open(\u0026run_root)` on line 627 calls `fs::canonicalize(control_root)` — but `run_root` is the run directory, not the workspace directory. The workspace is at `run_root/workspace`. **So the run_root still exists**, and `open()` just needs the run_root directory to exist and have `transaction.json` in it.\n\nActually wait — `discard_run` calls `discard_ready_receipt` which first calls `WorkspaceTransaction::open(\u0026run_root)`. The run_root still exists after discard. So `open()` succeeds. Then it enters `discard_ready_receipt`.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nLet me look at the actual code to understand the exact failure path.\nNow let me look at `WorkspaceTransaction::open` to understand what happens when the workspace is already gone:\n## Maximum Steps Reached\n\n### What was accomplished\n1. **Bug analysis completed**: The `discard_ready_receipt` function in `crates/pactrail-cli/src/commands.rs:634-709` was analyzed.\n2. **Root cause identified**: `WorkspaceTransaction::open(\u0026run_root)` at line 627 calls `fs::canonicalize(control_root)` which succeeds (run_root still exists), but then at line 139 it checks `workspace_root.is_dir()` — the workspace subdirectory was already deleted by the first discard call. This returns `TransactionError::NotDirectory`, which propagates up as an unhandled error before `discard_ready_receipt` is even entered.\n3. **The fix location**: The `discard_run` function at line 624 needs to handle the case where `WorkspaceTransaction::open` fails because the workspace is already gone — this is the idempotent second-call scenario.\n\n### Remaining tasks\n- **Implement the fix**: Modify `discard_run` (or `discard_ready_receipt`) to handle the `TransactionError::NotDirectory` case when the workspace was already removed by a prior discard. The fix should either:\n  - Catch the error in `discard_run` and handle the idempotent case (read receipt, check snapshot state, return existing receipt), OR\n  - Make `WorkspaceTransaction::open` tolerate a missing workspace directory when reopening, OR\n  - Restructure so the transaction open is inside `discard_ready_receipt` and the `Discarded` state branch handles the missing workspace before attempting to open the transaction.\n\n### Recommended next steps\n1. Read the `TransactionError` enum to understand error variants\n2. Implement the fix in `discard_run` or `discard_ready_receipt`\n3. Run relevant tests to verify idempotency"
+                    }
+                ]
+}

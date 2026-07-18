@@ -1,0 +1,1408 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 0,
+    "timestamp": "2026-07-18T14:25:47.4925385Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Fix reqwest issue #2989 in the blocking request conversion. TryFrom<http::Request<T>> for reqwest::blocking::Request preserves method, URI, headers, and body but silently discards other semantically meaningful request parts. Make it consistent with the asynchronous conversion by preserving the HTTP version and type-map extensions as well. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and make a focused production-quality change. Run relevant tests before finishing.",
+        "workspace_root": "\\\\?\\D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\heldout-scored\\20260718T142545Z-pactrail-deepseek-v4-flash\\reqwest-blocking-request-parts\\workspace",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f759e-75a5-75b1-8710-8c19e56f2249",
+            "description": "Fix reqwest issue #2989 in the blocking request conversion. TryFrom<http::Request<T>> for reqwest::blocking::Request preserves method, URI, headers, and body but silently discards other semantically meaningful request parts. Make it consistent with the asynchronous conversion by preserving the HTTP version and type-map extensions as well. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and make a focused production-quality change. Run relevant tests before finishing.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read",
+            "process_spawn",
+            "network",
+            "secret_use",
+            "external_write"
+          ],
+          "deny": []
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "e6313d255bf3be67acf55c694095104db4c8eae29655eb05982063e44e15d66d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 1,
+    "timestamp": "2026-07-18T14:25:47.4930053Z",
+    "previous_hash": "e6313d255bf3be67acf55c694095104db4c8eae29655eb05982063e44e15d66d",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "c34c0e8c5bab113e996f58cd0801c595466336923db303e796ebeb63a98461b9"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 2,
+    "timestamp": "2026-07-18T14:25:47.4931908Z",
+    "previous_hash": "c34c0e8c5bab113e996f58cd0801c595466336923db303e796ebeb63a98461b9",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "b82cd0cae91b5e23abfd3d63d3b86573fc8e180924cac4dc0216675490d75ad7"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 3,
+    "timestamp": "2026-07-18T14:25:47.5078908Z",
+    "previous_hash": "b82cd0cae91b5e23abfd3d63d3b86573fc8e180924cac4dc0216675490d75ad7",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 95 files and cited 15 within a 10747-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "budget_bytes": "10752",
+          "cited_files": "15",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "10747",
+          "truncated": "true"
+        }
+      }
+    },
+    "hash": "1ce2f61e130c754b281b4c601c252636708c06b5382caafa164046ca20a7d3a4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 4,
+    "timestamp": "2026-07-18T14:25:47.5082698Z",
+    "previous_hash": "1ce2f61e130c754b281b4c601c252636708c06b5382caafa164046ca20a7d3a4",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:11050a4a4e7d3bbf47b40e42043c2adcdeccc3831dc7316d284bded578662849"
+      }
+    },
+    "hash": "c19530943bc6f95de18e2c9ab35250b7d6e1a47fbb9082e3852faf684cb7c749"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 5,
+    "timestamp": "2026-07-18T14:25:47.508558Z",
+    "previous_hash": "c19530943bc6f95de18e2c9ab35250b7d6e1a47fbb9082e3852faf684cb7c749",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "16e76ec13645c48b1b6b5428a8bfdbdeb92ed86e05e034413b99fa72c5d6f461"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 6,
+    "timestamp": "2026-07-18T14:25:47.508729Z",
+    "previous_hash": "16e76ec13645c48b1b6b5428a8bfdbdeb92ed86e05e034413b99fa72c5d6f461",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "3691777ea158c55bfb5fb30a25e51c128ec3fad0c05053dd24c478bd976ac2c0"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 7,
+    "timestamp": "2026-07-18T14:25:49.2747441Z",
+    "previous_hash": "3691777ea158c55bfb5fb30a25e51c128ec3fad0c05053dd24c478bd976ac2c0",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 1 produced 2 tool call(s) and 93 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1765,
+        "attributes": {
+          "cached_input_tokens": "256",
+          "finish_reason": "toolcalls",
+          "input_tokens": "5487",
+          "output_tokens": "101",
+          "text_bytes": "93",
+          "tool_calls": "2",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "11efc0cd3e3a55e77d371652ee020df2aa3f0acb7fe96f4840a70f1730440dc8"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 8,
+    "timestamp": "2026-07-18T14:25:49.3060661Z",
+    "previous_hash": "11efc0cd3e3a55e77d371652ee020df2aa3f0acb7fe96f4840a70f1730440dc8",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 300 lines from src/blocking/request.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/blocking/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 15,
+        "attributes": {
+          "arguments_digest": "9401c93482cfe4bab7d8815fa869f6cdb2d252e3136c6407f7344e9370c55133",
+          "call_id": "call_00_3aFrXPAPGeAVtWJcXg9Q6272",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "9637",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "4754c61613c0eb42db23b7dc75846a8616d1e096956f4d4de892f2e6d6dcfe71"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 9,
+    "timestamp": "2026-07-18T14:25:49.3068262Z",
+    "previous_hash": "4754c61613c0eb42db23b7dc75846a8616d1e096956f4d4de892f2e6d6dcfe71",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 300 lines from src/async_impl/request.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/async_impl/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "d37b849a313c707ff11b51234b1673c4edac2f9c38e36a7bbce051eeed64afe9",
+          "call_id": "call_01_m0uIUuZEAjIBFkQGKrDj8611",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "9392",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "939365580db4d2b199218996f84bc2aa2c8dd15198d0e3bbd250443b1ffef254"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 10,
+    "timestamp": "2026-07-18T14:25:51.1789999Z",
+    "previous_hash": "939365580db4d2b199218996f84bc2aa2c8dd15198d0e3bbd250443b1ffef254",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 2 produced 2 tool call(s) and 78 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1871,
+        "attributes": {
+          "cached_input_tokens": "5376",
+          "finish_reason": "toolcalls",
+          "input_tokens": "10946",
+          "output_tokens": "137",
+          "text_bytes": "78",
+          "tool_calls": "2",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "2f92b06a0211fe842cd17e67f7e37cf4558c09bef823710905cefe1f7aa7583c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 11,
+    "timestamp": "2026-07-18T14:25:51.2092648Z",
+    "previous_hash": "2f92b06a0211fe842cd17e67f7e37cf4558c09bef823710905cefe1f7aa7583c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 12 matches for \"TryFrom\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:src/blocking/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 15,
+        "attributes": {
+          "arguments_digest": "3c59844edb914a4b4ac5adb05d82eb6bdae212f36528ca3fd8c6ecbc81887a68",
+          "call_id": "call_00_6xz7HbgPVbZ1jvhpMaVl9492",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "1252",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "f5f4270e7b352bdf79ae544266caeae05a28f4aa67e5c7770e0b8d9937a94127"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 12,
+    "timestamp": "2026-07-18T14:25:51.210405Z",
+    "previous_hash": "f5f4270e7b352bdf79ae544266caeae05a28f4aa67e5c7770e0b8d9937a94127",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 13 matches for \"TryFrom\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:src/async_impl/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 12,
+        "attributes": {
+          "arguments_digest": "fecdf067cdb798ae7dbecebece09cd0015658cda1b0e0cbb4e93c62029b0037f",
+          "call_id": "call_01_yobd4EGsQVQwwfpunv4O8457",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "1379",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "45a3f76e2ee98989d649b15748adbbcc4be2e7cfb237b036490fac9cf9802236"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 13,
+    "timestamp": "2026-07-18T14:25:52.9942521Z",
+    "previous_hash": "45a3f76e2ee98989d649b15748adbbcc4be2e7cfb237b036490fac9cf9802236",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 3 produced 2 tool call(s) and 54 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1783,
+        "attributes": {
+          "cached_input_tokens": "11008",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11894",
+          "output_tokens": "164",
+          "text_bytes": "54",
+          "tool_calls": "2",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "ad714dd7d0605e0fac76c59708d5c37deccbef3c1bede59d97b38150e4659e31"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 14,
+    "timestamp": "2026-07-18T14:25:53.0237315Z",
+    "previous_hash": "ad714dd7d0605e0fac76c59708d5c37deccbef3c1bede59d97b38150e4659e31",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 41 lines from src/blocking/request.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/blocking/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "57bf27f0c81f1e879bffe558173b139968162a77bf6cb7e27fd1716f7d0f13af",
+          "call_id": "call_00_FgI6hSpIvsLoxLJgAVl35598",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "1236",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "08dab6f0aaa37a60d295531a543292c7a66921b7f5d464fc4f0b6398101e9245"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 15,
+    "timestamp": "2026-07-18T14:25:53.0249517Z",
+    "previous_hash": "08dab6f0aaa37a60d295531a543292c7a66921b7f5d464fc4f0b6398101e9245",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 51 lines from src/async_impl/request.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/async_impl/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 11,
+        "attributes": {
+          "arguments_digest": "66f618ca7795f8b734b8df39b92cfe581e2c6bd043aa23307be1cef5f57d7504",
+          "call_id": "call_01_0ExqELDtCAOpWnb0x0ep5932",
+          "changed_files": "0",
+          "execution": "parallel",
+          "output_bytes": "1308",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "7bc0c8d8933c113a74baa34cd073a63fb4efffb6669a0cf06e249d58ab81afe2"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 16,
+    "timestamp": "2026-07-18T14:25:55.5258309Z",
+    "previous_hash": "7bc0c8d8933c113a74baa34cd073a63fb4efffb6669a0cf06e249d58ab81afe2",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 4 produced 1 tool call(s) and 573 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2500,
+        "attributes": {
+          "cached_input_tokens": "12032",
+          "finish_reason": "toolcalls",
+          "input_tokens": "12790",
+          "output_tokens": "209",
+          "text_bytes": "573",
+          "tool_calls": "1",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "e0dd8d43e33cfa39c7a22bf658cf8d32d3796a9a555d221cd1ddc2b5e60407ee"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 17,
+    "timestamp": "2026-07-18T14:25:55.5426389Z",
+    "previous_hash": "e0dd8d43e33cfa39c7a22bf658cf8d32d3796a9a555d221cd1ddc2b5e60407ee",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 3 matches for \"extensions_mut\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:src/async_impl/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "247254818c05f3f170335f86d46096a6008f0e7a68353c3212c6068ccde9381e",
+          "call_id": "call_00_g8nwj9OErNwCBAECHAUR3025",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "340",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "2f30b97a440dc99dcf032f9e15925f9edf7b66c5da973149e9e99a0a4f024074"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 18,
+    "timestamp": "2026-07-18T14:25:58.8735606Z",
+    "previous_hash": "2f30b97a440dc99dcf032f9e15925f9edf7b66c5da973149e9e99a0a4f024074",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 5 produced 1 tool call(s) and 100 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 3329,
+        "attributes": {
+          "cached_input_tokens": "12928",
+          "finish_reason": "toolcalls",
+          "input_tokens": "13112",
+          "output_tokens": "432",
+          "text_bytes": "100",
+          "tool_calls": "1",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "b39981191369d5c71f8eb93ae0be9ff05af295bf0f9354ee40cd8a314e9a50e5"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 19,
+    "timestamp": "2026-07-18T14:25:58.8879148Z",
+    "previous_hash": "b39981191369d5c71f8eb93ae0be9ff05af295bf0f9354ee40cd8a314e9a50e5",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:edit_file",
+        "action": "edit_file",
+        "summary": "edit 1 replacement count was 0, expected 1",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "0da33bf42093b32fc08f4c104a1e6033b507b4a6e9d492d30e9791083fcddf94",
+          "call_id": "call_00_y2KKGvZLvGW3CfLuI1aw3388",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "54",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "8d9722b6d3f4c597620057279387a821f30cfc0d67b5792eaf57694014b96f93"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 20,
+    "timestamp": "2026-07-18T14:26:00.3620274Z",
+    "previous_hash": "8d9722b6d3f4c597620057279387a821f30cfc0d67b5792eaf57694014b96f93",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 6 produced 1 tool call(s) and 63 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1472,
+        "attributes": {
+          "cached_input_tokens": "13056",
+          "finish_reason": "toolcalls",
+          "input_tokens": "13569",
+          "output_tokens": "95",
+          "text_bytes": "63",
+          "tool_calls": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "d57eb445e5488737be002ed2b3111c4933d2c3e63ce84df8a8a200c8e6f4d144"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 21,
+    "timestamp": "2026-07-18T14:26:00.3782031Z",
+    "previous_hash": "d57eb445e5488737be002ed2b3111c4933d2c3e63ce84df8a8a200c8e6f4d144",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 25 lines from src/blocking/request.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/blocking/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "211d8067fa8fc8752ef7e0d827502d157fb9f07ef2a747adc21b2f84c6a0909e",
+          "call_id": "call_00_oSmZt2DsChMliaI2bU6L2892",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "804",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "699c23db4a2587cfb6dba22c313f4bb13c01c55280d97ce58c51360c7f447f1e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 22,
+    "timestamp": "2026-07-18T14:26:03.8941998Z",
+    "previous_hash": "699c23db4a2587cfb6dba22c313f4bb13c01c55280d97ce58c51360c7f447f1e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 7 produced 1 tool call(s) and 70 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 3515,
+        "attributes": {
+          "cached_input_tokens": "13568",
+          "finish_reason": "toolcalls",
+          "input_tokens": "13905",
+          "output_tokens": "375",
+          "text_bytes": "70",
+          "tool_calls": "1",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "807a9c2ed7c000696116a01b3943405da9d5e7b9037c1a9a78a7a4d957ad27d8"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 23,
+    "timestamp": "2026-07-18T14:26:03.9104602Z",
+    "previous_hash": "807a9c2ed7c000696116a01b3943405da9d5e7b9037c1a9a78a7a4d957ad27d8",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:replace_text",
+        "action": "replace_text",
+        "summary": "replacement count was 0, expected 1",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "513e539dc2d6a4eb473431ae73ca01c5c7ac583f4815818d00e4d079206be138",
+          "call_id": "call_00_e7aHdjij8BUNPcnKaUnB1480",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "47",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "772da1f6357b8ff48a917a66aacfaa9535fb1397e01025f007a19c4890db0618"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 24,
+    "timestamp": "2026-07-18T14:26:05.3698949Z",
+    "previous_hash": "772da1f6357b8ff48a917a66aacfaa9535fb1397e01025f007a19c4890db0618",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 8 produced 1 tool call(s) and 58 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1458,
+        "attributes": {
+          "cached_input_tokens": "14208",
+          "finish_reason": "toolcalls",
+          "input_tokens": "14306",
+          "output_tokens": "93",
+          "text_bytes": "58",
+          "tool_calls": "1",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "b7a6c165f5694a321c23d12cdb7f350782624c5755d546c8af8ce92c77ae75ef"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 25,
+    "timestamp": "2026-07-18T14:26:05.3861456Z",
+    "previous_hash": "b7a6c165f5694a321c23d12cdb7f350782624c5755d546c8af8ce92c77ae75ef",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 25 lines from src/blocking/request.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/blocking/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "211d8067fa8fc8752ef7e0d827502d157fb9f07ef2a747adc21b2f84c6a0909e",
+          "call_id": "call_00_qw81WAwq32lKdVl8MpCg9868",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "804",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "ccbe66ea218f7e48a3f9c97e62092d72344d165b327f419a298ca3523c7bf5a3"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 26,
+    "timestamp": "2026-07-18T14:26:08.7637Z",
+    "previous_hash": "ccbe66ea218f7e48a3f9c97e62092d72344d165b327f419a298ca3523c7bf5a3",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 9 produced 1 tool call(s) and 66 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 3376,
+        "attributes": {
+          "cached_input_tokens": "14336",
+          "finish_reason": "toolcalls",
+          "input_tokens": "14640",
+          "output_tokens": "417",
+          "text_bytes": "66",
+          "tool_calls": "1",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "c8bdd721d181e4826821273fac8633dcc487421225acf6608397d700d7038bf4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 27,
+    "timestamp": "2026-07-18T14:26:08.7801941Z",
+    "previous_hash": "c8bdd721d181e4826821273fac8633dcc487421225acf6608397d700d7038bf4",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:edit_file",
+        "action": "edit_file",
+        "summary": "edit 1 replacement count was 0, expected 1",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "0da33bf42093b32fc08f4c104a1e6033b507b4a6e9d492d30e9791083fcddf94",
+          "call_id": "call_00_yGSci7sSABN2KmFyP5Dt2134",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "54",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "04782934a4516dee559a8f00d96314713b0024011dbd2cfdde17a3c72b6910a2"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 28,
+    "timestamp": "2026-07-18T14:26:10.3752211Z",
+    "previous_hash": "04782934a4516dee559a8f00d96314713b0024011dbd2cfdde17a3c72b6910a2",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 10 produced 1 tool call(s) and 67 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1593,
+        "attributes": {
+          "cached_input_tokens": "14592",
+          "finish_reason": "toolcalls",
+          "input_tokens": "15082",
+          "output_tokens": "92",
+          "text_bytes": "67",
+          "tool_calls": "1",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "d5f151929fb7471c1e7701c1fb094362ba8d0f3ba70ea175e9ccccc0e517dcb0"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 29,
+    "timestamp": "2026-07-18T14:26:10.3918444Z",
+    "previous_hash": "d5f151929fb7471c1e7701c1fb094362ba8d0f3ba70ea175e9ccccc0e517dcb0",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:run_process",
+        "action": "run_process",
+        "summary": "invalid input for run_process: unknown field `command`, expected one of `program`, `args`, `timeout_seconds`, `max_output_bytes`, `environment`",
+        "declared_effects": [
+          "process_spawn"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "3e7ad052fac1a1f007a5001dfa30ec0154a2958ad1f00e73edb2edceba5793f0",
+          "call_id": "call_00_XEFI21m8UeqPSAllawPi7028",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "155",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "hostexecution",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "a82730ccd8b56df5f3b549411a8e06c34a41ebfcf65639544ab6c3e1303bb92b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 30,
+    "timestamp": "2026-07-18T14:26:11.8167649Z",
+    "previous_hash": "a82730ccd8b56df5f3b549411a8e06c34a41ebfcf65639544ab6c3e1303bb92b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 11 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1423,
+        "attributes": {
+          "cached_input_tokens": "15104",
+          "finish_reason": "toolcalls",
+          "input_tokens": "15224",
+          "output_tokens": "84",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "1377380460d28207922251ce3cfd6eded74d14d3ee2bf4c1e748e323421557d1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 31,
+    "timestamp": "2026-07-18T14:26:11.9557877Z",
+    "previous_hash": "1377380460d28207922251ce3cfd6eded74d14d3ee2bf4c1e748e323421557d1",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:run_process",
+        "action": "run_process",
+        "summary": "process exited 0",
+        "declared_effects": [
+          "process_spawn"
+        ],
+        "observed_effects": [
+          "filesystem effects require post-call reconciliation",
+          "process.spawn"
+        ],
+        "succeeded": true,
+        "duration_ms": 136,
+        "attributes": {
+          "arguments_digest": "6f08a82da972c45a20f74775e76ee8194a49b91916d551a7c1943a048a21e797",
+          "call_id": "call_00_HcCY3vbn5qUFMIHnCeqN8203",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "702",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "hostexecution",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "7e8661d14474df8333051d338d980704d4a8f82ec3acc1b4021bc03dc5ea8a45"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 32,
+    "timestamp": "2026-07-18T14:26:15.2265276Z",
+    "previous_hash": "7e8661d14474df8333051d338d980704d4a8f82ec3acc1b4021bc03dc5ea8a45",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 12 produced 1 tool call(s) and 93 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 3269,
+        "attributes": {
+          "cached_input_tokens": "15232",
+          "finish_reason": "toolcalls",
+          "input_tokens": "15549",
+          "output_tokens": "459",
+          "text_bytes": "93",
+          "tool_calls": "1",
+          "turn": "12"
+        }
+      }
+    },
+    "hash": "57581e52c41ae691bbb77efb62b102704f6abe674d44e3be5c3e52857136a02f"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 33,
+    "timestamp": "2026-07-18T14:26:15.2509083Z",
+    "previous_hash": "57581e52c41ae691bbb77efb62b102704f6abe674d44e3be5c3e52857136a02f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:edit_file",
+        "action": "edit_file",
+        "summary": "applied 1 edits (1 replacements) to src/blocking/request.rs",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:src/blocking/request.rs",
+          "fs.write:src/blocking/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 23,
+        "attributes": {
+          "arguments_digest": "14ca02dc9ced4969b0a4ec963042981264f7558e59cf175fe56015d153174cab",
+          "call_id": "call_00_lS1x5ELvNZQiz6O7Nivq7011",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "82",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "12"
+        }
+      }
+    },
+    "hash": "80753110eeefd446359223505c23d34222e4dad9da2c0a88bc17cf31e6beaf4a"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 34,
+    "timestamp": "2026-07-18T14:26:16.8251074Z",
+    "previous_hash": "80753110eeefd446359223505c23d34222e4dad9da2c0a88bc17cf31e6beaf4a",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 13 produced 1 tool call(s) and 61 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1573,
+        "attributes": {
+          "cached_input_tokens": "16000",
+          "finish_reason": "toolcalls",
+          "input_tokens": "16046",
+          "output_tokens": "95",
+          "text_bytes": "61",
+          "tool_calls": "1",
+          "turn": "13"
+        }
+      }
+    },
+    "hash": "4516b06cc9938e461594c47dc60152ba9d788d5796151870b181e134a1659d61"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 35,
+    "timestamp": "2026-07-18T14:26:16.8428314Z",
+    "previous_hash": "4516b06cc9938e461594c47dc60152ba9d788d5796151870b181e134a1659d61",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 27 lines from src/blocking/request.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/blocking/request.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 15,
+        "attributes": {
+          "arguments_digest": "92f56b6a13b34f0705a97676cdd7bcecfa56f007ab602df17803b05cf258fc5b",
+          "call_id": "call_00_fh1gdHjkMavfeSZLHCv82220",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "906",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "13"
+        }
+      }
+    },
+    "hash": "46822b49a5555d9bf76d8db4273f043c6fc56f371ceaa0be36334f6632b9e355"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 36,
+    "timestamp": "2026-07-18T14:26:18.9933277Z",
+    "previous_hash": "46822b49a5555d9bf76d8db4273f043c6fc56f371ceaa0be36334f6632b9e355",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 14 produced 1 tool call(s) and 104 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2149,
+        "attributes": {
+          "cached_input_tokens": "16128",
+          "finish_reason": "toolcalls",
+          "input_tokens": "16404",
+          "output_tokens": "117",
+          "text_bytes": "104",
+          "tool_calls": "1",
+          "turn": "14"
+        }
+      }
+    },
+    "hash": "eb54dd5d4105aab736b5713834bfdb85738e652703b068f59f0167927afd6c89"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 37,
+    "timestamp": "2026-07-18T14:26:22.1479971Z",
+    "previous_hash": "eb54dd5d4105aab736b5713834bfdb85738e652703b068f59f0167927afd6c89",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:run_process",
+        "action": "run_process",
+        "summary": "process exited 101",
+        "declared_effects": [
+          "process_spawn"
+        ],
+        "observed_effects": [
+          "filesystem effects require post-call reconciliation",
+          "process.spawn"
+        ],
+        "succeeded": false,
+        "duration_ms": 3152,
+        "attributes": {
+          "arguments_digest": "03da75d8613d9bfc3d57a2365c46faa656791fe1a4be2f3706e894d0d9f42fca",
+          "call_id": "call_00_5io5d9Rw2aWHRu3va3187298",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1216",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "hostexecution",
+          "turn": "14"
+        }
+      }
+    },
+    "hash": "d4059d06f8af863a1814f246b6e00c509526bc2c5621481b7c5d20a7e8f52f14"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 38,
+    "timestamp": "2026-07-18T14:26:24.0664527Z",
+    "previous_hash": "d4059d06f8af863a1814f246b6e00c509526bc2c5621481b7c5d20a7e8f52f14",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 15 produced 1 tool call(s) and 119 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1917,
+        "attributes": {
+          "cached_input_tokens": "16512",
+          "finish_reason": "toolcalls",
+          "input_tokens": "16908",
+          "output_tokens": "107",
+          "text_bytes": "119",
+          "tool_calls": "1",
+          "turn": "15"
+        }
+      }
+    },
+    "hash": "894b2520d75dab488e5cb5946dd99f0970dfd44538185b31e97cb79e6df02cf7"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 39,
+    "timestamp": "2026-07-18T14:26:25.8662565Z",
+    "previous_hash": "894b2520d75dab488e5cb5946dd99f0970dfd44538185b31e97cb79e6df02cf7",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:run_process",
+        "action": "run_process",
+        "summary": "process exited 101",
+        "declared_effects": [
+          "process_spawn"
+        ],
+        "observed_effects": [
+          "filesystem effects require post-call reconciliation",
+          "process.spawn"
+        ],
+        "succeeded": false,
+        "duration_ms": 1796,
+        "attributes": {
+          "arguments_digest": "ac36c1beddf0f21bc042df495709959a08781c1080b0ae74fedde6e7f2e0d9b2",
+          "call_id": "call_00_dGptegfby8lgc1f4LWIC2096",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1136",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "hostexecution",
+          "turn": "15"
+        }
+      }
+    },
+    "hash": "7239dffb7b7abe956fe0ba65d1c82d5846012dc3ec79a0794749b6c10bd044a3"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 40,
+    "timestamp": "2026-07-18T14:26:27.603658Z",
+    "previous_hash": "7239dffb7b7abe956fe0ba65d1c82d5846012dc3ec79a0794749b6c10bd044a3",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/deepseek-v4-flash",
+        "action": "invoke",
+        "summary": "model turn 16 produced 1 tool call(s) and 131 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1736,
+        "attributes": {
+          "cached_input_tokens": "16896",
+          "finish_reason": "toolcalls",
+          "input_tokens": "17373",
+          "output_tokens": "120",
+          "text_bytes": "131",
+          "tool_calls": "1",
+          "turn": "16"
+        }
+      }
+    },
+    "hash": "79df7ae6ff2678ea6909ae1f369cfeb62f79159d1e64e9f48505cef6e48d3470"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 41,
+    "timestamp": "2026-07-18T14:26:28.1175402Z",
+    "previous_hash": "79df7ae6ff2678ea6909ae1f369cfeb62f79159d1e64e9f48505cef6e48d3470",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:run_process",
+        "action": "run_process",
+        "summary": "process exited 101",
+        "declared_effects": [
+          "process_spawn"
+        ],
+        "observed_effects": [
+          "filesystem effects require post-call reconciliation",
+          "process.spawn"
+        ],
+        "succeeded": false,
+        "duration_ms": 512,
+        "attributes": {
+          "arguments_digest": "1551c9eb1cd6003105e7d4fd31a641d024dbb0afb0396402f82098ba99f0f135",
+          "call_id": "call_00_xZsJSL20tMcy2MNKr7RV3579",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1099",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "hostexecution",
+          "turn": "16"
+        }
+      }
+    },
+    "hash": "1a9880cc48293488480bc1831dce792ae4f3c5b38bdd454528a51be240f7320c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 42,
+    "timestamp": "2026-07-18T14:26:28.1182158Z",
+    "previous_hash": "1a9880cc48293488480bc1831dce792ae4f3c5b38bdd454528a51be240f7320c",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model recovery stopped after 3 consecutive tool turns because every tool request failed"
+      }
+    },
+    "hash": "f35821e4af88f62ba0b1c38482bb91ab91b92266a2944b76f35a71001463e037"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 43,
+    "timestamp": "2026-07-18T14:26:28.1261475Z",
+    "previous_hash": "f35821e4af88f62ba0b1c38482bb91ab91b92266a2944b76f35a71001463e037",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "verifying"
+      }
+    },
+    "hash": "ff2ed5aa56d07d1a1479f49c4cc2bbd8662ab8e03f1f891c49f03055087c4534"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 44,
+    "timestamp": "2026-07-18T14:26:31.5480792Z",
+    "previous_hash": "ff2ed5aa56d07d1a1479f49c4cc2bbd8662ab8e03f1f891c49f03055087c4534",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "verifier",
+        "action": "Rust workspace tests",
+        "summary": "process exited 101",
+        "declared_effects": [
+          "process.spawn"
+        ],
+        "observed_effects": [
+          "process.spawn",
+          "filesystem effects require post-call reconciliation"
+        ],
+        "succeeded": false,
+        "duration_ms": 2868,
+        "attributes": {
+          "index": "1",
+          "output_bytes": "1198",
+          "output_truncated": "false",
+          "total": "2",
+          "workspace": "disposable_candidate_snapshot"
+        }
+      }
+    },
+    "hash": "01f0838872e54b57bd8343e3e4d417d3dbbc6d757b49a6b6ee583c7e800fbf2d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 45,
+    "timestamp": "2026-07-18T14:26:31.6453083Z",
+    "previous_hash": "01f0838872e54b57bd8343e3e4d417d3dbbc6d757b49a6b6ee583c7e800fbf2d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "verifier",
+        "action": "Python tests",
+        "summary": "process exited 1",
+        "declared_effects": [
+          "process.spawn"
+        ],
+        "observed_effects": [
+          "process.spawn",
+          "filesystem effects require post-call reconciliation"
+        ],
+        "succeeded": false,
+        "duration_ms": 95,
+        "attributes": {
+          "index": "2",
+          "output_bytes": "134",
+          "output_truncated": "false",
+          "total": "2",
+          "workspace": "disposable_candidate_snapshot"
+        }
+      }
+    },
+    "hash": "222246d16dbbd49a01b9da18468fddff8e942a7da02ca0bc276d73db97e93185"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 46,
+    "timestamp": "2026-07-18T14:26:31.6870474Z",
+    "previous_hash": "222246d16dbbd49a01b9da18468fddff8e942a7da02ca0bc276d73db97e93185",
+    "event": {
+      "type": "evidence_recorded",
+      "data": {
+        "id": "019f759f-245d-7b43-9c44-fb40de360665",
+        "obligation_id": "019f759e-75a5-75b1-8710-8c19e56f2249",
+        "grade": "deterministic",
+        "kind": "test",
+        "status": "failed",
+        "summary": "Automated repository checks for \"Fix reqwest issue #2989 in the blocking request conversion. TryFrom<http::Request<T>> for reqwest::blocking::Request preserves method, URI, headers, and body but silently discards other semantically meaningful request parts. Make it consistent with the asynchronous conversion by preserving the HTTP version and type-map extensions as well. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and make a focused production-quality change. Run relevant tests before finishing.\": Rust workspace tests: failed; Python tests: failed",
+        "artifact_digest": null,
+        "reproduction": "cargo test --workspace --all-targets && python -m pytest"
+      }
+    },
+    "hash": "00aa21e39c881586ecbe4a63429fe427eaffdf3a4a3728d6039df7b9831365f3"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+    "sequence": 47,
+    "timestamp": "2026-07-18T14:26:31.6981156Z",
+    "previous_hash": "00aa21e39c881586ecbe4a63429fe427eaffdf3a4a3728d6039df7b9831365f3",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "verifying",
+        "to": "failed"
+      }
+    },
+    "hash": "6076444446c0a9ee5be2376c687ed9cc60c4c631cd96aa1ea6e9ab5e6d726a2c"
+  }
+]

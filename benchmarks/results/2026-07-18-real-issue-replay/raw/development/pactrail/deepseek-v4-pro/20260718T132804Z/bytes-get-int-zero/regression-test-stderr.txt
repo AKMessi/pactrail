@@ -1,0 +1,5 @@
+   Compiling bytes v1.11.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T132804Z-pactrail-deepseek-v4-pro\bytes-get-int-zero\grade)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.65s
+     Running unittests src\lib.rs (target\debug\deps\bytes-70ba5d77a38dbacb.exe)
+     Running tests\test_buf.rs (target\debug\deps\test_buf-94c4269f6d4b4020.exe)
+error: test failed, to rerun pass `--test test_buf`

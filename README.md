@@ -256,6 +256,16 @@ Pactrail used **59.0% fewer reported model tokens**, preserved pre-apply source
 isolation in **42/42** trials, and produced **42/42 integrity-accepted traces**.
 The report retains every raw run and explicitly limits the claim to this matrix.
 
+A harder [real-issue replay](benchmarks/results/2026-07-18-real-issue-replay/README.md)
+uses pinned historical defects and hidden behavior tests. On its preregistered
+three-task held-out set, Pactrail and OpenCode tied **1/3 on functional
+correctness**; OpenCode led **1/3 to 0/3 on strict completion**. Pactrail used
+**6.7% fewer reported tokens**, **55.7% less agent time**, and **67.1% less
+estimated API cost**, with source isolation and verified traces in **3/3**
+runs. This result is deliberately published despite not establishing broad
+superiority: it identifies completion reliability as Pactrail's main remaining
+gap and documents the fixes made after scoring without rerunning the tasks.
+
 ## Architecture at a glance
 
 ```text

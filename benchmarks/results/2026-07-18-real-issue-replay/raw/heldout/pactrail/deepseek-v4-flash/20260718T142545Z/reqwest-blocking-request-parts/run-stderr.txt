@@ -1,0 +1,4 @@
+2026-07-18T14:25:58.887778Z  WARN pactrail_engine::engine: tool call failed tool=edit_file error=edit 1 replacement count was 0, expected 1
+2026-07-18T14:26:03.910330Z  WARN pactrail_engine::engine: tool call failed tool=replace_text error=replacement count was 0, expected 1
+2026-07-18T14:26:08.780078Z  WARN pactrail_engine::engine: tool call failed tool=edit_file error=edit 1 replacement count was 0, expected 1
+2026-07-18T14:26:10.391717Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=invalid input for run_process: unknown field `command`, expected one of `program`, `args`, `timeout_seconds`, `max_output_bytes`, `environment`

@@ -1,0 +1,48 @@
+
+running 20 tests
+test commands::tests::task_file_cannot_understate_native_process_access ... ok
+test commands::tests::native_process_opt_in_records_all_effective_capabilities ... ok
+test interactive::tests::command_help_corrects_typos_and_wraps_review_text ... ok
+test interactive::tests::counts_and_text_truncation_are_stable ... ok
+test interactive::tests::endpoints_reject_remote_http_and_url_credentials ... ok
+test interactive::tests::pending_candidate_is_focused_over_a_newer_terminal_run ... ok
+test interactive::tests::recovery_turn_has_a_distinct_trace_lane ... ok
+test diff::tests::renders_unified_diff_from_transaction_workspace ... ok
+test output::tests::escaped_json_keeps_its_value ... ok
+test output::tests::terminal_controls_are_neutralized ... ok
+test interactive::tests::structured_views_fit_a_narrow_terminal ... ok
+test diff::tests::persisted_review_survives_source_and_candidate_removal ... ok
+test settings::tests::output_budget_must_leave_room_for_model_input ... ok
+test interactive::tests::live_timeline_neutralizes_untrusted_terminal_controls ... ok
+test theme::tests::themed_untrusted_text_never_preserves_controls ... ok
+test settings::tests::future_settings_schema_fails_closed ... ok
+test commands::tests::apply_rejects_candidate_changes_after_receipt ... ok
+test settings::tests::settings_round_trip_atomically ... ok
+test commands::tests::discard_repairs_receipt_and_staging_after_terminal_event ... ok
+test commands::tests::apply_repairs_receipt_after_terminal_event ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 6 tests
+test no_subcommand_fails_fast_without_a_terminal ... ok
+test completion_is_generated_and_prompt_cannot_shadow_a_subcommand ... ok
+test failed_run_exports_trace_and_remains_discoverable ... ok
+test ready_run_can_be_discarded_idempotently ... FAILED
+test answered_run_is_inspectable_and_has_no_apply_boundary ... ok
+test complete_run_is_isolated_then_applies ... ok
+
+failures:
+
+---- ready_run_can_be_discarded_idempotently stdout ----
+
+thread 'ready_run_can_be_discarded_idempotently' (12052) panicked at crates\pactrail-cli\tests\end_to_end.rs:321:5:
+assertion failed: repeated.status.success()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    ready_run_can_be_discarded_idempotently
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+

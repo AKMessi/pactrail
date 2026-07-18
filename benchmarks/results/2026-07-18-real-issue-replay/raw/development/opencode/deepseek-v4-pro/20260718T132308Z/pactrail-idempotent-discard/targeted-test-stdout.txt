@@ -1,0 +1,18 @@
+
+running 1 test
+test ready_run_can_be_discarded_idempotently ... FAILED
+
+failures:
+
+---- ready_run_can_be_discarded_idempotently stdout ----
+
+thread 'ready_run_can_be_discarded_idempotently' (23516) panicked at crates\pactrail-cli\tests\end_to_end.rs:321:5:
+assertion failed: repeated.status.success()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    ready_run_can_be_discarded_idempotently
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.13s
+

@@ -1,0 +1,3 @@
+   Compiling crossbeam-channel v0.5.15 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\heldout-scored\20260718T141928Z-opencode-deepseek-v4-flash\crossbeam-select-cloned-handle\grade\crossbeam-channel)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
+     Running unittests src\lib.rs (target\debug\deps\crossbeam_channel-30016bc0ec47d475.exe)

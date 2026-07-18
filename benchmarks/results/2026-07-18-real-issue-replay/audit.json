@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "heldout_trials": 6,
+  "development_trials": 12,
+  "raw_heldout_files": 70,
+  "raw_development_files": 120,
+  "json_files_parsed": 51,
+  "jsonl_files_parsed": 18,
+  "jsonl_records_parsed": 790,
+  "parse_errors": 0,
+  "heldout_summary_json_parsed": 6,
+  "heldout_result_json_parsed": 6,
+  "pactrail_trace_checks_reported_valid": 3,
+  "pactrail_source_isolation_checks_passed": 3,
+  "gold_graders_valid": 3,
+  "gold_graders_total": 3,
+  "secret_value_matches": 0,
+  "manual_patch_audit": {
+    "pactrail_reqwest": "Focused four-addition production patch; hidden target and regression tests passed.",
+    "opencode_smallvec": "Behavioral fix passed, but cargo fmt rewrote production formatting and src/tests.rs; raw patch is 265337 bytes.",
+    "opencode_reqwest": "Behavioral lines were present, but an unnecessary Extensions import failed compilation under deny(warnings)."
+  },
+  "post_run_changes": {
+    "commit": "4e1dc1d2e540f841aba50aafabede603ba5093e3",
+    "scored_tasks_rerun": false,
+    "quality_gates": [
+      "cargo fmt --all -- --check",
+      "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings",
+      "cargo test --workspace --all-targets --all-features --locked"
+    ]
+  }
+}

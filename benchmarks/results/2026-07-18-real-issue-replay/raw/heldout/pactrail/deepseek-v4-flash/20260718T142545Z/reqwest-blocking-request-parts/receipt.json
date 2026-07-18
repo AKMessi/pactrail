@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "run_id": "019f759e-75a5-75b1-8710-8c2ec8ba442b",
+  "created_at": "2026-07-18T14:26:31.6984228Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix reqwest issue #2989 in the blocking request conversion. TryFrom<http::Request<T>> for reqwest::blocking::Request preserves method, URI, headers, and body but silently discards other semantically meaningful request parts. Make it consistent with the asynchronous conversion by preserving the HTTP version and type-map extensions as well. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and make a focused production-quality change. Run relevant tests before finishing.",
+    "workspace_root": "\\\\?\\D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\heldout-scored\\20260718T142545Z-pactrail-deepseek-v4-flash\\reqwest-blocking-request-parts\\workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f759e-75a5-75b1-8710-8c19e56f2249",
+        "description": "Fix reqwest issue #2989 in the blocking request conversion. TryFrom<http::Request<T>> for reqwest::blocking::Request preserves method, URI, headers, and body but silently discards other semantically meaningful request parts. Make it consistent with the asynchronous conversion by preserving the HTTP version and type-map extensions as well. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and make a focused production-quality change. Run relevant tests before finishing.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "process_spawn",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "deny": []
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "failed",
+  "baseline_digest": "35d7dc264d50b09d97395b6902876ce59b696adcd01c03c76d0c2adecf46d70e",
+  "final_event_hash": "6076444446c0a9ee5be2376c687ed9cc60c4c631cd96aa1ea6e9ab5e6d726a2c",
+  "changes": [
+    {
+      "path": "src/blocking/request.rs",
+      "before_digest": "746b9d2102d68af3810ed2f26595cbfce60ad5fadcb00a096688dde510906e40",
+      "after_digest": "14f18e878300e99f26b0d6c5af15b2b99ff1812e4d47fe47f357043d2cfd9ffc",
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 35824,
+      "bytes_removed": 35689
+    }
+  ],
+  "evidence": [
+    {
+      "id": "019f759f-245d-7b43-9c44-fb40de360665",
+      "obligation_id": "019f759e-75a5-75b1-8710-8c19e56f2249",
+      "grade": "deterministic",
+      "kind": "test",
+      "status": "failed",
+      "summary": "Automated repository checks for \"Fix reqwest issue #2989 in the blocking request conversion. TryFrom<http::Request<T>> for reqwest::blocking::Request preserves method, URI, headers, and body but silently discards other semantically meaningful request parts. Make it consistent with the asynchronous conversion by preserving the HTTP version and type-map extensions as well. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and make a focused production-quality change. Run relevant tests before finishing.\": Rust workspace tests: failed; Python tests: failed",
+      "artifact_digest": null,
+      "reproduction": "cargo test --workspace --all-targets && python -m pytest"
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 1,
+    "inconclusive": 0,
+    "skipped": 0,
+    "highest_grade": "deterministic"
+  },
+  "unresolved_risks": [
+    "Native verification processes are capability-gated but are not a host-filesystem or network sandbox; use an OCI runner for hostile repositories",
+    "At least one deterministic repository check failed",
+    "model recovery stopped after 3 consecutive tool turns because every tool request failed; the model did not return a final summary, so candidate completeness requires human review"
+  ],
+  "metadata": {},
+  "integrity_hash": "df125ff67be0afa3909df31a057d212148093abb6600daa42ef5af0e72c80618"
+}

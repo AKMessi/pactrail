@@ -1,0 +1,86 @@
+
+running 81 tests
+test box_bytes::get_int_be_zero ... ok
+test box_bytes::get_int_le ... ok
+test box_bytes::get_int_ne ... ok
+test box_bytes::get_int_be ... ok
+test box_bytes::get_int_le_zero ... ok
+test box_bytes::get_int_le_overflow - should panic ... ok
+test box_bytes::get_int_ne_overflow - should panic ... ok
+test box_bytes::get_int_be_overflow - should panic ... ok
+test box_bytes::get_int_ne_zero ... ok
+test bytes::get_int_be ... ok
+test bytes::get_int_be_overflow - should panic ... ok
+test bytes::get_int_be_zero ... ok
+test bytes::get_int_le ... ok
+test bytes::get_int_le_overflow - should panic ... ok
+test bytes::get_int_le_zero ... ok
+test bytes::get_int_ne ... ok
+test bytes::get_int_ne_zero ... ok
+test bytes::get_int_ne_overflow - should panic ... ok
+test bytes_mut::get_int_be ... ok
+test bytes_mut::get_int_be_zero ... ok
+test bytes_mut::get_int_le ... ok
+test bytes_mut::get_int_ne ... ok
+test bytes_mut::get_int_le_overflow - should panic ... ok
+test bytes_mut::get_int_be_overflow - should panic ... ok
+test bytes_mut::get_int_le_zero ... ok
+test bytes_mut::get_int_ne_overflow - should panic ... ok
+test bytes_mut::get_int_ne_zero ... ok
+test chain_limited_slices::get_int_be ... ok
+test chain_limited_slices::get_int_be_zero ... ok
+test chain_limited_slices::get_int_le ... ok
+test chain_limited_slices::get_int_be_overflow - should panic ... ok
+test chain_limited_slices::get_int_le_zero ... ok
+test chain_limited_slices::get_int_le_overflow - should panic ... ok
+test chain_limited_slices::get_int_ne ... ok
+test chain_limited_slices::get_int_ne_overflow - should panic ... ok
+test chain_limited_slices::get_int_ne_zero ... ok
+test chain_small_big_u8_slice::get_int_be ... ok
+test chain_small_big_u8_slice::get_int_be_zero ... ok
+test chain_small_big_u8_slice::get_int_be_overflow - should panic ... ok
+test chain_small_big_u8_slice::get_int_le ... ok
+test chain_small_big_u8_slice::get_int_le_overflow - should panic ... ok
+test chain_small_big_u8_slice::get_int_le_zero ... ok
+test chain_small_big_u8_slice::get_int_ne ... ok
+test chain_small_big_u8_slice::get_int_ne_overflow - should panic ... ok
+test chain_small_big_u8_slice::get_int_ne_zero ... ok
+test chain_u8_slice::get_int_be ... ok
+test chain_u8_slice::get_int_be_overflow - should panic ... ok
+test chain_u8_slice::get_int_le ... ok
+test chain_u8_slice::get_int_be_zero ... ok
+test chain_u8_slice::get_int_le_overflow - should panic ... ok
+test chain_u8_slice::get_int_le_zero ... ok
+test chain_u8_slice::get_int_ne ... ok
+test chain_u8_slice::get_int_ne_overflow - should panic ... ok
+test chain_u8_slice::get_int_ne_zero ... ok
+test cursor::get_int_be ... ok
+test cursor::get_int_be_zero ... ok
+test cursor::get_int_be_overflow - should panic ... ok
+test cursor::get_int_le ... ok
+test cursor::get_int_le_overflow - should panic ... ok
+test cursor::get_int_le_zero ... ok
+test cursor::get_int_ne ... ok
+test cursor::get_int_ne_zero ... ok
+test cursor::get_int_ne_overflow - should panic ... ok
+test u8_slice::get_int_be ... ok
+test u8_slice::get_int_be_overflow - should panic ... ok
+test u8_slice::get_int_be_zero ... ok
+test u8_slice::get_int_le ... ok
+test u8_slice::get_int_le_overflow - should panic ... ok
+test u8_slice::get_int_le_zero ... ok
+test u8_slice::get_int_ne ... ok
+test u8_slice::get_int_ne_overflow - should panic ... ok
+test u8_slice::get_int_ne_zero ... ok
+test vec_deque::get_int_be ... ok
+test vec_deque::get_int_be_zero ... ok
+test vec_deque::get_int_le ... ok
+test vec_deque::get_int_be_overflow - should panic ... ok
+test vec_deque::get_int_le_overflow - should panic ... ok
+test vec_deque::get_int_le_zero ... ok
+test vec_deque::get_int_ne ... ok
+test vec_deque::get_int_ne_overflow - should panic ... ok
+test vec_deque::get_int_ne_zero ... ok
+
+test result: ok. 81 passed; 0 failed; 0 ignored; 0 measured; 793 filtered out; finished in 0.00s
+

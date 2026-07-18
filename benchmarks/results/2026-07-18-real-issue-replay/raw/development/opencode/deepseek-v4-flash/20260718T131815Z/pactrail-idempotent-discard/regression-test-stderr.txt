@@ -1,0 +1,13 @@
+   Compiling pactrail-engine v0.1.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\pactrail-idempotent-discard\grade\crates\pactrail-engine)
+   Compiling pactrail-models v0.1.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\pactrail-idempotent-discard\grade\crates\pactrail-models)
+   Compiling pactrail-store v0.1.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\pactrail-idempotent-discard\grade\crates\pactrail-store)
+   Compiling pactrail v0.1.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\pactrail-idempotent-discard\grade\crates\pactrail-cli)
+   Compiling pactrail-tools v0.1.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\pactrail-idempotent-discard\grade\crates\pactrail-tools)
+   Compiling pactrail-workspace v0.1.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\pactrail-idempotent-discard\grade\crates\pactrail-workspace)
+   Compiling pactrail-context v0.1.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\pactrail-idempotent-discard\grade\crates\pactrail-context)
+   Compiling pactrail-memory v0.1.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\pactrail-idempotent-discard\grade\crates\pactrail-memory)
+   Compiling pactrail-core v0.1.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\scored\20260718T131815Z-opencode-deepseek-v4-flash\pactrail-idempotent-discard\grade\crates\pactrail-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.18s
+     Running unittests src\main.rs (target\debug\deps\pactrail-6deab8bac9a09f2c.exe)
+     Running tests\end_to_end.rs (target\debug\deps\end_to_end-79337800d9c9d83c.exe)
+error: test failed, to rerun pass `-p pactrail --test end_to_end`

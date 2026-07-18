@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "operating_system": "Microsoft Windows NT 10.0.26200.0",
+  "architecture": "ARM64",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "pactrail_version": "pactrail 0.1.0",
+  "pactrail_executable_sha256": "e06e79a652799b7c467c7b5393ceed544240a6250ba2e90731a300d73ec21477",
+  "opencode_version": "1.2.27",
+  "opencode_launcher_sha256": "5dd06ecb4ad00910461b7c0d296783e5124bc900566736f0d7b8844c97dfb7eb",
+  "provider": "DeepSeek direct API",
+  "model": "deepseek-v4-flash"
+}

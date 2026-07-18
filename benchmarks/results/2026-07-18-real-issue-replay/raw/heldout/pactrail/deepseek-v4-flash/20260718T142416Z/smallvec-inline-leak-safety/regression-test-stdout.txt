@@ -1,0 +1,68 @@
+
+running 63 tests
+test tests::const_generics ... ok
+test tests::const_new ... ok
+test tests::drain_forget ... ok
+test tests::drain_rev ... ok
+test tests::empty_macro ... ok
+test tests::drain ... ok
+test tests::drain_overflow - should panic ... ok
+test tests::grow_to_shrink ... ok
+test tests::grow_spilled_same_size ... ok
+test tests::into_iter ... ok
+test tests::into_iter_drop ... ok
+test tests::into_iter_rev ... ok
+test tests::issue_4 ... ok
+test tests::issue_5 ... ok
+test tests::max_dont_panic ... ok
+test tests::max_insert - should panic ... ok
+test tests::max_remove - should panic ... ok
+test tests::max_swap_remove - should panic ... ok
+test tests::resumable_extend ... ok
+test tests::shrink_after_from_empty_vec ... ok
+test tests::shrink_to_fit_unspill ... ok
+test tests::splice ... ok
+test tests::test_append ... ok
+test tests::test_as_mut ... ok
+test tests::test_as_ref ... ok
+test tests::test_borrow ... ok
+test tests::test_borrow_mut ... ok
+test tests::test_capacity ... ok
+test tests::test_clone_from ... ok
+test tests::test_collect_with_spill ... ok
+test tests::test_dedup ... ok
+test tests::test_double_spill ... ok
+test tests::test_drop_panic_smallvec - should panic ... ok
+test tests::test_eq ... ok
+test tests::test_exact_size_iterator ... ok
+test tests::test_extend_from_slice ... ok
+test tests::test_from ... ok
+test tests::test_extend_from_within ... ok
+test tests::test_from_vec ... ok
+test tests::test_from_slice ... ok
+test tests::test_hash ... ok
+test tests::test_inline ... ok
+test tests::test_into_inner ... ok
+test tests::test_into_iter_as_slice ... ok
+test tests::test_into_iter_clone ... ok
+test tests::test_into_iter_clone_empty_smallvec ... ok
+test tests::test_into_iter_clone_partially_consumed_iterator ... ok
+test tests::test_into_vec ... ok
+test tests::test_invalid_grow - should panic ... ok
+test tests::test_ord ... ok
+test tests::test_resize ... ok
+test tests::test_retain ... ok
+test tests::test_spare_capacity_mut ... ok
+test tests::test_spill ... ok
+test tests::test_split_off ... ok
+test tests::test_split_off_take_all ... ok
+test tests::test_truncate ... ok
+test tests::test_truncate_references ... ok
+test tests::test_with_capacity ... ok
+test tests::test_zero ... ok
+test tests::uninhabited ... ok
+test tests::zero_size_items ... ok
+test tests::collect_from_iter ... ok
+
+test result: ok. 63 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
