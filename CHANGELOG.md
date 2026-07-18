@@ -15,6 +15,14 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Generated CLI contracts now align their aggregate token and model-attempt
+  ceilings with the configured context, output, and turn limits, so a valid
+  `--max-turns` setting is no longer preempted by hidden default budgets.
+- Exact replace and atomic multi-edit tools now accept newline-equivalent model
+  text while preserving each file's existing LF or CRLF convention.
+- Rust verification no longer compiles every bench and example by default, and
+  a Rust `tests/` directory no longer incorrectly triggers `pytest` unless it
+  contains Python tests or the repository declares Python test configuration.
 - Tool-loop resilience now accepts a file path in `search`, paginates omitted
   `read_file` ranges at 300 lines, and reports continuation metadata instead of
   flooding the model conversation with an entire large source file.

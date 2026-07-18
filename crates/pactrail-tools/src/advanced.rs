@@ -7,6 +7,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::builtins::{descriptor, input, read_bounded, success};
+use crate::registry::replace_checked_preserving_newlines;
 use crate::{Tool, ToolContext, ToolDescriptor, ToolError, ToolOutput};
 
 const MAX_BATCH_FILES: usize = 32;
@@ -152,15 +153,18 @@ impl Tool for EditFileTool {
                     index + 1
                 )));
             }
-            let actual = text.matches(&edit.old).count();
-            if actual != edit.expected_replacements {
-                return Err(ToolError::InvalidEditCount {
-                    index: index + 1,
-                    expected: edit.expected_replacements,
-                    actual,
-                });
-            }
-            text = text.replace(&edit.old, &edit.new);
+            let (edited, actual) = replace_checked_preserving_newlines(
+                &text,
+                &edit.old,
+                &edit.new,
+                edit.expected_replacements,
+            )
+            .map_err(|actual| ToolError::InvalidEditCount {
+                index: index + 1,
+                expected: edit.expected_replacements,
+                actual,
+            })?;
+            text = edited;
             if u64::try_from(text.len()).unwrap_or(u64::MAX) > MAX_EDIT_BYTES {
                 return Err(ToolError::InvalidRange(format!(
                     "edited file would exceed {MAX_EDIT_BYTES} bytes"

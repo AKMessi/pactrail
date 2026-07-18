@@ -112,7 +112,9 @@ turns. A repeated successful read-only call receives explicit steering. If a
 conservatively classified informational goal still repeats three times, Pactrail
 permits exactly one additional model attempt with no tools and an evidence-only
 synthesis instruction. This recovery consumes the normal model-attempt and
-token budgets and is fully journaled. Failed calls, change requests, and
+token budgets and is fully journaled. Generated CLI contracts derive those
+budgets from the configured context, output, and turn ceilings; explicit task
+contracts retain their declared resource governance. Failed calls, change requests, and
 mutation loops do not receive this fallback.
 
 ## Durable memory

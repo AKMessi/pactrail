@@ -280,10 +280,17 @@ fn load_contract(
         path: cli_workspace.to_path_buf(),
         source,
     })?;
-    Ok((
-        TaskContract::new(goal, workspace.display().to_string()),
-        workspace,
-    ))
+    let mut contract = TaskContract::new(goal, workspace.display().to_string());
+    contract.budget.max_model_attempts = args.max_turns;
+    contract.budget.model_tokens =
+        generated_model_token_budget(args.context_tokens, args.max_output_tokens, args.max_turns);
+    Ok((contract, workspace))
+}
+
+fn generated_model_token_budget(context_tokens: u64, output_tokens: u64, max_turns: u16) -> u64 {
+    context_tokens
+        .saturating_add(output_tokens)
+        .saturating_mul(u64::from(max_turns))
 }
 
 fn build_driver(
@@ -1643,5 +1650,11 @@ mod tests {
         contract.permissions.allow.insert(Capability::ProcessSpawn);
         let result = configure_native_process_permissions(&mut contract, false);
         assert!(matches!(result, Err(CliError::Argument(_))));
+    }
+
+    #[test]
+    fn generated_budget_can_reach_every_configured_turn() {
+        assert_eq!(generated_model_token_budget(16_384, 2_048, 16), 294_912);
+        assert_eq!(generated_model_token_budget(u64::MAX, 1, 256), u64::MAX);
     }
 }

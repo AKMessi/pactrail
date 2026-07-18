@@ -12,6 +12,40 @@ use thiserror::Error;
 
 use crate::PolicyEngine;
 
+pub(crate) fn replace_checked_preserving_newlines(
+    text: &str,
+    old: &str,
+    new: &str,
+    expected: usize,
+) -> Result<(String, usize), usize> {
+    let exact = text.matches(old).count();
+    if exact == expected {
+        return Ok((text.replace(old, new), exact));
+    }
+    if exact != 0 || (!old.contains('\r') && !old.contains('\n')) {
+        return Err(exact);
+    }
+
+    let line_ending = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let adapted_old = adapt_line_endings(old, line_ending);
+    if adapted_old == old {
+        return Err(exact);
+    }
+    let adapted = text.matches(&adapted_old).count();
+    if adapted != expected {
+        return Err(adapted);
+    }
+    let adapted_new = adapt_line_endings(new, line_ending);
+    Ok((text.replace(&adapted_old, &adapted_new), adapted))
+}
+
+fn adapt_line_endings(value: &str, line_ending: &str) -> String {
+    value
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+        .replace('\n', line_ending)
+}
+
 /// Machine-readable contract presented to a model for one tool.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 pub struct ToolDescriptor {
@@ -249,4 +283,37 @@ pub enum ToolError {
         expected: usize,
         actual: usize,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::replace_checked_preserving_newlines;
+
+    #[test]
+    fn checked_replacement_accepts_lf_model_text_for_crlf_file() {
+        let source = "before\r\nold line\r\nafter\r\n";
+        let (result, count) = replace_checked_preserving_newlines(
+            source,
+            "before\nold line\nafter",
+            "before\nnew line\nafter",
+            1,
+        )
+        .unwrap_or_else(|actual| unreachable!("newline-equivalent replacement: {actual}"));
+        assert_eq!(count, 1);
+        assert_eq!(result, "before\r\nnew line\r\nafter\r\n");
+    }
+
+    #[test]
+    fn checked_replacement_does_not_relax_content_matching() {
+        let source = "before\r\nold line\r\nafter\r\n";
+        assert_eq!(
+            replace_checked_preserving_newlines(
+                source,
+                "before\nwrong line\nafter",
+                "replacement",
+                1,
+            ),
+            Err(0)
+        );
+    }
 }

@@ -10,6 +10,7 @@ use schemars::{JsonSchema, schema_for};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use crate::registry::replace_checked_preserving_newlines;
 use crate::{Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput};
 
 const MAX_READ_BYTES: u64 = 1024 * 1024;
@@ -500,34 +501,21 @@ impl Tool for ReplaceTextTool {
         let path = context.workspace.resolve_read(&request.path)?;
         let bytes = read_bounded(&path, MAX_EDIT_BYTES)?;
         let text = String::from_utf8(bytes).map_err(|_| ToolError::NonUtf8(path.clone()))?;
-        let actual = text.matches(&request.old).count();
-        if actual != request.expected_replacements {
-            return Err(ToolError::ReplacementCount {
-                expected: request.expected_replacements,
-                actual,
-            });
-        }
-        let removed = request
-            .old
-            .len()
-            .checked_mul(actual)
-            .ok_or_else(|| ToolError::InvalidRange("replacement size overflowed".to_owned()))?;
-        let added = request
-            .new
-            .len()
-            .checked_mul(actual)
-            .ok_or_else(|| ToolError::InvalidRange("replacement size overflowed".to_owned()))?;
-        let resulting_bytes = text
-            .len()
-            .checked_sub(removed)
-            .and_then(|size| size.checked_add(added))
-            .ok_or_else(|| ToolError::InvalidRange("replacement size overflowed".to_owned()))?;
-        if u64::try_from(resulting_bytes).unwrap_or(u64::MAX) > MAX_EDIT_BYTES {
+        let (replacement, actual) = replace_checked_preserving_newlines(
+            &text,
+            &request.old,
+            &request.new,
+            request.expected_replacements,
+        )
+        .map_err(|actual| ToolError::ReplacementCount {
+            expected: request.expected_replacements,
+            actual,
+        })?;
+        if u64::try_from(replacement.len()).unwrap_or(u64::MAX) > MAX_EDIT_BYTES {
             return Err(ToolError::InvalidRange(format!(
                 "replacement would exceed the {MAX_EDIT_BYTES}-byte edit limit"
             )));
         }
-        let replacement = text.replace(&request.old, &request.new);
         context
             .workspace
             .write_file(&request.path, replacement.as_bytes())?;
