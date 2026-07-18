@@ -1,0 +1,19 @@
+{
+  "changes": [],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-read-only-repository-summary\\.pactrail\\runs\\019f74cd-cf38-7e11-9c9d-a4b9c47a9f2e\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f74cd-cf38-7e11-9c9d-a4b9c47a9f2e",
+  "summary": "This directory contains a tiny arithmetic library that provides basic mathematical operations, specifically addition and subtraction.",
+  "tokens": 3103,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-read-only-repository-summary\\.pactrail\\runs\\019f74cd-cf38-7e11-9c9d-a4b9c47a9f2e\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

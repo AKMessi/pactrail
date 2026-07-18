@@ -1,0 +1,1076 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 0,
+    "timestamp": "2026-07-18T08:41:49.4996521Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T082607Z-gemma4-v2-q4km-multi-file-version-sync",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f7463-8e80-7e53-b4fa-d9a014d2be93",
+            "description": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "b38af2278444bf63fb70939d51489f4365bd5fcfc11f0aa01d76373074181f92"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 1,
+    "timestamp": "2026-07-18T08:41:49.4999815Z",
+    "previous_hash": "b38af2278444bf63fb70939d51489f4365bd5fcfc11f0aa01d76373074181f92",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "015d11f16281d8b0fcca0fedf5e26f17206a8b7d9193fec51f4cab375fa609ad"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 2,
+    "timestamp": "2026-07-18T08:41:49.500161Z",
+    "previous_hash": "015d11f16281d8b0fcca0fedf5e26f17206a8b7d9193fec51f4cab375fa609ad",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "b696ddf8633c886b79a00d5d4a5d770e10616deaa54120af00790c81d6b830b6"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 3,
+    "timestamp": "2026-07-18T08:41:49.5261096Z",
+    "previous_hash": "b696ddf8633c886b79a00d5d4a5d770e10616deaa54120af00790c81d6b830b6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 3 files and cited 3 within a 1978-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 22,
+        "attributes": {
+          "budget_bytes": "5760",
+          "cited_files": "3",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1978",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "e0e4e6a61b0ae4f47cbf2ad5e862a5b7bfdd1700340e797fce24a5bb4e30c5d7"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 4,
+    "timestamp": "2026-07-18T08:41:49.5271423Z",
+    "previous_hash": "e0e4e6a61b0ae4f47cbf2ad5e862a5b7bfdd1700340e797fce24a5bb4e30c5d7",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:93336b7bd4c2bd62dcdc2a3fc78ab527386f2c8dc811ffb2480a3cd584219e5e"
+      }
+    },
+    "hash": "3ae6b5a593d79c8f577640a49253a7e0b987cb4c360625b0c2b7988c986f2d48"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 5,
+    "timestamp": "2026-07-18T08:41:49.5324734Z",
+    "previous_hash": "3ae6b5a593d79c8f577640a49253a7e0b987cb4c360625b0c2b7988c986f2d48",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "0d6737b1418084e4c078ebb94757e55c8d58a41305fff8e488ef84ce6442e882"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 6,
+    "timestamp": "2026-07-18T08:41:49.5328897Z",
+    "previous_hash": "0d6737b1418084e4c078ebb94757e55c8d58a41305fff8e488ef84ce6442e882",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "798ad0cc1513eaefe2eea7dcd1d950d9b92a39b49e865d5f89ee43438cacd96c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 7,
+    "timestamp": "2026-07-18T08:43:31.2374444Z",
+    "previous_hash": "798ad0cc1513eaefe2eea7dcd1d950d9b92a39b49e865d5f89ee43438cacd96c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 1 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 101703,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2303",
+          "output_tokens": "33",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "ea19aa4e12df9094405d54da9b21d8be31b1bd3e6bcca37642a31b6293b7a827"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 8,
+    "timestamp": "2026-07-18T08:43:31.2460198Z",
+    "previous_hash": "ea19aa4e12df9094405d54da9b21d8be31b1bd3e6bcca37642a31b6293b7a827",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_many_files",
+        "action": "read_many_files",
+        "summary": "read 3 files (114 bytes)",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:Cargo.toml",
+          "fs.read:README.md",
+          "fs.read:src/version.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "f48aa0399a7c60e262a159c84baf65b9edac44129fb5269cfe22ec993fa2a36d",
+          "call_id": "TkMPUr7KjhN29vJLWKzH73v0qFiOkbut",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "327",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "34517bfb42b7616425427c008a18d8a9fa95ac5bb51e0c19bdae49f4dd7981cc"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 9,
+    "timestamp": "2026-07-18T08:44:12.2765747Z",
+    "previous_hash": "34517bfb42b7616425427c008a18d8a9fa95ac5bb51e0c19bdae49f4dd7981cc",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 2 produced 3 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 41029,
+        "attributes": {
+          "cached_input_tokens": "2299",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2467",
+          "output_tokens": "195",
+          "text_bytes": "0",
+          "tool_calls": "3",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "82a609fa3c94cce77b4c07821740d59c23dca20486163bb4bbbc0c95aa6c35bf"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 10,
+    "timestamp": "2026-07-18T08:44:12.2910991Z",
+    "previous_hash": "82a609fa3c94cce77b4c07821740d59c23dca20486163bb4bbbc0c95aa6c35bf",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:replace_text",
+        "action": "replace_text",
+        "summary": "replaced 1 exact occurrence(s)",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:Cargo.toml",
+          "fs.write:Cargo.toml"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "32135028270bb4d6580944dd869a3c7d4098bf519367feeea6ff496cd06d1367",
+          "call_id": "SzXYjYidL9DeFOBPnq8Zl3EnLzfqA35X",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "38",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "686286677a8fa5d50ba86b8472e78284fe30e23e50edbefc8206822d900f87c2"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 11,
+    "timestamp": "2026-07-18T08:44:12.3038861Z",
+    "previous_hash": "686286677a8fa5d50ba86b8472e78284fe30e23e50edbefc8206822d900f87c2",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:replace_text",
+        "action": "replace_text",
+        "summary": "replaced 1 exact occurrence(s)",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:src/version.rs",
+          "fs.write:src/version.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 12,
+        "attributes": {
+          "arguments_digest": "2a82e65bf06980ef5a6b95ea2e69c0998802385602a8fcec4e892159c742eeda",
+          "call_id": "Liti0MhnYWWD3POdyMThAZAmrkzc40U1",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "42",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "6ed20172565781a0bfe80cb7a637f0d3032a564783f4d19fea3aa1d6f01a7f36"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 12,
+    "timestamp": "2026-07-18T08:44:12.3163702Z",
+    "previous_hash": "6ed20172565781a0bfe80cb7a637f0d3032a564783f4d19fea3aa1d6f01a7f36",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:replace_text",
+        "action": "replace_text",
+        "summary": "replaced 1 exact occurrence(s)",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:README.md",
+          "fs.write:README.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 12,
+        "attributes": {
+          "arguments_digest": "fca56672feabb72132639ba7a58d72909b5c08f15f11fef14e04f6565bcb9cdb",
+          "call_id": "51WkSqYJGmfIQtod55mHfCVMwV4FLwdO",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "37",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "a091596621d72462815726ddb70da040682c4fbc74080bf15e63be6fc908346b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 13,
+    "timestamp": "2026-07-18T08:44:29.0215256Z",
+    "previous_hash": "a091596621d72462815726ddb70da040682c4fbc74080bf15e63be6fc908346b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 3 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 16704,
+        "attributes": {
+          "cached_input_tokens": "2467",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2688",
+          "output_tokens": "43",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "78d10003b441fec9d51cca38015a0c7378b30d5a63d8f37b3e0ec7ccab357f86"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 14,
+    "timestamp": "2026-07-18T08:44:29.0302643Z",
+    "previous_hash": "78d10003b441fec9d51cca38015a0c7378b30d5a63d8f37b3e0ec7ccab357f86",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:workspace_changes",
+        "action": "workspace_changes",
+        "summary": "inspected 3 candidate file changes",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "transaction.inspect"
+        ],
+        "succeeded": true,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "6e46dd10defc9b56c29a6ec56b508c21f54c08192194e4df25bf36f0c9c3c279",
+          "call_id": "Fmzo30YVAG7GvXLytxnizcKVnngzvXjR",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "874",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "6579d0109ba16a8612800b30d61e0f42e73af4b227da63db2a335561ad257b4e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 15,
+    "timestamp": "2026-07-18T08:45:03.9613977Z",
+    "previous_hash": "6579d0109ba16a8612800b30d61e0f42e73af4b227da63db2a335561ad257b4e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 4 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 34930,
+        "attributes": {
+          "cached_input_tokens": "2688",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3219",
+          "output_tokens": "59",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "1e28b7e3643ae7e17acfa6bd25eb8cc8a8184ff3b97527ca2b158cedb1b67567"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 16,
+    "timestamp": "2026-07-18T08:45:03.9778997Z",
+    "previous_hash": "1e28b7e3643ae7e17acfa6bd25eb8cc8a8184ff3b97527ca2b158cedb1b67567",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 0 matches for \"0.1.0\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:."
+        ],
+        "succeeded": true,
+        "duration_ms": 15,
+        "attributes": {
+          "arguments_digest": "0faa922ea4e0647d7afbeb7c376c2145a2ac268de206e496b197493a523eecdd",
+          "call_id": "6IojY4nym1bOG0jYYJlRcWWu8pdNUwFx",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "2",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "f49067657cb2b769bbd3c007d8ee3fcded9c95857c59f6f0cf4b69ef2b76d433"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 17,
+    "timestamp": "2026-07-18T08:45:28.0332144Z",
+    "previous_hash": "f49067657cb2b769bbd3c007d8ee3fcded9c95857c59f6f0cf4b69ef2b76d433",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 5 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 24054,
+        "attributes": {
+          "cached_input_tokens": "3219",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3247",
+          "output_tokens": "63",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "e6512db916bebd101ec80e0ea45cbcf5602deac71015afe44dbcfbf817fbecfb"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 18,
+    "timestamp": "2026-07-18T08:45:28.0391342Z",
+    "previous_hash": "e6512db916bebd101ec80e0ea45cbcf5602deac71015afe44dbcfbf817fbecfb",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 3 matches for \"0.2.0\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:."
+        ],
+        "succeeded": true,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "7892a013fb0ca18ee337d91e7aab5ce26e393fc0975e469939f6166f2e7de427",
+          "call_id": "U85wQyZNULPqYX04NJH2EiUx0a5YL1D6",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "204",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "9e4fa2c247003c5fec049c1e9ac217771aae529d6a3302ac387c74b7b6190e9a"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 19,
+    "timestamp": "2026-07-18T08:45:52.5821367Z",
+    "previous_hash": "9e4fa2c247003c5fec049c1e9ac217771aae529d6a3302ac387c74b7b6190e9a",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 6 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 24542,
+        "attributes": {
+          "cached_input_tokens": "3247",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3350",
+          "output_tokens": "86",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "63120d5dff92de09387c00f1afccf6d769952ae78a68cbd4ed058b2b0413345f"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 20,
+    "timestamp": "2026-07-18T08:45:52.5875145Z",
+    "previous_hash": "63120d5dff92de09387c00f1afccf6d769952ae78a68cbd4ed058b2b0413345f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 3 lines from Cargo.toml",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:Cargo.toml"
+        ],
+        "succeeded": true,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "c7aa5a17f7a3298e360aff30eb526d551ebcb6102cd70a6a813a8148c8a819d1",
+          "call_id": "B32BWnM4T41BbQfJtc9QN7Tqq2WGdST9",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "128",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "96a383eb61e8cce455b184675644999bd2f42349a822d4da7a081175046bb395"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 21,
+    "timestamp": "2026-07-18T08:46:08.0469101Z",
+    "previous_hash": "96a383eb61e8cce455b184675644999bd2f42349a822d4da7a081175046bb395",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 7 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 15458,
+        "attributes": {
+          "cached_input_tokens": "3350",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3426",
+          "output_tokens": "73",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "2b67918f93720118b659f68bff1f1c43be2a6c9ad4ce5d0dbacbaef3b940dc32"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 22,
+    "timestamp": "2026-07-18T08:46:08.0524487Z",
+    "previous_hash": "2b67918f93720118b659f68bff1f1c43be2a6c9ad4ce5d0dbacbaef3b940dc32",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 3 lines from Cargo.toml",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:Cargo.toml"
+        ],
+        "succeeded": true,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "c7aa5a17f7a3298e360aff30eb526d551ebcb6102cd70a6a813a8148c8a819d1",
+          "call_id": "kccE0pDS27Jd4cwgNJYIJMacrTcMtFxl",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "128",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "435bed1f63e8e16852a7ab0225880ebdfda20f5db1b4fd086f2adaa6459ed83a"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 23,
+    "timestamp": "2026-07-18T08:46:08.0527783Z",
+    "previous_hash": "435bed1f63e8e16852a7ab0225880ebdfda20f5db1b4fd086f2adaa6459ed83a",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "loop controller steered the model away from a repeated successful read-only request"
+      }
+    },
+    "hash": "1c1ed06b5f86bbd274fde3a4eba53aec5d6cb284f46699c6bae0a06a94516d2b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 24,
+    "timestamp": "2026-07-18T08:48:46.2086506Z",
+    "previous_hash": "1c1ed06b5f86bbd274fde3a4eba53aec5d6cb284f46699c6bae0a06a94516d2b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 8 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 158154,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3557",
+          "output_tokens": "55",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "0ced756b28b5cdd1d5ac153042fff7357b7b33d355d11f68f54f2bccc4ecbf06"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 25,
+    "timestamp": "2026-07-18T08:48:46.2133946Z",
+    "previous_hash": "0ced756b28b5cdd1d5ac153042fff7357b7b33d355d11f68f54f2bccc4ecbf06",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 1 lines from src/version.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/version.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "c6c7d155b509f3480a1f9eaff353d4a5d0f43aeb648227072e84121916cf20dc",
+          "call_id": "wsZKFn68Cs25ZH3fmUcq5Y6LfPTcoq1V",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "118",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "869207def96ca1e76597fd32c8e26587eb46addec52d2a1faacc67883ce98aac"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 26,
+    "timestamp": "2026-07-18T08:49:07.8572224Z",
+    "previous_hash": "869207def96ca1e76597fd32c8e26587eb46addec52d2a1faacc67883ce98aac",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 9 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 21643,
+        "attributes": {
+          "cached_input_tokens": "3557",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3632",
+          "output_tokens": "112",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "99dbbb5f986ef8c06577fc5c73ea990f9c4eef6f4bd0d931bd336e134cf979a6"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 27,
+    "timestamp": "2026-07-18T08:49:07.8655083Z",
+    "previous_hash": "99dbbb5f986ef8c06577fc5c73ea990f9c4eef6f4bd0d931bd336e134cf979a6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:run_process",
+        "action": "run_process",
+        "summary": "invalid input for run_process: unknown field `command`, expected one of `program`, `args`, `timeout_seconds`, `max_output_bytes`, `environment`",
+        "declared_effects": [
+          "process_spawn"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "22a43e997fe2cda2329ef98c320824f6138c4abbab195104779a0afac5132629",
+          "call_id": "dHVIgBswanZTq0k3nSTO5F0LCsXUXWFb",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "155",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "hostexecution",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "5fc85ca5f363156fef9c52b298fa21cff68683cb0d1af65e0afbcc779eee376d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 28,
+    "timestamp": "2026-07-18T08:49:26.8013518Z",
+    "previous_hash": "5fc85ca5f363156fef9c52b298fa21cff68683cb0d1af65e0afbcc779eee376d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 10 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 18935,
+        "attributes": {
+          "cached_input_tokens": "3632",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3735",
+          "output_tokens": "80",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "23250e4bcd204dbddc91c9c02b41b83a8c39a452aea49c7e6d5a89ac8b087f5c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 29,
+    "timestamp": "2026-07-18T08:49:26.8079321Z",
+    "previous_hash": "23250e4bcd204dbddc91c9c02b41b83a8c39a452aea49c7e6d5a89ac8b087f5c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:run_process",
+        "action": "run_process",
+        "summary": "process_spawn on \"grep\" requires approval: process_spawn requires a scoped approval",
+        "declared_effects": [
+          "process_spawn"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "29c153e01c1f64f1002c1dee82eca0661bc7a3f37bbafeae2933c2c868638924",
+          "call_id": "0nsE2WPLMqI4xNcschUhL7SbKAMwwzfx",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "97",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "hostexecution",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "58b653b831d9535ef5ece49485b5fd9742bcf322eaac7d19908e6027dd9c9793"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 30,
+    "timestamp": "2026-07-18T08:49:55.2554044Z",
+    "previous_hash": "58b653b831d9535ef5ece49485b5fd9742bcf322eaac7d19908e6027dd9c9793",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 11 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 28446,
+        "attributes": {
+          "cached_input_tokens": "3735",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3802",
+          "output_tokens": "115",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "9f7e58bf2a3dfd577046a71d5b8f0abae450e7c03a2037d9a5a81bb5b5e24800"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 31,
+    "timestamp": "2026-07-18T08:49:55.261516Z",
+    "previous_hash": "9f7e58bf2a3dfd577046a71d5b8f0abae450e7c03a2037d9a5a81bb5b5e24800",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:run_process",
+        "action": "run_process",
+        "summary": "process_spawn on \"grep\" requires approval: process_spawn requires a scoped approval",
+        "declared_effects": [
+          "process_spawn"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "db241c47e978df5eeb7fdfd39d607fc327973faa73b87b139b381f5c059c1583",
+          "call_id": "KpQN8PNkqzXcxlNGAcfu2t1TEYTpy0a2",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "97",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "hostexecution",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "3abe06ea458dea31e11fc97eb8ca226bc5a6664680e37c493decce5825e750b4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 32,
+    "timestamp": "2026-07-18T08:49:55.2619401Z",
+    "previous_hash": "3abe06ea458dea31e11fc97eb8ca226bc5a6664680e37c493decce5825e750b4",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model recovery stopped after 3 consecutive tool turns because every tool request failed"
+      }
+    },
+    "hash": "bfb95956f1c391eddcf20c00adf49845f581021b138e915310777f4082752fdc"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 33,
+    "timestamp": "2026-07-18T08:49:55.2639335Z",
+    "previous_hash": "bfb95956f1c391eddcf20c00adf49845f581021b138e915310777f4082752fdc",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "verifying"
+      }
+    },
+    "hash": "0dae628c11b800964055474e6e75fffaa29957470073ec11746c4ca55bc84710"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 34,
+    "timestamp": "2026-07-18T08:49:55.2649763Z",
+    "previous_hash": "0dae628c11b800964055474e6e75fffaa29957470073ec11746c4ca55bc84710",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "verifier",
+        "action": "Rust workspace tests",
+        "summary": "verification process was not authorized",
+        "declared_effects": [
+          "process.spawn"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 0,
+        "attributes": {
+          "authorization": "denied",
+          "index": "1",
+          "total": "1"
+        }
+      }
+    },
+    "hash": "8cbc54c7a22b124f3b820fabbae8167de234251a381274389712c94138d607d3"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 35,
+    "timestamp": "2026-07-18T08:49:55.2653987Z",
+    "previous_hash": "8cbc54c7a22b124f3b820fabbae8167de234251a381274389712c94138d607d3",
+    "event": {
+      "type": "evidence_recorded",
+      "data": {
+        "id": "019f746a-f841-79a2-a0d3-b11e9aaf4b5a",
+        "obligation_id": "019f7463-8e80-7e53-b4fa-d9a014d2be93",
+        "grade": "unverified",
+        "kind": "other",
+        "status": "inconclusive",
+        "summary": "Update the project version from 0.1.0 to 0.2.0 in Cargo.toml, src/version.rs, and README.md. Make no other changes.: Verification commands require process permission",
+        "artifact_digest": null,
+        "reproduction": null
+      }
+    },
+    "hash": "2edf5a944b682529c5ef8de3c0220d14faf75e74e3bdde535d3c5cd43fbf4c16"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 36,
+    "timestamp": "2026-07-18T08:49:55.2677594Z",
+    "previous_hash": "2edf5a944b682529c5ef8de3c0220d14faf75e74e3bdde535d3c5cd43fbf4c16",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "verifying",
+        "to": "reviewing"
+      }
+    },
+    "hash": "4c70f740ced2355958d46794a4f8b239952cbe876c00afcb326515c2a71df7e0"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 37,
+    "timestamp": "2026-07-18T08:49:55.2679455Z",
+    "previous_hash": "4c70f740ced2355958d46794a4f8b239952cbe876c00afcb326515c2a71df7e0",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model summary retained as implementation account; verification evidence remains independently graded"
+      }
+    },
+    "hash": "022e697615729d09defa2c92dcc7b7b033d232882d4b8255461ad653b518750a"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 38,
+    "timestamp": "2026-07-18T08:49:55.2683037Z",
+    "previous_hash": "022e697615729d09defa2c92dcc7b7b033d232882d4b8255461ad653b518750a",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "reviewing",
+        "to": "awaiting_apply"
+      }
+    },
+    "hash": "7aa783f1bda3880c86b2aa02583349f30a937f8001dfa98bc646594a6b3b59b1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7463-8e81-7781-b8ad-f2d229235c9d",
+    "sequence": 39,
+    "timestamp": "2026-07-18T08:49:55.4006588Z",
+    "previous_hash": "7aa783f1bda3880c86b2aa02583349f30a937f8001dfa98bc646594a6b3b59b1",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "awaiting_apply",
+        "to": "applied"
+      }
+    },
+    "hash": "707fb89820561aef9eb0a0dda31e9503e6b9228a3085f04cd9d14d206e9dc47d"
+  }
+]

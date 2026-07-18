@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": null,
+      "after_unix_mode": null,
+      "before_digest": "aa05da59bb5ad20dc0cbf6742671828d670ceda26edf0a2b8ebbc4776778b3f5",
+      "before_unix_mode": null,
+      "bytes_added": 0,
+      "bytes_removed": 10,
+      "path": "obsolete.txt"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-obsolete-file-removal\\.pactrail\\runs\\019f74b9-0d71-7553-8378-9835864fbff3\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f74b9-0d71-7553-8378-9835864fbff3",
+  "summary": "Done. `obsolete.txt` has been deleted and `keep.txt` remains unchanged with its original content.",
+  "tokens": 9257,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-obsolete-file-removal\\.pactrail\\runs\\019f74b9-0d71-7553-8378-9835864fbff3\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

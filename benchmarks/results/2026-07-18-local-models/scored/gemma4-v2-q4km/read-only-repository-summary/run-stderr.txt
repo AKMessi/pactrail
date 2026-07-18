@@ -1,0 +1,5 @@
+2026-07-18T09:09:29.920612Z  WARN pactrail_engine::engine: tool call failed tool=read_many_files error=invalid input for read_many_files: invalid type: string "README.md", expected a sequence
+2026-07-18T09:09:46.813048Z  WARN pactrail_engine::engine: tool call failed tool=read_many_files error=invalid input for read_many_files: invalid type: string "README.md", expected a sequence
+2026-07-18T09:10:02.932299Z  WARN pactrail_engine::engine: tool call failed tool=read_many_files error=invalid input for read_many_files: invalid type: string "README.md", expected a sequence
+error: engine failed for run 019f747a-96a8-7d83-a763-6bedf3fcd005: model stalled for 3 consecutive tool turns because the model repeated the same tool request
+Portable trace: \\?\C:\Users\aarya\AppData\Local\Temp\pactrail-mvb-2026-07-18-scored\20260718T082607Z-gemma4-v2-q4km-read-only-repository-summary\.pactrail\runs\019f747a-96a8-7d83-a763-6bedf3fcd005\trace.jsonl

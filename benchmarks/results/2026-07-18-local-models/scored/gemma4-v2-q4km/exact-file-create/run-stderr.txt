@@ -1,0 +1,1 @@
+2026-07-18T08:30:33.716977Z  WARN pactrail_engine::engine: tool call failed tool=read_file error=tool I/O failed at \\?\C:\Users\aarya\AppData\Local\Temp\pactrail-mvb-2026-07-18-scored\20260718T082607Z-gemma4-v2-q4km-exact-file-create\.pactrail\runs\019f7455-2e6e-7ac2-86c7-9844aa651b5c\workspace\SMO_TEST.md: The system cannot find the file specified. (os error 2)

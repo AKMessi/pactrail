@@ -1,0 +1,342 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 0,
+    "timestamp": "2026-07-18T09:25:51.8923511Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-exact-file-create",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f748b-e088-7061-b11a-f01af2230a38",
+            "description": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "5ad998d9a7709deea36c80248b9b6b0e83a1f1c6dae3ecef95eac7a1728a48ca"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 1,
+    "timestamp": "2026-07-18T09:25:51.892546Z",
+    "previous_hash": "5ad998d9a7709deea36c80248b9b6b0e83a1f1c6dae3ecef95eac7a1728a48ca",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "0cdf763c73f8dfa39db2e42445ab07278bb257af1d1e2a83454f952e2060f5cb"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 2,
+    "timestamp": "2026-07-18T09:25:51.8926502Z",
+    "previous_hash": "0cdf763c73f8dfa39db2e42445ab07278bb257af1d1e2a83454f952e2060f5cb",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "63a9347b444fe9dad59332cde6895bef91d62a2950c0524d30b0de075d4fc84f"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 3,
+    "timestamp": "2026-07-18T09:25:51.8947394Z",
+    "previous_hash": "63a9347b444fe9dad59332cde6895bef91d62a2950c0524d30b0de075d4fc84f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 0 files and cited 0 within a 1471-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1,
+        "attributes": {
+          "budget_bytes": "5760",
+          "cited_files": "0",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1471",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "74f0270d7ffdade9a496adc0132a67852e70b567e07ba3553768707705fcba07"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 4,
+    "timestamp": "2026-07-18T09:25:51.8949683Z",
+    "previous_hash": "74f0270d7ffdade9a496adc0132a67852e70b567e07ba3553768707705fcba07",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "hash": "8e0d30c5634e617b590365eed6f21621f17be8e8d822ed32ebd433b0fad374dc"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 5,
+    "timestamp": "2026-07-18T09:25:51.8951058Z",
+    "previous_hash": "8e0d30c5634e617b590365eed6f21621f17be8e8d822ed32ebd433b0fad374dc",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "460a1dd360ba4a46a1f667f6ce39c4880b863137f0d4690bf25235c0c61d1517"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 6,
+    "timestamp": "2026-07-18T09:25:51.8954097Z",
+    "previous_hash": "460a1dd360ba4a46a1f667f6ce39c4880b863137f0d4690bf25235c0c61d1517",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "5d3c53326e76ce1df91d52ac9a097c78b605452bc08817a56cdfd5bbb0d0596a"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 7,
+    "timestamp": "2026-07-18T09:35:40.8371833Z",
+    "previous_hash": "5d3c53326e76ce1df91d52ac9a097c78b605452bc08817a56cdfd5bbb0d0596a",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/ternary-bonsai-27b-q2",
+        "action": "invoke",
+        "summary": "model turn 1 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 588934,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2990",
+          "output_tokens": "47",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "1ede7476aa67f314ed74d65107979d2330711d51fc838f5c5a7a07bdbad2880e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 8,
+    "timestamp": "2026-07-18T09:35:40.843511Z",
+    "previous_hash": "1ede7476aa67f314ed74d65107979d2330711d51fc838f5c5a7a07bdbad2880e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:write_file",
+        "action": "write_file",
+        "summary": "wrote workspace file",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:SMOKE_TEST.md",
+          "fs.write:SMOKE_TEST.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "83d45a60b3074220cb97db08074a738bae233a3a6886d6dbbf4538b69cdfc513",
+          "call_id": "T22e1HU5N8aSsANw1icTGQ9JlXbTRrui",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "111",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "f021f4cdc88677888cc444e8b3dd6f30427a50736251c4ae15b8a791132ddda1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 9,
+    "timestamp": "2026-07-18T09:36:06.4861229Z",
+    "previous_hash": "f021f4cdc88677888cc444e8b3dd6f30427a50736251c4ae15b8a791132ddda1",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/ternary-bonsai-27b-q2",
+        "action": "invoke",
+        "summary": "model turn 2 produced 0 tool call(s) and 75 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 25640,
+        "attributes": {
+          "cached_input_tokens": "3036",
+          "finish_reason": "complete",
+          "input_tokens": "3127",
+          "output_tokens": "21",
+          "text_bytes": "75",
+          "tool_calls": "0",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "3aea0f89d2a4b85b8b9114c5308f3467d1baee19586bc7e96edb2e23ca35a77c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 10,
+    "timestamp": "2026-07-18T09:36:06.4868705Z",
+    "previous_hash": "3aea0f89d2a4b85b8b9114c5308f3467d1baee19586bc7e96edb2e23ca35a77c",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "verifying"
+      }
+    },
+    "hash": "029abad2f135af9eb187485d13d729419fefad796f09527eb3fe84821e44e6d7"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 11,
+    "timestamp": "2026-07-18T09:36:06.4875129Z",
+    "previous_hash": "029abad2f135af9eb187485d13d729419fefad796f09527eb3fe84821e44e6d7",
+    "event": {
+      "type": "evidence_recorded",
+      "data": {
+        "id": "019f7495-4157-7420-a134-4b972b41b190",
+        "obligation_id": "019f748b-e088-7061-b11a-f01af2230a38",
+        "grade": "unverified",
+        "kind": "other",
+        "status": "inconclusive",
+        "summary": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.: No supported test manifest was detected",
+        "artifact_digest": null,
+        "reproduction": null
+      }
+    },
+    "hash": "83b0c7fad91ab1701fb4e38fcb0dd8a2233932535cdc4fa6e7287d5b0bb3b55d"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 12,
+    "timestamp": "2026-07-18T09:36:06.4899448Z",
+    "previous_hash": "83b0c7fad91ab1701fb4e38fcb0dd8a2233932535cdc4fa6e7287d5b0bb3b55d",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "verifying",
+        "to": "reviewing"
+      }
+    },
+    "hash": "e1116a5fa71a7a09bf0e8d77538d0dd466938bbf679c44f06c4683f531285f40"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 13,
+    "timestamp": "2026-07-18T09:36:06.490245Z",
+    "previous_hash": "e1116a5fa71a7a09bf0e8d77538d0dd466938bbf679c44f06c4683f531285f40",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model summary retained as implementation account; verification evidence remains independently graded"
+      }
+    },
+    "hash": "49b3d8a73a6c7c8c4c6f0a34c0167a2416e9a73af1849dca4c84a66ae5853a4e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 14,
+    "timestamp": "2026-07-18T09:36:06.4905661Z",
+    "previous_hash": "49b3d8a73a6c7c8c4c6f0a34c0167a2416e9a73af1849dca4c84a66ae5853a4e",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "reviewing",
+        "to": "awaiting_apply"
+      }
+    },
+    "hash": "50d937d2286d4a9cd0a383df58d89d79e56c4d35f7a46a249339658dd0aefbfd"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+    "sequence": 15,
+    "timestamp": "2026-07-18T09:36:06.7565461Z",
+    "previous_hash": "50d937d2286d4a9cd0a383df58d89d79e56c4d35f7a46a249339658dd0aefbfd",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "awaiting_apply",
+        "to": "applied"
+      }
+    },
+    "hash": "b887576542769a97888cd37e7aa4e9276699dc8abfbe67754bee9476d6a90ad5"
+  }
+]

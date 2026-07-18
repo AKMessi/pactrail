@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-mvb-v1",
+  "suite_manifest": "../../mvb-v1/cases.json",
+  "scored_cases": 7,
+  "repetitions": 1,
+  "temperature": 0.0,
+  "temperature_enforcement": "Pactrail v0.1.0 OpenAI-compatible driver",
+  "grading": "deterministic observable artifacts; no LLM judge",
+  "retry_policy": "no case reruns or favorable-sample selection",
+  "common_controls": {
+    "context_tokens": 8192,
+    "max_output_tokens_per_turn": 512,
+    "max_turns_per_case": 12,
+    "logical_request_budget_per_model": 84,
+    "native_process_execution": false,
+    "server_slots": 1,
+    "server_threads": 8,
+    "server_batch_threads": 8,
+    "gpu_layers": 0,
+    "reasoning_mode": "off",
+    "jinja_chat_template": true,
+    "prompt_cache_mib": 512,
+    "server_context_tokens": 8192
+  },
+  "server_arguments": [
+    "-c", "8192",
+    "-t", "8",
+    "-tb", "8",
+    "-ngl", "0",
+    "-np", "1",
+    "--jinja",
+    "--reasoning", "off",
+    "--metrics",
+    "--cache-ram", "512",
+    "--no-webui"
+  ],
+  "model_specific_transport_deadlines_seconds": {
+    "gemma4-v2-q4km": 300,
+    "ternary-bonsai-27b-q2": 900
+  },
+  "deadline_rationale": "Bonsai's first typed-tool pilot reached Pactrail's original 300-second request deadline before llama.cpp completed prompt evaluation. The preserved trace recorded zero completed model calls and llama.cpp recorded cancellation of task 0. A bounded 900-second deadline then passed the same unscored pilot. No correctness, prompt, tool, context, output, turn, or grading control changed.",
+  "pilot_policy": "One exact-file-create compatibility pilot per model, excluded from scored results. The original Bonsai 300-second timeout diagnostic is also retained.",
+  "microbenchmark": {
+    "tool": "llama-bench build 9591 (62061f910)",
+    "prompt_tokens": 512,
+    "generation_tokens": 64,
+    "repetitions": 3,
+    "threads": 8,
+    "gpu_layers": 0,
+    "output": "JSONL",
+    "score_relationship": "supplemental throughput only; excluded from MVB correctness scores"
+  },
+  "known_runtime_behavior": "Both architectures emitted llama.cpp checkpoint invalidation warnings for hybrid, sliding-window, or recurrent state and sometimes forced full prompt reprocessing. Raw server logs are retained."
+}

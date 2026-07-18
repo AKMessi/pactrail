@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": "6e1f0ae81c0fe4709dd5cb2454706d9817f26468a6b145fad1740e12e010b3c8",
+      "after_unix_mode": null,
+      "before_digest": "a5d119afb7d2aa7ab271664184f4d6357ff366ef8655d659cbef5e3ffa0693ac",
+      "before_unix_mode": null,
+      "bytes_added": 40,
+      "bytes_removed": 40,
+      "path": "config/app.conf"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-targeted-config-edit\\.pactrail\\runs\\019f7495-4321-7783-89ed-e2407683c289\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+  "summary": "Done. `config/app.conf` now has `timeout_ms=2500` — all other bytes preserved, and `README.md` was not touched.",
+  "tokens": 13233,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-targeted-config-edit\\.pactrail\\runs\\019f7495-4321-7783-89ed-e2407683c289\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

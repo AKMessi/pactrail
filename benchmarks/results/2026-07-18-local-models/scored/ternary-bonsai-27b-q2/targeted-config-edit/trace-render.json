@@ -1,0 +1,470 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 0,
+    "timestamp": "2026-07-18T09:36:06.9815124Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-targeted-config-edit",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f7495-4321-7783-89ed-e239c55dd371",
+            "description": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "9fdc02b60eff14bbf9e8692cb224a0370072f6bf721d945e709b13770d5ee360"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 1,
+    "timestamp": "2026-07-18T09:36:06.9818245Z",
+    "previous_hash": "9fdc02b60eff14bbf9e8692cb224a0370072f6bf721d945e709b13770d5ee360",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "9da33f70a5f4b70439b01fac0a2d49ea4b010e8f9d14cc2a73eb01b8a37f91fa"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 2,
+    "timestamp": "2026-07-18T09:36:06.9819843Z",
+    "previous_hash": "9da33f70a5f4b70439b01fac0a2d49ea4b010e8f9d14cc2a73eb01b8a37f91fa",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "2a2665635531ae1d0c169c26ede79feb30970ca95d29c7ff619a88c2ddf8e2a1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 3,
+    "timestamp": "2026-07-18T09:36:06.9847144Z",
+    "previous_hash": "2a2665635531ae1d0c169c26ede79feb30970ca95d29c7ff619a88c2ddf8e2a1",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 2 files and cited 2 within a 1807-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2,
+        "attributes": {
+          "budget_bytes": "5760",
+          "cited_files": "2",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1807",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "e6885cb37f16ca12d3ca70352dd347e8cc3fa9e20cb48b0095c8819e76791e75"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 4,
+    "timestamp": "2026-07-18T09:36:06.9850348Z",
+    "previous_hash": "e6885cb37f16ca12d3ca70352dd347e8cc3fa9e20cb48b0095c8819e76791e75",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:d547f3dde4047974607b6ee204ae368b4d88c91f9f56d13d8bf8d19b9d5d46c4"
+      }
+    },
+    "hash": "5ee9794860dbb292d342c9126b02f8c7c290da1e76a248af0e297bf8353f5a89"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 5,
+    "timestamp": "2026-07-18T09:36:06.9853067Z",
+    "previous_hash": "5ee9794860dbb292d342c9126b02f8c7c290da1e76a248af0e297bf8353f5a89",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "dc908fc10eceb087ea3a38c19cfe38fade3c0db3814a0340b3cb3d37f283a118"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 6,
+    "timestamp": "2026-07-18T09:36:06.985585Z",
+    "previous_hash": "dc908fc10eceb087ea3a38c19cfe38fade3c0db3814a0340b3cb3d37f283a118",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "9bb4f0bbf5e728a677f66eddf2db808e0c442117abf2084d5b76308542628a95"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 7,
+    "timestamp": "2026-07-18T09:46:16.8445166Z",
+    "previous_hash": "9bb4f0bbf5e728a677f66eddf2db808e0c442117abf2084d5b76308542628a95",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/ternary-bonsai-27b-q2",
+        "action": "invoke",
+        "summary": "model turn 1 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 609829,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3123",
+          "output_tokens": "27",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "3680ec3a64434b4b53dd3a6cdfa5eddcee8db77e4e46f73a51b8bb3674e40d42"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 8,
+    "timestamp": "2026-07-18T09:46:16.8507801Z",
+    "previous_hash": "3680ec3a64434b4b53dd3a6cdfa5eddcee8db77e4e46f73a51b8bb3674e40d42",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 3 lines from config/app.conf",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:config/app.conf"
+        ],
+        "succeeded": true,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "9c915acb4cebac8ad0ffa217ab3f460760b10ceb16d853f136300218d115388f",
+          "call_id": "ZtNYBh2k0gvxrCrBBZ8nNWY62Ho9FTdD",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "124",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "fb907d2524f01c252bb378964f624cedb61f8cac6ecc037027fb7f486ecdb728"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 9,
+    "timestamp": "2026-07-18T09:46:52.2676343Z",
+    "previous_hash": "fb907d2524f01c252bb378964f624cedb61f8cac6ecc037027fb7f486ecdb728",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/ternary-bonsai-27b-q2",
+        "action": "invoke",
+        "summary": "model turn 2 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 35414,
+        "attributes": {
+          "cached_input_tokens": "3149",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3211",
+          "output_tokens": "73",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "4f5d51c0045c5139d87f39a0ba42c1197373d28c709adf0a1ecc7c31d9bd2761"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 10,
+    "timestamp": "2026-07-18T09:46:52.2822707Z",
+    "previous_hash": "4f5d51c0045c5139d87f39a0ba42c1197373d28c709adf0a1ecc7c31d9bd2761",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:edit_file",
+        "action": "edit_file",
+        "summary": "applied 1 edits (1 replacements) to config/app.conf",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:config/app.conf",
+          "fs.write:config/app.conf"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "19eadd70911fab7f40e38b91cff48fa1381faeb2bd85d9e74d84eb30af2efc54",
+          "call_id": "TcehjBYZO5eqY0F5F9RhjwZHKf7FuoAE",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "71",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "fd7cc2a29ab8556f45f15c6ca7597fa866ff875c53983ab54fe27bb908fc0f8e"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 11,
+    "timestamp": "2026-07-18T09:47:49.5258911Z",
+    "previous_hash": "fd7cc2a29ab8556f45f15c6ca7597fa866ff875c53983ab54fe27bb908fc0f8e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/ternary-bonsai-27b-q2",
+        "action": "invoke",
+        "summary": "model turn 3 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 57239,
+        "attributes": {
+          "cached_input_tokens": "3079",
+          "finish_reason": "toolcalls",
+          "input_tokens": "3325",
+          "output_tokens": "27",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "9c29b5199512a85d20d49902f5d31f75eada0c058cb72a15ecee118533c78132"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 12,
+    "timestamp": "2026-07-18T09:47:49.5303645Z",
+    "previous_hash": "9c29b5199512a85d20d49902f5d31f75eada0c058cb72a15ecee118533c78132",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 3 lines from config/app.conf",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:config/app.conf"
+        ],
+        "succeeded": true,
+        "duration_ms": 3,
+        "attributes": {
+          "arguments_digest": "9c915acb4cebac8ad0ffa217ab3f460760b10ceb16d853f136300218d115388f",
+          "call_id": "HGjCAmJgYeCiZPQlj1U7ok1y3XnrvcKw",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "124",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "3b39c016dc1d31883013b0af0e3cd0466f5967e3b1e42d69d2d67dfccb6592ef"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 13,
+    "timestamp": "2026-07-18T09:48:15.8622778Z",
+    "previous_hash": "3b39c016dc1d31883013b0af0e3cd0466f5967e3b1e42d69d2d67dfccb6592ef",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/ternary-bonsai-27b-q2",
+        "action": "invoke",
+        "summary": "model turn 4 produced 0 tool call(s) and 113 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 26330,
+        "attributes": {
+          "cached_input_tokens": "3351",
+          "finish_reason": "complete",
+          "input_tokens": "3413",
+          "output_tokens": "34",
+          "text_bytes": "113",
+          "tool_calls": "0",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "5cf7db19a66f4c7a62f7995a5e69b6ffd86e1cef5644bf53907448d47d557738"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 14,
+    "timestamp": "2026-07-18T09:48:15.862959Z",
+    "previous_hash": "5cf7db19a66f4c7a62f7995a5e69b6ffd86e1cef5644bf53907448d47d557738",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "verifying"
+      }
+    },
+    "hash": "4bf5181d61d09b250d13ac19e8ccd8bba2179ab8194f9389897a2ac3ec432774"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 15,
+    "timestamp": "2026-07-18T09:48:15.863535Z",
+    "previous_hash": "4bf5181d61d09b250d13ac19e8ccd8bba2179ab8194f9389897a2ac3ec432774",
+    "event": {
+      "type": "evidence_recorded",
+      "data": {
+        "id": "019f74a0-6277-7f13-88ee-8e5b8fc5fd29",
+        "obligation_id": "019f7495-4321-7783-89ed-e239c55dd371",
+        "grade": "unverified",
+        "kind": "other",
+        "status": "inconclusive",
+        "summary": "In config/app.conf, change timeout_ms from 1000 to 2500. Preserve every other byte and do not edit README.md.: No supported test manifest was detected",
+        "artifact_digest": null,
+        "reproduction": null
+      }
+    },
+    "hash": "a04f1068aaaf80ff04f406260caa97336ffde2aae07507d3caf9ed73649cb589"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 16,
+    "timestamp": "2026-07-18T09:48:15.8662692Z",
+    "previous_hash": "a04f1068aaaf80ff04f406260caa97336ffde2aae07507d3caf9ed73649cb589",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "verifying",
+        "to": "reviewing"
+      }
+    },
+    "hash": "90b260f94385f5ec5de7204e34691d5228714a8015406ebc9129ef67f59fbf2f"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 17,
+    "timestamp": "2026-07-18T09:48:15.8665414Z",
+    "previous_hash": "90b260f94385f5ec5de7204e34691d5228714a8015406ebc9129ef67f59fbf2f",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model summary retained as implementation account; verification evidence remains independently graded"
+      }
+    },
+    "hash": "c788a045885d3c68fd32ee4b5980946dd1ffc10844c690cdcf8cdc335c696092"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 18,
+    "timestamp": "2026-07-18T09:48:15.8667954Z",
+    "previous_hash": "c788a045885d3c68fd32ee4b5980946dd1ffc10844c690cdcf8cdc335c696092",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "reviewing",
+        "to": "awaiting_apply"
+      }
+    },
+    "hash": "781d755e8927d3c58d932b6ad07e832b3e5cf95c03f33ca7a6970f3be5bec8bd"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7495-4321-7783-89ed-e2407683c289",
+    "sequence": 19,
+    "timestamp": "2026-07-18T09:48:15.9609119Z",
+    "previous_hash": "781d755e8927d3c58d932b6ad07e832b3e5cf95c03f33ca7a6970f3be5bec8bd",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "awaiting_apply",
+        "to": "applied"
+      }
+    },
+    "hash": "253bf6a42449d50278dfc853eda410a19d577f05db2cf1751d9ea8568984c9e5"
+  }
+]

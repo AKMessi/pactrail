@@ -1,0 +1,560 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 0,
+    "timestamp": "2026-07-18T09:06:58.9082331Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Explain this directory in one concise sentence. Mention what the library does and name both operations it provides. Do not modify any files.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T082607Z-gemma4-v2-q4km-read-only-repository-summary",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f747a-96a7-7af2-865e-99dbfe8b6dc7",
+            "description": "Explain this directory in one concise sentence. Mention what the library does and name both operations it provides. Do not modify any files.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "65fe2de3813dbf0726f97fbccb01d9e2d1cdf1ef8e537ea40d792717b7f22fd9"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 1,
+    "timestamp": "2026-07-18T09:06:58.9085392Z",
+    "previous_hash": "65fe2de3813dbf0726f97fbccb01d9e2d1cdf1ef8e537ea40d792717b7f22fd9",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "5ba8a790c2df860691c83351c4774267ea2465e4d990fee96b0d479cadd6c228"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 2,
+    "timestamp": "2026-07-18T09:06:58.9087973Z",
+    "previous_hash": "5ba8a790c2df860691c83351c4774267ea2465e4d990fee96b0d479cadd6c228",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "f036684b504e5c08e1fb3d3e996d7f2c415780d9e726640dbddfd3411d154e58"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 3,
+    "timestamp": "2026-07-18T09:06:58.9130796Z",
+    "previous_hash": "f036684b504e5c08e1fb3d3e996d7f2c415780d9e726640dbddfd3411d154e58",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 2 files and cited 1 within a 1806-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 3,
+        "attributes": {
+          "budget_bytes": "5760",
+          "cited_files": "1",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1806",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "96ffe5cdfdca5a443df0aca43460d7db640687a6adec412158477c142dc9bb97"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 4,
+    "timestamp": "2026-07-18T09:06:58.9133726Z",
+    "previous_hash": "96ffe5cdfdca5a443df0aca43460d7db640687a6adec412158477c142dc9bb97",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:dc758b829b8ff8067944c0dc888163cf1c610349b714f3fa1d73c1fdff74133a"
+      }
+    },
+    "hash": "63435bb59b5900ff13b5f86a295860866fe94ca2341c18fe0520960a715462f8"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 5,
+    "timestamp": "2026-07-18T09:06:58.9135412Z",
+    "previous_hash": "63435bb59b5900ff13b5f86a295860866fe94ca2341c18fe0520960a715462f8",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "4c184644d33e64ccbc846c86e5c88731dc4ed6557aa7bb82d0e825ee239bfa4c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 6,
+    "timestamp": "2026-07-18T09:06:58.913699Z",
+    "previous_hash": "4c184644d33e64ccbc846c86e5c88731dc4ed6557aa7bb82d0e825ee239bfa4c",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "3ce179d608108a4fb91b29e6fad0e41615dd8373128721a9ce573399bbe2d6b6"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 7,
+    "timestamp": "2026-07-18T09:08:34.229894Z",
+    "previous_hash": "3ce179d608108a4fb91b29e6fad0e41615dd8373128721a9ce573399bbe2d6b6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 1 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 95315,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2172",
+          "output_tokens": "15",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "a8591f6d1d2e9d66b11b5242d8da979b2647979da06e0f3ade34f8c514f354ba"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 8,
+    "timestamp": "2026-07-18T09:08:34.245221Z",
+    "previous_hash": "a8591f6d1d2e9d66b11b5242d8da979b2647979da06e0f3ade34f8c514f354ba",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:list_files",
+        "action": "list_files",
+        "summary": "listed 2 files below .",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.list:."
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "2eafb1f1c7336630d0a5f0493d05bbc7bcc40382c36408e5f4b53825106d02bc",
+          "call_id": "mCAGq5JZyO2aSuVoEVHGlQ6Yv1D7npcs",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "227",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "82dbf7137df331f3ad336dc2816277a2ba1072fadc27d98ebcaeca5673153505"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 9,
+    "timestamp": "2026-07-18T09:08:49.2270896Z",
+    "previous_hash": "82dbf7137df331f3ad336dc2816277a2ba1072fadc27d98ebcaeca5673153505",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 2 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 14981,
+        "attributes": {
+          "cached_input_tokens": "2168",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2249",
+          "output_tokens": "61",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "68a9dfb2a1e3fa072597269f7d2bf8ed5c4b45fdcc41fa23a527c22aee8c411f"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 10,
+    "timestamp": "2026-07-18T09:08:49.2328111Z",
+    "previous_hash": "68a9dfb2a1e3fa072597269f7d2bf8ed5c4b45fdcc41fa23a527c22aee8c411f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 2 lines from src/calculator.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/calculator.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "b2d7a6ec9cd8a4e8328d179d42231d69ea35bb3f2e51196496b3c6c75b6ef3e5",
+          "call_id": "JuYz5rIdjmhEwqf64KowwsqyfpIV6QOJ",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "178",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "d87ba576cee9dd5312595cadbb2162b3f0f789874d5c76c68ad8b205faafda13"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 11,
+    "timestamp": "2026-07-18T09:09:12.8737592Z",
+    "previous_hash": "d87ba576cee9dd5312595cadbb2162b3f0f789874d5c76c68ad8b205faafda13",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 3 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 23640,
+        "attributes": {
+          "cached_input_tokens": "2249",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2361",
+          "output_tokens": "60",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "a42c08712860c587b605214fbd6ed4185c184f1f330213e856f5ba7413aaf207"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 12,
+    "timestamp": "2026-07-18T09:09:12.8794721Z",
+    "previous_hash": "a42c08712860c587b605214fbd6ed4185c184f1f330213e856f5ba7413aaf207",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 3 lines from README.md",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:README.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "cb5a955a5220a3508b570dff9b6093b3be208ea9ea9f61031efef62e75212fd3",
+          "call_id": "1p97hNWDKzBQBp168NMWQMwh0gdjnZpF",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "126",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "cf83baeeffa1b86ad08dbd143849238e6dca6893a5150c2a76cd6bfa6cb3daee"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 13,
+    "timestamp": "2026-07-18T09:09:29.9146936Z",
+    "previous_hash": "cf83baeeffa1b86ad08dbd143849238e6dca6893a5150c2a76cd6bfa6cb3daee",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 4 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 17034,
+        "attributes": {
+          "cached_input_tokens": "2361",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2429",
+          "output_tokens": "63",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "031a526fd1e49f67c54b65bc491ed21a4d57503c0a1d06500373003b0c17c02b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 14,
+    "timestamp": "2026-07-18T09:09:29.9209674Z",
+    "previous_hash": "031a526fd1e49f67c54b65bc491ed21a4d57503c0a1d06500373003b0c17c02b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_many_files",
+        "action": "read_many_files",
+        "summary": "invalid input for read_many_files: invalid type: string \"README.md\", expected a sequence",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "956d1675773a00ec042f850b1d8968dd786ac97188ebfbe44706bc70eea051c2",
+          "call_id": "g0sekSDDyA9w2GLdYqVlZ93JKSABUlpJ",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "102",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "aeb6f57b7894fa26597628dedcbc89c9781380119ee06d5fa80ee28c99cca1ea"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 15,
+    "timestamp": "2026-07-18T09:09:46.806636Z",
+    "previous_hash": "aeb6f57b7894fa26597628dedcbc89c9781380119ee06d5fa80ee28c99cca1ea",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 5 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 16885,
+        "attributes": {
+          "cached_input_tokens": "2429",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2487",
+          "output_tokens": "76",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "b12a51acd24d9076b76599269ee950ba4299d3dfc043b308336e1972ccd4a800"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 16,
+    "timestamp": "2026-07-18T09:09:46.8131966Z",
+    "previous_hash": "b12a51acd24d9076b76599269ee950ba4299d3dfc043b308336e1972ccd4a800",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_many_files",
+        "action": "read_many_files",
+        "summary": "invalid input for read_many_files: invalid type: string \"README.md\", expected a sequence",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 6,
+        "attributes": {
+          "arguments_digest": "956d1675773a00ec042f850b1d8968dd786ac97188ebfbe44706bc70eea051c2",
+          "call_id": "2HSNFxgEdBv0PRUZSQ5qBT0nyiKgyids",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "102",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "f4ebc0193dd3364fdc5eebbcd0125c0b47edbf19cd035af658799f87b59dc3b1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 17,
+    "timestamp": "2026-07-18T09:10:02.9266469Z",
+    "previous_hash": "f4ebc0193dd3364fdc5eebbcd0125c0b47edbf19cd035af658799f87b59dc3b1",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 6 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 16112,
+        "attributes": {
+          "cached_input_tokens": "2487",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2545",
+          "output_tokens": "87",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "b284e806457ba259343f7736e41701d2539731177620a1b3385225d22adea353"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 18,
+    "timestamp": "2026-07-18T09:10:02.932457Z",
+    "previous_hash": "b284e806457ba259343f7736e41701d2539731177620a1b3385225d22adea353",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_many_files",
+        "action": "read_many_files",
+        "summary": "invalid input for read_many_files: invalid type: string \"README.md\", expected a sequence",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [],
+        "succeeded": false,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "956d1675773a00ec042f850b1d8968dd786ac97188ebfbe44706bc70eea051c2",
+          "call_id": "86tTzOgXGO89hfvk36RcXpQRtXkn6kRu",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "102",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "42ed25f118cc36393790fdeed6598262c1222542e97c4515f25f53655d80a6cc"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 19,
+    "timestamp": "2026-07-18T09:10:02.9328133Z",
+    "previous_hash": "42ed25f118cc36393790fdeed6598262c1222542e97c4515f25f53655d80a6cc",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model recovery stopped after 3 consecutive tool turns because the model repeated the same tool request"
+      }
+    },
+    "hash": "9cddec88866467babef0d70f3de710f1b6281f5336b8ffcce4c4b000b31c54b5"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "sequence": 20,
+    "timestamp": "2026-07-18T09:10:02.9348122Z",
+    "previous_hash": "9cddec88866467babef0d70f3de710f1b6281f5336b8ffcce4c4b000b31c54b5",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "failed"
+      }
+    },
+    "hash": "d2e8360d5ed53414bf991f04c0dea5d4008d89dfe53d4053c1585190dfe0d672"
+  }
+]

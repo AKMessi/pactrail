@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "run_id": "019f74b9-0d71-7553-8378-9835864fbff3",
+  "created_at": "2026-07-18T10:25:22.0341072Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Delete obsolete.txt. Preserve keep.txt unchanged.",
+    "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-obsolete-file-removal",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f74b9-0d70-7b23-9284-88ca6bb741ec",
+        "description": "Delete obsolete.txt. Preserve keep.txt unchanged.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read"
+      ],
+      "deny": [
+        "network",
+        "secret_use",
+        "external_write"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "b6f1864cfb212430b3fbc2ce44ecbf0f3cc8ff06074e3cee57003f6d8099bd3b",
+  "final_event_hash": "f21b2bf9483f9556d429eb7ba27c38197c4954376dda0f755b7ad0ab8906d9be",
+  "changes": [
+    {
+      "path": "obsolete.txt",
+      "before_digest": "aa05da59bb5ad20dc0cbf6742671828d670ceda26edf0a2b8ebbc4776778b3f5",
+      "after_digest": null,
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 0,
+      "bytes_removed": 10
+    }
+  ],
+  "evidence": [
+    {
+      "id": "019f74c2-5a1d-7a43-b691-88a36944d5ca",
+      "obligation_id": "019f74b9-0d70-7b23-9284-88ca6bb741ec",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Delete obsolete.txt. Preserve keep.txt unchanged.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "882fb921b47712071e2e2f1248dcaabcca317565a7f8af3e9214c20a7927dfbd"
+}

@@ -1,0 +1,79 @@
+{
+    "case_id":  "obsolete-file-removal",
+    "repetition":  1,
+    "category":  "workspace-edit",
+    "model":  "gemma4-v2-q4km",
+    "passed":  false,
+    "pactrail_exit_code":  1,
+    "apply_exit_code":  null,
+    "outcome":  "process_error",
+    "run_id":  "019f7471-61ce-7b52-bc52-a5bc174bcc8b",
+    "duration_ms":  308070,
+    "tokens":  34362,
+    "candidate_correct":  false,
+    "candidate_changed_paths":  [
+                                    "keep.txt",
+                                    "obsolete.txt"
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:keep.txt",
+                                     "passed":  false,
+                                     "detail":  "Content differed."
+                                 },
+                                 {
+                                     "name":  "absent:obsolete.txt",
+                                     "passed":  true,
+                                     "detail":  "Path is absent."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  false,
+                                     "detail":  "Expected [obsolete.txt]; observed [keep.txt, obsolete.txt]."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  32,
+                    "model_calls":  12,
+                    "tool_calls":  12,
+                    "failed_tool_calls":  1,
+                    "model_duration_ms":  307853,
+                    "tool_duration_ms":  66,
+                    "input_tokens":  33621,
+                    "output_tokens":  741,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:keep.txt",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "absent:obsolete.txt",
+                           "passed":  false,
+                           "detail":  "Path still exists."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  false,
+                           "detail":  "Expected [obsolete.txt]; observed []."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  ""
+}

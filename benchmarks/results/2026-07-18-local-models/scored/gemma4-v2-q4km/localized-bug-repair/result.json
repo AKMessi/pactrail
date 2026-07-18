@@ -1,0 +1,78 @@
+{
+    "case_id":  "localized-bug-repair",
+    "repetition":  1,
+    "category":  "code-repair",
+    "model":  "gemma4-v2-q4km",
+    "passed":  false,
+    "pactrail_exit_code":  1,
+    "apply_exit_code":  null,
+    "outcome":  "process_error",
+    "run_id":  "019f746a-f955-7861-8f5d-4784384f7a3d",
+    "duration_ms":  419798,
+    "tokens":  34889,
+    "candidate_correct":  true,
+    "candidate_changed_paths":  [
+                                    "src/math.rs"
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:src/math.rs",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "file:tests/math.rs",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  true,
+                                     "detail":  "Expected [src/math.rs]; observed [src/math.rs]."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  33,
+                    "model_calls":  12,
+                    "tool_calls":  12,
+                    "failed_tool_calls":  4,
+                    "model_duration_ms":  419604,
+                    "tool_duration_ms":  74,
+                    "input_tokens":  33988,
+                    "output_tokens":  901,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:src/math.rs",
+                           "passed":  false,
+                           "detail":  "Content differed."
+                       },
+                       {
+                           "name":  "file:tests/math.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  false,
+                           "detail":  "Expected [src/math.rs]; observed []."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  ""
+}

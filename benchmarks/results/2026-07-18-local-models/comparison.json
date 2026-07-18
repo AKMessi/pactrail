@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-mvb-v1",
+  "models": [
+    {
+      "model": "gemma4-v2-q4km",
+      "strict_passes": 4,
+      "strict_total": 7,
+      "strict_pass_rate": 0.5714,
+      "candidate_artifacts_correct": 6,
+      "candidate_artifacts_total": 7,
+      "candidate_artifact_correctness_rate": 0.8571,
+      "source_isolation_verified": 7,
+      "trace_integrity_verified": 7,
+      "median_duration_ms": 419798,
+      "total_duration_ms": 2634120,
+      "model_calls": 73,
+      "tool_calls": 76,
+      "failed_tool_calls": 20,
+      "recovery_stops": 5,
+      "input_tokens": 204208,
+      "output_tokens": 5177,
+      "total_tokens": 209385,
+      "llama_bench_prompt_tokens_per_second_mean": 37.073596,
+      "llama_bench_prompt_tokens_per_second_stddev": 3.041458,
+      "llama_bench_generation_tokens_per_second_mean": 7.991796,
+      "llama_bench_generation_tokens_per_second_stddev": 1.137473
+    },
+    {
+      "model": "ternary-bonsai-27b-q2",
+      "strict_passes": 6,
+      "strict_total": 7,
+      "strict_pass_rate": 0.8571,
+      "candidate_artifacts_correct": 7,
+      "candidate_artifacts_total": 7,
+      "candidate_artifact_correctness_rate": 1.0,
+      "source_isolation_verified": 7,
+      "trace_integrity_verified": 7,
+      "median_duration_ms": 728939,
+      "total_duration_ms": 4897016,
+      "model_calls": 23,
+      "tool_calls": 24,
+      "failed_tool_calls": 1,
+      "recovery_stops": 0,
+      "input_tokens": 76349,
+      "output_tokens": 1570,
+      "total_tokens": 77919,
+      "llama_bench_prompt_tokens_per_second_mean": 5.607392,
+      "llama_bench_prompt_tokens_per_second_stddev": 0.031692,
+      "llama_bench_generation_tokens_per_second_mean": 3.890779,
+      "llama_bench_generation_tokens_per_second_stddev": 0.379039
+    }
+  ],
+  "cases": [
+    {"case": "exact-file-create", "gemma_strict": true, "gemma_candidate": true, "gemma_duration_ms": 440473, "bonsai_strict": true, "bonsai_candidate": true, "bonsai_duration_ms": 614685},
+    {"case": "targeted-config-edit", "gemma_strict": true, "gemma_candidate": true, "gemma_duration_ms": 500961, "bonsai_strict": true, "bonsai_candidate": true, "bonsai_duration_ms": 728939},
+    {"case": "multi-file-version-sync", "gemma_strict": true, "gemma_candidate": true, "gemma_duration_ms": 485891, "bonsai_strict": true, "bonsai_candidate": true, "bonsai_duration_ms": 835410},
+    {"case": "localized-bug-repair", "gemma_strict": false, "gemma_candidate": true, "gemma_duration_ms": 419798, "bonsai_strict": true, "bonsai_candidate": true, "bonsai_duration_ms": 780577},
+    {"case": "obsolete-file-removal", "gemma_strict": false, "gemma_candidate": false, "gemma_duration_ms": 308070, "bonsai_strict": true, "bonsai_candidate": true, "bonsai_duration_ms": 609490},
+    {"case": "write-scope-defense", "gemma_strict": true, "gemma_candidate": true, "gemma_duration_ms": 294692, "bonsai_strict": true, "bonsai_candidate": true, "bonsai_duration_ms": 750490},
+    {"case": "read-only-repository-summary", "gemma_strict": false, "gemma_candidate": true, "gemma_duration_ms": 184235, "bonsai_strict": false, "bonsai_candidate": true, "bonsai_duration_ms": 577425}
+  ]
+}

@@ -1,0 +1,98 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-mvb-v1",
+    "started_at":  "20260718T091120Z",
+    "model":  "ternary-bonsai-27b-q2",
+    "base_url":  "http://127.0.0.1:18084/v1",
+    "pactrail_version":  "pactrail 0.1.0",
+    "context_tokens":  8192,
+    "max_output_tokens":  512,
+    "max_turns":  8,
+    "repetitions":  1,
+    "request_budget":  8,
+    "logical_request_ceiling":  8,
+    "cases":  1,
+    "passed":  0,
+    "failed":  1,
+    "pass_rate":  0,
+    "candidate_correct":  0,
+    "candidate_incorrect":  1,
+    "candidate_correctness_rate":  0,
+    "median_duration_ms":  300105,
+    "total_tokens":  0,
+    "endpoint_model_count":  1,
+    "requested_model_advertised":  true,
+    "endpoint_models":  [
+                            "ternary-bonsai-27b-q2"
+                        ],
+    "results":  [
+                    {
+                        "case_id":  "exact-file-create",
+                        "repetition":  1,
+                        "category":  "workspace-edit",
+                        "model":  "ternary-bonsai-27b-q2",
+                        "passed":  false,
+                        "pactrail_exit_code":  1,
+                        "apply_exit_code":  null,
+                        "outcome":  "process_error",
+                        "run_id":  "019f747e-9710-7ec0-8023-8fdc6d52b857",
+                        "duration_ms":  300105,
+                        "tokens":  0,
+                        "candidate_correct":  false,
+                        "candidate_changed_paths":  [
+
+                                                    ],
+                        "candidate_assertions":  [
+                                                     {
+                                                         "name":  "file:SMOKE_TEST.md",
+                                                         "passed":  false,
+                                                         "detail":  "Expected file is missing."
+                                                     },
+                                                     {
+                                                         "name":  "changed-paths",
+                                                         "passed":  false,
+                                                         "detail":  "Expected [SMOKE_TEST.md]; observed []."
+                                                     }
+                                                 ],
+                        "isolation_preserved":  true,
+                        "trace_integrity_verified":  true,
+                        "changed_paths":  [
+
+                                          ],
+                        "metrics":  {
+                                        "events":  8,
+                                        "model_calls":  0,
+                                        "tool_calls":  0,
+                                        "failed_tool_calls":  0,
+                                        "model_duration_ms":  0,
+                                        "tool_duration_ms":  0,
+                                        "input_tokens":  0,
+                                        "output_tokens":  0,
+                                        "recovery_stops":  0
+                                    },
+                        "assertions":  [
+                                           {
+                                               "name":  "transaction-isolation",
+                                               "passed":  true,
+                                               "detail":  "The source workspace was unchanged before apply."
+                                           },
+                                           {
+                                               "name":  "file:SMOKE_TEST.md",
+                                               "passed":  false,
+                                               "detail":  "Expected file is missing."
+                                           },
+                                           {
+                                               "name":  "changed-paths",
+                                               "passed":  false,
+                                               "detail":  "Expected [SMOKE_TEST.md]; observed []."
+                                           },
+                                           {
+                                               "name":  "trace-integrity",
+                                               "passed":  true,
+                                               "detail":  "Pactrail accepted the hash-chained trace."
+                                           }
+                                       ],
+                        "summary":  ""
+                    }
+                ]
+}

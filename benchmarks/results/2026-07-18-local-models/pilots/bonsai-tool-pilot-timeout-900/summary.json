@@ -1,0 +1,98 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-mvb-v1",
+    "started_at":  "20260718T092149Z",
+    "model":  "ternary-bonsai-27b-q2",
+    "base_url":  "http://127.0.0.1:18084/v1",
+    "pactrail_version":  "pactrail 0.1.0",
+    "context_tokens":  8192,
+    "max_output_tokens":  512,
+    "max_turns":  8,
+    "repetitions":  1,
+    "request_budget":  8,
+    "logical_request_ceiling":  8,
+    "cases":  1,
+    "passed":  1,
+    "failed":  0,
+    "pass_rate":  1,
+    "candidate_correct":  1,
+    "candidate_incorrect":  0,
+    "candidate_correctness_rate":  1,
+    "median_duration_ms":  216390,
+    "total_tokens":  6187,
+    "endpoint_model_count":  1,
+    "requested_model_advertised":  true,
+    "endpoint_models":  [
+                            "ternary-bonsai-27b-q2"
+                        ],
+    "results":  [
+                    {
+                        "case_id":  "exact-file-create",
+                        "repetition":  1,
+                        "category":  "workspace-edit",
+                        "model":  "ternary-bonsai-27b-q2",
+                        "passed":  true,
+                        "pactrail_exit_code":  0,
+                        "apply_exit_code":  0,
+                        "outcome":  "ready_to_apply",
+                        "run_id":  "019f7488-2cb2-7342-8c33-0d76df87da42",
+                        "duration_ms":  216390,
+                        "tokens":  6187,
+                        "candidate_correct":  true,
+                        "candidate_changed_paths":  [
+                                                        "SMOKE_TEST.md"
+                                                    ],
+                        "candidate_assertions":  [
+                                                     {
+                                                         "name":  "file:SMOKE_TEST.md",
+                                                         "passed":  true,
+                                                         "detail":  "Content matched."
+                                                     },
+                                                     {
+                                                         "name":  "changed-paths",
+                                                         "passed":  true,
+                                                         "detail":  "Expected [SMOKE_TEST.md]; observed [SMOKE_TEST.md]."
+                                                     }
+                                                 ],
+                        "isolation_preserved":  true,
+                        "trace_integrity_verified":  true,
+                        "changed_paths":  [
+                                              "SMOKE_TEST.md"
+                                          ],
+                        "metrics":  {
+                                        "events":  16,
+                                        "model_calls":  2,
+                                        "tool_calls":  1,
+                                        "failed_tool_calls":  0,
+                                        "model_duration_ms":  216278,
+                                        "tool_duration_ms":  5,
+                                        "input_tokens":  6119,
+                                        "output_tokens":  68,
+                                        "recovery_stops":  0
+                                    },
+                        "assertions":  [
+                                           {
+                                               "name":  "transaction-isolation",
+                                               "passed":  true,
+                                               "detail":  "The source workspace was unchanged before apply."
+                                           },
+                                           {
+                                               "name":  "file:SMOKE_TEST.md",
+                                               "passed":  true,
+                                               "detail":  "Content matched."
+                                           },
+                                           {
+                                               "name":  "changed-paths",
+                                               "passed":  true,
+                                               "detail":  "Expected [SMOKE_TEST.md]; observed [SMOKE_TEST.md]."
+                                           },
+                                           {
+                                               "name":  "trace-integrity",
+                                               "passed":  true,
+                                               "detail":  "Pactrail accepted the hash-chained trace."
+                                           }
+                                       ],
+                        "summary":  "Created `SMOKE_TEST.md` with exactly one line: \"Pactrail benchmark passed.\""
+                    }
+                ]
+}

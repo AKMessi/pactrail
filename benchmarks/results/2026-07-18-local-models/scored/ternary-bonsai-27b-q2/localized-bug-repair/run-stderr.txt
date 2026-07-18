@@ -1,0 +1,1 @@
+2026-07-18T10:12:38.063414Z  WARN pactrail_engine::engine: tool call failed tool=replace_text error=replacement count was 2, expected 1

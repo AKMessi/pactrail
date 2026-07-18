@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": "f5aa3bf06b199e51034d57980e728695607c8e72033ac71b09f5a9ccbea04bd5",
+      "after_unix_mode": null,
+      "before_digest": "f132e629501878663e212262761624eb423e225595b9ea25c9a4bc9165e7b8c6",
+      "before_unix_mode": null,
+      "bytes_added": 130,
+      "bytes_removed": 130,
+      "path": "src/math.rs"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-localized-bug-repair\\.pactrail\\runs\\019f74ad-2376-7de0-a320-89952e52718a\\receipt.json",
+  "risks": [
+    "Verification incomplete: Verification commands require process permission"
+  ],
+  "run_id": "019f74ad-2376-7de0-a320-89952e52718a",
+  "summary": "The fix is in place. `subtract` now correctly uses `-` instead of `+`, so `subtract(9, 4)` will return `5`. The `add` function is preserved unchanged, and `tests/math.rs` was not modified.",
+  "tokens": 17059,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-localized-bug-repair\\.pactrail\\runs\\019f74ad-2376-7de0-a320-89952e52718a\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

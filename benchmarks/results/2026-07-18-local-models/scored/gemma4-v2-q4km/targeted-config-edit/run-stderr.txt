@@ -1,0 +1,4 @@
+2026-07-18T08:35:50.394513Z  WARN pactrail_engine::engine: tool call failed tool=edit_file error=invalid input for edit_file: unknown field `new_end`, expected one of `old`, `new`, `expected_replacements`
+2026-07-18T08:40:56.827689Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=invalid input for run_process: unknown field `command`, expected one of `program`, `args`, `timeout_seconds`, `max_output_bytes`, `environment`
+2026-07-18T08:41:19.516567Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=invalid input for run_process: invalid type: string "['-n','1000','.']", expected a sequence
+2026-07-18T08:41:49.103607Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=invalid input for run_process: invalid type: string "['-n','1000','.']", expected a sequence

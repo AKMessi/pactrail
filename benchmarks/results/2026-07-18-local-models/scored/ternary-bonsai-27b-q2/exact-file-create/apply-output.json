@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "run_id": "019f748b-e089-7153-a960-e985f61f0d3d",
+  "created_at": "2026-07-18T09:36:06.7573087Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.",
+    "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T092551Z-ternary-bonsai-27b-q2-exact-file-create",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "019f748b-e088-7061-b11a-f01af2230a38",
+        "description": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 250000,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read"
+      ],
+      "deny": [
+        "network",
+        "secret_use",
+        "external_write"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+  "final_event_hash": "b887576542769a97888cd37e7aa4e9276699dc8abfbe67754bee9476d6a90ad5",
+  "changes": [
+    {
+      "path": "SMOKE_TEST.md",
+      "before_digest": null,
+      "after_digest": "1d9572384596595dac070821730eec5d42663924d6991613b7a42ef276fadde0",
+      "before_unix_mode": null,
+      "after_unix_mode": null,
+      "bytes_added": 26,
+      "bytes_removed": 0
+    }
+  ],
+  "evidence": [
+    {
+      "id": "019f7495-4157-7420-a134-4b972b41b190",
+      "obligation_id": "019f748b-e088-7061-b11a-f01af2230a38",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "fd4fdb1e1b6935e0d79ac11c8e43377b99671096a97ca916e6bcc9b58e30d667"
+}

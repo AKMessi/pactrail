@@ -1,0 +1,29 @@
+{
+  "changes": [
+    {
+      "after_digest": "1d9572384596595dac070821730eec5d42663924d6991613b7a42ef276fadde0",
+      "after_unix_mode": null,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 26,
+      "bytes_removed": 0,
+      "path": "SMOKE_TEST.md"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-pilots-timeout900\\20260718T092149Z-ternary-bonsai-27b-q2-exact-file-create\\.pactrail\\runs\\019f7488-2cb2-7342-8c33-0d76df87da42\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "019f7488-2cb2-7342-8c33-0d76df87da42",
+  "summary": "Created `SMOKE_TEST.md` with exactly one line: \"Pactrail benchmark passed.\"",
+  "tokens": 6187,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-pilots-timeout900\\20260718T092149Z-ternary-bonsai-27b-q2-exact-file-create\\.pactrail\\runs\\019f7488-2cb2-7342-8c33-0d76df87da42\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

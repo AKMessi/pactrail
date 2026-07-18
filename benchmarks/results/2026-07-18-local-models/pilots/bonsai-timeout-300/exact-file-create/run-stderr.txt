@@ -1,0 +1,2 @@
+error: engine failed for run 019f747e-9710-7ec0-8023-8fdc6d52b857: model invocation failed: model transport failed: error sending request for url (http://127.0.0.1:18084/v1/chat/completions)
+Portable trace: \\?\C:\Users\aarya\AppData\Local\Temp\pactrail-mvb-2026-07-18-pilots\20260718T091120Z-ternary-bonsai-27b-q2-exact-file-create\.pactrail\runs\019f747e-9710-7ec0-8023-8fdc6d52b857\trace.jsonl

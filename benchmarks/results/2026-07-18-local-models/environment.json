@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "captured_on": "2026-07-18",
+  "timezone": "Asia/Calcutta",
+  "host": {
+    "manufacturer": "Acer",
+    "model": "Swift SFG14-01",
+    "system_type": "ARM64-based PC",
+    "cpu": "Snapdragon(R) X Plus - X1P42100 - Qualcomm(R) Oryon(TM) CPU",
+    "physical_cores": 8,
+    "logical_processors": 8,
+    "physical_memory_bytes": 16759111680,
+    "operating_system": "Microsoft Windows 11 Home Single Language",
+    "os_version": "10.0.26200",
+    "os_build": "26200",
+    "os_architecture": "ARM 64-bit Processor"
+  },
+  "toolchain": {
+    "powershell": "5.1.26100.8875",
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "rust_host": "aarch64-pc-windows-msvc",
+    "cargo": "1.95.0 (f2d3ce0bd 2026-03-21)"
+  },
+  "llama_cpp": {
+    "build_number": 9591,
+    "build_commit": "62061f910",
+    "target": "Windows arm64",
+    "backend": "CPU",
+    "server_sha256": "3b9e598307b097f59a183ff0a92df895256c7a1e0aa3649c90e3cd2ccb0e3486",
+    "bench_sha256": "52315c967a5f5f2193df628b958665f928725d676e3f7fe35c446cb8de286318"
+  },
+  "pactrail": {
+    "version": "0.1.0",
+    "gemma_scored_revision": "754f331e81864f0a64776bf89fea9ba0b5f7516f",
+    "bonsai_scored_revision": "344868e0bfc34dafed6265d58408007413425fce",
+    "current_release_binary_sha256": "68279e7c8e3abca573a88fd6db7620431194af98345a1317af02724ede779123",
+    "revision_note": "Revision 344868e adds the bounded request-timeout control used by Bonsai. The default remains 300 seconds; scoring, prompts, tools, and candidate grading are unchanged. The earlier Gemma binary was not retained for hashing."
+  },
+  "models": [
+    {
+      "id": "gemma4-v2-q4km",
+      "filename": "gemma4-v2-Q4_K_M.gguf",
+      "architecture": "gemma4",
+      "quantization": "Q4_K_M",
+      "file_size_bytes": 7381381664,
+      "tensor_size_bytes_reported_by_llama_bench": 7365558464,
+      "parameters_reported_by_llama_bench": 11907350576,
+      "sha256": "0aa619215f704f47c3ed96aef9ebc44640bc809e586a183c0e60e42f8fbed189"
+    },
+    {
+      "id": "ternary-bonsai-27b-q2",
+      "filename": "Ternary-Bonsai-27B-Q2_0.gguf",
+      "architecture": "qwen35",
+      "quantization": "Q2_0",
+      "file_size_bytes": 7165121600,
+      "tensor_size_bytes_reported_by_llama_bench": 7154128896,
+      "parameters_reported_by_llama_bench": 26895998464,
+      "sha256": "36d863bae5db43dfae1f10c34d22c7c0df3265ac4aa1362b37f3b4c297587c28"
+    }
+  ]
+}

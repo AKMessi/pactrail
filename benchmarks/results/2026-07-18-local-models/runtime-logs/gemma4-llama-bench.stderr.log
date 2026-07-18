@@ -1,0 +1,8 @@
+load_backend: loaded RPC backend from C:\Users\aarya\AppData\Local\Temp\pactrail-mvb\llama-arm64\ggml-rpc.dll
+load_backend: loaded CPU backend from C:\Users\aarya\AppData\Local\Temp\pactrail-mvb\llama-arm64\ggml-cpu.dll
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| gemma4 ?B Q4_K - Medium        |   6.86 GiB |    11.91 B | CPU        |       8 |           pp512 |         37.07 ± 3.04 |
+| gemma4 ?B Q4_K - Medium        |   6.86 GiB |    11.91 B | CPU        |       8 |            tg64 |          7.99 ± 1.14 |
+
+build: 62061f910 (9591)

@@ -1,0 +1,92 @@
+{
+    "case_id":  "multi-file-version-sync",
+    "repetition":  1,
+    "category":  "multi-file-edit",
+    "model":  "ternary-bonsai-27b-q2",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f74a0-6369-7ad0-9041-2c14fa435776",
+    "duration_ms":  835410,
+    "tokens":  15097,
+    "candidate_correct":  true,
+    "candidate_changed_paths":  [
+                                    "Cargo.toml",
+                                    "README.md",
+                                    "src/version.rs"
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:Cargo.toml",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "file:src/version.rs",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "file:README.md",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  true,
+                                     "detail":  "Expected [Cargo.toml, README.md, src/version.rs]; observed [Cargo.toml, README.md, src/version.rs]."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "Cargo.toml",
+                          "README.md",
+                          "src/version.rs"
+                      ],
+    "metrics":  {
+                    "events":  27,
+                    "model_calls":  4,
+                    "tool_calls":  9,
+                    "failed_tool_calls":  0,
+                    "model_duration_ms":  835173,
+                    "tool_duration_ms":  43,
+                    "input_tokens":  14526,
+                    "output_tokens":  571,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:Cargo.toml",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:src/version.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [Cargo.toml, README.md, src/version.rs]; observed [Cargo.toml, README.md, src/version.rs]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "Done. The project version has been updated from `0.1.0` to `0.2.0` in all three files:\n\n- **Cargo.toml** — `version = \"0.2.0\"`\n- **src/version.rs** — `pub const VERSION: \u0026str = \"0.2.0\";`\n- **README.md** — `Current release: 0.2.0`\n\nNo other changes were made."
+}

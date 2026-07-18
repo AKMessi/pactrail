@@ -1,0 +1,775 @@
+[
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 0,
+    "timestamp": "2026-07-18T08:22:58.2175994Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.",
+        "workspace_root": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-pilots\\20260718T082258Z-gemma4-v2-q4km-exact-file-create",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "019f7452-4b8f-7540-93da-1c004eddc43f",
+            "description": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 250000,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 24
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read"
+          ],
+          "deny": [
+            "network",
+            "secret_use",
+            "external_write"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "d7963aa74f25774ce4dc2c6b5fcc7259991b5da73bfcedca465c2ffcb4c3cac1"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 1,
+    "timestamp": "2026-07-18T08:22:58.2180066Z",
+    "previous_hash": "d7963aa74f25774ce4dc2c6b5fcc7259991b5da73bfcedca465c2ffcb4c3cac1",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "26457d7e92d86ca2ba947699e9bd49d34f399825f1e56d56d1e2e3e3ac46fad6"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 2,
+    "timestamp": "2026-07-18T08:22:58.2181177Z",
+    "previous_hash": "26457d7e92d86ca2ba947699e9bd49d34f399825f1e56d56d1e2e3e3ac46fad6",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "cf46a8250ea718d12f707015bd7be2c7bc63ea14f4440dac6810addb4ff51b1c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 3,
+    "timestamp": "2026-07-18T08:22:58.2194502Z",
+    "previous_hash": "cf46a8250ea718d12f707015bd7be2c7bc63ea14f4440dac6810addb4ff51b1c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 0 files and cited 0 within a 1471-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1,
+        "attributes": {
+          "budget_bytes": "5760",
+          "cited_files": "0",
+          "instructions": "0",
+          "memory_fragments": "0",
+          "rendered_bytes": "1471",
+          "truncated": "false"
+        }
+      }
+    },
+    "hash": "5c5178df148255582a4d5d1bcd8ad19d0d50fe10ac000929e89d8468ec7128e4"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 4,
+    "timestamp": "2026-07-18T08:22:58.2196977Z",
+    "previous_hash": "5c5178df148255582a4d5d1bcd8ad19d0d50fe10ac000929e89d8468ec7128e4",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
+      }
+    },
+    "hash": "0af2516fe0dc02d74031ab901378ab76cf6a5394bddd107f19a322bada907696"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 5,
+    "timestamp": "2026-07-18T08:22:58.2198899Z",
+    "previous_hash": "0af2516fe0dc02d74031ab901378ab76cf6a5394bddd107f19a322bada907696",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "526234e2f3470f4aafaf59e008caf3bed30c1fd7cd2a98eac282116083b1969a"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 6,
+    "timestamp": "2026-07-18T08:22:58.220046Z",
+    "previous_hash": "526234e2f3470f4aafaf59e008caf3bed30c1fd7cd2a98eac282116083b1969a",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "1782463df26d396eaca81491d95551de0bd40886dfc1c41f6d2d832ba98a56dd"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 7,
+    "timestamp": "2026-07-18T08:24:09.2787728Z",
+    "previous_hash": "1782463df26d396eaca81491d95551de0bd40886dfc1c41f6d2d832ba98a56dd",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 1 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 71057,
+        "attributes": {
+          "cached_input_tokens": "0",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2085",
+          "output_tokens": "31",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "a99f54ebff92cbc1ae81229ec0a7b50b66c7a0e9b3fc9b1d0c3d180e4f2c8a83"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 8,
+    "timestamp": "2026-07-18T08:24:09.2972973Z",
+    "previous_hash": "a99f54ebff92cbc1ae81229ec0a7b50b66c7a0e9b3fc9b1d0c3d180e4f2c8a83",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:write_file",
+        "action": "write_file",
+        "summary": "wrote workspace file",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.changed:SMOKE_TEST.md",
+          "fs.write:SMOKE_TEST.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 17,
+        "attributes": {
+          "arguments_digest": "83d45a60b3074220cb97db08074a738bae233a3a6886d6dbbf4538b69cdfc513",
+          "call_id": "0rbVc5zxIunKoGWiTqGEl2ovUTR25mol",
+          "changed_files": "1",
+          "execution": "serial",
+          "output_bytes": "111",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "49a6bdb99c125922a0a851b5b64537e89ad0f7afbc7349bdd7fe191f1633ac69"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 9,
+    "timestamp": "2026-07-18T08:24:21.3912687Z",
+    "previous_hash": "49a6bdb99c125922a0a851b5b64537e89ad0f7afbc7349bdd7fe191f1633ac69",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 2 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 12093,
+        "attributes": {
+          "cached_input_tokens": "2081",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2199",
+          "output_tokens": "44",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "2976709114e0d943a6ae11f030c92c25b12b0dc005774ad137f12d1747ce7600"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 10,
+    "timestamp": "2026-07-18T08:24:21.3962445Z",
+    "previous_hash": "2976709114e0d943a6ae11f030c92c25b12b0dc005774ad137f12d1747ce7600",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:workspace_changes",
+        "action": "workspace_changes",
+        "summary": "inspected 1 candidate file changes",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "transaction.inspect"
+        ],
+        "succeeded": true,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "6e46dd10defc9b56c29a6ec56b508c21f54c08192194e4df25bf36f0c9c3c279",
+          "call_id": "b1zYohe2IcMwP4gZ3SygwxhU8QiWzAdG",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "268",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "9b6cd89902161cb693c3e46cb58a045efa2202d4e7cb222d755f7323f81e1d78"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 11,
+    "timestamp": "2026-07-18T08:24:38.1883854Z",
+    "previous_hash": "9b6cd89902161cb693c3e46cb58a045efa2202d4e7cb222d755f7323f81e1d78",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 3 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 16791,
+        "attributes": {
+          "cached_input_tokens": "2199",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2347",
+          "output_tokens": "55",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "0a2d1f4a7cbcf5300760359ebc598371ccb20f48b1b00572813eaa52faec8b6c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 12,
+    "timestamp": "2026-07-18T08:24:38.1922648Z",
+    "previous_hash": "0a2d1f4a7cbcf5300760359ebc598371ccb20f48b1b00572813eaa52faec8b6c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 1 lines from SMOKE_TEST.md",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:SMOKE_TEST.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 3,
+        "attributes": {
+          "arguments_digest": "3aaf00d401dbf3c101b9ef5dbef4c1e6cb380efe07997373d68e39db6291137e",
+          "call_id": "Mq0wCD0ZuUOg2KJvaFvhbCrPkX5TFZXU",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "107",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "f52e80a1aa537a2ee41e32dd3c4a49aa2fd5b91301c2e1b03dfc3cefceb51661"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 13,
+    "timestamp": "2026-07-18T08:24:53.6491719Z",
+    "previous_hash": "f52e80a1aa537a2ee41e32dd3c4a49aa2fd5b91301c2e1b03dfc3cefceb51661",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 4 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 15456,
+        "attributes": {
+          "cached_input_tokens": "2347",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2416",
+          "output_tokens": "59",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "bf254a7663c7f4ed9c95e14202c6167ebc409b5741a652ad42d8c2468dba6644"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 14,
+    "timestamp": "2026-07-18T08:24:53.6566315Z",
+    "previous_hash": "bf254a7663c7f4ed9c95e14202c6167ebc409b5741a652ad42d8c2468dba6644",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:write_file",
+        "action": "write_file",
+        "summary": "wrote workspace file",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.write:SMOKE_TEST.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 6,
+        "attributes": {
+          "arguments_digest": "83d45a60b3074220cb97db08074a738bae233a3a6886d6dbbf4538b69cdfc513",
+          "call_id": "8g9Rs9EAiUDEr4yskucBcxpb4QcM0Y8H",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "111",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "c7b69eef5a6c927d8d92a61591874e0b955e093c7e348cd4d9cd94d3f4846723"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 15,
+    "timestamp": "2026-07-18T08:25:04.8533838Z",
+    "previous_hash": "c7b69eef5a6c927d8d92a61591874e0b955e093c7e348cd4d9cd94d3f4846723",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 5 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 11196,
+        "attributes": {
+          "cached_input_tokens": "2416",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2534",
+          "output_tokens": "42",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "83324abddb013e304f1febeba3c585e1af1bccb9c004d27d5856fd30914775b5"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 16,
+    "timestamp": "2026-07-18T08:25:04.8580626Z",
+    "previous_hash": "83324abddb013e304f1febeba3c585e1af1bccb9c004d27d5856fd30914775b5",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 1 lines from SMOKE_TEST.md",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:SMOKE_TEST.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 4,
+        "attributes": {
+          "arguments_digest": "3aaf00d401dbf3c101b9ef5dbef4c1e6cb380efe07997373d68e39db6291137e",
+          "call_id": "giWi6pnjSlC6FDff9wSWKufznTEqUoQm",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "107",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "7f19f98424816c4a720eb6e8a74f7cf830926a43acc884ebe28deddbb80f9cf2"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 17,
+    "timestamp": "2026-07-18T08:25:18.8235663Z",
+    "previous_hash": "7f19f98424816c4a720eb6e8a74f7cf830926a43acc884ebe28deddbb80f9cf2",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 6 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 13964,
+        "attributes": {
+          "cached_input_tokens": "2534",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2603",
+          "output_tokens": "53",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "f40f44f0d3c85f9c1ce2542027df9653dd71921a29c3ada2a7e67bf4e00bc917"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 18,
+    "timestamp": "2026-07-18T08:25:18.8291041Z",
+    "previous_hash": "f40f44f0d3c85f9c1ce2542027df9653dd71921a29c3ada2a7e67bf4e00bc917",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:write_file",
+        "action": "write_file",
+        "summary": "wrote workspace file",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.write:SMOKE_TEST.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "83d45a60b3074220cb97db08074a738bae233a3a6886d6dbbf4538b69cdfc513",
+          "call_id": "cBtMSIcT6WvR35ld8mTXRguCNd9mTWgW",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "111",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "a5e8175b4362491850d7cd5a558ef384eef522c6c5a67e4c3384ec9941a6a288"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 19,
+    "timestamp": "2026-07-18T08:25:34.5878245Z",
+    "previous_hash": "a5e8175b4362491850d7cd5a558ef384eef522c6c5a67e4c3384ec9941a6a288",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 7 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 15758,
+        "attributes": {
+          "cached_input_tokens": "2603",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2721",
+          "output_tokens": "63",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "c738b2deb778fc294781cb41ffe43e1ab7388bbbd8bceda84aa4e6a3073207e9"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 20,
+    "timestamp": "2026-07-18T08:25:34.5947303Z",
+    "previous_hash": "c738b2deb778fc294781cb41ffe43e1ab7388bbbd8bceda84aa4e6a3073207e9",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:write_file",
+        "action": "write_file",
+        "summary": "wrote workspace file",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.write:SMOKE_TEST.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 6,
+        "attributes": {
+          "arguments_digest": "83d45a60b3074220cb97db08074a738bae233a3a6886d6dbbf4538b69cdfc513",
+          "call_id": "2IFZArNxx6sIUUEGc3wSIt0X5QYH5k7z",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "111",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "c2eedb81369310efff329f64bf46a86363092812d394757cbd4887d81b16e059"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 21,
+    "timestamp": "2026-07-18T08:25:52.0695936Z",
+    "previous_hash": "c2eedb81369310efff329f64bf46a86363092812d394757cbd4887d81b16e059",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/gemma4-v2-q4km",
+        "action": "invoke",
+        "summary": "model turn 8 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 17474,
+        "attributes": {
+          "cached_input_tokens": "2721",
+          "finish_reason": "toolcalls",
+          "input_tokens": "2839",
+          "output_tokens": "59",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "95d2f6565155bb0d61821f1b963d271b3db29ca20143dfe8ba1ef6e582f85729"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 22,
+    "timestamp": "2026-07-18T08:25:52.0760715Z",
+    "previous_hash": "95d2f6565155bb0d61821f1b963d271b3db29ca20143dfe8ba1ef6e582f85729",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:write_file",
+        "action": "write_file",
+        "summary": "wrote workspace file",
+        "declared_effects": [
+          "file_write"
+        ],
+        "observed_effects": [
+          "fs.write:SMOKE_TEST.md"
+        ],
+        "succeeded": true,
+        "duration_ms": 5,
+        "attributes": {
+          "arguments_digest": "83d45a60b3074220cb97db08074a738bae233a3a6886d6dbbf4538b69cdfc513",
+          "call_id": "RXatgaAvMjLWH8jmCyWdwoD2jvaCRqS7",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "111",
+          "output_truncated": "false",
+          "parallel_safe": "false",
+          "risk": "workspacemutation",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "e0fbc9948f10e452e5ef77e16d9f26d77ca5639459134e6379cc8987a0f07d6c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 23,
+    "timestamp": "2026-07-18T08:25:52.0763364Z",
+    "previous_hash": "e0fbc9948f10e452e5ef77e16d9f26d77ca5639459134e6379cc8987a0f07d6c",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model recovery stopped after 3 consecutive tool turns because the model repeated the same tool request"
+      }
+    },
+    "hash": "1875332907742f9f100becb90b9943027f625ceb1169972ff96bb950c9a216bc"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 24,
+    "timestamp": "2026-07-18T08:25:52.0779998Z",
+    "previous_hash": "1875332907742f9f100becb90b9943027f625ceb1169972ff96bb950c9a216bc",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "verifying"
+      }
+    },
+    "hash": "09c994c23eb3568f4c45960f328058d54df25e9f12f92d990e240cbe300db8a5"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 25,
+    "timestamp": "2026-07-18T08:25:52.0788333Z",
+    "previous_hash": "09c994c23eb3568f4c45960f328058d54df25e9f12f92d990e240cbe300db8a5",
+    "event": {
+      "type": "evidence_recorded",
+      "data": {
+        "id": "019f7454-f2ce-7432-b2a8-588f48fdeb53",
+        "obligation_id": "019f7452-4b8f-7540-93da-1c004eddc43f",
+        "grade": "unverified",
+        "kind": "other",
+        "status": "inconclusive",
+        "summary": "Create SMOKE_TEST.md containing exactly one line: Pactrail benchmark passed.: No supported test manifest was detected",
+        "artifact_digest": null,
+        "reproduction": null
+      }
+    },
+    "hash": "d03cd0eb92e1f6379cb0e96028dab060d894696338fcf4307353fa5da845d7ac"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 26,
+    "timestamp": "2026-07-18T08:25:52.080823Z",
+    "previous_hash": "d03cd0eb92e1f6379cb0e96028dab060d894696338fcf4307353fa5da845d7ac",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "verifying",
+        "to": "reviewing"
+      }
+    },
+    "hash": "42fccbe6d52f95b2c400fa6c0d485e351560ec0eb280af934f733d74f8a9367c"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 27,
+    "timestamp": "2026-07-18T08:25:52.0810305Z",
+    "previous_hash": "42fccbe6d52f95b2c400fa6c0d485e351560ec0eb280af934f733d74f8a9367c",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "model summary retained as implementation account; verification evidence remains independently graded"
+      }
+    },
+    "hash": "9dc02d6be7ac6e0e50891e76930fc33cc9d68fe3d869bb957710348ed621c145"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 28,
+    "timestamp": "2026-07-18T08:25:52.0811692Z",
+    "previous_hash": "9dc02d6be7ac6e0e50891e76930fc33cc9d68fe3d869bb957710348ed621c145",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "reviewing",
+        "to": "awaiting_apply"
+      }
+    },
+    "hash": "ac694874c5e5b195079c825ebbbaa06e67be1ba9a9b5639672f0e30f4cc0b31b"
+  },
+  {
+    "schema_version": 1,
+    "run_id": "019f7452-4b90-7d21-8dda-40c6a9cf9bd7",
+    "sequence": 29,
+    "timestamp": "2026-07-18T08:25:52.4265602Z",
+    "previous_hash": "ac694874c5e5b195079c825ebbbaa06e67be1ba9a9b5639672f0e30f4cc0b31b",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "awaiting_apply",
+        "to": "applied"
+      }
+    },
+    "hash": "d0efd923c642015573afa9185656202ffb0dfb6a8f105ebd391a636a6acc64ea"
+  }
+]

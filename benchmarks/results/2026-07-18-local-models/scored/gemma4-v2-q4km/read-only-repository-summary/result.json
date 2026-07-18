@@ -1,0 +1,93 @@
+{
+    "case_id":  "read-only-repository-summary",
+    "repetition":  1,
+    "category":  "repository-understanding",
+    "model":  "gemma4-v2-q4km",
+    "passed":  false,
+    "pactrail_exit_code":  1,
+    "apply_exit_code":  null,
+    "outcome":  "process_error",
+    "run_id":  "019f747a-96a8-7d83-a763-6bedf3fcd005",
+    "duration_ms":  184235,
+    "tokens":  14605,
+    "candidate_correct":  true,
+    "candidate_changed_paths":  [
+
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:README.md",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "file:src/calculator.rs",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  true,
+                                     "detail":  "Expected []; observed []."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+
+                      ],
+    "metrics":  {
+                    "events":  21,
+                    "model_calls":  6,
+                    "tool_calls":  6,
+                    "failed_tool_calls":  3,
+                    "model_duration_ms":  183967,
+                    "tool_duration_ms":  38,
+                    "input_tokens":  14243,
+                    "output_tokens":  362,
+                    "recovery_stops":  1
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:README.md",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:src/calculator.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected []; observed []."
+                       },
+                       {
+                           "name":  "summary:calculator",
+                           "passed":  false,
+                           "detail":  "Summary omitted the term."
+                       },
+                       {
+                           "name":  "summary:add",
+                           "passed":  false,
+                           "detail":  "Summary omitted the term."
+                       },
+                       {
+                           "name":  "summary:subtract",
+                           "passed":  false,
+                           "detail":  "Summary omitted the term."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  ""
+}

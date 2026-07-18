@@ -1,0 +1,4 @@
+# Preserve generated evidence exactly as captured from the benchmark processes.
+pilots/** -text -diff
+scored/** -text -diff
+runtime-logs/** -text -diff

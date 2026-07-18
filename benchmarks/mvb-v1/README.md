@@ -105,3 +105,9 @@ A quota-constrained OpenRouter free-tier run, including the scored 1/4 strict
 result, 4/4 exact isolated candidates, rate-limit diagnostic, every failure,
 and raw traces, is available in the
 [`2026-07-17 OpenRouter report`](../results/2026-07-17-openrouter-free/README.md).
+
+A CPU-only Windows ARM64 comparison of Gemma4 v2 Q4_K_M and Ternary Bonsai
+27B Q2_0, including 14 scored runs, transport compatibility diagnostics,
+three-trial `llama-bench` throughput, server logs, exact model hashes, and every
+raw candidate and trace, is available in the
+[`2026-07-18 local-model report`](../results/2026-07-18-local-models/README.md).

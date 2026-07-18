@@ -1,0 +1,78 @@
+{
+    "case_id":  "localized-bug-repair",
+    "repetition":  1,
+    "category":  "code-repair",
+    "model":  "ternary-bonsai-27b-q2",
+    "passed":  true,
+    "pactrail_exit_code":  0,
+    "apply_exit_code":  0,
+    "outcome":  "ready_to_apply",
+    "run_id":  "019f74ad-2376-7de0-a320-89952e52718a",
+    "duration_ms":  780577,
+    "tokens":  17059,
+    "candidate_correct":  true,
+    "candidate_changed_paths":  [
+                                    "src/math.rs"
+                                ],
+    "candidate_assertions":  [
+                                 {
+                                     "name":  "file:src/math.rs",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "file:tests/math.rs",
+                                     "passed":  true,
+                                     "detail":  "Content matched."
+                                 },
+                                 {
+                                     "name":  "changed-paths",
+                                     "passed":  true,
+                                     "detail":  "Expected [src/math.rs]; observed [src/math.rs]."
+                                 }
+                             ],
+    "isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "changed_paths":  [
+                          "src/math.rs"
+                      ],
+    "metrics":  {
+                    "events":  23,
+                    "model_calls":  5,
+                    "tool_calls":  4,
+                    "failed_tool_calls":  1,
+                    "model_duration_ms":  780458,
+                    "tool_duration_ms":  22,
+                    "input_tokens":  16734,
+                    "output_tokens":  325,
+                    "recovery_stops":  0
+                },
+    "assertions":  [
+                       {
+                           "name":  "transaction-isolation",
+                           "passed":  true,
+                           "detail":  "The source workspace was unchanged before apply."
+                       },
+                       {
+                           "name":  "file:src/math.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "file:tests/math.rs",
+                           "passed":  true,
+                           "detail":  "Content matched."
+                       },
+                       {
+                           "name":  "changed-paths",
+                           "passed":  true,
+                           "detail":  "Expected [src/math.rs]; observed [src/math.rs]."
+                       },
+                       {
+                           "name":  "trace-integrity",
+                           "passed":  true,
+                           "detail":  "Pactrail accepted the hash-chained trace."
+                       }
+                   ],
+    "summary":  "The fix is in place. `subtract` now correctly uses `-` instead of `+`, so `subtract(9, 4)` will return `5`. The `add` function is preserved unchanged, and `tests/math.rs` was not modified."
+}

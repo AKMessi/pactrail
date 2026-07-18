@@ -1,0 +1,30 @@
+{
+  "changes": [
+    {
+      "after_digest": "6e1f0ae81c0fe4709dd5cb2454706d9817f26468a6b145fad1740e12e010b3c8",
+      "after_unix_mode": null,
+      "before_digest": "a5d119afb7d2aa7ab271664184f4d6357ff366ef8655d659cbef5e3ffa0693ac",
+      "before_unix_mode": null,
+      "bytes_added": 40,
+      "bytes_removed": 40,
+      "path": "config/app.conf"
+    }
+  ],
+  "outcome": "ready_to_apply",
+  "receipt": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T082607Z-gemma4-v2-q4km-targeted-config-edit\\.pactrail\\runs\\019f745b-e898-7183-8fb1-a23dc3528fdb\\receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "model recovery stopped after 3 consecutive tool turns because every tool request failed; the model did not return a final summary, so candidate completeness requires human review"
+  ],
+  "run_id": "019f745b-e898-7183-8fb1-a23dc3528fdb",
+  "summary": "The model stopped after repeated non-progress tool calls. Candidate changes were preserved for explicit review.",
+  "tokens": 35246,
+  "trace": "\\\\?\\C:\\Users\\aarya\\AppData\\Local\\Temp\\pactrail-mvb-2026-07-18-scored\\20260718T082607Z-gemma4-v2-q4km-targeted-config-edit\\.pactrail\\runs\\019f745b-e898-7183-8fb1-a23dc3528fdb\\trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

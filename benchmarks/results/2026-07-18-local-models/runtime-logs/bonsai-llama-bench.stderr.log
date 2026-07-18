@@ -1,0 +1,8 @@
+load_backend: loaded RPC backend from C:\Users\aarya\AppData\Local\Temp\pactrail-mvb\llama-arm64\ggml-rpc.dll
+load_backend: loaded CPU backend from C:\Users\aarya\AppData\Local\Temp\pactrail-mvb\llama-arm64\ggml-cpu.dll
+| model                          |       size |     params | backend    | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | ------: | --------------: | -------------------: |
+| qwen35 27B Q2_0                |   6.66 GiB |    26.90 B | CPU        |       8 |           pp512 |          5.61 ± 0.03 |
+| qwen35 27B Q2_0                |   6.66 GiB |    26.90 B | CPU        |       8 |            tg64 |          3.89 ± 0.38 |
+
+build: 62061f910 (9591)
