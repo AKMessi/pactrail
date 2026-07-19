@@ -64,6 +64,13 @@ paths, BLAKE3 digests, sizes, coarse languages, imports, and symbol-like
 declarations. Oversized and non-UTF-8 files remain visible in topology without
 being retained for semantic scanning.
 
+The index also derives a bounded repository evidence graph. Definition nodes
+come from project symbol declarations; edges point to exact file and line
+locations where the same project-defined identifier occurs. These edges are
+explicitly lexical evidence, not type-resolved calls. Construction is capped at
+200,000 definitions, 500,000 references, and 256 references per symbol. A
+second-pass digest check fails closed if a file changes during indexing.
+
 For each run, the compiler:
 
 1. Rewrites the model-visible workspace root to `.` so host paths never enter
@@ -77,10 +84,12 @@ For each run, the compiler:
 5. Falls back to conventional manifests, READMEs, and entrypoints for broad
    repository questions, adding bounded current previews labelled as untrusted
    file evidence.
-6. Produces a deterministic project profile from root ecosystem manifests and
+6. Expands task-matched symbols to bounded definition and reference locations,
+   giving initial retrieval one repository-wide relationship hop.
+7. Produces a deterministic project profile from root ecosystem manifests and
    conventional entrypoints so tiny models do not have to infer basic topology.
-7. Adds complete relevant memory and topology entries in priority order.
-8. Omits optional entries whole, records inclusion metadata, and shows the model
+8. Adds complete relevant memory and topology entries in priority order.
+9. Omits optional entries whole, records inclusion metadata, and shows the model
    a visible budget-exhaustion notice.
 
 Memory is advisory. It includes an identifier, kind, source, title, and content;
@@ -93,6 +102,7 @@ UX/scheduling annotations: read-only, idempotent, parallel-safe, and risk class.
 The production registry currently provides:
 
 - `list_files`, `read_file`, `read_many_files`, and `search`;
+- `search_code_graph` for project definitions and bounded lexical references;
 - `write_file`, `replace_text`, atomic `edit_file`, and `remove_file`;
 - `workspace_changes` and `recall_memory`;
 - capability-gated `run_process` for detected verification.
@@ -101,6 +111,12 @@ The engine executes consecutive parallel-safe calls concurrently. A mutation,
 unknown tool, or host-execution call closes the read batch; later calls cannot
 overtake it. Results are journaled in the model's original call order, keeping
 replay deterministic.
+
+`search_code_graph` rebuilds the evidence graph from the current isolated
+candidate on each call. This avoids serving a stale pre-edit graph and keeps
+cache invalidation outside the trust boundary. The output carries the current
+repository digest, explicit truncation state, definition provenance, and a
+warning to read cited source before editing.
 
 Each tool result is normalized, output-bounded, and compared against transaction
 manifests before and after execution. The event record contains a digest of the

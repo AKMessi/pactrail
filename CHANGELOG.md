@@ -6,6 +6,14 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A deterministic repository evidence graph that connects bounded
+  project-defined symbol locations with lexical reference locations, expands
+  initial retrieval one hop, and is available to models through the typed
+  `search_code_graph` tool. Tool queries rebuild from the isolated candidate so
+  navigation cannot silently use a pre-edit index.
+
 ## [0.2.0] - 2026-07-18
 
 ### Added

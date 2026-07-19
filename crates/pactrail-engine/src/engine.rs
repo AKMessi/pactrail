@@ -1539,6 +1539,7 @@ fn bound_tool_content(content: serde_json::Value) -> (serde_json::Value, usize, 
 fn model_safe_tool_error(error: &ToolError) -> String {
     match error {
         ToolError::Workspace(_) => "workspace operation failed; use only workspace-relative paths (`.` for the root). list_files and search accept directories; read_file, write_file, replace_text, and remove_file accept files".to_owned(),
+        ToolError::RepositoryGraph(_) => "repository evidence graph construction failed because the candidate could not be indexed consistently; retry after current workspace writes finish".to_owned(),
         ToolError::Io { source, .. } => format!(
             "tool I/O failed: {source}; use only workspace-relative paths (`.` for the root)"
         ),

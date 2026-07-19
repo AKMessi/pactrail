@@ -13,6 +13,10 @@ use thiserror::Error;
 const MAX_INDEX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_INSTRUCTION_BYTES: u64 = 256 * 1024;
 const MAX_SYMBOLS_PER_FILE: usize = 2_000;
+const MAX_GRAPH_DEFINITIONS: usize = 200_000;
+const MAX_GRAPH_REFERENCES: usize = 500_000;
+const MAX_REFERENCES_PER_SYMBOL: usize = 256;
+const MAX_IDENTIFIER_BYTES: usize = 128;
 const MAX_ANCHOR_PREVIEW_BYTES: usize = 2 * 1024;
 const MAX_CONTEXT_FRAGMENTS: usize = 64;
 const MAX_CONTEXT_FRAGMENT_BYTES: usize = 64 * 1024;
@@ -55,6 +59,53 @@ pub struct Symbol {
     pub name: String,
     pub kind: String,
     pub line: usize,
+}
+
+/// One project-defined symbol location in the repository evidence graph.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SymbolLocation {
+    pub path: String,
+    pub line: usize,
+    pub kind: String,
+}
+
+/// One bounded lexical reference to a project-defined symbol.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SymbolReference {
+    pub path: String,
+    pub line: usize,
+}
+
+/// Deterministic repository-wide symbol and reference index.
+///
+/// References are deliberately labelled lexical evidence. They are navigation
+/// hints derived from identifier occurrences, not claims about runtime call
+/// flow or type resolution.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RepositoryGraph {
+    pub definitions: BTreeMap<String, Vec<SymbolLocation>>,
+    pub references: BTreeMap<String, Vec<SymbolReference>>,
+    pub truncated: bool,
+}
+
+/// Bounded evidence for one graph-matched project symbol.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GraphSymbolEvidence {
+    pub name: String,
+    pub definitions: Vec<SymbolLocation>,
+    pub references: Vec<SymbolReference>,
+    pub total_references: usize,
+    pub references_truncated: bool,
+}
+
+/// Stable result of a repository evidence graph query.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GraphQueryResult {
+    pub query: String,
+    pub symbols: Vec<GraphSymbolEvidence>,
+    pub total_matching_symbols: usize,
+    pub result_truncated: bool,
+    pub graph_truncated: bool,
 }
 
 /// Deterministic metadata extracted from one repository file.
@@ -153,6 +204,8 @@ pub struct RepositoryIndex {
     pub files: BTreeMap<String, IndexedFile>,
     pub instructions: Vec<InstructionFile>,
     pub languages: BTreeMap<Language, usize>,
+    #[serde(default)]
+    pub graph: RepositoryGraph,
     pub digest: String,
 }
 
@@ -223,11 +276,13 @@ impl RepositoryIndex {
             );
         }
         instructions.sort_by(|left, right| left.path.cmp(&right.path));
+        let graph = build_repository_graph(root, &files)?;
         let digest = index_digest(&files, &instructions);
         Ok(Self {
             files,
             instructions,
             languages,
+            graph,
             digest,
         })
     }
@@ -265,6 +320,27 @@ impl RepositoryIndex {
                 (score, file)
             })
             .collect::<Vec<_>>();
+        let graph_evidence = self.graph.query(query, 16, 64);
+        for (score, file) in &mut scored {
+            for symbol in &graph_evidence.symbols {
+                *score = score.saturating_add(
+                    symbol
+                        .definitions
+                        .iter()
+                        .filter(|location| location.path == file.path)
+                        .count()
+                        .saturating_mul(6),
+                );
+                *score = score.saturating_add(
+                    symbol
+                        .references
+                        .iter()
+                        .filter(|reference| reference.path == file.path)
+                        .count()
+                        .saturating_mul(2),
+                );
+            }
+        }
         scored.sort_by(|(left_score, left), (right_score, right)| {
             right_score
                 .cmp(left_score)
@@ -290,6 +366,68 @@ impl RepositoryIndex {
             retrieved.extend(anchors.into_iter().take(limit.min(8)).map(|(_, file)| file));
         }
         retrieved
+    }
+}
+
+impl RepositoryGraph {
+    /// Finds project-defined symbols and their bounded lexical references.
+    ///
+    /// Results are ranked by exact or partial query-token overlap, then by a
+    /// stable case-insensitive symbol name. Zero limits return an empty result.
+    #[must_use]
+    pub fn query(
+        &self,
+        query: &str,
+        max_symbols: usize,
+        max_references_per_symbol: usize,
+    ) -> GraphQueryResult {
+        let normalized_query = query.trim().to_ascii_lowercase();
+        let tokens = query_tokens(query);
+        let mut matches = self
+            .definitions
+            .keys()
+            .filter_map(|name| {
+                let normalized_name = name.to_ascii_lowercase();
+                graph_match_score(&normalized_query, &tokens, &normalized_name)
+                    .map(|score| (score, normalized_name, name))
+            })
+            .collect::<Vec<_>>();
+        matches.sort_by(
+            |(left_score, left_normalized, left), (right_score, right_normalized, right)| {
+                right_score
+                    .cmp(left_score)
+                    .then_with(|| left_normalized.cmp(right_normalized))
+                    .then_with(|| left.cmp(right))
+            },
+        );
+        let total_matching_symbols = matches.len();
+        let symbols = matches
+            .into_iter()
+            .take(max_symbols)
+            .filter_map(|(_, _, name)| {
+                let definitions = self.definitions.get(name)?.clone();
+                let all_references = self.references.get(name).cloned().unwrap_or_default();
+                let total_references = all_references.len();
+                let references = all_references
+                    .into_iter()
+                    .take(max_references_per_symbol)
+                    .collect::<Vec<_>>();
+                Some(GraphSymbolEvidence {
+                    name: name.clone(),
+                    definitions,
+                    references_truncated: references.len() < total_references,
+                    references,
+                    total_references,
+                })
+            })
+            .collect::<Vec<_>>();
+        GraphQueryResult {
+            query: query.to_owned(),
+            result_truncated: symbols.len() < total_matching_symbols,
+            symbols,
+            total_matching_symbols,
+            graph_truncated: self.truncated,
+        }
     }
 }
 
@@ -336,6 +474,170 @@ fn fingerprint_and_retain(path: &Path) -> Result<(String, u64, Option<Vec<u8>>),
         }
     }
     Ok((hasher.finalize().to_hex().to_string(), size, retained))
+}
+
+fn build_repository_graph(
+    root: &Path,
+    files: &BTreeMap<String, IndexedFile>,
+) -> Result<RepositoryGraph, ContextError> {
+    let mut graph = RepositoryGraph::default();
+    let mut definition_count = 0_usize;
+    for file in files.values() {
+        for symbol in &file.symbols {
+            if definition_count == MAX_GRAPH_DEFINITIONS {
+                graph.truncated = true;
+                break;
+            }
+            graph
+                .definitions
+                .entry(symbol.name.clone())
+                .or_default()
+                .push(SymbolLocation {
+                    path: file.path.clone(),
+                    line: symbol.line,
+                    kind: symbol.kind.clone(),
+                });
+            definition_count = definition_count.saturating_add(1);
+        }
+        if definition_count == MAX_GRAPH_DEFINITIONS {
+            break;
+        }
+    }
+
+    let definition_names = graph.definitions.keys().cloned().collect::<BTreeSet<_>>();
+    let mut reference_count = 0_usize;
+    'files: for file in files.values() {
+        if !is_code_language(file.language) || file.bytes > MAX_INDEX_FILE_BYTES {
+            continue;
+        }
+        let path = root.join(Path::new(&file.path));
+        let (digest, _, retained) = fingerprint_and_retain(&path)?;
+        if digest != file.digest {
+            return Err(ContextError::ChangedDuringIndex(path));
+        }
+        let Some(text) = retained
+            .as_deref()
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+        else {
+            continue;
+        };
+        for (line_index, raw_line) in text.lines().enumerate() {
+            if is_comment_only(raw_line, file.language) {
+                continue;
+            }
+            let line = line_index.saturating_add(1);
+            for identifier in identifiers(raw_line) {
+                if !definition_names.contains(identifier) {
+                    continue;
+                }
+                let is_definition = graph.definitions.get(identifier).is_some_and(|locations| {
+                    locations
+                        .iter()
+                        .any(|location| location.path == file.path && location.line == line)
+                });
+                if is_definition {
+                    continue;
+                }
+                let references = graph.references.entry(identifier.to_owned()).or_default();
+                if references.len() == MAX_REFERENCES_PER_SYMBOL {
+                    graph.truncated = true;
+                    continue;
+                }
+                references.push(SymbolReference {
+                    path: file.path.clone(),
+                    line,
+                });
+                reference_count = reference_count.saturating_add(1);
+                if reference_count == MAX_GRAPH_REFERENCES {
+                    graph.truncated = true;
+                    break 'files;
+                }
+            }
+        }
+    }
+    Ok(graph)
+}
+
+fn is_code_language(language: Language) -> bool {
+    matches!(
+        language,
+        Language::Rust
+            | Language::TypeScript
+            | Language::JavaScript
+            | Language::Python
+            | Language::Go
+            | Language::Java
+            | Language::Kotlin
+            | Language::C
+            | Language::Cpp
+            | Language::CSharp
+            | Language::Ruby
+            | Language::Php
+    )
+}
+
+fn is_comment_only(line: &str, language: Language) -> bool {
+    let trimmed = line.trim_start();
+    match language {
+        Language::Python | Language::Ruby => trimmed.starts_with('#'),
+        Language::Php => trimmed.starts_with("//") || trimmed.starts_with('#'),
+        _ => trimmed.starts_with("//") || trimmed.starts_with('*'),
+    }
+}
+
+fn identifiers(line: &str) -> BTreeSet<&str> {
+    let mut identifiers = BTreeSet::new();
+    let bytes = line.as_bytes();
+    let mut start = None;
+    for (index, byte) in bytes.iter().copied().enumerate() {
+        let valid = byte.is_ascii_alphanumeric() || byte == b'_';
+        match (start, valid) {
+            (None, true) if byte.is_ascii_alphabetic() || byte == b'_' => start = Some(index),
+            (Some(begin), false) => {
+                if index.saturating_sub(begin) <= MAX_IDENTIFIER_BYTES {
+                    identifiers.insert(&line[begin..index]);
+                }
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(begin) = start
+        && bytes.len().saturating_sub(begin) <= MAX_IDENTIFIER_BYTES
+    {
+        identifiers.insert(&line[begin..]);
+    }
+    identifiers
+}
+
+fn graph_match_score(
+    normalized_query: &str,
+    tokens: &BTreeSet<String>,
+    normalized_name: &str,
+) -> Option<usize> {
+    if normalized_query.is_empty() || normalized_name.is_empty() {
+        return None;
+    }
+    if normalized_query == normalized_name {
+        return Some(1_000);
+    }
+    if normalized_name.len() < 3 {
+        return None;
+    }
+    tokens
+        .iter()
+        .filter_map(|token| {
+            if token == normalized_name {
+                Some(600)
+            } else if normalized_name.contains(token) {
+                Some(300_usize.saturating_add(token.len()))
+            } else if normalized_name.len() >= 4 && token.contains(normalized_name) {
+                Some(200_usize.saturating_add(normalized_name.len()))
+            } else {
+                None
+            }
+        })
+        .max()
 }
 
 fn utf8_prefix(value: &str, max_bytes: usize) -> &str {
@@ -407,6 +709,7 @@ impl ContextPack {
         let contract_json =
             serde_json::to_string_pretty(&model_contract).map_err(ContextError::Serialization)?;
         let retrieved = index.retrieve(&contract.goal, 40);
+        let graph_evidence = index.graph.query(&contract.goal, 8, 16);
         let language_summary = index
             .languages
             .iter()
@@ -442,7 +745,10 @@ impl ContextPack {
         let mut included_fragments = Vec::new();
         append_fragments(&mut writer, fragments, &mut included_fragments);
         let mut cited_files = Vec::new();
+        append_graph_evidence(&mut writer, &graph_evidence, &mut cited_files);
         append_topology(&mut writer, &retrieved, &mut cited_files);
+        cited_files.sort();
+        cited_files.dedup();
         let (rendered, truncated) = writer.finish();
         let rendered_bytes = rendered.len();
         Ok(Self {
@@ -651,6 +957,52 @@ fn append_topology(writer: &mut PackWriter, retrieved: &[&IndexedFile], cited: &
     }
 }
 
+fn append_graph_evidence(
+    writer: &mut PackWriter,
+    result: &GraphQueryResult,
+    cited: &mut Vec<String>,
+) {
+    let mut heading_pending = true;
+    for symbol in &result.symbols {
+        let heading = if heading_pending {
+            "\n# Repository evidence graph\nProject-defined symbols are linked to bounded lexical identifier references. Use these as navigation hints, not proof of runtime call flow; read current source before editing.\n\n"
+        } else {
+            "\n"
+        };
+        let definitions = symbol
+            .definitions
+            .iter()
+            .map(|location| format!("{}:{} ({})", location.path, location.line, location.kind))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let references = symbol
+            .references
+            .iter()
+            .map(|reference| format!("{}:{}", reference.path, reference.line))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let entry = format!(
+            "{heading}- {}\n  definitions: {definitions}\n  lexical references: {references}",
+            symbol.name
+        );
+        if writer.push_optional(&entry) {
+            heading_pending = false;
+            cited.extend(
+                symbol
+                    .definitions
+                    .iter()
+                    .map(|location| location.path.clone()),
+            );
+            cited.extend(
+                symbol
+                    .references
+                    .iter()
+                    .map(|reference| reference.path.clone()),
+            );
+        }
+    }
+}
+
 fn validate_fragments(fragments: &[ContextFragment]) -> Result<(), ContextError> {
     if fragments.len() > MAX_CONTEXT_FRAGMENTS {
         return Err(ContextError::InvalidFragment(format!(
@@ -848,6 +1200,8 @@ pub enum ContextError {
         #[source]
         source: std::io::Error,
     },
+    #[error("repository file changed while its evidence graph was being built: {0}")]
+    ChangedDuringIndex(PathBuf),
     #[error("repository path escaped the root: {0}")]
     EscapedRoot(PathBuf),
     #[error("non-Unicode repository path is unsupported: {0}")]
@@ -889,6 +1243,86 @@ mod tests {
         assert_eq!(file.symbols[0].name, "Receipt");
         assert_eq!(file.symbols[1].name, "verify");
         assert_eq!(file.imports, vec!["use std::fmt;"]);
+    }
+
+    #[test]
+    fn repository_graph_links_definitions_to_bounded_lexical_references() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::create_dir(root.path().join("src"))
+            .unwrap_or_else(|error| unreachable!("src: {error}"));
+        fs::write(
+            root.path().join("src/receipt.rs"),
+            "pub struct Receipt;\nimpl Receipt {\n    pub fn verify(&self) {}\n}\n",
+        )
+        .unwrap_or_else(|error| unreachable!("definition: {error}"));
+        fs::write(
+            root.path().join("src/consumer.rs"),
+            "use crate::receipt::Receipt;\npub fn consume(receipt: Receipt) { receipt.verify(); }\n",
+        )
+        .unwrap_or_else(|error| unreachable!("reference: {error}"));
+
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let result = index.graph.query("Receipt", 8, 8);
+
+        assert_eq!(result.total_matching_symbols, 1);
+        assert_eq!(result.symbols[0].name, "Receipt");
+        assert_eq!(result.symbols[0].definitions[0].path, "src/receipt.rs");
+        assert_eq!(result.symbols[0].definitions[0].line, 1);
+        assert!(
+            result.symbols[0]
+                .references
+                .iter()
+                .any(|reference| reference.path == "src/consumer.rs" && reference.line == 1)
+        );
+        assert!(!result.graph_truncated);
+    }
+
+    #[test]
+    fn graph_evidence_expands_initial_retrieval_and_context() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::create_dir(root.path().join("src"))
+            .unwrap_or_else(|error| unreachable!("src: {error}"));
+        fs::write(
+            root.path().join("src/definition.rs"),
+            "pub struct Receipt;\n",
+        )
+        .unwrap_or_else(|error| unreachable!("definition: {error}"));
+        fs::write(
+            root.path().join("src/consumer.rs"),
+            "pub fn consume(value: Receipt) {}\n",
+        )
+        .unwrap_or_else(|error| unreachable!("reference: {error}"));
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+
+        let retrieved = index.retrieve("fix Receipt", 10);
+        assert!(retrieved.iter().any(|file| file.path == "src/consumer.rs"));
+
+        let context = ContextPack::compile(&TaskContract::new("fix Receipt", "."), &index)
+            .unwrap_or_else(|error| unreachable!("context: {error}"));
+        assert!(context.rendered.contains("# Repository evidence graph"));
+        assert!(context.rendered.contains("src/consumer.rs:1"));
+        assert!(context.cited_files.contains(&"src/consumer.rs".to_owned()));
+    }
+
+    #[test]
+    fn graph_query_does_not_match_short_symbols_inside_unrelated_words() {
+        let graph = RepositoryGraph {
+            definitions: BTreeMap::from([(
+                "get".to_owned(),
+                vec![SymbolLocation {
+                    path: "src/lib.rs".to_owned(),
+                    line: 1,
+                    kind: "function".to_owned(),
+                }],
+            )]),
+            references: BTreeMap::new(),
+            truncated: false,
+        };
+
+        assert!(graph.query("fix target selection", 8, 8).symbols.is_empty());
+        assert_eq!(graph.query("fix get", 8, 8).symbols[0].name, "get");
     }
 
     #[test]

@@ -5,6 +5,7 @@ mod builtins;
 mod policy;
 mod process;
 mod registry;
+mod structural;
 
 pub use builtins::{
     ListFilesTool, ReadFileTool, RemoveFileTool, ReplaceTextTool, SearchTool, WriteFileTool,
@@ -15,6 +16,7 @@ pub use registry::{
     Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry,
     ToolRisk,
 };
+pub use structural::SearchCodeGraphTool;
 
 /// Builds the production default set of local coding tools.
 ///
@@ -29,6 +31,7 @@ pub fn builtin_registry() -> Result<ToolRegistry, ToolError> {
     registry.register(ReadManyFilesTool)?;
     registry.register(ListFilesTool)?;
     registry.register(SearchTool)?;
+    registry.register(SearchCodeGraphTool)?;
     registry.register(WriteFileTool)?;
     registry.register(ReplaceTextTool)?;
     registry.register(EditFileTool)?;

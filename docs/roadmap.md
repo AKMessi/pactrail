@@ -20,6 +20,8 @@ promise or a security claim.
   profiles, first-class answered runs, and bounded weak-model loop recovery.
 - Provenance-aware workspace memory with human and applied-receipt write paths.
 - Hash-linked detailed execution traces and portable JSONL.
+- Bounded repository evidence graph with typed current-candidate symbol and
+  lexical-reference search.
 - Interactive review-focused CLI plus scriptable JSON interface.
 - Cross-platform CI, dependency policy, and attested GitHub release workflow.
 
@@ -65,8 +67,9 @@ tests and legible CLI diagnostics.
   context, output, vision, caching, and structured output.
 - Incremental repository index invalidation; tree-sitter structure and optional
   LSP references without making an LSP a hard dependency.
-- Hybrid lexical/structural retrieval, context usefulness telemetry, and
-  deterministic compaction summaries with provenance.
+- Tree-sitter/type-aware graph enrichment, incremental index invalidation,
+  context usefulness telemetry, and deterministic compaction summaries with
+  provenance. The shipped lexical evidence graph remains the bounded fallback.
 - Image input as an explicit artifact capability.
 
 Exit criterion: context-overflow and retrieval-relevance suites cover small

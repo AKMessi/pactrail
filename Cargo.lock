@@ -1294,6 +1294,7 @@ dependencies = [
  "async-trait",
  "blake3",
  "ignore",
+ "pactrail-context",
  "pactrail-core",
  "pactrail-memory",
  "pactrail-workspace",

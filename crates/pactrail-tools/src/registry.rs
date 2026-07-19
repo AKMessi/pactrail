@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use pactrail_context::ContextError;
 use pactrail_core::{Capability, PolicyDecision};
 use pactrail_memory::{MemoryError, MemoryStore};
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
@@ -251,6 +252,8 @@ pub enum ToolError {
     },
     #[error("workspace operation failed: {0}")]
     Workspace(#[from] TransactionError),
+    #[error("repository evidence graph failed: {0}")]
+    RepositoryGraph(#[from] ContextError),
     #[error("tool I/O failed at {path}: {source}")]
     Io {
         path: std::path::PathBuf,

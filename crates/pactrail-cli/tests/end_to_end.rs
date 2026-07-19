@@ -498,8 +498,14 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
     let tools = tools
         .as_array()
         .unwrap_or_else(|| unreachable!("tool descriptors were not an array"));
-    assert_eq!(tools.len(), 11);
+    assert_eq!(tools.len(), 12);
     assert!(tools.iter().any(|tool| tool["name"] == "run_process"));
+    let graph = tools
+        .iter()
+        .find(|tool| tool["name"] == "search_code_graph")
+        .unwrap_or_else(|| unreachable!("repository evidence graph tool was not registered"));
+    assert_eq!(graph["required_capability"], "file_read");
+    assert_eq!(graph["annotations"]["read_only"], true);
 
     let schema = pactrail(workspace.path(), ["schema"]);
     assert!(schema.status.success());

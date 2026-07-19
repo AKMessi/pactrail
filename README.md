@@ -53,9 +53,11 @@ pactrail ❯ Fix the parser regression and add a test.
   in a durable SQLite store. Applied receipts can create integrity-checked
   historical records. The model can recall memory but cannot write it.
 - **Context adapts to the model.** Repository topology, scoped `AGENTS.md`
-  instructions, and relevant memories are compiled under a model-derived byte
-  budget. Authoritative context fails closed; optional entries are omitted whole
-  and the omission is visible.
+  instructions, relevant memories, and a bounded repository evidence graph are
+  compiled under a model-derived byte budget. Project-defined symbols link to
+  lexical reference locations for navigation without pretending to be a runtime
+  call graph. Authoritative context fails closed; optional entries are omitted
+  whole and the omission is visible.
 - **Traces describe reality.** Model latency and token deltas, tool duration,
   risk, argument digests, output bounds, observed effects, verification, policy,
   evidence, and state transitions are hash-linked and available as portable
@@ -65,7 +67,7 @@ pactrail ❯ Fix the parser regression and add a test.
   successful read-only loops get one tool-free synthesis turn; invalid loops
   still fail closed, while coherent candidate edits remain reviewable.
 
-## Shipped in 0.1
+## Shipped foundation
 
 ### Interactive experience
 
@@ -87,8 +89,9 @@ pactrail ❯ Fix the parser regression and add a test.
 ### Tool Kernel v2
 
 - Bounded file listing, single and batch reads, lexical search, exact replace,
-  atomic multi-edit, write, remove, candidate-change inspection, memory recall,
-  and trusted native verification.
+  repository-wide symbol/reference graph search, atomic multi-edit, write,
+  remove, candidate-change inspection, memory recall, and trusted native
+  verification.
 - Per-tool read-only, idempotency, parallel-safety, capability, and risk metadata.
 - Consecutive parallel-safe reads overlap; mutations stay serial and durable
   results retain the model's call order.
@@ -284,7 +287,8 @@ The nine crates keep the core domain, storage, memory, context, models, tools,
 workspace transactions, engine, and CLI independently testable. See
 [Architecture](docs/architecture.md), [Threat model](docs/threat-model.md),
 [Interactive CLI](docs/interactive-cli.md), [Providers](docs/providers.md), and
-[Roadmap](docs/roadmap.md).
+[Roadmap](docs/roadmap.md). The primary-paper mechanisms behind recent
+architecture decisions are recorded in [Research foundations](docs/research-foundations.md).
 
 ## Durable local layout
 
@@ -317,7 +321,7 @@ the dependency/license policy in `deny.toml`. Start with
 
 ## Project status
 
-Pactrail 0.1 is a production-grade developer preview: its invariants and failure
+Pactrail 0.2 is a production-grade developer preview: its invariants and failure
 modes are tested, while Rust APIs and versioned local formats may still evolve
 before 1.0. OCI/OS sandbox backends, MCP, native provider adapters, streaming,
 and richer retrieval are roadmap work—not current security claims.
