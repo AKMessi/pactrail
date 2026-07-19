@@ -6,6 +6,8 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-19
+
 ### Added
 
 - A deterministic repository evidence graph that connects bounded
@@ -24,7 +26,7 @@ follow [Semantic Versioning](https://semver.org/).
 - A single budget-respecting validation-repair cycle: repairable deterministic
   check failures are returned as bounded, digest-bound, explicitly untrusted
   diagnostics, then the repaired candidate is independently verified again.
-  Probe/final phases and the controller decision are visible in live and
+  Completion-gate/final phases and the controller decision are visible in live and
   durable traces.
 
 ### Fixed
@@ -144,6 +146,7 @@ follow [Semantic Versioning](https://semver.org/).
 - Bounded run-goal and memory previews now end with a visible ellipsis instead
   of silently dropping continuation text.
 
-[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/AKMessi/pactrail/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/AKMessi/pactrail/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AKMessi/pactrail/releases/tag/v0.1.0
