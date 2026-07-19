@@ -58,6 +58,11 @@ pactrail ❯ Fix the parser regression and add a test.
   lexical reference locations for navigation without pretending to be a runtime
   call graph. Authoritative context fails closed; optional entries are omitted
   whole and the omission is visible.
+- **Long runs stay evidence-dense.** Pactrail measures the serialized
+  conversation and tool schemas against a model-derived high-water mark. Old
+  tool results become deterministic, digest-bound navigation envelopes while
+  the newest evidence stays lossless whenever possible. Tool-call/result pairs
+  remain valid and every compaction is visible in the live and durable trace.
 - **Traces describe reality.** Model latency and token deltas, tool duration,
   risk, argument digests, output bounds, observed effects, verification, policy,
   evidence, and state transitions are hash-linked and available as portable
@@ -96,6 +101,10 @@ pactrail ❯ Fix the parser regression and add a test.
 - Consecutive parallel-safe reads overlap; mutations stay serial and durable
   results retain the model's call order.
 - Model-visible results are bounded to 256 KiB with explicit narrowing guidance.
+- Conversation growth is bounded independently: older observations are
+  compacted locally with BLAKE3 provenance, high-signal anchors, an exact JSON
+  preview, and re-read guidance. No model-generated history summary becomes an
+  authority.
 
 ### Durable safety and state
 

@@ -123,6 +123,27 @@ manifests before and after execution. The event record contains a digest of the
 arguments rather than raw potentially sensitive inputs, plus duration, risk,
 call ID, output size/truncation, declared capability, and observed effects.
 
+### Trajectory context controller
+
+Before every model invocation, the engine measures the exact provider-neutral
+JSON representation of the conversation and tool descriptors. Its conservative
+high-water and target marks are derived from declared context and output token
+limits; provider token accounting remains authoritative.
+
+When the high-water mark is crossed, older tool results are replaced in place
+with deterministic compaction envelopes. Each envelope retains the tool name,
+call ID, error state, original byte count and BLAKE3 digest, bounded scalar
+anchors such as paths and line cursors, a small exact JSON prefix, and explicit
+instructions to re-run the original call more narrowly. Assistant tool calls
+and conversation order are never removed, preserving provider protocol
+validity. The latest tool turn remains unmodified unless it alone threatens the
+window. Model-generated summaries are never used for compaction.
+
+Each compaction writes before/after request digests, byte counts, thresholds,
+and reclaimed bytes to the hash-linked action journal and appears in the live
+CLI timeline. Raw observations remain intentionally absent from the durable
+trace.
+
 The loop controller separately tracks identical tool turns and all-failed tool
 turns. A repeated successful read-only call receives explicit steering. If a
 conservatively classified informational goal still repeats three times, Pactrail
@@ -153,9 +174,9 @@ and its own BLAKE3 hash. Loading a run verifies the entire chain and replays
 events through the same lifecycle reducer. Sequence gaps, cross-run records,
 unknown schema versions, invalid transitions, and tampering fail closed.
 
-Action events cover context compilation, model requests, tools, and verifier
-commands. Policy decisions, evidence, checkpoints, notes, and state transitions
-share the same journal. The CLI exports the verified stream to run-local
+Action events cover context compilation and compaction, model requests, tools,
+and verifier commands. Policy decisions, evidence, checkpoints, notes, and state
+transitions share the same journal. The CLI exports the verified stream to run-local
 `trace.jsonl` atomically after run, apply, and discard transitions. The SQLite
 journal remains authoritative; JSONL is the portable inspection artifact.
 

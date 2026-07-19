@@ -13,6 +13,10 @@ follow [Semantic Versioning](https://semver.org/).
   initial retrieval one hop, and is available to models through the typed
   `search_code_graph` tool. Tool queries rebuild from the isolated candidate so
   navigation cannot silently use a pre-edit index.
+- Deterministic long-horizon context management that preserves recent
+  observations, compacts older tool results into BLAKE3-bound navigation
+  envelopes, keeps tool protocol topology intact, and records before/after
+  request digests and reclaimed bytes in live and durable traces.
 
 ## [0.2.0] - 2026-07-18
 

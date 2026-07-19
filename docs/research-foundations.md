@@ -40,9 +40,9 @@ copy its benchmark claim into Pactrail.
   and independently reruns discovered verification in a disposable snapshot.
 - [Context as a Tool: Context Management for Long-Horizon SWE-Agents](https://arxiv.org/abs/2512.22087)
   motivates separating stable task semantics, condensed long-term trajectory
-  state, and high-fidelity recent interactions. Pactrail will use this as the
-  basis for deterministic, provenance-preserving context compaction rather than
-  append-only history.
+  state, and high-fidelity recent interactions. Pactrail uses this separation
+  for deterministic, provenance-preserving context compaction rather than
+  append-only history or model-authored summaries.
 - [What Context Does a Coding Agent Actually Need to Act?](https://arxiv.org/abs/2607.09691)
   reports that source at the edit site carries more useful behavioral signal
   than natural-language summaries and that carefully compressed context can
@@ -63,13 +63,27 @@ copy its benchmark claim into Pactrail.
 7. The model must read cited source before editing; graph results never replace
    current code.
 
+## Shipped trajectory compaction invariants
+
+1. Stable system, repository, and task messages are never summarized or
+   removed.
+2. Assistant tool calls and tool-result order remain intact for provider
+   protocol validity.
+3. Recent tool evidence stays exact unless its size alone threatens the model
+   window.
+4. A compacted result retains its call ID, tool name, error status, original
+   byte count and BLAKE3 digest, bounded anchors, and a small exact JSON preview.
+5. The model receives explicit re-read guidance; a compacted envelope is
+   navigation evidence, not a replacement for source at the edit site.
+6. Compaction thresholds come from declared context and output limits and every
+   event records before/after request digests and byte counts.
+7. No model-generated summary can become durable trajectory state.
+
 ## Deliberately deferred
 
 - Tree-sitter and optional LSP/type-resolution enrichment require language and
   parser compatibility fixtures before they can strengthen lexical edges.
 - Learned embeddings are not a mandatory dependency; local and air-gapped use
   must retain deterministic retrieval.
-- Automatic history compaction must preserve tool-call protocol validity,
-  provenance, reread paths, and trace observability before shipping.
 - Multiple candidate sampling and patch ranking require isolated child budgets
   and receipts; they will not share mutable tool state.

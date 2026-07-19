@@ -466,6 +466,31 @@ impl RunActivity {
         self.set_message("context ready");
     }
 
+    fn on_compaction_progress(&self, progress: &RunProgress) {
+        let RunProgress::ContextCompacted {
+            compacted_results,
+            before_bytes,
+            after_bytes,
+            reclaimed_bytes,
+        } = progress
+        else {
+            return;
+        };
+        self.row(
+            "◈",
+            "context",
+            &format!(
+                "{compacted_results} {} compacted · {} reclaimed · {} → {}",
+                plural(*compacted_results, "result", "results"),
+                format_bytes(u64::try_from(*reclaimed_bytes).unwrap_or(u64::MAX)),
+                format_bytes(u64::try_from(*before_bytes).unwrap_or(u64::MAX)),
+                format_bytes(u64::try_from(*after_bytes).unwrap_or(u64::MAX)),
+            ),
+            TimelineTone::Brand,
+        );
+        self.set_message("context compacted · recent evidence preserved");
+    }
+
     fn on_model_progress(&self, progress: &RunProgress) {
         match progress {
             RunProgress::ModelTurnStarted { turn, max_turns } => {
@@ -649,6 +674,7 @@ impl RunObserver for RunActivity {
             RunProgress::RunStarted { .. } => self.on_run_started(progress),
             RunProgress::StateChanged { .. } => self.on_state_progress(progress),
             RunProgress::ContextBuilt { .. } => self.on_context_progress(progress),
+            RunProgress::ContextCompacted { .. } => self.on_compaction_progress(progress),
             RunProgress::ModelTurnStarted { .. } | RunProgress::ModelTurnCompleted { .. } => {
                 self.on_model_progress(progress);
             }

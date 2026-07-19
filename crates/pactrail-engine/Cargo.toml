@@ -22,6 +22,7 @@ pactrail-models = { version = "0.2.0", path = "../pactrail-models" }
 pactrail-store = { version = "0.2.0", path = "../pactrail-store" }
 pactrail-tools = { version = "0.2.0", path = "../pactrail-tools" }
 pactrail-workspace = { version = "0.2.0", path = "../pactrail-workspace" }
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

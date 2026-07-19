@@ -1232,6 +1232,7 @@ dependencies = [
  "pactrail-store",
  "pactrail-tools",
  "pactrail-workspace",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror",
