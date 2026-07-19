@@ -11,7 +11,9 @@ copy its benchmark claim into Pactrail.
   shows that simple, compact actions, concise environment feedback, and
   guardrails can materially change agent performance without changing model
   weights. Pactrail therefore keeps graph navigation as one typed read-only
-  action rather than exposing a collection of parser-specific commands.
+  action rather than exposing a collection of parser-specific commands, and
+  mutation tools return bounded current-source feedback instead of only an
+  acknowledgement.
 - [RepoCoder: Repository-Level Code Completion Through Iterative Retrieval and Generation](https://arxiv.org/abs/2303.12570)
   demonstrates the value of using new model/task information to retrieve again
   instead of treating initial retrieval as final. Pactrail exposes graph search
@@ -78,6 +80,20 @@ copy its benchmark claim into Pactrail.
 6. Compaction thresholds come from declared context and output limits and every
    event records before/after request digests and byte counts.
 7. No model-generated summary can become durable trajectory state.
+
+## Shipped mutation-feedback invariants
+
+1. Feedback is generated from the isolated candidate after the write succeeds,
+   never from a model claim about the intended edit.
+2. Final bytes and BLAKE3 digest identify the exact current file version.
+3. Changed-line bounds come from a deterministic UTF-8-safe comparison of the
+   prior and current source for exact edits.
+4. Current source is line-numbered and bounded by both line and byte ceilings;
+   distant change regions receive previews at both edges.
+5. The result says whether all changed lines are visible and provides an exact
+   narrow-read recovery path when they are not.
+6. Exact no-op edits are rejected because they produce no new candidate state
+   or evidence.
 
 ## Deliberately deferred
 

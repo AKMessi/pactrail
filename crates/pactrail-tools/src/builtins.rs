@@ -18,6 +18,10 @@ const DEFAULT_READ_LINES: usize = 300;
 const MAX_READ_LINES: usize = 1_000;
 const MAX_SEARCH_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_EDIT_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_MUTATION_FEEDBACK_LINES: usize = 80;
+const MAX_MUTATION_FEEDBACK_TEXT_BYTES: usize = 12 * 1024;
+const MAX_MUTATION_FEEDBACK_LINE_BYTES: usize = 2 * 1024;
+const MUTATION_CONTEXT_LINES: usize = 3;
 
 pub(crate) fn descriptor<T: JsonSchema>(
     name: &str,
@@ -422,7 +426,7 @@ impl Tool for WriteFileTool {
     fn descriptor(&self) -> ToolDescriptor {
         descriptor::<WriteFileInput>(
             "write_file",
-            "Create or replace one UTF-8 file inside the task's write scope.",
+            "Create or replace one UTF-8 file inside the task's write scope and return bounded current-source evidence.",
             Capability::FileWrite,
         )
     }
@@ -446,8 +450,14 @@ impl Tool for WriteFileTool {
         let digest = blake3::hash(request.content.as_bytes())
             .to_hex()
             .to_string();
+        let post_edit = mutation_feedback(&request.path, None, &request.content);
         Ok(success(
-            json!({ "path": request.path, "digest": digest, "bytes": request.content.len() }),
+            json!({
+                "path": request.path,
+                "digest": digest,
+                "bytes": request.content.len(),
+                "post_edit": post_edit,
+            }),
             "wrote workspace file",
             vec![format!("fs.write:{}", request.path)],
         ))
@@ -480,7 +490,7 @@ impl Tool for ReplaceTextTool {
     fn descriptor(&self) -> ToolDescriptor {
         descriptor::<ReplaceTextInput>(
             "replace_text",
-            "Replace exact text only when the expected occurrence count matches.",
+            "Replace exact text only when the expected occurrence count matches, then return bounded current-source evidence around the change.",
             Capability::FileWrite,
         )
     }
@@ -494,6 +504,11 @@ impl Tool for ReplaceTextTool {
         if request.old.is_empty() || request.expected_replacements == 0 {
             return Err(ToolError::InvalidRange(
                 "old text and expected_replacements must be non-empty".to_owned(),
+            ));
+        }
+        if request.old == request.new {
+            return Err(ToolError::InvalidRange(
+                "old and new text must differ; no-op replacements produce no evidence".to_owned(),
             ));
         }
         context.authorize(&Capability::FileRead, request.path.clone(), "replace_text")?;
@@ -519,8 +534,16 @@ impl Tool for ReplaceTextTool {
         context
             .workspace
             .write_file(&request.path, replacement.as_bytes())?;
+        let digest = blake3::hash(replacement.as_bytes()).to_hex().to_string();
+        let post_edit = mutation_feedback(&request.path, Some(&text), &replacement);
         Ok(success(
-            json!({ "path": request.path, "replacements": actual }),
+            json!({
+                "path": request.path,
+                "replacements": actual,
+                "digest": digest,
+                "result_bytes": replacement.len(),
+                "post_edit": post_edit,
+            }),
             format!("replaced {actual} exact occurrence(s)"),
             vec![format!("fs.write:{}", request.path)],
         ))
@@ -556,11 +579,185 @@ impl Tool for RemoveFileTool {
         context.authorize(&Capability::FileWrite, request.path.clone(), "remove_file")?;
         context.workspace.remove_file(&request.path)?;
         Ok(success(
-            json!({ "path": request.path }),
+            json!({
+                "path": request.path,
+                "removed": true,
+                "exists_in_candidate": false,
+                "guidance": "The path is absent from the isolated candidate. Use workspace_changes to inspect the complete candidate transaction.",
+            }),
             "removed workspace file",
             vec![format!("fs.delete:{}", request.path)],
         ))
     }
+}
+
+pub(crate) fn mutation_feedback(path: &str, before: Option<&str>, after: &str) -> Value {
+    let lines = after.lines().collect::<Vec<_>>();
+    let total_lines = lines.len();
+    let (changed_start, changed_end) = before.map_or_else(
+        || (1, total_lines.max(1)),
+        |before| changed_line_span(before, after),
+    );
+    let ranges = mutation_preview_ranges(changed_start, changed_end, total_lines);
+    let mut remaining_bytes = MAX_MUTATION_FEEDBACK_TEXT_BYTES;
+    let mut text_truncated = false;
+    let mut previews = Vec::with_capacity(ranges.len());
+    for (start, end) in ranges {
+        let mut preview_lines = Vec::with_capacity(end.saturating_sub(start).saturating_add(1));
+        for line_number in start..=end {
+            let Some(line) = lines.get(line_number.saturating_sub(1)) else {
+                continue;
+            };
+            if remaining_bytes == 0 {
+                text_truncated = true;
+                break;
+            }
+            let line_limit = remaining_bytes.min(MAX_MUTATION_FEEDBACK_LINE_BYTES);
+            let (text, line_truncated) = truncate_source_line(line, line_limit);
+            remaining_bytes = remaining_bytes.saturating_sub(text.len());
+            text_truncated |= line_truncated;
+            preview_lines.push(json!({
+                "line": line_number,
+                "text": text,
+                "text_truncated": line_truncated,
+            }));
+        }
+        if !preview_lines.is_empty() {
+            previews.push(json!({
+                "start_line": start,
+                "end_line": end,
+                "lines": preview_lines,
+            }));
+        }
+    }
+    let changed_lines_fully_shown = !text_truncated
+        && changed_start <= changed_end
+        && previews_cover_range(&previews, changed_start, changed_end);
+    json!({
+        "path": path,
+        "digest": blake3::hash(after.as_bytes()).to_hex().to_string(),
+        "bytes": after.len(),
+        "total_lines": total_lines,
+        "changed_line_start": changed_start,
+        "changed_line_end": changed_end,
+        "changed_lines_fully_shown": changed_lines_fully_shown,
+        "previews": previews,
+        "guidance": if changed_lines_fully_shown {
+            "This is current source from the isolated candidate after the mutation."
+        } else {
+            "Post-edit evidence is bounded. Use read_file with path and a narrow start_line/end_line range before relying on omitted changed source."
+        },
+    })
+}
+
+fn changed_line_span(before: &str, after: &str) -> (usize, usize) {
+    if before == after {
+        let line = after.lines().count().max(1);
+        return (line, line);
+    }
+    let mut prefix = before
+        .as_bytes()
+        .iter()
+        .zip(after.as_bytes())
+        .take_while(|(left, right)| left == right)
+        .count();
+    while prefix > 0 && (!before.is_char_boundary(prefix) || !after.is_char_boundary(prefix)) {
+        prefix -= 1;
+    }
+    let suffix_limit = before.len().min(after.len()).saturating_sub(prefix);
+    let mut suffix = before
+        .as_bytes()
+        .iter()
+        .rev()
+        .zip(after.as_bytes().iter().rev())
+        .take(suffix_limit)
+        .take_while(|(left, right)| left == right)
+        .count();
+    while suffix > 0
+        && (!before.is_char_boundary(before.len().saturating_sub(suffix))
+            || !after.is_char_boundary(after.len().saturating_sub(suffix)))
+    {
+        suffix -= 1;
+    }
+    let changed_end_offset = after.len().saturating_sub(suffix);
+    let start_line = after[..prefix]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count()
+        + 1;
+    let end_line = if changed_end_offset > prefix {
+        after[..changed_end_offset.saturating_sub(1)]
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .count()
+            + 1
+    } else {
+        start_line
+    };
+    (start_line, end_line.max(start_line))
+}
+
+fn mutation_preview_ranges(start: usize, end: usize, total_lines: usize) -> Vec<(usize, usize)> {
+    if total_lines == 0 {
+        return Vec::new();
+    }
+    let start = start.clamp(1, total_lines);
+    let end = end.clamp(start, total_lines);
+    let expanded_start = start.saturating_sub(MUTATION_CONTEXT_LINES).max(1);
+    let expanded_end = end.saturating_add(MUTATION_CONTEXT_LINES).min(total_lines);
+    if expanded_end
+        .saturating_sub(expanded_start)
+        .saturating_add(1)
+        <= MAX_MUTATION_FEEDBACK_LINES
+    {
+        return vec![(expanded_start, expanded_end)];
+    }
+
+    let first_lines = MAX_MUTATION_FEEDBACK_LINES / 2;
+    let first_end = expanded_start
+        .saturating_add(first_lines.saturating_sub(1))
+        .min(total_lines);
+    let last_lines = MAX_MUTATION_FEEDBACK_LINES.saturating_sub(first_lines);
+    let last_start = expanded_end
+        .saturating_sub(last_lines.saturating_sub(1))
+        .max(1);
+    if last_start <= first_end.saturating_add(1) {
+        vec![(expanded_start, expanded_end)]
+    } else {
+        vec![(expanded_start, first_end), (last_start, expanded_end)]
+    }
+}
+
+fn truncate_source_line(line: &str, max_bytes: usize) -> (String, bool) {
+    if line.len() <= max_bytes {
+        return (line.to_owned(), false);
+    }
+    let mut boundary = max_bytes;
+    while boundary > 0 && !line.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    (line[..boundary].to_owned(), true)
+}
+
+fn previews_cover_range(previews: &[Value], start: usize, end: usize) -> bool {
+    let mut cursor = start;
+    for preview in previews {
+        let Some(preview_start) = preview.get("start_line").and_then(Value::as_u64) else {
+            continue;
+        };
+        let Some(preview_end) = preview.get("end_line").and_then(Value::as_u64) else {
+            continue;
+        };
+        let preview_start = usize::try_from(preview_start).unwrap_or(usize::MAX);
+        let preview_end = usize::try_from(preview_end).unwrap_or_default();
+        if preview_start <= cursor && preview_end >= cursor {
+            cursor = preview_end.saturating_add(1);
+            if cursor > end {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn resolve_directory(context: &ToolContext<'_>, relative: &str) -> Result<PathBuf, ToolError> {
@@ -658,11 +855,28 @@ mod tests {
                 &context,
                 json!({"path":"hello.txt","old":"world","new":"Pactrail"}),
             )
-            .await;
-        assert!(output.is_ok());
+            .await
+            .unwrap_or_else(|error| unreachable!("replace: {error}"));
         assert_eq!(
             fs::read_to_string(transaction.workspace_root().join("hello.txt")).ok(),
             Some("hello Pactrail\nsecond line\n".to_owned())
+        );
+        assert_eq!(output.content["post_edit"]["changed_line_start"], 1);
+        assert_eq!(output.content["post_edit"]["changed_line_end"], 1);
+        assert_eq!(
+            output.content["post_edit"]["previews"][0]["lines"][0]["text"],
+            "hello Pactrail"
+        );
+        assert_eq!(output.content["digest"].as_str().map(str::len), Some(64));
+
+        let no_op = ReplaceTextTool
+            .execute(
+                &context,
+                json!({"path":"hello.txt","old":"Pactrail","new":"Pactrail"}),
+            )
+            .await;
+        assert!(
+            matches!(no_op, Err(ToolError::InvalidRange(message)) if message.contains("no-op"))
         );
     }
 
@@ -804,5 +1018,41 @@ mod tests {
 
         assert!(description.contains("Workspace-relative directory"));
         assert!(description.contains("never pass a file or absolute path"));
+    }
+
+    #[test]
+    fn mutation_feedback_bounds_distant_edits_and_cites_both_edges() {
+        let before = (1..=120)
+            .map(|line| format!("before {line}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut after_lines = before.lines().map(str::to_owned).collect::<Vec<_>>();
+        after_lines[4] = "changed first".to_owned();
+        after_lines[114] = "changed last".to_owned();
+        let after = after_lines.join("\n");
+
+        let feedback = mutation_feedback("src/lib.rs", Some(&before), &after);
+
+        assert_eq!(feedback["changed_line_start"], 5);
+        assert_eq!(feedback["changed_line_end"], 115);
+        assert_eq!(feedback["previews"].as_array().map(Vec::len), Some(2));
+        assert_eq!(feedback["changed_lines_fully_shown"], false);
+        let rendered = feedback["previews"].to_string();
+        assert!(rendered.contains("changed first"));
+        assert!(rendered.contains("changed last"));
+    }
+
+    #[test]
+    fn mutation_feedback_is_utf8_safe_and_byte_bounded() {
+        let after = format!("prefix {} suffix", "🦀".repeat(10_000));
+        let feedback = mutation_feedback("unicode.txt", None, &after);
+        let preview = feedback["previews"][0]["lines"][0]["text"]
+            .as_str()
+            .unwrap_or_default();
+
+        assert!(preview.len() <= MAX_MUTATION_FEEDBACK_LINE_BYTES);
+        assert!(preview.is_char_boundary(preview.len()));
+        assert_eq!(feedback["previews"][0]["lines"][0]["text_truncated"], true);
+        assert_eq!(feedback["changed_lines_fully_shown"], false);
     }
 }

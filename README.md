@@ -101,6 +101,10 @@ pactrail ❯ Fix the parser regression and add a test.
 - Consecutive parallel-safe reads overlap; mutations stay serial and durable
   results retain the model's call order.
 - Model-visible results are bounded to 256 KiB with explicit narrowing guidance.
+- Successful writes and exact edits return digest-bound, line-numbered source
+  previews from the isolated candidate around the changed region. Distant or
+  oversized changes carry explicit re-read guidance instead of implying that a
+  partial preview is complete; no-op replacements are rejected.
 - Conversation growth is bounded independently: older observations are
   compacted locally with BLAKE3 provenance, high-signal anchors, an exact JSON
   preview, and re-read guidance. No model-generated history summary becomes an

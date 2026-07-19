@@ -123,6 +123,15 @@ manifests before and after execution. The event record contains a digest of the
 arguments rather than raw potentially sensitive inputs, plus duration, risk,
 call ID, output size/truncation, declared capability, and observed effects.
 
+Successful write and exact-edit results additionally contain bounded post-edit
+evidence derived from the current isolated candidate: final content digest and
+size, the first and last changed line, and line-numbered source windows with
+per-line truncation labels. Nearby changes use one window; distant changes use
+bounded windows at both edges. The result explicitly states whether every
+changed line is shown and directs the model to a narrow `read_file` call when it
+is not. No-op exact replacements are rejected because they create neither a
+candidate delta nor useful evidence.
+
 ### Trajectory context controller
 
 Before every model invocation, the engine measures the exact provider-neutral

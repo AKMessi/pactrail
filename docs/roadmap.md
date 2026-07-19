@@ -24,6 +24,8 @@ promise or a security claim.
   lexical-reference search.
 - Deterministic model-window management with provenance-preserving tool-result
   compaction, recent-evidence retention, and trace-visible byte accounting.
+- Digest-bound post-mutation source feedback with changed-line localization,
+  bounded dual-edge previews, and explicit re-read guidance.
 - Interactive review-focused CLI plus scriptable JSON interface.
 - Cross-platform CI, dependency policy, and attested GitHub release workflow.
 

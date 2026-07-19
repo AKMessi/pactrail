@@ -17,6 +17,10 @@ follow [Semantic Versioning](https://semver.org/).
   observations, compacts older tool results into BLAKE3-bound navigation
   envelopes, keeps tool protocol topology intact, and records before/after
   request digests and reclaimed bytes in live and durable traces.
+- Post-mutation current-source feedback for writes and exact edits, including
+  content digests, changed-line bounds, bounded line-numbered previews, and
+  explicit narrow re-read guidance when the changed region is not fully shown.
+  Exact no-op replacements are now rejected as non-evidence-producing actions.
 
 ## [0.2.0] - 2026-07-18
 

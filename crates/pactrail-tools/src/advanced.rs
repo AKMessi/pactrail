@@ -6,7 +6,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::builtins::{descriptor, input, read_bounded, success};
+use crate::builtins::{descriptor, input, mutation_feedback, read_bounded, success};
 use crate::registry::replace_checked_preserving_newlines;
 use crate::{Tool, ToolContext, ToolDescriptor, ToolError, ToolOutput};
 
@@ -124,7 +124,7 @@ impl Tool for EditFileTool {
     fn descriptor(&self) -> ToolDescriptor {
         descriptor::<EditFileInput>(
             "edit_file",
-            "Atomically edit one UTF-8 file with 1-64 ordered, exact, count-checked replacements. No partial file is written when validation fails.",
+            "Atomically edit one UTF-8 file with 1-64 ordered, exact, count-checked replacements. No partial file is written when validation fails; success returns bounded current-source evidence around the changed lines.",
             Capability::FileWrite,
         )
     }
@@ -145,11 +145,18 @@ impl Tool for EditFileTool {
         let path = context.workspace.resolve_read(&request.path)?;
         let bytes = read_bounded(&path, MAX_EDIT_BYTES)?;
         let mut text = String::from_utf8(bytes).map_err(|_| ToolError::NonUtf8(path))?;
+        let original_text = text.clone();
         let mut replacements = 0_usize;
         for (index, edit) in request.edits.iter().enumerate() {
             if edit.old.is_empty() || edit.expected_replacements == 0 {
                 return Err(ToolError::InvalidRange(format!(
                     "edit {} must have non-empty old text and a positive expected count",
+                    index + 1
+                )));
+            }
+            if edit.old == edit.new {
+                return Err(ToolError::InvalidRange(format!(
+                    "edit {} must change the matched text; no-op edits produce no evidence",
                     index + 1
                 )));
             }
@@ -175,12 +182,15 @@ impl Tool for EditFileTool {
         context
             .workspace
             .write_file(&request.path, text.as_bytes())?;
+        let post_edit = mutation_feedback(&request.path, Some(&original_text), &text);
         Ok(success(
             json!({
                 "path": request.path,
                 "edits": request.edits.len(),
                 "replacements": replacements,
                 "result_bytes": text.len(),
+                "digest": blake3::hash(text.as_bytes()).to_hex().to_string(),
+                "post_edit": post_edit,
             }),
             format!(
                 "applied {} edits ({replacements} replacements) to {}",
@@ -350,7 +360,7 @@ mod tests {
             Some("alpha\nbeta\n".to_owned())
         );
 
-        EditFileTool
+        let output = EditFileTool
             .execute(
                 &context,
                 json!({
@@ -367,6 +377,13 @@ mod tests {
             fs::read_to_string(transaction.workspace_root().join("a.txt")).ok(),
             Some("ALPHA\nBETA\n".to_owned())
         );
+        assert_eq!(output.content["post_edit"]["changed_line_start"], 1);
+        assert_eq!(output.content["post_edit"]["changed_line_end"], 2);
+        assert_eq!(
+            output.content["post_edit"]["changed_lines_fully_shown"],
+            true
+        );
+        assert_eq!(output.content["digest"].as_str().map(str::len), Some(64));
     }
 
     #[tokio::test]
