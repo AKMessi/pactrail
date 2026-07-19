@@ -38,8 +38,9 @@ copy its benchmark claim into Pactrail.
 
 - [A Case Study of LLM for Automated Vulnerability Repair: Assessing Impact of Reasoning and Patch Validation Feedback](https://arxiv.org/abs/2405.15690)
   supports feeding external compiler, test, and sanitizer evidence back into
-  repair. Pactrail already exposes capability-gated process results to the model
-  and independently reruns discovered verification in a disposable snapshot.
+  repair. Pactrail exposes capability-gated process results to the model and
+  now permits one bounded repair cycle after deterministic validation rejects a
+  candidate, followed by an independent final run in a fresh snapshot.
 - [Context as a Tool: Context Management for Long-Horizon SWE-Agents](https://arxiv.org/abs/2512.22087)
   motivates separating stable task semantics, condensed long-term trajectory
   state, and high-fidelity recent interactions. Pactrail uses this separation
@@ -94,6 +95,23 @@ copy its benchmark claim into Pactrail.
    narrow-read recovery path when they are not.
 6. Exact no-op edits are rejected because they produce no new candidate state
    or evidence.
+
+## Shipped validation-repair invariants
+
+1. Repair is available only for a changed candidate, an authorized discovered
+   check, a real non-zero process exit, and a remaining model-turn budget.
+2. At most one automatic repair cycle occurs per run; final verification never
+   recursively requests another repair.
+3. Diagnostics are bounded from declared model context/output limits and carry
+   a digest and original byte count.
+4. Process output is delimited and labelled as untrusted repository data;
+   infrastructure, policy, spawn, and timeout failures are not treated as
+   repairable source failures.
+5. The probe runs in a disposable candidate snapshot. The repaired candidate is
+   verified again in a fresh snapshot, and only that final result becomes
+   receipt evidence.
+6. Probe/final phases, candidate digest, diagnostics digest, and controller
+   decision are hash-linked and visible in the trace.
 
 ## Deliberately deferred
 

@@ -21,6 +21,19 @@ follow [Semantic Versioning](https://semver.org/).
   content digests, changed-line bounds, bounded line-numbered previews, and
   explicit narrow re-read guidance when the changed region is not fully shown.
   Exact no-op replacements are now rejected as non-evidence-producing actions.
+- A single budget-respecting validation-repair cycle: repairable deterministic
+  check failures are returned as bounded, digest-bound, explicitly untrusted
+  diagnostics, then the repaired candidate is independently verified again.
+  Probe/final phases and the controller decision are visible in live and
+  durable traces.
+
+### Fixed
+
+- Native verification now retains an explicit non-secret Windows toolchain and
+  SDK discovery environment, preventing repaired Rust candidates from failing
+  spuriously with `link.exe not found` after the process environment is cleared.
+  Secret variables, external Cargo target directories, and compiler wrappers
+  remain excluded.
 
 ## [0.2.0] - 2026-07-18
 

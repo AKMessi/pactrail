@@ -235,6 +235,25 @@ Each required obligation receives a grade and status; missing process permission
 creates explicit inconclusive evidence and an unresolved risk rather than a
 fictional pass.
 
+When a model first declares a changed candidate complete, authorized discovered
+checks run as a repair probe if at least one model turn remains. A non-zero
+process exit can trigger exactly one automatic repair cycle. Pactrail returns a
+model-window-sized preview of structured stdout/stderr diagnostics, its full
+BLAKE3 digest and byte count, and an authoritative warning that repository
+process output is untrusted data. Tool-launch, authorization, and infrastructure
+errors do not trigger source repair. A successful gate on an unchanged candidate
+becomes final evidence directly, avoiding a duplicate test run. After a repair
+attempt, normal final verification runs again in a fresh disposable snapshot and
+is the only result that becomes receipt evidence. Gate and final verifier actions
+carry explicit `completion_gate` and `final` trace phases; the controller
+decision records the candidate and diagnostics digests.
+
+Native processes start from a cleared environment. Pactrail inherits an
+explicit toolchain/operating-system allowlist rather than arbitrary variables;
+Windows Visual C++ and SDK discovery paths are included, while API keys,
+`CARGO_TARGET_DIR`, wrappers, and other undeclared variables are not. Explicit
+environment entries still require the already-trusted process capability.
+
 Model exploration is bounded independently of provider context size. A
 `read_file` call without an explicit range returns at most 300 lines and exposes
 the next line cursor; explicit ranges remain available up to 1,000 lines.

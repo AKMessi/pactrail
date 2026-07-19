@@ -121,6 +121,10 @@ pactrail ❯ Fix the parser regression and add a test.
 - BLAKE3 hash-linked events, integrity-protected receipts, and a tested
   compressed content-addressed artifact-store primitive.
 - Automatic Rust, Go, Python, and JavaScript verification discovery.
+- One bounded validation-repair cycle when an authorized deterministic check
+  rejects a candidate and a model turn remains. Diagnostics are byte-budgeted
+  to the configured context window, labelled as untrusted process output, and
+  digest-bound; the final candidate is independently verified again.
 
 ### Model portability
 

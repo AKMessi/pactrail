@@ -16,6 +16,46 @@ const DEFAULT_TIMEOUT_SECONDS: u64 = 120;
 const MAX_TIMEOUT_SECONDS: u64 = 3_600;
 const DEFAULT_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+const SAFE_ENVIRONMENT_NAMES: &[&str] = &[
+    "PATH",
+    "PATHEXT",
+    "SystemRoot",
+    "WINDIR",
+    "COMSPEC",
+    "ProgramFiles",
+    "ProgramFiles(Arm)",
+    "ProgramFiles(x86)",
+    "ProgramW6432",
+    "CommonProgramFiles",
+    "CommonProgramFiles(Arm)",
+    "CommonProgramFiles(x86)",
+    "CommonProgramW6432",
+    "ProgramData",
+    "ALLUSERSPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "SystemDrive",
+    "PROCESSOR_ARCHITECTURE",
+    "OS",
+    "VSINSTALLDIR",
+    "VCINSTALLDIR",
+    "VCToolsInstallDir",
+    "WindowsSdkDir",
+    "WindowsSDKVersion",
+    "UniversalCRTSdkDir",
+    "UCRTVersion",
+    "INCLUDE",
+    "LIB",
+    "LIBPATH",
+    "HOME",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "USERPROFILE",
+    "TMP",
+    "TEMP",
+    "CARGO_HOME",
+    "RUSTUP_HOME",
+];
 
 #[derive(Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -195,20 +235,7 @@ async fn read_bounded<R: AsyncRead + Unpin>(
 }
 
 fn copy_safe_environment(command: &mut Command) {
-    const SAFE_NAMES: &[&str] = &[
-        "PATH",
-        "PATHEXT",
-        "SystemRoot",
-        "WINDIR",
-        "COMSPEC",
-        "HOME",
-        "USERPROFILE",
-        "TMP",
-        "TEMP",
-        "CARGO_HOME",
-        "RUSTUP_HOME",
-    ];
-    for name in SAFE_NAMES {
+    for name in SAFE_ENVIRONMENT_NAMES {
         if let Some(value) = std::env::var_os(name) {
             command.env(name, value);
         }
@@ -248,5 +275,15 @@ mod tests {
             .execute(&context, json!({"program":"cargo"}))
             .await;
         assert!(matches!(result, Err(ToolError::ApprovalRequired { .. })));
+    }
+
+    #[test]
+    fn inherited_environment_is_an_explicit_toolchain_only_allowlist() {
+        assert!(SAFE_ENVIRONMENT_NAMES.contains(&"LOCALAPPDATA"));
+        assert!(SAFE_ENVIRONMENT_NAMES.contains(&"ProgramFiles(x86)"));
+        assert!(SAFE_ENVIRONMENT_NAMES.contains(&"VCToolsInstallDir"));
+        assert!(!SAFE_ENVIRONMENT_NAMES.contains(&"OPENROUTER_API_KEY"));
+        assert!(!SAFE_ENVIRONMENT_NAMES.contains(&"CARGO_TARGET_DIR"));
+        assert!(!SAFE_ENVIRONMENT_NAMES.contains(&"RUSTC_WRAPPER"));
     }
 }

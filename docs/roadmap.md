@@ -26,6 +26,9 @@ promise or a security claim.
   compaction, recent-evidence retention, and trace-visible byte accounting.
 - Digest-bound post-mutation source feedback with changed-line localization,
   bounded dual-edge previews, and explicit re-read guidance.
+- One trace-visible validation-repair cycle with model-aware diagnostic bounds,
+  untrusted-output labelling, candidate/diagnostic digests, and fresh final
+  verification authority.
 - Interactive review-focused CLI plus scriptable JSON interface.
 - Cross-platform CI, dependency policy, and attested GitHub release workflow.
 

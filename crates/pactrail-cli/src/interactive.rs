@@ -586,6 +586,23 @@ impl RunActivity {
 
     fn on_verification_progress(&self, progress: &RunProgress) {
         match progress {
+            RunProgress::VerificationRepairStarted {
+                cycle,
+                failed_checks,
+                candidate_digest,
+            } => {
+                self.row(
+                    "↻",
+                    "repair",
+                    &format!(
+                        "cycle {cycle} · {failed_checks} {} failed · candidate {}",
+                        plural(*failed_checks, "check", "checks"),
+                        truncate(candidate_digest, 12)
+                    ),
+                    TimelineTone::Warning,
+                );
+                self.set_message("validation failed · repairing from deterministic diagnostics");
+            }
             RunProgress::VerificationStarted { commands } => {
                 let detail = if *commands == 0 {
                     "no deterministic commands detected".to_owned()
@@ -685,6 +702,7 @@ impl RunObserver for RunActivity {
                 self.on_recovery_progress(progress);
             }
             RunProgress::VerificationStarted { .. }
+            | RunProgress::VerificationRepairStarted { .. }
             | RunProgress::VerificationCommandStarted { .. }
             | RunProgress::VerificationCommandCompleted { .. } => {
                 self.on_verification_progress(progress);
