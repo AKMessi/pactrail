@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use time::OffsetDateTime;
 
-use crate::{ApprovalRecord, EVENT_SCHEMA_VERSION, Evidence, PolicyDecision, RunId, TaskContract};
+use crate::{
+    ApprovalRecord, EVENT_SCHEMA_VERSION, Evidence, MIN_EVENT_SCHEMA_VERSION, PolicyDecision,
+    RunId, TaskContract,
+};
 
 /// Integrity hash of an event envelope.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -143,6 +146,36 @@ pub struct EventEnvelope {
 }
 
 impl EventEnvelope {
+    fn compute_hash(
+        schema_version: u32,
+        run_id: RunId,
+        sequence: u64,
+        timestamp: OffsetDateTime,
+        previous_hash: &EventHash,
+        event: &RunEvent,
+    ) -> Result<EventHash, serde_json::Error> {
+        #[derive(Serialize)]
+        struct Hashable<'a> {
+            schema_version: u32,
+            run_id: RunId,
+            sequence: u64,
+            #[serde(with = "time::serde::rfc3339")]
+            timestamp: OffsetDateTime,
+            previous_hash: &'a EventHash,
+            event: &'a RunEvent,
+        }
+
+        let bytes = serde_json::to_vec(&Hashable {
+            schema_version,
+            run_id,
+            sequence,
+            timestamp,
+            previous_hash,
+            event,
+        })?;
+        Ok(EventHash(blake3::hash(&bytes).to_hex().to_string()))
+    }
+
     /// Constructs and hashes an envelope from canonical JSON fields.
     ///
     /// # Errors
@@ -155,27 +188,14 @@ impl EventEnvelope {
         previous_hash: EventHash,
         event: RunEvent,
     ) -> Result<Self, serde_json::Error> {
-        #[derive(Serialize)]
-        struct Hashable<'a> {
-            schema_version: u32,
-            run_id: RunId,
-            sequence: u64,
-            #[serde(with = "time::serde::rfc3339")]
-            timestamp: OffsetDateTime,
-            previous_hash: &'a EventHash,
-            event: &'a RunEvent,
-        }
-
-        let hashable = Hashable {
-            schema_version: EVENT_SCHEMA_VERSION,
+        let hash = Self::compute_hash(
+            EVENT_SCHEMA_VERSION,
             run_id,
             sequence,
             timestamp,
-            previous_hash: &previous_hash,
-            event: &event,
-        };
-        let bytes = serde_json::to_vec(&hashable)?;
-        let hash = EventHash(blake3::hash(&bytes).to_hex().to_string());
+            &previous_hash,
+            &event,
+        )?;
         Ok(Self {
             schema_version: EVENT_SCHEMA_VERSION,
             run_id,
@@ -193,14 +213,15 @@ impl EventEnvelope {
     ///
     /// Returns an error if the event cannot be serialized for verification.
     pub fn verify(&self) -> Result<bool, serde_json::Error> {
-        Self::new(
+        Self::compute_hash(
+            self.schema_version,
             self.run_id,
             self.sequence,
             self.timestamp,
-            self.previous_hash.clone(),
-            self.event.clone(),
+            &self.previous_hash,
+            &self.event,
         )
-        .map(|expected| expected.hash == self.hash)
+        .map(|expected| expected == self.hash)
     }
 }
 
@@ -243,7 +264,7 @@ impl RunSnapshot {
     ///
     /// Returns a [`StateError`] when integrity, sequence, contract, or lifecycle invariants fail.
     pub fn apply(&mut self, envelope: &EventEnvelope) -> Result<(), StateError> {
-        if envelope.schema_version != EVENT_SCHEMA_VERSION {
+        if !(MIN_EVENT_SCHEMA_VERSION..=EVENT_SCHEMA_VERSION).contains(&envelope.schema_version) {
             return Err(StateError::UnsupportedSchema(envelope.schema_version));
         }
         if envelope.run_id != self.run_id {
@@ -550,5 +571,53 @@ mod tests {
         .unwrap_or_else(|error| unreachable!("legacy action: {error}"));
         assert_eq!(action.duration_ms, 0);
         assert!(action.attributes.is_empty());
+    }
+
+    #[test]
+    fn schema_one_envelopes_remain_hash_verifiable_and_projectable() {
+        let run_id = RunId::new();
+        let timestamp = OffsetDateTime::UNIX_EPOCH;
+        let previous_hash = EventHash::genesis();
+        let event = RunEvent::NoteRecorded {
+            message: "written by v0.4".to_owned(),
+        };
+        let hash = EventEnvelope::compute_hash(1, run_id, 0, timestamp, &previous_hash, &event)
+            .unwrap_or_else(|error| unreachable!("legacy event hashes: {error}"));
+        let envelope = EventEnvelope {
+            schema_version: 1,
+            run_id,
+            sequence: 0,
+            timestamp,
+            previous_hash,
+            event,
+            hash,
+        };
+
+        assert!(envelope.verify().unwrap_or(false));
+        let mut snapshot = RunSnapshot::new(run_id);
+        snapshot
+            .apply(&envelope)
+            .unwrap_or_else(|error| unreachable!("legacy event projects: {error}"));
+        assert_eq!(snapshot.last_sequence, Some(0));
+    }
+
+    #[test]
+    fn future_event_schema_is_rejected_before_projection() {
+        let run_id = RunId::new();
+        let mut envelope = event(
+            run_id,
+            0,
+            EventHash::genesis(),
+            RunEvent::NoteRecorded {
+                message: "future".to_owned(),
+            },
+        );
+        envelope.schema_version = EVENT_SCHEMA_VERSION + 1;
+
+        let mut snapshot = RunSnapshot::new(run_id);
+        assert!(matches!(
+            snapshot.apply(&envelope),
+            Err(StateError::UnsupportedSchema(version)) if version == EVENT_SCHEMA_VERSION + 1
+        ));
     }
 }

@@ -24,4 +24,7 @@ pub use receipt::{
 };
 
 /// Version of Pactrail's persisted event envelope.
-pub const EVENT_SCHEMA_VERSION: u32 = 1;
+pub const EVENT_SCHEMA_VERSION: u32 = 2;
+
+/// Oldest persisted event envelope this binary can verify and project.
+pub const MIN_EVENT_SCHEMA_VERSION: u32 = 1;

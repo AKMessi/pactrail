@@ -1055,7 +1055,9 @@ impl<'a> RunEngine<'a> {
             })?;
             recovery_risk = Some(risk);
         }
-        if goal_intent == GoalIntent::Informational && is_broad_repository_overview(&contract.goal)
+        if resume_phase != ResumePhase::BeforeVerification
+            && goal_intent == GoalIntent::Informational
+            && is_broad_repository_overview(&contract.goal)
         {
             final_text = format!(
                 "Pactrail workspace profile (deterministic)\n{}\n\nModel explanation\n{}",
