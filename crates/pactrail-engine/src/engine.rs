@@ -5,7 +5,8 @@ use std::time::Instant;
 
 use futures_util::future::join_all;
 use pactrail_context::{
-    ContextBudget, ContextError, ContextFragment, ContextPack, RepositoryIndex,
+    ContextBudget, ContextError, ContextFragment, ContextPack, IndexBuildTelemetry,
+    RepositoryIndex, RepositoryIndexBuild,
 };
 use pactrail_core::{
     ActionRecord, ApprovalDecision, ApprovalRequest, Capability, ChangeReceipt, ContractError,
@@ -68,6 +69,13 @@ pub enum RunProgress {
     ContextBuilt {
         indexed_files: usize,
         cited_files: usize,
+        cache_eligible_files: usize,
+        cache_hits: usize,
+        cache_misses: usize,
+        rejected_cache_entries: usize,
+        bytes_hashed: u64,
+        citation_coverage_basis_points: u16,
+        graph_symbols: usize,
         rendered_bytes: usize,
         budget_bytes: usize,
         truncated: bool,
@@ -225,6 +233,7 @@ pub struct RunEngine<'a> {
     cancellation: CancellationToken,
     memory: Option<&'a MemoryStore>,
     context_fragments: Vec<ContextFragment>,
+    repository_cache: Option<PathBuf>,
     checkpoint_store: Option<&'a CheckpointStore>,
     runtime_identity: Option<String>,
     max_turns: u16,
@@ -246,6 +255,7 @@ impl<'a> RunEngine<'a> {
             cancellation: CancellationToken::new(),
             memory: None,
             context_fragments: Vec::new(),
+            repository_cache: None,
             checkpoint_store: None,
             runtime_identity: None,
             max_turns: DEFAULT_MAX_TURNS,
@@ -284,6 +294,16 @@ impl<'a> RunEngine<'a> {
     #[must_use]
     pub fn with_context_fragments(mut self, fragments: Vec<ContextFragment>) -> Self {
         self.context_fragments = fragments;
+        self
+    }
+
+    /// Enables a best-effort content-addressed repository analysis cache.
+    ///
+    /// Current workspace bytes are always hashed before derived structure is
+    /// reused. Cache failures degrade to a cold build and never fail a run.
+    #[must_use]
+    pub fn with_repository_cache(mut self, cache_root: impl Into<PathBuf>) -> Self {
+        self.repository_cache = Some(cache_root.into());
         self
     }
 
@@ -560,7 +580,24 @@ impl<'a> RunEngine<'a> {
 
             info!(%run_id, "building repository evidence graph");
             let context_started = Instant::now();
-            let index = RepositoryIndex::build(transaction.workspace_root())?;
+            let RepositoryIndexBuild { index, telemetry } =
+                if let Some(cache_root) = &self.repository_cache {
+                    RepositoryIndex::build_with_cache(transaction.workspace_root(), cache_root)?
+                } else {
+                    let index = RepositoryIndex::build(transaction.workspace_root())?;
+                    RepositoryIndexBuild {
+                        telemetry: IndexBuildTelemetry {
+                            files_hashed: index.files.len(),
+                            bytes_hashed: index
+                                .files
+                                .values()
+                                .map(|file| file.bytes)
+                                .fold(0_u64, u64::saturating_add),
+                            ..IndexBuildTelemetry::default()
+                        },
+                        index,
+                    }
+                };
             let context_budget = ContextBudget::from_model_limits(
                 model_capabilities.context_tokens,
                 model_capabilities.max_output_tokens,
@@ -575,6 +612,15 @@ impl<'a> RunEngine<'a> {
             observer.on_progress(&RunProgress::ContextBuilt {
                 indexed_files: index.files.len(),
                 cited_files: context_pack.cited_files.len(),
+                cache_eligible_files: telemetry.cache_eligible_files,
+                cache_hits: telemetry.cache_hits,
+                cache_misses: telemetry.cache_misses,
+                rejected_cache_entries: telemetry.rejected_cache_entries,
+                bytes_hashed: telemetry.bytes_hashed,
+                citation_coverage_basis_points: context_pack
+                    .retrieval
+                    .citation_coverage_basis_points,
+                graph_symbols: context_pack.retrieval.graph_symbols,
                 rendered_bytes: context_pack.rendered_bytes,
                 budget_bytes: context_pack.budget_bytes,
                 truncated: context_pack.truncated,
@@ -601,6 +647,38 @@ impl<'a> RunEngine<'a> {
                     (
                         "cited_files".to_owned(),
                         context_pack.cited_files.len().to_string(),
+                    ),
+                    (
+                        "cache_eligible_files".to_owned(),
+                        telemetry.cache_eligible_files.to_string(),
+                    ),
+                    ("cache_hits".to_owned(), telemetry.cache_hits.to_string()),
+                    (
+                        "cache_misses".to_owned(),
+                        telemetry.cache_misses.to_string(),
+                    ),
+                    (
+                        "cache_rejected".to_owned(),
+                        telemetry.rejected_cache_entries.to_string(),
+                    ),
+                    (
+                        "bytes_hashed".to_owned(),
+                        telemetry.bytes_hashed.to_string(),
+                    ),
+                    (
+                        "citation_coverage_bps".to_owned(),
+                        context_pack
+                            .retrieval
+                            .citation_coverage_basis_points
+                            .to_string(),
+                    ),
+                    (
+                        "graph_symbols".to_owned(),
+                        context_pack.retrieval.graph_symbols.to_string(),
+                    ),
+                    (
+                        "retrieved_files".to_owned(),
+                        context_pack.retrieval.retrieved_files.to_string(),
                     ),
                     (
                         "instructions".to_owned(),

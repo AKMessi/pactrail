@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
@@ -13,6 +13,8 @@ use thiserror::Error;
 const MAX_INDEX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_INSTRUCTION_BYTES: u64 = 256 * 1024;
 const MAX_SYMBOLS_PER_FILE: usize = 2_000;
+const MAX_IMPORTS_PER_FILE: usize = 4_096;
+const MAX_IDENTIFIER_OCCURRENCES_PER_FILE: usize = 100_000;
 const MAX_GRAPH_DEFINITIONS: usize = 200_000;
 const MAX_GRAPH_REFERENCES: usize = 500_000;
 const MAX_REFERENCES_PER_SYMBOL: usize = 256;
@@ -28,6 +30,8 @@ const ESTIMATED_BYTES_PER_TOKEN: u64 = 3;
 const CONTEXT_PACK_INPUT_SHARE: u64 = 4;
 const TRUNCATION_NOTICE: &str =
     "\n\n[Context pack reached its model-derived budget. Use tools to inspect omitted sources.]";
+const INDEX_CACHE_SCHEMA_VERSION: u32 = 1;
+const MAX_INDEX_CACHE_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Coarse language classification used by the context compiler.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -198,6 +202,55 @@ pub struct ContextFragment {
     pub content: String,
 }
 
+/// Measured work performed while constructing a repository index.
+///
+/// Cache hits never bypass content hashing: `bytes_hashed` always describes
+/// current workspace bytes read during this build. The cache only reuses
+/// bounded, derived structure after its content digest has been established.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IndexBuildTelemetry {
+    pub files_hashed: usize,
+    pub bytes_hashed: u64,
+    pub cache_eligible_files: usize,
+    pub cache_hits: usize,
+    pub cache_misses: usize,
+    pub cache_writes: usize,
+    pub rejected_cache_entries: usize,
+}
+
+/// A repository index together with deterministic cache telemetry.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RepositoryIndexBuild {
+    pub index: RepositoryIndex,
+    pub telemetry: IndexBuildTelemetry,
+}
+
+/// Deterministic retrieval measurements derived by Pactrail, not by a model.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RetrievalTelemetry {
+    pub query_terms: usize,
+    pub retrieved_files: usize,
+    pub cited_files: usize,
+    pub graph_symbols: usize,
+    pub graph_locations: usize,
+    /// Share of retrieved files that fit in the rendered pack, from 0 to 10,000.
+    pub citation_coverage_basis_points: u16,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct CachedFileAnalysis {
+    schema_version: u32,
+    content_digest: String,
+    payload_digest: String,
+    language: Language,
+    lines: usize,
+    symbols: Vec<Symbol>,
+    imports: Vec<String>,
+    identifier_lines: BTreeMap<String, Vec<usize>>,
+    identifiers_truncated: bool,
+}
+
 /// Stable repository topology and provenance index.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RepositoryIndex {
@@ -217,9 +270,35 @@ impl RepositoryIndex {
     /// Returns an error when traversal or required file access fails. Oversized
     /// and non-UTF-8 files remain in topology but are not semantically scanned.
     pub fn build(root: &Path) -> Result<Self, ContextError> {
-        let mut files = BTreeMap::new();
-        let mut instructions = Vec::new();
-        let mut languages = BTreeMap::new();
+        Self::build_internal(root, None).map(|build| build.index)
+    }
+
+    /// Builds an index while reusing content-addressed derived structure.
+    ///
+    /// Every current file is still read and hashed before a cache entry can be
+    /// used. Cache entries never supply instruction contents or source
+    /// previews. Cache I/O is best effort: an unavailable, malformed, or stale
+    /// entry is measured and recomputed instead of failing repository context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when traversal or required workspace file access fails.
+    pub fn build_with_cache(
+        root: &Path,
+        cache_root: &Path,
+    ) -> Result<RepositoryIndexBuild, ContextError> {
+        Self::build_internal(root, Some(cache_root))
+    }
+
+    fn build_internal(
+        root: &Path,
+        cache_root: Option<&Path>,
+    ) -> Result<RepositoryIndexBuild, ContextError> {
+        let mut indexed_by_path = BTreeMap::new();
+        let mut directives = Vec::new();
+        let mut language_counts = BTreeMap::new();
+        let mut derived_by_path = BTreeMap::new();
+        let mut telemetry = IndexBuildTelemetry::default();
         for item in WalkBuilder::new(root)
             .hidden(false)
             .git_ignore(true)
@@ -234,56 +313,26 @@ impl RepositoryIndex {
             if !entry.file_type().is_some_and(|kind| kind.is_file()) {
                 continue;
             }
-            let path = entry.path();
-            let relative = portable_relative(root, path)?;
-            let (digest, size, retained) = fingerprint_and_retain(path)?;
-            let language = detect_language(path);
-            *languages.entry(language).or_insert(0) += 1;
-            let text = retained
-                .as_deref()
-                .and_then(|bytes| std::str::from_utf8(bytes).ok());
-            let (lines, symbols, imports) = text.map_or((0, Vec::new(), Vec::new()), |text| {
-                let lines = text.lines().count();
-                let (symbols, imports) = extract_structure(text, language);
-                (lines, symbols, imports)
-            });
-            let anchor_preview = text
-                .filter(|_| repository_anchor_rank(&relative).is_some())
-                .map(|text| utf8_prefix(text, MAX_ANCHOR_PREVIEW_BYTES).to_owned());
-            if path.file_name().is_some_and(|name| name == "AGENTS.md")
-                && size <= MAX_INSTRUCTION_BYTES
-                && let Some(content) = text
-            {
-                instructions.push(InstructionFile {
-                    path: relative.clone(),
-                    scope: instruction_scope(&relative),
-                    digest: digest.clone(),
-                    content: content.to_owned(),
-                });
+            let built = build_indexed_file(root, entry.path(), cache_root, &mut telemetry)?;
+            *language_counts.entry(built.indexed.language).or_insert(0) += 1;
+            if let Some(directive) = built.instruction {
+                directives.push(directive);
             }
-            files.insert(
-                relative.clone(),
-                IndexedFile {
-                    path: relative,
-                    digest,
-                    bytes: size,
-                    lines,
-                    language,
-                    symbols,
-                    imports,
-                    anchor_preview,
-                },
-            );
+            derived_by_path.insert(built.relative.clone(), built.derived);
+            indexed_by_path.insert(built.relative, built.indexed);
         }
-        instructions.sort_by(|left, right| left.path.cmp(&right.path));
-        let graph = build_repository_graph(root, &files)?;
-        let digest = index_digest(&files, &instructions);
-        Ok(Self {
-            files,
-            instructions,
-            languages,
-            graph,
-            digest,
+        directives.sort_by(|left, right| left.path.cmp(&right.path));
+        let graph = build_repository_graph(&indexed_by_path, &derived_by_path);
+        let digest = index_digest(&indexed_by_path, &directives);
+        Ok(RepositoryIndexBuild {
+            index: Self {
+                files: indexed_by_path,
+                instructions: directives,
+                languages: language_counts,
+                graph,
+                digest,
+            },
+            telemetry,
         })
     }
 
@@ -476,10 +525,336 @@ fn fingerprint_and_retain(path: &Path) -> Result<(String, u64, Option<Vec<u8>>),
     Ok((hasher.finalize().to_hex().to_string(), size, retained))
 }
 
-fn build_repository_graph(
+struct IndexedFileBuild {
+    relative: String,
+    indexed: IndexedFile,
+    instruction: Option<InstructionFile>,
+    derived: CachedFileAnalysis,
+}
+
+fn build_indexed_file(
     root: &Path,
+    path: &Path,
+    cache_root: Option<&Path>,
+    telemetry: &mut IndexBuildTelemetry,
+) -> Result<IndexedFileBuild, ContextError> {
+    let relative = portable_relative(root, path)?;
+    let (digest, size, retained) = fingerprint_and_retain(path)?;
+    telemetry.files_hashed = telemetry.files_hashed.saturating_add(1);
+    telemetry.bytes_hashed = telemetry.bytes_hashed.saturating_add(size);
+    let language = detect_language(path);
+    let text = retained
+        .as_deref()
+        .and_then(|bytes| std::str::from_utf8(bytes).ok());
+    let derived = text.map_or_else(
+        || empty_file_analysis(&digest, language),
+        |text| resolve_file_analysis(text, &digest, size, language, cache_root, telemetry),
+    );
+    let anchor_preview = text
+        .filter(|_| repository_anchor_rank(&relative).is_some())
+        .map(|text| utf8_prefix(text, MAX_ANCHOR_PREVIEW_BYTES).to_owned());
+    let instruction = if path.file_name().is_some_and(|name| name == "AGENTS.md")
+        && size <= MAX_INSTRUCTION_BYTES
+    {
+        text.map(|content| InstructionFile {
+            path: relative.clone(),
+            scope: instruction_scope(&relative),
+            digest: digest.clone(),
+            content: content.to_owned(),
+        })
+    } else {
+        None
+    };
+    let indexed = IndexedFile {
+        path: relative.clone(),
+        digest,
+        bytes: size,
+        lines: derived.lines,
+        language,
+        symbols: derived.symbols.clone(),
+        imports: derived.imports.clone(),
+        anchor_preview,
+    };
+    Ok(IndexedFileBuild {
+        relative,
+        indexed,
+        instruction,
+        derived,
+    })
+}
+
+fn empty_file_analysis(content_digest: &str, language: Language) -> CachedFileAnalysis {
+    CachedFileAnalysis {
+        schema_version: INDEX_CACHE_SCHEMA_VERSION,
+        content_digest: content_digest.to_owned(),
+        payload_digest: String::new(),
+        language,
+        lines: 0,
+        symbols: Vec::new(),
+        imports: Vec::new(),
+        identifier_lines: BTreeMap::new(),
+        identifiers_truncated: false,
+    }
+}
+
+fn resolve_file_analysis(
+    text: &str,
+    content_digest: &str,
+    file_bytes: u64,
+    language: Language,
+    cache_root: Option<&Path>,
+    telemetry: &mut IndexBuildTelemetry,
+) -> CachedFileAnalysis {
+    telemetry.cache_eligible_files = telemetry.cache_eligible_files.saturating_add(1);
+    let cached = cache_root.and_then(|root| {
+        match load_cached_analysis(root, content_digest, language, file_bytes) {
+            CacheLookup::Hit(entry) => {
+                telemetry.cache_hits = telemetry.cache_hits.saturating_add(1);
+                Some(entry)
+            }
+            CacheLookup::Miss => {
+                telemetry.cache_misses = telemetry.cache_misses.saturating_add(1);
+                None
+            }
+            CacheLookup::Rejected => {
+                telemetry.cache_misses = telemetry.cache_misses.saturating_add(1);
+                telemetry.rejected_cache_entries =
+                    telemetry.rejected_cache_entries.saturating_add(1);
+                None
+            }
+        }
+    });
+    if cache_root.is_none() {
+        telemetry.cache_misses = telemetry.cache_misses.saturating_add(1);
+    }
+    cached.unwrap_or_else(|| {
+        let entry = analyze_file(text, language, content_digest);
+        if let Some(root) = cache_root
+            && store_cached_analysis(root, &entry)
+        {
+            telemetry.cache_writes = telemetry.cache_writes.saturating_add(1);
+        }
+        entry
+    })
+}
+
+enum CacheLookup {
+    Hit(CachedFileAnalysis),
+    Miss,
+    Rejected,
+}
+
+fn analyze_file(text: &str, language: Language, content_digest: &str) -> CachedFileAnalysis {
+    let lines = text.lines().count();
+    let (symbols, imports) = extract_structure(text, language);
+    let mut identifier_lines = BTreeMap::<String, Vec<usize>>::new();
+    let mut occurrence_count = 0_usize;
+    let mut identifiers_truncated = false;
+    if is_code_language(language) {
+        'source: for (line_index, raw_line) in text.lines().enumerate() {
+            if is_comment_only(raw_line, language) {
+                continue;
+            }
+            let line = line_index.saturating_add(1);
+            for identifier in identifiers(raw_line) {
+                if occurrence_count == MAX_IDENTIFIER_OCCURRENCES_PER_FILE {
+                    identifiers_truncated = true;
+                    break 'source;
+                }
+                identifier_lines
+                    .entry(identifier.to_owned())
+                    .or_default()
+                    .push(line);
+                occurrence_count = occurrence_count.saturating_add(1);
+            }
+        }
+    }
+    let mut analysis = CachedFileAnalysis {
+        schema_version: INDEX_CACHE_SCHEMA_VERSION,
+        content_digest: content_digest.to_owned(),
+        payload_digest: String::new(),
+        language,
+        lines,
+        symbols,
+        imports,
+        identifier_lines,
+        identifiers_truncated,
+    };
+    analysis.payload_digest = analysis_payload_digest(&analysis);
+    analysis
+}
+
+fn analysis_payload_digest(analysis: &CachedFileAnalysis) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&analysis.schema_version.to_le_bytes());
+    hasher.update(analysis.content_digest.as_bytes());
+    hasher.update(format!("{:?}", analysis.language).as_bytes());
+    hasher.update(&analysis.lines.to_le_bytes());
+    for symbol in &analysis.symbols {
+        hasher.update(symbol.name.as_bytes());
+        hasher.update(symbol.kind.as_bytes());
+        hasher.update(&symbol.line.to_le_bytes());
+    }
+    for import in &analysis.imports {
+        hasher.update(import.as_bytes());
+    }
+    for (identifier, lines) in &analysis.identifier_lines {
+        hasher.update(identifier.as_bytes());
+        for line in lines {
+            hasher.update(&line.to_le_bytes());
+        }
+    }
+    hasher.update(&[u8::from(analysis.identifiers_truncated)]);
+    hasher.finalize().to_hex().to_string()
+}
+
+fn analysis_cache_path(cache_root: &Path, content_digest: &str, language: Language) -> PathBuf {
+    let key = blake3::hash(
+        format!("{INDEX_CACHE_SCHEMA_VERSION}\0{content_digest}\0{language:?}").as_bytes(),
+    )
+    .to_hex()
+    .to_string();
+    cache_root
+        .join(format!("v{INDEX_CACHE_SCHEMA_VERSION}"))
+        .join(&key[..2])
+        .join(format!("{key}.json"))
+}
+
+fn load_cached_analysis(
+    cache_root: &Path,
+    content_digest: &str,
+    language: Language,
+    file_bytes: u64,
+) -> CacheLookup {
+    let path = analysis_cache_path(cache_root, content_digest, language);
+    let file = match fs::File::open(&path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return CacheLookup::Miss,
+        Err(_) => return CacheLookup::Rejected,
+    };
+    let size = match file.metadata() {
+        Ok(metadata) => metadata.len(),
+        Err(_) => return CacheLookup::Rejected,
+    };
+    if size > MAX_INDEX_CACHE_ENTRY_BYTES {
+        return CacheLookup::Rejected;
+    }
+    let capacity = usize::try_from(size).unwrap_or_default();
+    let mut encoded = Vec::with_capacity(capacity);
+    if file
+        .take(MAX_INDEX_CACHE_ENTRY_BYTES.saturating_add(1))
+        .read_to_end(&mut encoded)
+        .is_err()
+        || u64::try_from(encoded.len()).unwrap_or(u64::MAX) > MAX_INDEX_CACHE_ENTRY_BYTES
+    {
+        return CacheLookup::Rejected;
+    }
+    let Ok(analysis) = serde_json::from_slice::<CachedFileAnalysis>(&encoded) else {
+        return CacheLookup::Rejected;
+    };
+    if validate_cached_analysis(&analysis, content_digest, language, file_bytes) {
+        CacheLookup::Hit(analysis)
+    } else {
+        CacheLookup::Rejected
+    }
+}
+
+fn validate_cached_analysis(
+    analysis: &CachedFileAnalysis,
+    content_digest: &str,
+    language: Language,
+    file_bytes: u64,
+) -> bool {
+    let max_lines = usize::try_from(file_bytes)
+        .unwrap_or(usize::MAX)
+        .saturating_add(1);
+    if analysis.schema_version != INDEX_CACHE_SCHEMA_VERSION
+        || analysis.content_digest != content_digest
+        || analysis.payload_digest != analysis_payload_digest(analysis)
+        || analysis.language != language
+        || analysis.lines > max_lines
+        || analysis.symbols.len() > MAX_SYMBOLS_PER_FILE
+        || analysis.imports.len() > MAX_IMPORTS_PER_FILE
+    {
+        return false;
+    }
+    if analysis.symbols.iter().any(|symbol| {
+        !valid_identifier(&symbol.name)
+            || !matches!(
+                symbol.kind.as_str(),
+                "function" | "struct" | "enum" | "trait" | "class" | "type" | "interface"
+            )
+            || symbol.line == 0
+            || symbol.line > analysis.lines
+    }) || analysis.imports.iter().any(|import| {
+        import.len() > 500
+            || import
+                .chars()
+                .any(|value| matches!(value, '\0' | '\r' | '\n'))
+    }) {
+        return false;
+    }
+    let mut occurrences = 0_usize;
+    for (identifier, lines) in &analysis.identifier_lines {
+        if !valid_identifier(identifier)
+            || lines
+                .windows(2)
+                .any(|window| window.first() >= window.get(1))
+            || lines
+                .iter()
+                .any(|line| *line == 0 || *line > analysis.lines)
+        {
+            return false;
+        }
+        occurrences = occurrences.saturating_add(lines.len());
+        if occurrences > MAX_IDENTIFIER_OCCURRENCES_PER_FILE {
+            return false;
+        }
+    }
+    true
+}
+
+fn valid_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_IDENTIFIER_BYTES
+        && value.bytes().enumerate().all(|(index, byte)| {
+            byte == b'_' || byte.is_ascii_alphabetic() || (index > 0 && byte.is_ascii_digit())
+        })
+}
+
+fn store_cached_analysis(cache_root: &Path, analysis: &CachedFileAnalysis) -> bool {
+    let path = analysis_cache_path(cache_root, &analysis.content_digest, analysis.language);
+    let Some(parent) = path.parent() else {
+        return false;
+    };
+    if fs::create_dir_all(parent).is_err() {
+        return false;
+    }
+    let Ok(canonical_root) = fs::canonicalize(cache_root) else {
+        return false;
+    };
+    let Ok(canonical_parent) = fs::canonicalize(parent) else {
+        return false;
+    };
+    if !canonical_parent.starts_with(&canonical_root) {
+        return false;
+    }
+    let Ok(mut temporary) = tempfile::NamedTempFile::new_in(parent) else {
+        return false;
+    };
+    if serde_json::to_writer(temporary.as_file_mut(), analysis).is_err()
+        || temporary.as_file_mut().flush().is_err()
+        || temporary.as_file().sync_all().is_err()
+    {
+        return false;
+    }
+    temporary.persist(&path).is_ok()
+}
+
+fn build_repository_graph(
     files: &BTreeMap<String, IndexedFile>,
-) -> Result<RepositoryGraph, ContextError> {
+    derived_by_path: &BTreeMap<String, CachedFileAnalysis>,
+) -> RepositoryGraph {
     let mut graph = RepositoryGraph::default();
     let mut definition_count = 0_usize;
     for file in files.values() {
@@ -510,30 +885,19 @@ fn build_repository_graph(
         if !is_code_language(file.language) || file.bytes > MAX_INDEX_FILE_BYTES {
             continue;
         }
-        let path = root.join(Path::new(&file.path));
-        let (digest, _, retained) = fingerprint_and_retain(&path)?;
-        if digest != file.digest {
-            return Err(ContextError::ChangedDuringIndex(path));
-        }
-        let Some(text) = retained
-            .as_deref()
-            .and_then(|bytes| std::str::from_utf8(bytes).ok())
-        else {
+        let Some(derived) = derived_by_path.get(&file.path) else {
             continue;
         };
-        for (line_index, raw_line) in text.lines().enumerate() {
-            if is_comment_only(raw_line, file.language) {
+        graph.truncated |= derived.identifiers_truncated;
+        for (identifier, lines) in &derived.identifier_lines {
+            if !definition_names.contains(identifier) {
                 continue;
             }
-            let line = line_index.saturating_add(1);
-            for identifier in identifiers(raw_line) {
-                if !definition_names.contains(identifier) {
-                    continue;
-                }
+            for line in lines {
                 let is_definition = graph.definitions.get(identifier).is_some_and(|locations| {
                     locations
                         .iter()
-                        .any(|location| location.path == file.path && location.line == line)
+                        .any(|location| location.path == file.path && location.line == *line)
                 });
                 if is_definition {
                     continue;
@@ -545,7 +909,7 @@ fn build_repository_graph(
                 }
                 references.push(SymbolReference {
                     path: file.path.clone(),
-                    line,
+                    line: *line,
                 });
                 reference_count = reference_count.saturating_add(1);
                 if reference_count == MAX_GRAPH_REFERENCES {
@@ -555,7 +919,7 @@ fn build_repository_graph(
             }
         }
     }
-    Ok(graph)
+    graph
 }
 
 fn is_code_language(language: Language) -> bool {
@@ -660,6 +1024,7 @@ pub struct ContextPack {
     pub rendered_bytes: usize,
     pub budget_bytes: usize,
     pub truncated: bool,
+    pub retrieval: RetrievalTelemetry,
 }
 
 impl ContextPack {
@@ -751,6 +1116,37 @@ impl ContextPack {
         cited_files.dedup();
         let (rendered, truncated) = writer.finish();
         let rendered_bytes = rendered.len();
+        let retrieved_paths = retrieved
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<BTreeSet<_>>();
+        let cited_retrieved_files = cited_files
+            .iter()
+            .filter(|path| retrieved_paths.contains(path.as_str()))
+            .count();
+        let citation_coverage_basis_points = if retrieved.is_empty() {
+            10_000
+        } else {
+            u16::try_from(
+                cited_retrieved_files
+                    .saturating_mul(10_000)
+                    .checked_div(retrieved.len())
+                    .unwrap_or_default()
+                    .min(10_000),
+            )
+            .unwrap_or(10_000)
+        };
+        let graph_locations = graph_evidence
+            .symbols
+            .iter()
+            .map(|symbol| {
+                symbol
+                    .definitions
+                    .len()
+                    .saturating_add(symbol.references.len())
+            })
+            .sum();
+        let cited_file_count = cited_files.len();
         Ok(Self {
             repository_digest: index.digest.clone(),
             project_profile,
@@ -761,6 +1157,14 @@ impl ContextPack {
             rendered_bytes,
             budget_bytes: budget.max_bytes,
             truncated,
+            retrieval: RetrievalTelemetry {
+                query_terms: query_tokens(&contract.goal).len(),
+                retrieved_files: retrieved.len(),
+                cited_files: cited_file_count,
+                graph_symbols: graph_evidence.symbols.len(),
+                graph_locations,
+                citation_coverage_basis_points,
+            },
         })
     }
 }
@@ -1038,7 +1442,9 @@ fn extract_structure(text: &str, language: Language) -> (Vec<Symbol>, Vec<String
     let mut imports = Vec::new();
     for (index, raw_line) in text.lines().enumerate() {
         let line = raw_line.trim();
-        if let Some(import) = extract_import(line, language) {
+        if imports.len() < MAX_IMPORTS_PER_FILE
+            && let Some(import) = extract_import(line, language)
+        {
             imports.push(import);
         }
         if symbols.len() < MAX_SYMBOLS_PER_FILE
@@ -1243,6 +1649,64 @@ mod tests {
         assert_eq!(file.symbols[0].name, "Receipt");
         assert_eq!(file.symbols[1].name, "verify");
         assert_eq!(file.imports, vec!["use std::fmt;"]);
+    }
+
+    #[test]
+    fn content_addressed_cache_reuses_only_unchanged_file_analysis() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let cache = tempfile::tempdir().unwrap_or_else(|error| unreachable!("cache: {error}"));
+        fs::write(root.path().join("one.rs"), "pub fn one() {}\n")
+            .unwrap_or_else(|error| unreachable!("one: {error}"));
+        fs::write(root.path().join("two.rs"), "pub fn two() {}\n")
+            .unwrap_or_else(|error| unreachable!("two: {error}"));
+
+        let cold = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("cold index: {error}"));
+        assert_eq!(cold.telemetry.files_hashed, 2);
+        assert_eq!(cold.telemetry.cache_hits, 0);
+        assert_eq!(cold.telemetry.cache_misses, 2);
+        assert_eq!(cold.telemetry.cache_writes, 2);
+
+        let warm = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("warm index: {error}"));
+        assert_eq!(warm.index, cold.index);
+        assert_eq!(warm.telemetry.cache_hits, 2);
+        assert_eq!(warm.telemetry.cache_misses, 0);
+
+        fs::write(root.path().join("two.rs"), "pub fn changed() {}\n")
+            .unwrap_or_else(|error| unreachable!("changed: {error}"));
+        let incremental = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("incremental index: {error}"));
+        assert_eq!(incremental.telemetry.cache_hits, 1);
+        assert_eq!(incremental.telemetry.cache_misses, 1);
+        assert_eq!(incremental.index.files["two.rs"].symbols[0].name, "changed");
+    }
+
+    #[test]
+    fn malformed_cache_entry_is_rejected_and_repaired() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let cache = tempfile::tempdir().unwrap_or_else(|error| unreachable!("cache: {error}"));
+        let source = b"pub fn verified() {}\n";
+        fs::write(root.path().join("lib.rs"), source)
+            .unwrap_or_else(|error| unreachable!("source: {error}"));
+        let digest = blake3::hash(source).to_hex().to_string();
+        let cache_path = analysis_cache_path(cache.path(), &digest, Language::Rust);
+
+        let _cold = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("cold index: {error}"));
+        fs::write(&cache_path, b"{not-json")
+            .unwrap_or_else(|error| unreachable!("corrupt cache: {error}"));
+
+        let repaired = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("repair index: {error}"));
+        assert_eq!(repaired.telemetry.rejected_cache_entries, 1);
+        assert_eq!(repaired.telemetry.cache_writes, 1);
+        assert_eq!(repaired.index.files["lib.rs"].symbols[0].name, "verified");
+
+        let warm = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("warm index: {error}"));
+        assert_eq!(warm.telemetry.cache_hits, 1);
+        assert_eq!(warm.telemetry.rejected_cache_entries, 0);
     }
 
     #[test]

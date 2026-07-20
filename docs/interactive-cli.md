@@ -23,8 +23,9 @@ The default run view is a persistent live execution timeline backed by engine
 events rather than simulated activity. Completed rows remain visible above one
 animated current-operation line. It shows:
 
-- repository context size, cited/indexed files, compilation time, and whether
-  model-budgeting omitted optional entries;
+- repository context size, cited/indexed files, warm/cold index reuse,
+  kernel-derived citation coverage, graph evidence, compilation time, and
+  whether model-budgeting omitted optional entries;
 - model turn, latency, tool-call count, provider-reported tokens, and aggregate
   model time;
 - the active typed tool, changed path, duration, and bounded output count;

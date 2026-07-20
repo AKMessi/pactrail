@@ -480,6 +480,12 @@ impl RunActivity {
         let RunProgress::ContextBuilt {
             indexed_files,
             cited_files,
+            cache_eligible_files,
+            cache_hits,
+            cache_misses,
+            rejected_cache_entries,
+            citation_coverage_basis_points,
+            graph_symbols,
             rendered_bytes,
             truncated,
             duration_ms,
@@ -489,11 +495,23 @@ impl RunActivity {
             return;
         };
         let bounded = if *truncated { " · bounded" } else { "" };
+        let cache = if *cache_eligible_files == 0 {
+            "cache off".to_owned()
+        } else {
+            format!("{cache_hits} warm · {cache_misses} cold")
+        };
+        let rejected = if *rejected_cache_entries == 0 {
+            String::new()
+        } else {
+            format!(" · {rejected_cache_entries} rejected")
+        };
+        let coverage_whole = citation_coverage_basis_points / 100;
+        let coverage_fraction = citation_coverage_basis_points % 100;
         self.row(
             "◆",
             "context",
             &format!(
-                "{indexed_files} files · {cited_files} cited · {} · {}{bounded}",
+                "{indexed_files} indexed · {cache}{rejected} · {cited_files} cited · {coverage_whole}.{coverage_fraction:02}% coverage · {graph_symbols} graph · {} · {}{bounded}",
                 format_bytes(u64::try_from(*rendered_bytes).unwrap_or(u64::MAX)),
                 format_duration(Duration::from_millis(*duration_ms))
             ),

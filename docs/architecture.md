@@ -78,12 +78,19 @@ paths, BLAKE3 digests, sizes, coarse languages, imports, and symbol-like
 declarations. Oversized and non-UTF-8 files remain visible in topology without
 being retained for semantic scanning.
 
+Every build hashes current file bytes. Bounded per-file derived structure is
+reused from a content-addressed cache keyed by content digest, language, and
+analysis revision; source text, previews, and instructions are never supplied
+by that cache. A malformed or unavailable entry is measured and recomputed.
+This makes invalidation exact while keeping the cache outside durable authority.
+
 The index also derives a bounded repository evidence graph. Definition nodes
 come from project symbol declarations; edges point to exact file and line
 locations where the same project-defined identifier occurs. These edges are
 explicitly lexical evidence, not type-resolved calls. Construction is capped at
-200,000 definitions, 500,000 references, and 256 references per symbol. A
-second-pass digest check fails closed if a file changes during indexing.
+200,000 definitions, 500,000 references, and 256 references per symbol. Cached
+identifier locations also have a per-file bound. The graph is built from the
+same current-byte analysis, eliminating a second filesystem read.
 
 For each run, the compiler:
 
@@ -105,6 +112,11 @@ For each run, the compiler:
 8. Adds complete relevant memory and topology entries in priority order.
 9. Omits optional entries whole, records inclusion metadata, and shows the model
    a visible budget-exhaustion notice.
+
+The context action records bytes hashed, cache reuse/rejection, retrieval and
+graph counts, and kernel-derived citation coverage. Coverage measures how much
+of the selected file set fit in the bounded pack; it is not a model-authored
+relevance or correctness score.
 
 Memory is advisory. It includes an identifier, kind, source, title, and content;
 it never overrides the task contract, scoped instructions, or current files.
