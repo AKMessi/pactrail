@@ -745,6 +745,24 @@ fn generated_model_token_budget(context_tokens: u64, output_tokens: u64, max_tur
 
 fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn ModelDriver>, CliError> {
     let model = configured_model(contract, args)?;
+    validate_model_options(args)?;
+    let capabilities = configured_capabilities(args);
+    build_driver_for_provider(model, capabilities, args)
+}
+
+fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
+    if args.native_tools == crate::cli::CapabilitySetting::Off
+        && args.parallel_tools == crate::cli::CapabilitySetting::On
+    {
+        return Err(CliError::Argument(
+            "--parallel-tools on conflicts with --native-tools off".to_owned(),
+        ));
+    }
+    if args.disable_thinking && args.reasoning_controls == crate::cli::CapabilitySetting::Off {
+        return Err(CliError::Argument(
+            "--disable-thinking conflicts with --reasoning-controls off".to_owned(),
+        ));
+    }
     if args.disable_thinking
         && matches!(
             args.provider,
@@ -756,7 +774,14 @@ fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn Model
                 .to_owned(),
         ));
     }
-    let capabilities = configured_capabilities(args);
+    Ok(())
+}
+
+fn build_driver_for_provider(
+    model: String,
+    capabilities: ModelCapabilities,
+    args: &RunArgs,
+) -> Result<Box<dyn ModelDriver>, CliError> {
     let driver: Box<dyn ModelDriver> = match args.provider {
         ProviderKind::Ollama => Box::new(
             OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
@@ -852,17 +877,22 @@ fn configured_model(contract: &TaskContract, args: &RunArgs) -> Result<String, C
 }
 
 fn configured_capabilities(args: &RunArgs) -> ModelCapabilities {
+    let native_tools = args.native_tools.resolve(true);
+    let provider_parallel = matches!(
+        args.provider,
+        ProviderKind::Anthropic | ProviderKind::Gemini
+    );
     ModelCapabilities {
-        parallel_tools: matches!(
-            args.provider,
-            ProviderKind::Anthropic | ProviderKind::Gemini
-        ),
+        native_tools,
+        parallel_tools: native_tools && args.parallel_tools.resolve(provider_parallel),
+        structured_output: args.structured_output.resolve(false),
+        vision: args.vision.resolve(false),
+        prompt_caching: args.prompt_caching.resolve(false),
         streaming: !args.no_stream,
-        reasoning_controls: args.disable_thinking,
+        reasoning_controls: args.reasoning_controls.resolve(args.disable_thinking),
         context_tokens: args.context_tokens,
         max_output_tokens: args.max_output_tokens,
         source: CapabilitySource::UserDeclared,
-        ..ModelCapabilities::default()
     }
 }
 

@@ -25,7 +25,8 @@ use terminal_size::{Width, terminal_size};
 use tokio_util::sync::CancellationToken;
 
 use crate::cli::{
-    OciRuntimeArg, OutputFormat, ProcessApprovalArg, ProcessBackendArg, ProviderKind, RunArgs,
+    CapabilitySetting, OciRuntimeArg, OutputFormat, ProcessApprovalArg, ProcessBackendArg,
+    ProviderKind, RunArgs,
 };
 use crate::commands::{self, CliError, CompletedRun};
 use crate::diff::render_receipt_diff;
@@ -99,6 +100,11 @@ const COMMANDS: &[CommandHelp] = &[
         "Model",
         "/stream on|off",
         "select live SSE or buffered provider responses",
+    ),
+    CommandHelp::new(
+        "Model",
+        "/capability <name> <auto|on|off>",
+        "override and inspect the effective model profile",
     ),
     CommandHelp::new(
         "Kernel",
@@ -951,6 +957,9 @@ impl Session {
             "/endpoint" => self.set_endpoint(arguments)?,
             "/key-env" => self.set_api_key_env(arguments)?,
             "/stream" => self.set_streaming(arguments)?,
+            "/capability" | "/capabilities" | "/profile" => {
+                self.set_capability(arguments)?;
+            }
             "/context" => self.set_context(arguments)?,
             "/output-tokens" => self.set_output_tokens(arguments)?,
             "/turns" => self.set_turns(arguments)?,
@@ -1020,6 +1029,12 @@ impl Session {
             request_timeout_seconds: 300,
             no_stream: !self.settings.streaming,
             disable_thinking: false,
+            native_tools: self.settings.native_tools,
+            parallel_tools: self.settings.parallel_tools,
+            structured_output: self.settings.structured_output,
+            vision: self.settings.vision,
+            prompt_caching: self.settings.prompt_caching,
+            reasoning_controls: self.settings.reasoning_controls,
             output: OutputFormat::Human,
         };
 
@@ -1317,6 +1332,11 @@ impl Session {
                 },
             ),
             ("credential", key.0, key.1),
+            (
+                "capabilities",
+                capability_summary(&self.settings),
+                TimelineTone::Normal,
+            ),
             (
                 "limits",
                 format!(
@@ -1736,6 +1756,52 @@ impl Session {
             } else {
                 self.theme.text("buffered · complete JSON")
             }
+        ))
+    }
+
+    fn set_capability(&mut self, arguments: &str) -> Result<(), CliError> {
+        let mut values = arguments.split_whitespace();
+        let Some(name) = values.next() else {
+            return self.emit(&format!(
+                "{} {}\n",
+                self.theme.heading("Effective model capabilities"),
+                self.theme.text(&capability_summary(&self.settings))
+            ));
+        };
+        let setting = values
+            .next()
+            .and_then(parse_capability_setting)
+            .ok_or_else(|| {
+                CliError::Argument(
+                    "usage: /capability <native-tools|parallel-tools|structured-output|vision|prompt-caching|reasoning-controls> <auto|on|off>"
+                        .to_owned(),
+                )
+            })?;
+        if values.next().is_some() {
+            return Err(CliError::Argument(
+                "too many capability arguments".to_owned(),
+            ));
+        }
+        let mut settings = self.settings.clone();
+        match name.trim().to_ascii_lowercase().as_str() {
+            "native-tools" | "tools" => settings.native_tools = setting,
+            "parallel-tools" | "parallel" => settings.parallel_tools = setting,
+            "structured-output" | "structured" => settings.structured_output = setting,
+            "vision" | "images" => settings.vision = setting,
+            "prompt-caching" | "caching" | "cache" => settings.prompt_caching = setting,
+            "reasoning-controls" | "reasoning" => settings.reasoning_controls = setting,
+            _ => {
+                return Err(CliError::Argument(
+                    "unknown capability; use /capability for the effective profile".to_owned(),
+                ));
+            }
+        }
+        self.persist(settings)?;
+        self.emit(&format!(
+            "{} {} = {}\n",
+            self.theme.success("Capability override saved:"),
+            self.theme.code(name),
+            capability_setting_label(setting)
         ))
     }
 
@@ -2909,6 +2975,66 @@ fn run_state_text(theme: &Theme, state: RunState) -> String {
     }
 }
 
+fn parse_capability_setting(value: &str) -> Option<CapabilitySetting> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "auto" | "default" => Some(CapabilitySetting::Auto),
+        "on" | "true" | "enabled" => Some(CapabilitySetting::On),
+        "off" | "false" | "disabled" => Some(CapabilitySetting::Off),
+        _ => None,
+    }
+}
+
+fn capability_setting_label(setting: CapabilitySetting) -> &'static str {
+    match setting {
+        CapabilitySetting::Auto => "auto",
+        CapabilitySetting::On => "on",
+        CapabilitySetting::Off => "off",
+    }
+}
+
+fn capability_summary(settings: &InteractiveSettings) -> String {
+    let default_parallel = matches!(
+        settings.provider,
+        ProviderKind::Anthropic | ProviderKind::Gemini
+    );
+    let native_tools = settings.native_tools.resolve(true);
+    let entries = [
+        ("tools", native_tools, settings.native_tools),
+        (
+            "parallel",
+            native_tools && settings.parallel_tools.resolve(default_parallel),
+            settings.parallel_tools,
+        ),
+        (
+            "structured",
+            settings.structured_output.resolve(false),
+            settings.structured_output,
+        ),
+        ("vision", settings.vision.resolve(false), settings.vision),
+        (
+            "cache",
+            settings.prompt_caching.resolve(false),
+            settings.prompt_caching,
+        ),
+        (
+            "reasoning",
+            settings.reasoning_controls.resolve(false),
+            settings.reasoning_controls,
+        ),
+    ];
+    entries
+        .into_iter()
+        .map(|(name, enabled, setting)| {
+            format!(
+                "{name} {} ({})",
+                if enabled { "on" } else { "off" },
+                capability_setting_label(setting)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" Â· ")
+}
+
 fn split_command(line: &str) -> (&str, &str) {
     line.split_once(char::is_whitespace)
         .map_or((line, ""), |(command, arguments)| {
@@ -3372,6 +3498,30 @@ mod tests {
             ),
             Err(ModelListError::TooManyModels)
         ));
+    }
+
+    #[test]
+    fn capability_profile_resolves_provider_defaults_and_overrides() {
+        let mut settings = InteractiveSettings {
+            provider: ProviderKind::Anthropic,
+            ..InteractiveSettings::default()
+        };
+        let defaults = capability_summary(&settings);
+        assert!(defaults.contains("tools on (auto)"));
+        assert!(defaults.contains("parallel on (auto)"));
+        assert!(defaults.contains("vision off (auto)"));
+
+        settings.native_tools = CapabilitySetting::Off;
+        settings.parallel_tools = CapabilitySetting::On;
+        settings.vision = CapabilitySetting::On;
+        let overridden = capability_summary(&settings);
+        assert!(overridden.contains("tools off (off)"));
+        assert!(overridden.contains("parallel off (on)"));
+        assert!(overridden.contains("vision on (on)"));
+        assert_eq!(
+            parse_capability_setting("enabled"),
+            Some(CapabilitySetting::On)
+        );
     }
 
     #[test]

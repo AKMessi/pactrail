@@ -292,6 +292,36 @@ pub struct RunArgs {
     #[arg(long)]
     pub disable_thinking: bool,
 
+    /// Override native model tool-call support.
+    #[arg(long, value_enum, default_value = "auto")]
+    #[serde(default)]
+    pub native_tools: CapabilitySetting,
+
+    /// Override model support for multiple tool calls in one turn.
+    #[arg(long, value_enum, default_value = "auto")]
+    #[serde(default)]
+    pub parallel_tools: CapabilitySetting,
+
+    /// Override provider-native structured-output support.
+    #[arg(long, value_enum, default_value = "auto")]
+    #[serde(default)]
+    pub structured_output: CapabilitySetting,
+
+    /// Override image-input support.
+    #[arg(long, value_enum, default_value = "auto")]
+    #[serde(default)]
+    pub vision: CapabilitySetting,
+
+    /// Override prompt-cache accounting/control support.
+    #[arg(long, value_enum, default_value = "auto")]
+    #[serde(default)]
+    pub prompt_caching: CapabilitySetting,
+
+    /// Override provider reasoning-control support.
+    #[arg(long, value_enum, default_value = "auto")]
+    #[serde(default)]
+    pub reasoning_controls: CapabilitySetting,
+
     /// Result rendering format.
     #[arg(long, value_enum, default_value = "human")]
     pub output: OutputFormat,
@@ -305,6 +335,30 @@ pub enum ProviderKind {
     OpenAiCompatible,
     Anthropic,
     Gemini,
+}
+
+/// Explicit override for one model capability.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum CapabilitySetting {
+    /// Use Pactrail's conservative adapter default.
+    #[default]
+    Auto,
+    /// Declare the capability available for this endpoint/model.
+    On,
+    /// Declare the capability unavailable for this endpoint/model.
+    Off,
+}
+
+impl CapabilitySetting {
+    #[must_use]
+    pub const fn resolve(self, default: bool) -> bool {
+        match self {
+            Self::Auto => default,
+            Self::On => true,
+            Self::Off => false,
+        }
+    }
 }
 
 const fn legacy_buffered_transport() -> bool {
@@ -338,7 +392,7 @@ pub struct ResumeArgs {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Command, OciRuntimeArg, OutputFormat, ProcessBackendArg};
+    use super::{CapabilitySetting, Cli, Command, OciRuntimeArg, OutputFormat, ProcessBackendArg};
     use clap::Parser;
 
     #[test]
@@ -421,6 +475,30 @@ mod tests {
             unreachable!("run command")
         };
         assert!(args.disable_thinking);
+    }
+
+    #[test]
+    fn run_parses_explicit_capability_overrides() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--model",
+            "model",
+            "--native-tools",
+            "off",
+            "--parallel-tools",
+            "auto",
+            "--vision",
+            "on",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Run(args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert_eq!(args.native_tools, CapabilitySetting::Off);
+        assert_eq!(args.parallel_tools, CapabilitySetting::Auto);
+        assert_eq!(args.vision, CapabilitySetting::On);
     }
 
     #[test]
