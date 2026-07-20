@@ -31,7 +31,8 @@ pub(crate) fn descriptor<T: JsonSchema>(
     let annotations = match required_capability {
         Capability::FileRead | Capability::MemoryRead => ToolAnnotations::READ_ONLY,
         Capability::FileWrite => ToolAnnotations::WORKSPACE_MUTATION,
-        Capability::ProcessSpawn
+        Capability::McpInvoke
+        | Capability::ProcessSpawn
         | Capability::Network
         | Capability::SecretUse
         | Capability::ExternalWrite => ToolAnnotations::HOST_EXECUTION,

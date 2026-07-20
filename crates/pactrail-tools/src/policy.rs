@@ -20,6 +20,7 @@ impl PolicyEngine {
         permissions.allow.insert(Capability::FileRead);
         permissions.allow.insert(Capability::FileWrite);
         permissions.ask.insert(Capability::ProcessSpawn);
+        permissions.deny.insert(Capability::McpInvoke);
         permissions.deny.insert(Capability::Network);
         permissions.deny.insert(Capability::SecretUse);
         permissions.deny.insert(Capability::ExternalWrite);

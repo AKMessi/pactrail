@@ -14,7 +14,7 @@ workspace = true
 
 [dependencies]
 blake3.workspace = true
-pactrail-core = { version = "0.6.0", path = "../pactrail-core" }
+pactrail-core = { version = "0.7.0", path = "../pactrail-core" }
 rusqlite.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

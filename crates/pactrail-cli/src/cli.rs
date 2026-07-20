@@ -74,6 +74,11 @@ pub enum Command {
         #[command(subcommand)]
         command: MemoryCommand,
     },
+    /// Manage governed Model Context Protocol servers and pinned catalogs.
+    Mcp {
+        #[command(subcommand)]
+        command: McpCommand,
+    },
     /// Report local execution dependencies and sandbox limitations.
     Doctor {
         /// Emit machine-readable JSON.
@@ -184,6 +189,50 @@ pub enum MemoryCommand {
     },
 }
 
+#[derive(Debug, Subcommand)]
+pub enum McpCommand {
+    /// Create a safe, empty MCP manifest in the selected state directory.
+    Init,
+    /// Validate the manifest and every enabled server snapshot without connecting.
+    Check {
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// List configured servers and local snapshot health without connecting.
+    List {
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Connect once and show a server's advertised catalog without changing local state.
+    Inspect {
+        /// Exact server name from mcp.toml.
+        server: String,
+        /// Emit the complete discovered catalog as machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Connect once and atomically pin a server catalog for normal agent runs.
+    Snapshot {
+        /// Exact server name from mcp.toml.
+        server: String,
+        /// Emit the complete stored snapshot as machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Enable a configured server for subsequent runs.
+    Enable {
+        /// Exact server name from mcp.toml.
+        server: String,
+    },
+    /// Disable a configured server without deleting its snapshot.
+    Disable {
+        /// Exact server name from mcp.toml.
+        server: String,
+    },
+}
+
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum MemoryKindArg {
     Convention,
@@ -236,6 +285,20 @@ pub enum ProcessApprovalArg {
     Prompt,
 }
 
+/// Resolution mode for requests made by pinned MCP tools.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum McpApprovalArg {
+    /// Deny unresolved MCP approvals (the non-interactive default).
+    #[default]
+    Deny,
+    /// Approve each exact MCP capability request for the duration of this run.
+    AllowRun,
+    /// Ask through the active interactive frontend.
+    #[value(skip)]
+    Prompt,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Args)]
 #[serde(deny_unknown_fields)]
 #[allow(clippy::struct_excessive_bools)]
@@ -281,6 +344,11 @@ pub struct RunArgs {
     /// How scoped process approval requests are resolved.
     #[arg(long, value_enum)]
     pub process_approval: Option<ProcessApprovalArg>,
+
+    /// How exact, snapshot-bound MCP approval requests are resolved.
+    #[arg(long, value_enum)]
+    #[serde(default)]
+    pub mcp_approval: Option<McpApprovalArg>,
 
     /// OCI runtime for `--process-backend oci`.
     #[arg(long, value_enum, default_value = "docker")]
@@ -436,6 +504,10 @@ pub struct ResumeArgs {
     #[arg(long, value_enum)]
     pub process_approval: Option<ProcessApprovalArg>,
 
+    /// Override how unresolved MCP approvals are handled after restart.
+    #[arg(long, value_enum)]
+    pub mcp_approval: Option<McpApprovalArg>,
+
     /// Apply immediately only if resumed work reaches ready-to-apply state.
     #[arg(long)]
     pub apply: bool,
@@ -447,7 +519,10 @@ pub struct ResumeArgs {
 
 #[cfg(test)]
 mod tests {
-    use super::{CapabilitySetting, Cli, Command, OciRuntimeArg, OutputFormat, ProcessBackendArg};
+    use super::{
+        CapabilitySetting, Cli, Command, McpApprovalArg, McpCommand, OciRuntimeArg, OutputFormat,
+        ProcessBackendArg,
+    };
     use clap::Parser;
 
     #[test]
@@ -530,6 +605,51 @@ mod tests {
             unreachable!("run command")
         };
         assert!(args.disable_thinking);
+    }
+
+    #[test]
+    fn run_and_resume_parse_independent_mcp_authority() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--model",
+            "model",
+            "--mcp-approval",
+            "allow-run",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Run(args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert_eq!(args.mcp_approval, Some(McpApprovalArg::AllowRun));
+
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "resume",
+            "018f53d2-a0d8-7c6a-8e22-6b6a4b0b0f54",
+            "--mcp-approval",
+            "deny",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Resume(args)) = cli.command else {
+            unreachable!("resume command")
+        };
+        assert_eq!(args.mcp_approval, Some(McpApprovalArg::Deny));
+    }
+
+    #[test]
+    fn mcp_lifecycle_commands_parse_exact_server_names() {
+        let cli = Cli::try_parse_from(["pactrail", "mcp", "snapshot", "github", "--json"])
+            .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Mcp {
+            command: McpCommand::Snapshot { server, json },
+        }) = cli.command
+        else {
+            unreachable!("MCP snapshot command")
+        };
+        assert_eq!(server, "github");
+        assert!(json);
     }
 
     #[test]

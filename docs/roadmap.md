@@ -7,7 +7,7 @@ and user-facing failure mode are complete.
 This file distinguishes shipped behavior from planned work. It is not a release
 promise or a security claim.
 
-## Shipped through 0.6
+## Shipped through 0.7
 
 - Contract-first runs with explicit capability policy and overgrant detection.
 - Isolated workspace transactions, receipt-bound review/apply, source-drift
@@ -60,7 +60,7 @@ promise or a security claim.
 Exit criterion: local and hosted adapters pass the same conversation/tool
 contract suite, with bounded memory and identical durable semantics.
 
-## 0.7 — open tool and embedding ecosystem
+## Shipped in 0.7 — open tool and embedding ecosystem
 
 - MCP client support behind the same descriptor, schema, capability, approval,
   risk, output-bound, effect, trace, and cancellation boundary as built-ins.

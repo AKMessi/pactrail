@@ -17,7 +17,7 @@ The central abstraction is not a chat wrapper or an agent persona. It is a
 durable, inspectable software change transaction.
 
 ```text
-  ╭─ P A C T R A I L  v0.6.0
+  ╭─ P A C T R A I L  v0.7.0
   │  verification-native coding · every change carries evidence
   ├─
   │ workspace  C:\work\project
@@ -71,6 +71,11 @@ pactrail ❯ Fix the parser regression and add a test.
   risk, argument digests, output bounds, observed effects, verification, policy,
   evidence, and state transitions are hash-linked and available as portable
   JSONL.
+- **Open tools do not become open authority.** MCP servers are explicit,
+  locally profiled, and snapshot-pinned. Discovery is an operator action, never
+  hidden run behavior. Every invocation crosses a dedicated `mcp_invoke` gate
+  plus its network/process/secret/write capabilities, exact approval, effect
+  fence, output bound, cancellation path, and durable trace.
 - **Weak models degrade gracefully.** Broad questions receive bounded current
   anchor previews and a deterministic ecosystem/entrypoint profile. Repeated
   successful read-only loops get one tool-free synthesis turn; invalid loops
@@ -114,6 +119,30 @@ pactrail ❯ Fix the parser regression and add a test.
   preview, and re-read guidance. No model-generated history summary becomes an
   authority.
 
+### Governed MCP ecosystem
+
+- Stable MCP 2025-11-25 client support over bounded stdio and Streamable HTTP,
+  using the official Rust protocol types behind a Pactrail-owned adapter.
+- `.pactrail/mcp.toml` assigns local authority. Server descriptions, schemas,
+  annotations, resources, prompts, and results remain untrusted data.
+- `pactrail mcp inspect <server>` performs explicit, read-only discovery.
+  `pactrail mcp snapshot <server>` atomically pins the negotiated server
+  identity, executable/endpoint identity, selected schemas, local profiles, and
+  selected advisory context under an integrity digest.
+- Normal runs never discover tools. They load only enabled, valid snapshots,
+  namespace every tool as `mcp__<server>__<tool>`, reject collisions, and bind
+  the snapshot set into durable resume identity.
+- Local subprocess servers start without a shell or ambient environment. Remote
+  servers require HTTPS except for explicit literal loopback HTTP; redirects,
+  URL credentials/query secrets, OAuth discovery, implicit retries, and hidden
+  replay are disabled.
+- A shared run-local health handle moves through ready, connecting, healthy,
+  stale, and failed states. Success traces retain the health transition;
+  identity/schema drift becomes stale and other failures remain explicit.
+- `/mcp`, `/tools`, and `/status` expose configured state and pinned tools in the
+  interactive CLI. All lifecycle operations also have stable JSON-capable
+  subcommands for automation.
+
 ### Durable safety and state
 
 - Git-aware or plain-directory copy-on-run transactions.
@@ -150,6 +179,16 @@ pactrail ❯ Fix the parser regression and add a test.
 - Remote endpoints require HTTPS. Plain HTTP is restricted to exact loopback
   hosts, redirects are disabled, and credentials are read from environment
   variables rather than CLI values or settings files.
+
+### Rust embedding
+
+`pactrail-sdk` is a static facade for applications embedding the real Pactrail
+kernel. It reexports the provider-neutral `ModelDriver`, typed `Tool`, policy,
+engine, MCP, transaction, store, checkpoint, memory, and context contracts. An
+out-of-tree-style compatibility fixture implements a custom provider and tool
+and composes them with `RunEngine`. See the [embedding guide](docs/embedding.md).
+The pre-1.0 SDK is consumed from a pinned Git revision; crates.io publication
+and the formal SemVer support window remain v1 release work.
 
 ## Install
 
@@ -253,6 +292,58 @@ the host with broad filesystem, network, secret, and external-service authority.
 Every process request still requires an exact scoped approval recorded in the
 trace and receipt. `/process off` restores the fail-closed default.
 
+### Add an MCP server
+
+Initialize a workspace-local manifest:
+
+```console
+pactrail mcp init
+```
+
+Add a disabled server to `.pactrail/mcp.toml`. This example deliberately keeps
+credentials in an environment variable and grants one advertised read-only tool
+only network authority:
+
+```toml
+schema = 1
+
+[[servers]]
+name = "issues"
+enabled = false
+environment = ["ISSUES_MCP_TOKEN"]
+startup_timeout_seconds = 30
+request_timeout_seconds = 30
+max_output_bytes = 262144
+resources = []
+prompts = []
+
+[servers.transport]
+kind = "streamable-http"
+url = "https://mcp.example.com/mcp"
+bearer_token_env = "ISSUES_MCP_TOKEN"
+
+[servers.tools.search_issues]
+capabilities = ["network"]
+read_only = true
+idempotent = true
+parallel_safe = true
+```
+
+Then inspect, pin, validate, and enable it:
+
+```console
+pactrail mcp inspect issues
+pactrail mcp snapshot issues
+pactrail mcp check
+pactrail mcp enable issues
+```
+
+The interactive session asks for each exact MCP request by default. Automation
+fails closed unless the run explicitly uses `--mcp-approval allow-run`; complete
+task-contract files must declare `mcp_invoke` and every underlying capability
+in `permissions.allow` or `permissions.ask`. Disable a server instantly with
+`pactrail mcp disable issues`; its snapshot is retained for inspection.
+
 ## Automation and CI
 
 No-subcommand mode intentionally requires a terminal. Use subcommands in scripts:
@@ -274,7 +365,7 @@ pactrail run --task pactrail.task.toml --model qwen3-coder --output json
 ```
 
 Other discovery commands include `pactrail tools --json`, `pactrail schema`,
-`pactrail memory list`, `pactrail list`, `pactrail doctor`, and
+`pactrail mcp list --json`, `pactrail memory list`, `pactrail list`, `pactrail doctor`, and
 `pactrail completion <shell>`.
 
 ## Reproducible evaluation

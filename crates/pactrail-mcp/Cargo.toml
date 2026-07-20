@@ -1,6 +1,6 @@
 [package]
-name = "pactrail-models"
-description = "Capability-driven model providers for Pactrail"
+name = "pactrail-mcp"
+description = "Governed Model Context Protocol adapter for Pactrail"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,22 +9,29 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
-[lints]
-workspace = true
-
 [dependencies]
 async-trait.workspace = true
 blake3.workspace = true
+bytes.workspace = true
 futures-util.workspace = true
-httpdate.workspace = true
+http.workspace = true
+jsonschema.workspace = true
+pactrail-context = { version = "0.7.0", path = "../pactrail-context" }
 pactrail-core = { version = "0.7.0", path = "../pactrail-core" }
 pactrail-tools = { version = "0.7.0", path = "../pactrail-tools" }
 reqwest.workspace = true
-schemars.workspace = true
-secrecy.workspace = true
+rmcp.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sse-stream.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tracing.workspace = true
-uuid.workspace = true
+tokio-util.workspace = true
+toml.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

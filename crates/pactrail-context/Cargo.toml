@@ -12,7 +12,7 @@ publish = false
 [dependencies]
 blake3.workspace = true
 ignore.workspace = true
-pactrail-core = { version = "0.6.0", path = "../pactrail-core" }
+pactrail-core = { version = "0.7.0", path = "../pactrail-core" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

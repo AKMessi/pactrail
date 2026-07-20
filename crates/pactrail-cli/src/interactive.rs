@@ -25,8 +25,8 @@ use terminal_size::{Width, terminal_size};
 use tokio_util::sync::CancellationToken;
 
 use crate::cli::{
-    CapabilitySetting, OciRuntimeArg, OutputFormat, ProcessApprovalArg, ProcessBackendArg,
-    ProviderKind, RunArgs,
+    CapabilitySetting, McpCommand, OciRuntimeArg, OutputFormat, ProcessApprovalArg,
+    ProcessBackendArg, ProviderKind, RunArgs,
 };
 use crate::commands::{self, CliError, CompletedRun};
 use crate::diff::render_receipt_diff;
@@ -115,6 +115,11 @@ const COMMANDS: &[CommandHelp] = &[
         "Kernel",
         "/tools",
         "inspect typed tools, capabilities, and risk classes",
+    ),
+    CommandHelp::new(
+        "Kernel",
+        "/mcp [list|check|init|inspect|snapshot|enable|disable]",
+        "manage governed MCP servers and pinned catalogs",
     ),
     CommandHelp::new(
         "Safety",
@@ -955,6 +960,7 @@ impl Session {
             "/status" | "/settings" | "/config" => self.render_status()?,
             "/doctor" => commands::doctor(false)?,
             "/tools" => self.render_tools()?,
+            "/mcp" => self.handle_mcp(arguments).await?,
             "/models" => self.refresh_models().await?,
             "/model" => self.set_model(arguments)?,
             "/connect" => self.connect(arguments)?,
@@ -1112,6 +1118,7 @@ impl Session {
         let process = banner_process(self.settings.process_backend);
         let review = banner_review(self.pending_runs);
         let memory = banner_memory(self.memory_count);
+        let mcp = self.mcp_status();
         let mut lines = vec![format!(
             "  {}  {}",
             self.theme.brand("╭─ P A C T R A I L"),
@@ -1151,6 +1158,7 @@ impl Session {
             "live timeline · durable hash chain · /trace",
             TimelineTone::Brand,
         ));
+        lines.extend(frame_field(&self.theme, columns, "mcp", &mcp.0, mcp.1));
         lines.extend(frame_field(
             &self.theme,
             columns,
@@ -1236,7 +1244,10 @@ impl Session {
 
     fn render_tools(&self) -> Result<(), CliError> {
         let columns = terminal_columns();
-        let descriptors = builtin_registry()?.descriptors();
+        let mut registry = builtin_registry()?;
+        let cancellation = CancellationToken::new();
+        crate::mcp::McpRuntime::load(&self.state)?.register(&mut registry, &cancellation)?;
+        let descriptors = registry.descriptors();
         let parallel_reads = descriptors
             .iter()
             .filter(|tool| tool.annotations.read_only && tool.annotations.parallel_safe)
@@ -1264,6 +1275,55 @@ impl Session {
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
+    async fn handle_mcp(&self, arguments: &str) -> Result<(), CliError> {
+        let mut parts = arguments.split_whitespace();
+        let operation = parts.next().unwrap_or("list");
+        let command = match operation {
+            "list" => McpCommand::List { json: false },
+            "check" => McpCommand::Check { json: false },
+            "init" => McpCommand::Init,
+            "inspect" => McpCommand::Inspect {
+                server: mcp_server_argument(parts.next(), parts.next(), operation)?,
+                json: false,
+            },
+            "snapshot" => McpCommand::Snapshot {
+                server: mcp_server_argument(parts.next(), parts.next(), operation)?,
+                json: false,
+            },
+            "enable" => McpCommand::Enable {
+                server: mcp_server_argument(parts.next(), parts.next(), operation)?,
+            },
+            "disable" => McpCommand::Disable {
+                server: mcp_server_argument(parts.next(), parts.next(), operation)?,
+            },
+            _ => {
+                return Err(CliError::Argument(format!(
+                    "unknown /mcp operation {operation:?}; use list, check, init, inspect, snapshot, enable, or disable"
+                )));
+            }
+        };
+        if matches!(operation, "list" | "check" | "init") && parts.next().is_some() {
+            return Err(CliError::Argument(format!(
+                "/mcp {operation} does not accept an argument"
+            )));
+        }
+        let cancellation = CancellationToken::new();
+        let mut execution = Box::pin(crate::mcp::execute(
+            &self.state,
+            &self.workspace,
+            command,
+            cancellation.clone(),
+        ));
+        tokio::select! {
+            result = &mut execution => result.map_err(CliError::from),
+            signal = tokio::signal::ctrl_c() => {
+                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                cancellation.cancel();
+                (&mut execution).await.map_err(CliError::from)
+            }
+        }
+    }
+
     fn render_status(&self) -> Result<(), CliError> {
         let columns = terminal_columns();
         let model = self
@@ -1276,6 +1336,7 @@ impl Session {
         let key = self.credential_status();
         let review = self.review_status();
         let memory = self.memory_status();
+        let mcp = self.mcp_status();
         let fields = [
             (
                 "workspace",
@@ -1318,6 +1379,7 @@ impl Session {
                 TimelineTone::Normal,
             ),
             ("processes", process.0, process.1),
+            ("mcp", mcp.0, mcp.1),
             ("review", review.0, review.1),
             ("memory", memory.0, memory.1),
         ];
@@ -1344,6 +1406,26 @@ impl Session {
                         .unwrap_or("image not configured")
                 ),
                 TimelineTone::Success,
+            ),
+        }
+    }
+
+    fn mcp_status(&self) -> (String, TimelineTone) {
+        match crate::mcp::McpRuntime::load(&self.state) {
+            Ok(runtime) if runtime.server_count() == 0 => {
+                ("none enabled · /mcp".to_owned(), TimelineTone::Muted)
+            }
+            Ok(runtime) => (
+                format!(
+                    "{} enabled · {} pinned tools · request-scoped approval",
+                    runtime.server_count(),
+                    runtime.tool_count()
+                ),
+                TimelineTone::Accent,
+            ),
+            Err(error) => (
+                format!("configuration invalid · {error}"),
+                TimelineTone::Warning,
             ),
         }
     }
@@ -3104,6 +3186,7 @@ fn run_args_from_settings(
         process_backend: Some(settings.process_backend),
         allow_process: false,
         process_approval: Some(ProcessApprovalArg::Prompt),
+        mcp_approval: Some(crate::cli::McpApprovalArg::Prompt),
         sandbox_runtime: settings.sandbox_runtime,
         sandbox_runtime_executable: settings
             .sandbox_runtime_executable
@@ -3136,6 +3219,22 @@ fn split_command(line: &str) -> (&str, &str) {
         .map_or((line, ""), |(command, arguments)| {
             (command, arguments.trim())
         })
+}
+
+fn mcp_server_argument(
+    server: Option<&str>,
+    extra: Option<&str>,
+    operation: &str,
+) -> Result<String, CliError> {
+    match (server, extra) {
+        (Some(server), None) => Ok(server.to_owned()),
+        (None, _) => Err(CliError::Argument(format!(
+            "/mcp {operation} requires one exact server name"
+        ))),
+        (Some(_), Some(_)) => Err(CliError::Argument(format!(
+            "/mcp {operation} accepts exactly one server name"
+        ))),
+    }
 }
 
 fn terminal_columns() -> usize {
