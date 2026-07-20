@@ -209,6 +209,44 @@ Read-only informational runs transition from `Reviewing` to terminal
 deterministic project profile to a separately labelled model explanation and
 records the grounding action in the trace.
 
+## Checkpoint and restart protocol
+
+While a run is executing, Pactrail serializes provider-neutral conversation and
+controller state into bounded content-addressed checkpoint artifacts. A
+`CheckpointCreated` event names the artifact only after its bytes are durable.
+The checkpoint points back to the preceding event sequence/hash and also binds
+the task contract, candidate change set, repository context, model/tool
+profiles, secret-free CLI manifest, resolved process-runtime/image profile,
+token use, turn counters, repair state, and elapsed active budget.
+
+`pactrail resume <run-id>` reopens the existing workspace transaction and reads
+the original `run.json`; it never reloads a mutable task file. Before appending
+anything, the engine requires the supplied checkpoint to be the exact artifact
+named by the current event head and recomputes every identity digest. Keys are
+resolved afresh from the recorded environment-variable name and are never part
+of the manifest or checkpoint.
+
+One local execution owner is enforced twice. A kernel file lock prevents two
+live processes from driving the same run and disappears immediately on process
+death. SQLite schema 2 retains a bounded ownership lease so concurrent and stale
+ownership remain diagnosable. The same mechanism covers new and resumed runs.
+
+Model-requested tools are effect-fenced. `EffectPrepared` is appended before a
+tool receives control and binds its call ID, name, risk, arguments, candidate,
+and runtime profile. `EffectCompleted` follows the normalized action/result and
+binds the resulting candidate. A crash with a prepared but incomplete effect is
+reported by tool and risk; Pactrail refuses automatic replay. A crash after an
+effect but before the next complete conversation checkpoint also stops safely
+because the event head is not resumable. This deliberately prefers explicit
+human recovery over duplicating a candidate mutation or host/external effect.
+
+Automatic continuation currently occurs at pre-model and pre-verification safe
+points. A pre-tool checkpoint is retained for diagnosis, but resume refuses it
+until a complete effect-reconciliation policy can preserve the exact tool
+result topology. Terminal runs, cancelled runs, and ready-to-apply candidates
+use their existing receipt/apply recovery paths rather than re-entering the
+model loop.
+
 ## Workspace transaction and apply
 
 Creation records a sorted baseline manifest and copies non-ignored regular files

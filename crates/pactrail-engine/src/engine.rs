@@ -9,8 +9,9 @@ use pactrail_context::{
 };
 use pactrail_core::{
     ActionRecord, ApprovalDecision, ApprovalRequest, Capability, ChangeReceipt, ContractError,
-    Evidence, EvidenceGrade, EvidenceId, EvidenceKind, EvidenceStatus, FileChange, ReceiptError,
-    ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState, TaskContract,
+    EffectCompleted, EffectPrepared, EventHash, Evidence, EvidenceGrade, EvidenceId, EvidenceKind,
+    EvidenceStatus, FileChange, ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent, RunId,
+    RunState, TaskContract,
 };
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
@@ -23,13 +24,17 @@ use pactrail_tools::{
     ToolError, ToolOutput, ToolRegistry,
 };
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
+use serde::Serialize;
 use serde_json::json;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+use crate::checkpoint::{
+    CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint, contract_digest,
+};
 use crate::context_window::{CompactionReport, ContextWindow};
-use crate::{VerificationCommand, detect_verification_commands};
+use crate::{CheckpointError, VerificationCommand, detect_verification_commands};
 
 const DEFAULT_MAX_TURNS: u16 = 24;
 const STALLED_TOOL_TURN_LIMIT: u16 = 3;
@@ -170,6 +175,8 @@ pub struct RunEngine<'a> {
     cancellation: CancellationToken,
     memory: Option<&'a MemoryStore>,
     context_fragments: Vec<ContextFragment>,
+    checkpoint_store: Option<&'a CheckpointStore>,
+    runtime_identity: Option<String>,
     max_turns: u16,
 }
 
@@ -189,6 +196,8 @@ impl<'a> RunEngine<'a> {
             cancellation: CancellationToken::new(),
             memory: None,
             context_fragments: Vec::new(),
+            checkpoint_store: None,
+            runtime_identity: None,
             max_turns: DEFAULT_MAX_TURNS,
         }
     }
@@ -225,6 +234,20 @@ impl<'a> RunEngine<'a> {
     #[must_use]
     pub fn with_context_fragments(mut self, fragments: Vec<ContextFragment>) -> Self {
         self.context_fragments = fragments;
+        self
+    }
+
+    /// Enables content-addressed provider-neutral session checkpoints.
+    #[must_use]
+    pub const fn with_checkpoint_store(mut self, store: &'a CheckpointStore) -> Self {
+        self.checkpoint_store = Some(store);
+        self
+    }
+
+    /// Binds resumable state to an opaque, non-secret runtime-configuration digest.
+    #[must_use]
+    pub fn with_runtime_identity(mut self, identity: impl Into<String>) -> Self {
+        self.runtime_identity = Some(identity.into());
         self
     }
 
@@ -277,13 +300,83 @@ impl<'a> RunEngine<'a> {
         store: &mut EventStore,
         observer: &dyn RunObserver,
     ) -> Result<RunOutcome, EngineError> {
+        self.execute_started_run(run_id, contract, transaction, store, observer, None)
+            .await
+    }
+
+    /// Continues a non-terminal run from a head-bound provider-neutral checkpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if checkpoint identity, profile, candidate, lifecycle,
+    /// or remaining budget validation fails, or if continued execution fails.
+    pub async fn resume_with_observer(
+        &self,
+        run_id: RunId,
+        contract: TaskContract,
+        transaction: &WorkspaceTransaction,
+        store: &mut EventStore,
+        checkpoint: RunCheckpoint,
+        observer: &dyn RunObserver,
+    ) -> Result<RunOutcome, EngineError> {
+        self.execute_started_run(
+            run_id,
+            contract,
+            transaction,
+            store,
+            observer,
+            Some(checkpoint),
+        )
+        .await
+    }
+
+    /// Continues a non-terminal run without emitting transient UI observations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error under the same resume-safety conditions as
+    /// [`Self::resume_with_observer`].
+    pub async fn resume(
+        &self,
+        run_id: RunId,
+        contract: TaskContract,
+        transaction: &WorkspaceTransaction,
+        store: &mut EventStore,
+        checkpoint: RunCheckpoint,
+    ) -> Result<RunOutcome, EngineError> {
+        self.resume_with_observer(
+            run_id,
+            contract,
+            transaction,
+            store,
+            checkpoint,
+            &SilentRunObserver,
+        )
+        .await
+    }
+
+    async fn execute_started_run(
+        &self,
+        run_id: RunId,
+        contract: TaskContract,
+        transaction: &WorkspaceTransaction,
+        store: &mut EventStore,
+        observer: &dyn RunObserver,
+        resume: Option<RunCheckpoint>,
+    ) -> Result<RunOutcome, EngineError> {
         contract.validate()?;
         let wall_time_seconds = contract.budget.wall_time_seconds;
+        let elapsed_active_ms = resume.as_ref().map_or(0, |value| value.elapsed_active_ms);
+        let wall_time_ms = wall_time_seconds.saturating_mul(1_000);
+        let remaining_ms = wall_time_ms.saturating_sub(elapsed_active_ms);
+        if remaining_ms == 0 {
+            return Err(EngineError::WallTimeExceeded { wall_time_seconds });
+        }
         let mut execution =
-            Box::pin(self.execute_inner(run_id, contract, transaction, store, observer));
+            Box::pin(self.execute_inner(run_id, contract, transaction, store, observer, resume));
         let result = tokio::select! {
             result = &mut execution => Some(result),
-            () = tokio::time::sleep(std::time::Duration::from_secs(wall_time_seconds)) => None,
+            () = tokio::time::sleep(std::time::Duration::from_millis(remaining_ms)) => None,
         };
         if let Some(result) = result {
             drop(execution);
@@ -293,6 +386,7 @@ impl<'a> RunEngine<'a> {
                     ensure_cancelled_state(store, run_id, observer);
                     Err(EngineError::Cancelled)
                 }
+                Err(error @ EngineError::ResumeRejected(_)) => Err(error),
                 Err(error) => {
                     ensure_failed_state(store, run_id, observer);
                     Err(error)
@@ -322,7 +416,9 @@ impl<'a> RunEngine<'a> {
         transaction: &WorkspaceTransaction,
         store: &mut EventStore,
         observer: &dyn RunObserver,
+        resume: Option<RunCheckpoint>,
     ) -> Result<RunOutcome, EngineError> {
+        let active_started = Instant::now();
         let overgrants = self.policy.overgrants(&contract.permissions);
         if !overgrants.is_empty() {
             return Err(EngineError::InvalidConfiguration(format!(
@@ -339,101 +435,217 @@ impl<'a> RunEngine<'a> {
             goal: contract.goal.clone(),
             model: format!("{}/{}", self.model.name(), self.model.model()),
         });
-        let mut journal = Journal::new(run_id, store);
-        journal.append(RunEvent::ContractRegistered(contract.clone()))?;
-        let mut state = RunState::Created;
-        transition(&mut journal, &mut state, RunState::Contracting, observer)?;
-        transition(&mut journal, &mut state, RunState::Investigating, observer)?;
-
-        info!(%run_id, "building repository evidence graph");
-        let context_started = Instant::now();
-        let index = RepositoryIndex::build(transaction.workspace_root())?;
         let model_capabilities = self.model.capabilities();
         let context_window = ContextWindow::from_model_limits(
             model_capabilities.context_tokens,
             model_capabilities.max_output_tokens,
         );
-        let context_budget = ContextBudget::from_model_limits(
-            model_capabilities.context_tokens,
-            model_capabilities.max_output_tokens,
-        );
-        let context_pack = ContextPack::compile_with_budget(
-            &contract,
-            &index,
-            &self.context_fragments,
-            context_budget,
-        )?;
-        let context_duration_ms = elapsed_millis(context_started);
-        observer.on_progress(&RunProgress::ContextBuilt {
-            indexed_files: index.files.len(),
-            cited_files: context_pack.cited_files.len(),
-            rendered_bytes: context_pack.rendered_bytes,
-            budget_bytes: context_pack.budget_bytes,
-            truncated: context_pack.truncated,
-            duration_ms: context_duration_ms,
-        });
-        journal.append(RunEvent::ActionCompleted(ActionRecord {
-            actor: "context".to_owned(),
-            action: "compile_repository_context".to_owned(),
-            summary: format!(
-                "indexed {} files and cited {} within a {}-byte context pack",
-                index.files.len(),
-                context_pack.cited_files.len(),
-                context_pack.rendered_bytes
-            ),
-            declared_effects: Vec::new(),
-            observed_effects: Vec::new(),
-            succeeded: true,
-            duration_ms: context_duration_ms,
-            attributes: BTreeMap::from([
-                (
-                    "budget_bytes".to_owned(),
-                    context_pack.budget_bytes.to_string(),
-                ),
-                (
-                    "cited_files".to_owned(),
-                    context_pack.cited_files.len().to_string(),
-                ),
-                (
-                    "instructions".to_owned(),
-                    context_pack.included_instructions.len().to_string(),
-                ),
-                (
-                    "memory_fragments".to_owned(),
-                    context_pack.included_fragments.len().to_string(),
-                ),
-                (
-                    "rendered_bytes".to_owned(),
-                    context_pack.rendered_bytes.to_string(),
-                ),
-                ("truncated".to_owned(), context_pack.truncated.to_string()),
-            ]),
-        }))?;
-        journal.append(RunEvent::CheckpointCreated {
-            checkpoint: format!("context:{}", context_pack.repository_digest),
-        })?;
-        transition(&mut journal, &mut state, RunState::Planning, observer)?;
-        transition(&mut journal, &mut state, RunState::Executing, observer)?;
-
-        let mut conversation = vec![
-            ConversationItem::Message(Message::system(SYSTEM_PROMPT)),
-            ConversationItem::Message(Message::system(context_pack.rendered.clone())),
-            ConversationItem::Message(Message::user(contract.goal.clone())),
-        ];
-        let mut usage = Usage::default();
         let max_turns = self.max_turns.min(contract.budget.max_model_attempts);
         let goal_intent = classify_goal(&contract.goal);
-        let mut call_ids = BTreeSet::new();
-        let mut final_text = String::new();
-        let mut previous_tool_signature = None;
-        let mut repeated_tool_turns = 0_u16;
-        let mut consecutive_failed_tool_turns = 0_u16;
-        let mut recovery_risk = None;
-        let mut automatic_repair_cycles = 0_u16;
-        let mut accepted_completion_gate = None;
         let tool_descriptors = self.tools.descriptors();
+        let (
+            mut journal,
+            mut state,
+            project_profile,
+            context_digest,
+            mut conversation,
+            mut usage,
+            mut call_ids,
+            mut final_text,
+            mut previous_tool_signature,
+            mut repeated_tool_turns,
+            mut consecutive_failed_tool_turns,
+            mut recovery_risk,
+            mut automatic_repair_cycles,
+            mut durable_checkpoint,
+            start_turn,
+            resume_phase,
+            active_base_ms,
+        ) = if let Some(checkpoint) = resume {
+            self.validate_resume_checkpoint(
+                run_id,
+                &contract,
+                transaction,
+                store,
+                &tool_descriptors,
+                &checkpoint,
+                max_turns,
+            )?;
+            let mut journal = Journal::resume(run_id, store)?;
+            journal.append(RunEvent::NoteRecorded {
+                message: format!(
+                    "resumed from safe session checkpoint at model turn {}",
+                    checkpoint.next_turn.saturating_add(1)
+                ),
+            })?;
+            (
+                journal,
+                RunState::Executing,
+                checkpoint.project_profile.clone(),
+                checkpoint.context_digest.clone(),
+                checkpoint.conversation.clone(),
+                checkpoint.usage,
+                checkpoint.call_ids.clone(),
+                checkpoint.final_text.clone(),
+                checkpoint.previous_tool_signature.clone(),
+                checkpoint.repeated_tool_turns,
+                checkpoint.consecutive_failed_tool_turns,
+                checkpoint.recovery_risk.clone(),
+                checkpoint.automatic_repair_cycles,
+                Some(checkpoint.clone()),
+                checkpoint.next_turn,
+                checkpoint.phase,
+                checkpoint.elapsed_active_ms,
+            )
+        } else {
+            let mut journal = Journal::new(run_id, store);
+            journal.append(RunEvent::ContractRegistered(contract.clone()))?;
+            let mut state = RunState::Created;
+            transition(&mut journal, &mut state, RunState::Contracting, observer)?;
+            transition(&mut journal, &mut state, RunState::Investigating, observer)?;
 
-        for turn in 0..max_turns {
+            info!(%run_id, "building repository evidence graph");
+            let context_started = Instant::now();
+            let index = RepositoryIndex::build(transaction.workspace_root())?;
+            let context_budget = ContextBudget::from_model_limits(
+                model_capabilities.context_tokens,
+                model_capabilities.max_output_tokens,
+            );
+            let context_pack = ContextPack::compile_with_budget(
+                &contract,
+                &index,
+                &self.context_fragments,
+                context_budget,
+            )?;
+            let context_duration_ms = elapsed_millis(context_started);
+            observer.on_progress(&RunProgress::ContextBuilt {
+                indexed_files: index.files.len(),
+                cited_files: context_pack.cited_files.len(),
+                rendered_bytes: context_pack.rendered_bytes,
+                budget_bytes: context_pack.budget_bytes,
+                truncated: context_pack.truncated,
+                duration_ms: context_duration_ms,
+            });
+            journal.append(RunEvent::ActionCompleted(ActionRecord {
+                actor: "context".to_owned(),
+                action: "compile_repository_context".to_owned(),
+                summary: format!(
+                    "indexed {} files and cited {} within a {}-byte context pack",
+                    index.files.len(),
+                    context_pack.cited_files.len(),
+                    context_pack.rendered_bytes
+                ),
+                declared_effects: Vec::new(),
+                observed_effects: Vec::new(),
+                succeeded: true,
+                duration_ms: context_duration_ms,
+                attributes: BTreeMap::from([
+                    (
+                        "budget_bytes".to_owned(),
+                        context_pack.budget_bytes.to_string(),
+                    ),
+                    (
+                        "cited_files".to_owned(),
+                        context_pack.cited_files.len().to_string(),
+                    ),
+                    (
+                        "instructions".to_owned(),
+                        context_pack.included_instructions.len().to_string(),
+                    ),
+                    (
+                        "memory_fragments".to_owned(),
+                        context_pack.included_fragments.len().to_string(),
+                    ),
+                    (
+                        "rendered_bytes".to_owned(),
+                        context_pack.rendered_bytes.to_string(),
+                    ),
+                    ("truncated".to_owned(), context_pack.truncated.to_string()),
+                ]),
+            }))?;
+            journal.append(RunEvent::CheckpointCreated {
+                checkpoint: format!("context:{}", context_pack.repository_digest),
+            })?;
+            transition(&mut journal, &mut state, RunState::Planning, observer)?;
+            transition(&mut journal, &mut state, RunState::Executing, observer)?;
+
+            let conversation = vec![
+                ConversationItem::Message(Message::system(SYSTEM_PROMPT)),
+                ConversationItem::Message(Message::system(context_pack.rendered.clone())),
+                ConversationItem::Message(Message::user(contract.goal.clone())),
+            ];
+            let mut durable_checkpoint = self
+                .checkpoint_store
+                .map(|_| {
+                    let (event_sequence, event_hash) = journal.head()?;
+                    let (model_profile_digest, tool_profile_digest) =
+                        self.checkpoint_profile_digests(&tool_descriptors)?;
+                    RunCheckpoint::initial(
+                        CheckpointIdentity {
+                            run_id,
+                            event_sequence,
+                            event_hash,
+                            contract: &contract,
+                            candidate_digest: candidate_changes_digest(&transaction.changes()?),
+                            model_profile_digest,
+                            tool_profile_digest,
+                            context_digest: context_pack.repository_digest.clone(),
+                        },
+                        conversation.clone(),
+                    )
+                    .map_err(EngineError::from)
+                })
+                .transpose()?;
+            if let Some(checkpoint) = durable_checkpoint.as_mut() {
+                checkpoint
+                    .project_profile
+                    .clone_from(&context_pack.project_profile);
+            }
+            (
+                journal,
+                state,
+                context_pack.project_profile,
+                context_pack.repository_digest,
+                conversation,
+                Usage::default(),
+                BTreeSet::new(),
+                String::new(),
+                None,
+                0,
+                0,
+                None,
+                0,
+                durable_checkpoint,
+                0,
+                ResumePhase::BeforeModel,
+                0,
+            )
+        };
+        let mut accepted_completion_gate = None;
+        self.persist_checkpoint(
+            &mut durable_checkpoint,
+            transaction,
+            &mut journal,
+            CheckpointLoopState {
+                phase: resume_phase,
+                next_turn: start_turn,
+                elapsed_active_ms: active_base_ms.saturating_add(elapsed_millis(active_started)),
+                conversation: &conversation,
+                usage,
+                call_ids: &call_ids,
+                previous_tool_signature: previous_tool_signature.as_ref(),
+                repeated_tool_turns,
+                consecutive_failed_tool_turns,
+                automatic_repair_cycles,
+                final_text: &final_text,
+                recovery_risk: recovery_risk.as_deref(),
+            },
+        )?;
+
+        for turn in start_turn..max_turns {
+            if resume_phase == ResumePhase::BeforeVerification {
+                break;
+            }
             self.check_cancelled()?;
             compact_model_context(
                 context_window,
@@ -616,6 +828,26 @@ impl<'a> RunEngine<'a> {
                             previous_tool_signature = None;
                             repeated_tool_turns = 0;
                             consecutive_failed_tool_turns = 0;
+                            self.persist_checkpoint(
+                                &mut durable_checkpoint,
+                                transaction,
+                                &mut journal,
+                                CheckpointLoopState {
+                                    phase: ResumePhase::BeforeModel,
+                                    next_turn: turn.saturating_add(1),
+                                    elapsed_active_ms: active_base_ms
+                                        .saturating_add(elapsed_millis(active_started)),
+                                    conversation: &conversation,
+                                    usage,
+                                    call_ids: &call_ids,
+                                    previous_tool_signature: previous_tool_signature.as_ref(),
+                                    repeated_tool_turns,
+                                    consecutive_failed_tool_turns,
+                                    automatic_repair_cycles,
+                                    final_text: &final_text,
+                                    recovery_risk: recovery_risk.as_deref(),
+                                },
+                            )?;
                             continue;
                         } else if validation.passed() {
                             accepted_completion_gate = Some((candidate_digest, validation));
@@ -658,15 +890,43 @@ impl<'a> RunEngine<'a> {
                 text: response.text,
                 calls: response.tool_calls.clone(),
             });
+            self.persist_checkpoint(
+                &mut durable_checkpoint,
+                transaction,
+                &mut journal,
+                CheckpointLoopState {
+                    phase: ResumePhase::BeforeTools,
+                    next_turn: turn,
+                    elapsed_active_ms: active_base_ms
+                        .saturating_add(elapsed_millis(active_started)),
+                    conversation: &conversation,
+                    usage,
+                    call_ids: &call_ids,
+                    previous_tool_signature: previous_tool_signature.as_ref(),
+                    repeated_tool_turns,
+                    consecutive_failed_tool_turns,
+                    automatic_repair_cycles,
+                    final_text: &final_text,
+                    recovery_risk: recovery_risk.as_deref(),
+                },
+            )?;
             let mut any_tool_succeeded = false;
             for batch in self.schedule_tool_batches(response.tool_calls) {
+                let candidate_before = candidate_changes_digest(&transaction.changes()?);
+                for call in &batch {
+                    journal.append(RunEvent::EffectPrepared(
+                        self.effect_preparation(call, &candidate_before),
+                    ))?;
+                }
                 let executions = self
                     .execute_tool_batch(run_id, transaction, observer, turn + 1, batch)
                     .await?;
                 for execution in executions {
                     any_tool_succeeded |= execution.succeeded;
+                    let effect_completion = Self::effect_completion(&execution, transaction)?;
                     append_policy_audit(&mut journal, execution.policy_audit)?;
-                    journal.append(RunEvent::ActionCompleted(execution.action))?;
+                    journal.append(RunEvent::ActionCompleted(execution.action.clone()))?;
+                    journal.append(RunEvent::EffectCompleted(effect_completion))?;
                     if let Some(error) = execution.fatal_error {
                         return Err(EngineError::ProcessCleanup(error));
                     }
@@ -757,6 +1017,26 @@ impl<'a> RunEngine<'a> {
                 ));
                 break;
             }
+            self.persist_checkpoint(
+                &mut durable_checkpoint,
+                transaction,
+                &mut journal,
+                CheckpointLoopState {
+                    phase: ResumePhase::BeforeModel,
+                    next_turn: turn.saturating_add(1),
+                    elapsed_active_ms: active_base_ms
+                        .saturating_add(elapsed_millis(active_started)),
+                    conversation: &conversation,
+                    usage,
+                    call_ids: &call_ids,
+                    previous_tool_signature: previous_tool_signature.as_ref(),
+                    repeated_tool_turns,
+                    consecutive_failed_tool_turns,
+                    automatic_repair_cycles,
+                    final_text: &final_text,
+                    recovery_risk: recovery_risk.as_deref(),
+                },
+            )?;
         }
 
         if final_text.is_empty() {
@@ -775,11 +1055,13 @@ impl<'a> RunEngine<'a> {
             })?;
             recovery_risk = Some(risk);
         }
-        if goal_intent == GoalIntent::Informational && is_broad_repository_overview(&contract.goal)
+        if resume_phase != ResumePhase::BeforeVerification
+            && goal_intent == GoalIntent::Informational
+            && is_broad_repository_overview(&contract.goal)
         {
             final_text = format!(
                 "Pactrail workspace profile (deterministic)\n{}\n\nModel explanation\n{}",
-                context_pack.project_profile,
+                project_profile,
                 final_text.trim()
             );
             journal.append(RunEvent::ActionCompleted(ActionRecord {
@@ -793,12 +1075,32 @@ impl<'a> RunEngine<'a> {
                 duration_ms: 0,
                 attributes: BTreeMap::from([(
                     "profile_digest".to_owned(),
-                    blake3::hash(context_pack.project_profile.as_bytes())
+                    blake3::hash(project_profile.as_bytes())
                         .to_hex()
                         .to_string(),
                 )]),
             }))?;
         }
+
+        self.persist_checkpoint(
+            &mut durable_checkpoint,
+            transaction,
+            &mut journal,
+            CheckpointLoopState {
+                phase: ResumePhase::BeforeVerification,
+                next_turn: max_turns,
+                elapsed_active_ms: active_base_ms.saturating_add(elapsed_millis(active_started)),
+                conversation: &conversation,
+                usage,
+                call_ids: &call_ids,
+                previous_tool_signature: previous_tool_signature.as_ref(),
+                repeated_tool_turns,
+                consecutive_failed_tool_turns,
+                automatic_repair_cycles,
+                final_text: &final_text,
+                recovery_risk: recovery_risk.as_deref(),
+            },
+        )?;
 
         transition(&mut journal, &mut state, RunState::Verifying, observer)?;
         let changes = transaction.changes()?;
@@ -880,7 +1182,7 @@ impl<'a> RunEngine<'a> {
             final_text,
             receipt,
             usage,
-            context_digest: context_pack.repository_digest,
+            context_digest,
             event_count: journal.sequence,
         })
     }
@@ -1049,6 +1351,60 @@ impl<'a> RunEngine<'a> {
         batches
     }
 
+    fn effect_preparation(&self, call: &ToolCall, candidate_digest: &str) -> EffectPrepared {
+        let risk = self.tools.descriptor(&call.name).map_or_else(
+            || "unknown".to_owned(),
+            |descriptor| {
+                serde_json::to_value(descriptor.annotations.risk)
+                    .ok()
+                    .and_then(|value| value.as_str().map(str::to_owned))
+                    .unwrap_or_else(|| "unknown".to_owned())
+            },
+        );
+        let runtime_profile_digest = self.runtime_identity.clone().unwrap_or_else(|| {
+            blake3::hash(b"pactrail:runtime-profile:unbound:v1")
+                .to_hex()
+                .to_string()
+        });
+        EffectPrepared {
+            call_id: call.id.clone(),
+            tool: call.name.clone(),
+            arguments_digest: blake3::hash(call.arguments.to_string().as_bytes())
+                .to_hex()
+                .to_string(),
+            candidate_digest_before: candidate_digest.to_owned(),
+            risk,
+            runtime_profile_digest,
+        }
+    }
+
+    fn effect_completion(
+        execution: &CompletedToolExecution,
+        transaction: &WorkspaceTransaction,
+    ) -> Result<EffectCompleted, EngineError> {
+        #[derive(Serialize)]
+        struct CompletedEffect<'a> {
+            result: &'a ToolResult,
+            action: &'a ActionRecord,
+            succeeded: bool,
+        }
+
+        let bytes = serde_json::to_vec(&CompletedEffect {
+            result: &execution.result,
+            action: &execution.action,
+            succeeded: execution.succeeded,
+        })
+        .map_err(|error| {
+            EngineError::Protocol(format!("tool completion could not be fenced: {error}"))
+        })?;
+        Ok(EffectCompleted {
+            call_id: execution.call_id.clone(),
+            result_digest: blake3::hash(&bytes).to_hex().to_string(),
+            candidate_digest_after: candidate_changes_digest(&transaction.changes()?),
+            succeeded: execution.succeeded,
+        })
+    }
+
     async fn execute_tool_batch(
         &self,
         run_id: RunId,
@@ -1137,6 +1493,7 @@ impl<'a> RunEngine<'a> {
             &normalized,
         );
         Ok(CompletedToolExecution {
+            call_id: call.id,
             result: normalized.result,
             action,
             succeeded: normalized.succeeded,
@@ -1379,7 +1736,187 @@ impl<'a> RunEngine<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct CheckpointLoopState<'a> {
+    phase: ResumePhase,
+    next_turn: u16,
+    elapsed_active_ms: u64,
+    conversation: &'a Vec<ConversationItem>,
+    usage: Usage,
+    call_ids: &'a BTreeSet<String>,
+    previous_tool_signature: Option<&'a Vec<(String, String)>>,
+    repeated_tool_turns: u16,
+    consecutive_failed_tool_turns: u16,
+    automatic_repair_cycles: u16,
+    final_text: &'a str,
+    recovery_risk: Option<&'a str>,
+}
+
 impl RunEngine<'_> {
+    #[allow(clippy::too_many_arguments)]
+    fn validate_resume_checkpoint(
+        &self,
+        run_id: RunId,
+        contract: &TaskContract,
+        transaction: &WorkspaceTransaction,
+        events: &EventStore,
+        tools: &[ToolDescriptor],
+        checkpoint: &RunCheckpoint,
+        max_turns: u16,
+    ) -> Result<(), EngineError> {
+        let reject = |reason: String| EngineError::ResumeRejected(reason);
+        checkpoint
+            .validate()
+            .map_err(|error| reject(error.to_string()))?;
+        if checkpoint.run_id != run_id {
+            return Err(reject(format!(
+                "checkpoint belongs to run {}, not requested run {run_id}",
+                checkpoint.run_id
+            )));
+        }
+        let checkpoint_store = self.checkpoint_store.ok_or_else(|| {
+            reject("the engine was not configured with a checkpoint store".to_owned())
+        })?;
+        let durable = checkpoint_store
+            .load_head(events, run_id)
+            .map_err(|error| reject(error.to_string()))?;
+        if &durable != checkpoint {
+            return Err(reject(
+                "the supplied checkpoint is not the exact artifact named by the event head"
+                    .to_owned(),
+            ));
+        }
+
+        let snapshot = events
+            .snapshot(run_id)
+            .map_err(|error| reject(error.to_string()))?;
+        if snapshot.state != RunState::Executing {
+            return Err(reject(format!(
+                "durable lifecycle is {:?}; only executing runs can resume",
+                snapshot.state
+            )));
+        }
+        let expected_contract =
+            contract_digest(contract).map_err(|error| reject(error.to_string()))?;
+        if checkpoint.contract_digest != expected_contract {
+            return Err(reject(
+                "task contract differs from the checkpointed contract".to_owned(),
+            ));
+        }
+        let candidate_digest = candidate_changes_digest(&transaction.changes()?);
+        if checkpoint.candidate_digest != candidate_digest {
+            return Err(reject(
+                "isolated candidate differs from the checkpointed candidate".to_owned(),
+            ));
+        }
+        let (model_profile_digest, tool_profile_digest) = self
+            .checkpoint_profile_digests(tools)
+            .map_err(|error| reject(error.to_string()))?;
+        if checkpoint.model_profile_digest != model_profile_digest {
+            return Err(reject(
+                "model identity or limits differ from the checkpointed profile".to_owned(),
+            ));
+        }
+        if checkpoint.tool_profile_digest != tool_profile_digest {
+            return Err(reject(
+                "tool registry differs from the checkpointed profile".to_owned(),
+            ));
+        }
+        if checkpoint.next_turn > max_turns {
+            return Err(reject(format!(
+                "checkpoint next turn {} exceeds the run limit {max_turns}",
+                checkpoint.next_turn
+            )));
+        }
+        if contract.budget.model_tokens != 0
+            && checkpoint.usage.total() > contract.budget.model_tokens
+        {
+            return Err(reject(format!(
+                "checkpoint already used {} tokens, exceeding the {}-token task budget",
+                checkpoint.usage.total(),
+                contract.budget.model_tokens
+            )));
+        }
+        match checkpoint.phase {
+            ResumePhase::BeforeModel => {}
+            ResumePhase::BeforeVerification if !checkpoint.final_text.trim().is_empty() => {}
+            ResumePhase::BeforeVerification => {
+                return Err(reject(
+                    "a pre-verification checkpoint has no final model account".to_owned(),
+                ));
+            }
+            ResumePhase::BeforeTools => {
+                return Err(reject(
+                    "the checkpoint is between model output and tool effects; automatic replay is intentionally forbidden"
+                        .to_owned(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn checkpoint_profile_digests(
+        &self,
+        tools: &[ToolDescriptor],
+    ) -> Result<(String, String), EngineError> {
+        #[derive(Serialize)]
+        struct ModelProfile<'a> {
+            provider: &'a str,
+            model: &'a str,
+            capabilities: &'a pactrail_models::ModelCapabilities,
+            max_turns: u16,
+            runtime_identity: Option<&'a str>,
+        }
+
+        let model = serde_json::to_vec(&ModelProfile {
+            provider: self.model.name(),
+            model: self.model.model(),
+            capabilities: self.model.capabilities(),
+            max_turns: self.max_turns,
+            runtime_identity: self.runtime_identity.as_deref(),
+        })
+        .map_err(CheckpointError::Encoding)?;
+        let tools = serde_json::to_vec(tools).map_err(CheckpointError::Encoding)?;
+        Ok((
+            blake3::hash(&model).to_hex().to_string(),
+            blake3::hash(&tools).to_hex().to_string(),
+        ))
+    }
+
+    fn persist_checkpoint(
+        &self,
+        checkpoint: &mut Option<RunCheckpoint>,
+        transaction: &WorkspaceTransaction,
+        journal: &mut Journal<'_>,
+        state: CheckpointLoopState<'_>,
+    ) -> Result<(), EngineError> {
+        let (Some(store), Some(checkpoint)) = (self.checkpoint_store, checkpoint.as_mut()) else {
+            return Ok(());
+        };
+        let (event_sequence, event_hash) = journal.head()?;
+        checkpoint.event_sequence = event_sequence;
+        checkpoint.event_hash = event_hash;
+        checkpoint.candidate_digest = candidate_changes_digest(&transaction.changes()?);
+        checkpoint.phase = state.phase;
+        checkpoint.next_turn = state.next_turn;
+        checkpoint.elapsed_active_ms = state.elapsed_active_ms;
+        checkpoint.conversation.clone_from(state.conversation);
+        checkpoint.usage = state.usage;
+        checkpoint.call_ids.clone_from(state.call_ids);
+        checkpoint
+            .previous_tool_signature
+            .clone_from(&state.previous_tool_signature.cloned());
+        checkpoint.repeated_tool_turns = state.repeated_tool_turns;
+        checkpoint.consecutive_failed_tool_turns = state.consecutive_failed_tool_turns;
+        checkpoint.automatic_repair_cycles = state.automatic_repair_cycles;
+        state.final_text.clone_into(&mut checkpoint.final_text);
+        checkpoint.recovery_risk = state.recovery_risk.map(str::to_owned);
+        let artifact = store.put(checkpoint)?;
+        journal.append(RunEvent::CheckpointCreated {
+            checkpoint: CheckpointStore::event_reference(&artifact),
+        })
+    }
+
     async fn invoke_model(&self, request: &ModelRequest) -> Result<ModelResponse, EngineError> {
         tokio::select! {
             biased;
@@ -1426,6 +1963,7 @@ fn is_process_cleanup_engine_error(error: &EngineError) -> bool {
 }
 
 struct CompletedToolExecution {
+    call_id: String,
     result: ToolResult,
     action: ActionRecord,
     succeeded: bool,
@@ -1800,6 +2338,20 @@ impl<'a> Journal<'a> {
         }
     }
 
+    fn resume(run_id: RunId, store: &'a mut EventStore) -> Result<Self, EngineError> {
+        let snapshot = store.snapshot(run_id)?;
+        let sequence = snapshot
+            .last_sequence
+            .map_or(0, |value| value.saturating_add(1));
+        Ok(Self {
+            run_id,
+            store,
+            sequence,
+            last_hash: snapshot.last_hash.0,
+            approvals: snapshot.approvals,
+        })
+    }
+
     fn append(&mut self, event: RunEvent) -> Result<(), EngineError> {
         let approval = match &event {
             RunEvent::ApprovalDecided(approval) => Some(approval.clone()),
@@ -1812,6 +2364,15 @@ impl<'a> Journal<'a> {
             self.approvals.push(approval);
         }
         Ok(())
+    }
+
+    fn head(&self) -> Result<(u64, EventHash), EngineError> {
+        let sequence = self.sequence.checked_sub(1).ok_or_else(|| {
+            EngineError::InvalidConfiguration(
+                "cannot checkpoint a run before its first durable event".to_owned(),
+            )
+        })?;
+        Ok((sequence, EventHash(self.last_hash.clone())))
     }
 }
 
@@ -2171,6 +2732,8 @@ pub enum EngineError {
     Context(#[from] ContextError),
     #[error("event storage failed: {0}")]
     Store(#[from] StoreError),
+    #[error("durable checkpoint failed: {0}")]
+    Checkpoint(#[from] CheckpointError),
     #[error("model invocation failed: {0}")]
     Model(#[from] ModelError),
     #[error("workspace transaction failed: {0}")]
@@ -2185,6 +2748,8 @@ pub enum EngineError {
     InvalidConfiguration(String),
     #[error("model protocol violation: {0}")]
     Protocol(String),
+    #[error("run cannot resume safely: {0}")]
+    ResumeRejected(String),
     #[error("model context management failed: {0}")]
     ContextWindow(String),
     #[error("model used {used} tokens, exceeding the {limit}-token task budget")]
@@ -2436,6 +3001,31 @@ mod tests {
         assert_ne!(forward, candidate_changes_digest(&[second]));
     }
 
+    #[test]
+    fn checkpoint_profile_binds_the_external_runtime_identity() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "identity-test".to_owned(),
+            responses: Mutex::new(VecDeque::new()),
+            capabilities: ModelCapabilities::default(),
+        };
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let tools = registry.descriptors();
+        let first = RunEngine::new(&model, &registry, &policy)
+            .with_runtime_identity("a".repeat(64))
+            .checkpoint_profile_digests(&tools)
+            .unwrap_or_else(|error| unreachable!("first profile: {error}"));
+        let second = RunEngine::new(&model, &registry, &policy)
+            .with_runtime_identity("b".repeat(64))
+            .checkpoint_profile_digests(&tools)
+            .unwrap_or_else(|error| unreachable!("second profile: {error}"));
+
+        assert_ne!(first.0, second.0);
+        assert_eq!(first.1, second.1);
+    }
+
     #[tokio::test]
     async fn wall_time_budget_cancels_and_fails_the_run() {
         let model = SlowModel {
@@ -2514,6 +3104,190 @@ mod tests {
             .snapshot(run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
         assert_eq!(snapshot.state, RunState::Cancelled);
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn interrupted_model_turn_resumes_from_the_exact_durable_checkpoint() {
+        let suspended_model = SlowModel {
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        fs::write(source.path().join("README.md"), "# Resume fixture\n")
+            .unwrap_or_else(|error| unreachable!("fixture: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let checkpoint_root =
+            tempfile::tempdir().unwrap_or_else(|error| unreachable!("checkpoint root: {error}"));
+        let checkpoints = CheckpointStore::open(checkpoint_root.path())
+            .unwrap_or_else(|error| unreachable!("checkpoints: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let suspended_engine = RunEngine::new(&suspended_model, &registry, &policy)
+            .with_checkpoint_store(&checkpoints);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let mut contract = TaskContract::new("Explain this workspace", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let run_id = RunId::new();
+
+        let interrupted = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            suspended_engine.execute_inner(
+                run_id,
+                contract.clone(),
+                &transaction,
+                &mut store,
+                &SilentRunObserver,
+                None,
+            ),
+        )
+        .await;
+        assert!(
+            interrupted.is_err(),
+            "the synthetic model turn must remain in flight"
+        );
+        let checkpoint = checkpoints
+            .load_head(&store, run_id)
+            .unwrap_or_else(|error| unreachable!("load checkpoint: {error}"));
+        assert_eq!(checkpoint.phase, ResumePhase::BeforeModel);
+        assert_eq!(checkpoint.next_turn, 0);
+        assert_eq!(
+            store
+                .snapshot(run_id)
+                .unwrap_or_else(|error| unreachable!("snapshot: {error}"))
+                .state,
+            RunState::Executing
+        );
+
+        let resumed_model = ScriptedModel {
+            name: "slow".to_owned(),
+            model: "test".to_owned(),
+            responses: Mutex::new(VecDeque::from([ModelResponse {
+                text: "This workspace contains a resume fixture.".to_owned(),
+                tool_calls: Vec::new(),
+                finish_reason: FinishReason::Complete,
+                usage: Usage {
+                    input_tokens: 7,
+                    output_tokens: 5,
+                    cached_input_tokens: 0,
+                },
+                provider_request_id: None,
+                extensions: serde_json::Map::new(),
+            }])),
+            capabilities: ModelCapabilities::default(),
+        };
+        let resumed_engine =
+            RunEngine::new(&resumed_model, &registry, &policy).with_checkpoint_store(&checkpoints);
+        let outcome = resumed_engine
+            .resume_with_observer(
+                run_id,
+                contract,
+                &transaction,
+                &mut store,
+                checkpoint,
+                &SilentRunObserver,
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("resume: {error}"));
+
+        assert_eq!(outcome.run_id, run_id);
+        assert_eq!(outcome.usage.total(), 12);
+        assert_eq!(outcome.receipt.outcome, ReceiptOutcome::Answered);
+        let events = store
+            .load(run_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"));
+        assert_eq!(
+            events
+                .iter()
+                .filter(|event| matches!(event.event, RunEvent::ContractRegistered(_)))
+                .count(),
+            1
+        );
+        assert!(events.iter().any(|event| matches!(
+            &event.event,
+            RunEvent::NoteRecorded { message } if message.contains("resumed from safe session checkpoint")
+        )));
+    }
+
+    #[tokio::test]
+    async fn resume_rejects_candidate_drift_without_mutating_the_run_journal() {
+        let suspended_model = SlowModel {
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let checkpoint_root =
+            tempfile::tempdir().unwrap_or_else(|error| unreachable!("checkpoint root: {error}"));
+        let checkpoints = CheckpointStore::open(checkpoint_root.path())
+            .unwrap_or_else(|error| unreachable!("checkpoints: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let engine = RunEngine::new(&suspended_model, &registry, &policy)
+            .with_checkpoint_store(&checkpoints);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let mut contract = TaskContract::new("Inspect safely", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let run_id = RunId::new();
+
+        let interrupted = tokio::time::timeout(
+            std::time::Duration::from_millis(100),
+            engine.execute_inner(
+                run_id,
+                contract.clone(),
+                &transaction,
+                &mut store,
+                &SilentRunObserver,
+                None,
+            ),
+        )
+        .await;
+        assert!(interrupted.is_err());
+        let checkpoint = checkpoints
+            .load_head(&store, run_id)
+            .unwrap_or_else(|error| unreachable!("load checkpoint: {error}"));
+        let head_before = store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        fs::write(
+            transaction.workspace_root().join("drift.txt"),
+            "unexpected\n",
+        )
+        .unwrap_or_else(|error| unreachable!("candidate drift: {error}"));
+
+        let result = engine
+            .resume_with_observer(
+                run_id,
+                contract,
+                &transaction,
+                &mut store,
+                checkpoint,
+                &SilentRunObserver,
+            )
+            .await;
+        assert!(matches!(result, Err(EngineError::ResumeRejected(_))));
+        let head_after = store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        assert_eq!(head_after.last_sequence, head_before.last_sequence);
+        assert_eq!(head_after.last_hash, head_before.last_hash);
+        assert_eq!(head_after.state, RunState::Executing);
     }
 
     #[tokio::test]
@@ -2730,6 +3504,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::too_many_lines)]
     async fn tool_loop_produces_isolated_change_receipt() {
         let responses = VecDeque::from([
             ModelResponse {
@@ -2804,6 +3579,31 @@ mod tests {
             .snapshot(outcome.run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
         assert_eq!(snapshot.state, RunState::AwaitingApply);
+        assert!(snapshot.pending_effects.is_empty());
+        assert_eq!(snapshot.completed_effects.len(), 1);
+        assert_eq!(snapshot.completed_effects[0].call_id, "call-1");
+        assert!(snapshot.completed_effects[0].succeeded);
+        let events = store
+            .load(outcome.run_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"));
+        let prepared = events
+            .iter()
+            .position(|event| matches!(event.event, RunEvent::EffectPrepared(_)))
+            .unwrap_or_else(|| unreachable!("prepared effect"));
+        let action = events
+            .iter()
+            .position(|event| {
+                matches!(
+                    &event.event,
+                    RunEvent::ActionCompleted(action) if action.actor == "tool:write_file"
+                )
+            })
+            .unwrap_or_else(|| unreachable!("tool action"));
+        let completed = events
+            .iter()
+            .position(|event| matches!(event.event, RunEvent::EffectCompleted(_)))
+            .unwrap_or_else(|| unreachable!("completed effect"));
+        assert!(prepared < action && action < completed);
         let progress = observer.events();
         assert!(progress.iter().any(|event| matches!(
             event,

@@ -1,4 +1,4 @@
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
@@ -13,14 +13,14 @@ use pactrail_core::{
     EvidenceGrade, EvidenceId, EvidenceKind, EvidenceStatus, ReceiptInput, ReceiptOutcome,
     RunEvent, RunId, RunState, TaskContract,
 };
-use pactrail_engine::{EngineError, RunEngine, RunObserver};
+use pactrail_engine::{CheckpointStore, EngineError, RunEngine, RunObserver, RunOutcome};
 use pactrail_memory::{
     MemoryDraft, MemoryError, MemoryId, MemoryKind, MemoryMatch, MemoryRecord, MemoryStore,
 };
 use pactrail_models::{
     ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
-use pactrail_store::{EventStore, StoreError};
+use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
     ApprovalResolver, DisabledProcessBackend, NativeProcessBackend, OciProcessBackend,
     OciProcessConfig, OciRuntimeKind, OciSandboxProfile, PolicyEngine, ProcessBackend,
@@ -29,6 +29,7 @@ use pactrail_tools::{
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
 use secrecy::SecretString;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tempfile::NamedTempFile;
 use thiserror::Error;
@@ -36,7 +37,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::cli::{
     Cli, Command, CompletionShell, MemoryCommand, MemoryKindArg, OciRuntimeArg, OutputFormat,
-    ProcessApprovalArg, ProcessBackendArg, ProviderKind, RunArgs, RunIdArgs,
+    ProcessApprovalArg, ProcessBackendArg, ProviderKind, ResumeArgs, RunArgs, RunIdArgs,
 };
 use crate::output::{
     escape_json_terminal_controls, write_human_stdout, write_stderr, write_stdout,
@@ -47,6 +48,7 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
         CliError::Argument("a command is required outside interactive mode".to_owned())
     })? {
         Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), args).await,
+        Command::Resume(args) => resume(&cli.workspace, cli.state_dir.as_deref(), args).await,
         Command::Inspect(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
             inspect(&state, &args)
@@ -85,6 +87,64 @@ pub(crate) struct CompletedRun {
     pub model_summary: String,
     pub receipt: ChangeReceipt,
     pub tokens: u64,
+}
+
+const RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;
+const MAX_RUN_MANIFEST_BYTES: u64 = 1024 * 1024;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct RunManifest {
+    schema_version: u32,
+    run_id: RunId,
+    workspace_root: PathBuf,
+    contract: TaskContract,
+    args: RunArgs,
+}
+
+impl RunManifest {
+    fn validate(
+        &self,
+        expected_run_id: RunId,
+        transaction: &WorkspaceTransaction,
+    ) -> Result<(), CliError> {
+        if self.schema_version != RUN_MANIFEST_SCHEMA_VERSION {
+            return Err(CliError::Argument(format!(
+                "run manifest schema {} is unsupported; expected {RUN_MANIFEST_SCHEMA_VERSION}",
+                self.schema_version
+            )));
+        }
+        if self.run_id != expected_run_id {
+            return Err(CliError::Argument(format!(
+                "run manifest belongs to {}, not {expected_run_id}",
+                self.run_id
+            )));
+        }
+        self.contract.validate().map_err(CliError::Contract)?;
+        if self.workspace_root != transaction.source_root()
+            || self.contract.workspace_root != transaction.source_root().display().to_string()
+        {
+            return Err(CliError::Argument(
+                "run manifest workspace identity does not match the isolated transaction"
+                    .to_owned(),
+            ));
+        }
+        if self.args.task.is_some()
+            || self.args.allow_process
+            || self.args.goal.as_deref() != Some(self.contract.goal.as_str())
+            || self.args.write_paths != self.contract.allowed_write_paths
+            || self.args.process_backend.is_none()
+            || self.args.process_approval.is_none()
+        {
+            return Err(CliError::Argument(
+                "run manifest contains a non-normalized execution configuration".to_owned(),
+            ));
+        }
+        validate_model_limits(&self.args)?;
+        let _backend = effective_process_backend(&self.args)?;
+        let _approval = effective_process_approval(&self.args)?;
+        Ok(())
+    }
 }
 
 async fn run(
@@ -127,6 +187,132 @@ async fn run(
     )
 }
 
+async fn resume(
+    cli_workspace: &Path,
+    state_override: Option<&Path>,
+    args: ResumeArgs,
+) -> Result<(), CliError> {
+    let output = args.output;
+    let cancellation = CancellationToken::new();
+    let mut execution = Box::pin(execute_resume_inner(
+        cli_workspace,
+        state_override,
+        args,
+        None,
+        cancellation.clone(),
+    ));
+    let completed = tokio::select! {
+        result = &mut execution => result?,
+        signal = tokio::signal::ctrl_c() => {
+            signal.map_err(|source| CliError::Io {
+                path: PathBuf::from("<ctrl-c>"),
+                source,
+            })?;
+            cancellation.cancel();
+            (&mut execution).await?
+        }
+    };
+    render_run(
+        &completed.run_root,
+        &completed.model_summary,
+        &completed.receipt,
+        completed.tokens,
+        output,
+    )
+}
+
+async fn execute_resume_inner(
+    cli_workspace: &Path,
+    state_override: Option<&Path>,
+    resume_args: ResumeArgs,
+    observer: Option<&dyn RunObserver>,
+    cancellation: CancellationToken,
+) -> Result<CompletedRun, CliError> {
+    let state = state_dir(cli_workspace, state_override)?;
+    let run_id = parse_run_id(&resume_args.run_id)?;
+    let run_root = run_root(&state, run_id);
+    let (manifest, manifest_identity) = read_run_manifest(&run_root)?;
+    let transaction = WorkspaceTransaction::open(&run_root)?;
+    manifest.validate(run_id, &transaction)?;
+    let RunManifest {
+        contract, mut args, ..
+    } = manifest;
+    if let Some(process_approval) = resume_args.process_approval {
+        args.process_approval = Some(process_approval);
+    }
+    args.apply |= resume_args.apply;
+    args.output = resume_args.output;
+    let process_backend_kind = effective_process_backend(&args)?;
+    let process_approval = effective_process_approval(&args)?;
+    let process_backend =
+        build_process_backend(process_backend_kind, &args, transaction.source_root()).await?;
+    let runtime_identity = runtime_identity(&manifest_identity, process_backend.as_ref())?;
+
+    let mut store = EventStore::open(state.join("events.sqlite3"))?;
+    let checkpoints = CheckpointStore::open(state.join("artifacts").join("checkpoints"))
+        .map_err(EngineError::from)?;
+    let checkpoint = checkpoints
+        .load_head(&store, run_id)
+        .map_err(EngineError::from)?;
+    let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
+    let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
+    let registry = builtin_registry_with_process(process_tool)?;
+    let policy = PolicyEngine::new(contract.permissions.clone());
+    let driver = build_driver(&contract, &args)?;
+    let engine = RunEngine::new(&driver, &registry, &policy)
+        .with_memory(&memory)
+        .with_checkpoint_store(&checkpoints)
+        .with_runtime_identity(runtime_identity)
+        .with_max_turns(args.max_turns)
+        .with_cancellation(cancellation);
+    let fixed_approval = FixedApprovalResolver(match process_approval {
+        ProcessApprovalArg::Deny | ProcessApprovalArg::Prompt => ApprovalDecision::Deny,
+        ProcessApprovalArg::AllowRun => ApprovalDecision::AllowRun,
+    });
+    let engine = if process_approval == ProcessApprovalArg::Prompt {
+        engine
+    } else {
+        engine.with_approval_resolver(&fixed_approval)
+    };
+    let cancelled_contract = contract.clone();
+    let lease = acquire_execution_lease(&mut store, &run_root, run_id, &contract)?;
+    let engine_result = match observer {
+        Some(observer) => {
+            engine
+                .resume_with_observer(
+                    run_id,
+                    contract,
+                    &transaction,
+                    &mut store,
+                    checkpoint,
+                    observer,
+                )
+                .await
+        }
+        None => {
+            engine
+                .resume(run_id, contract, &transaction, &mut store, checkpoint)
+                .await
+        }
+    };
+    release_execution_lease(&mut store, lease)?;
+    let outcome = match engine_result {
+        Ok(outcome) => outcome,
+        Err(EngineError::Cancelled) => {
+            return cancelled_run(&run_root, &transaction, &store, run_id, cancelled_contract);
+        }
+        Err(source) => return Err(failed_run_error(&run_root, &state, &store, run_id, source)),
+    };
+    finish_run(
+        &run_root,
+        &transaction,
+        &mut store,
+        &memory,
+        outcome,
+        args.apply,
+    )
+}
+
 pub(crate) async fn execute_run_with_observer_and_cancellation(
     cli_workspace: &Path,
     state_override: Option<&Path>,
@@ -144,6 +330,28 @@ pub(crate) async fn execute_run_with_observer_and_cancellation(
     .await
 }
 
+pub(crate) async fn execute_resume_with_observer_and_cancellation(
+    cli_workspace: &Path,
+    state_override: Option<&Path>,
+    run_id: RunId,
+    observer: &dyn RunObserver,
+    cancellation: CancellationToken,
+) -> Result<CompletedRun, CliError> {
+    execute_resume_inner(
+        cli_workspace,
+        state_override,
+        ResumeArgs {
+            run_id: run_id.to_string(),
+            process_approval: Some(ProcessApprovalArg::Prompt),
+            apply: false,
+            output: OutputFormat::Human,
+        },
+        Some(observer),
+        cancellation,
+    )
+    .await
+}
+
 async fn execute_run_inner(
     cli_workspace: &Path,
     state_override: Option<&Path>,
@@ -154,7 +362,99 @@ async fn execute_run_inner(
     validate_model_limits(&args)?;
     let process_backend = effective_process_backend(&args)?;
     let process_approval = effective_process_approval(&args)?;
-    let (mut contract, workspace) = load_contract(cli_workspace, &args)?;
+    let (contract, workspace) = prepare_run_contract(cli_workspace, &args, process_backend)?;
+    let durable_args = normalized_run_args(&args, &contract, process_backend, process_approval);
+    // Resolve and attest the execution boundary before creating durable run state. Invalid
+    // sandbox configuration must fail without leaving an empty run behind for users to diagnose.
+    let process_backend = build_process_backend(process_backend, &args, &workspace).await?;
+
+    let state = if let Some(override_path) = state_override {
+        absolute_or_join(cli_workspace, override_path)?
+    } else {
+        workspace.join(".pactrail")
+    };
+    fs::create_dir_all(state.join("runs")).map_err(|source| CliError::Io {
+        path: state.clone(),
+        source,
+    })?;
+    let run_id = RunId::new();
+    let run_root = state.join("runs").join(run_id.to_string());
+    let transaction =
+        WorkspaceTransaction::create(&workspace, &run_root, &contract.allowed_write_paths)?;
+    let manifest_identity = write_run_manifest(
+        &run_root,
+        &RunManifest {
+            schema_version: RUN_MANIFEST_SCHEMA_VERSION,
+            run_id,
+            workspace_root: workspace,
+            contract: contract.clone(),
+            args: durable_args,
+        },
+    )?;
+    let runtime_identity = runtime_identity(&manifest_identity, process_backend.as_ref())?;
+    let mut store = EventStore::open(state.join("events.sqlite3"))?;
+    let checkpoints = CheckpointStore::open(state.join("artifacts").join("checkpoints"))
+        .map_err(EngineError::from)?;
+    let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
+    let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
+    let registry = builtin_registry_with_process(process_tool)?;
+    let policy = PolicyEngine::new(contract.permissions.clone());
+    let driver = build_driver(&contract, &args)?;
+    let context_fragments = memory_context_fragments(&contract, &memory)?;
+    let engine = RunEngine::new(&driver, &registry, &policy)
+        .with_memory(&memory)
+        .with_context_fragments(context_fragments)
+        .with_checkpoint_store(&checkpoints)
+        .with_runtime_identity(runtime_identity)
+        .with_max_turns(args.max_turns)
+        .with_cancellation(cancellation);
+    let fixed_approval = FixedApprovalResolver(match process_approval {
+        ProcessApprovalArg::Deny | ProcessApprovalArg::Prompt => ApprovalDecision::Deny,
+        ProcessApprovalArg::AllowRun => ApprovalDecision::AllowRun,
+    });
+    let engine = if process_approval == ProcessApprovalArg::Prompt {
+        engine
+    } else {
+        engine.with_approval_resolver(&fixed_approval)
+    };
+    let cancelled_contract = contract.clone();
+    let lease = acquire_execution_lease(&mut store, &run_root, run_id, &contract)?;
+    let engine_result = match observer {
+        Some(observer) => {
+            engine
+                .execute_with_id_and_observer(run_id, contract, &transaction, &mut store, observer)
+                .await
+        }
+        None => {
+            engine
+                .execute_with_id(run_id, contract, &transaction, &mut store)
+                .await
+        }
+    };
+    release_execution_lease(&mut store, lease)?;
+    let outcome = match engine_result {
+        Ok(outcome) => outcome,
+        Err(EngineError::Cancelled) => {
+            return cancelled_run(&run_root, &transaction, &store, run_id, cancelled_contract);
+        }
+        Err(source) => return Err(failed_run_error(&run_root, &state, &store, run_id, source)),
+    };
+    finish_run(
+        &run_root,
+        &transaction,
+        &mut store,
+        &memory,
+        outcome,
+        args.apply,
+    )
+}
+
+fn prepare_run_contract(
+    cli_workspace: &Path,
+    args: &RunArgs,
+    process_backend: ProcessBackendArg,
+) -> Result<(TaskContract, PathBuf), CliError> {
+    let (mut contract, workspace) = load_contract(cli_workspace, args)?;
     contract.workspace_root = workspace.display().to_string();
     if args.task.is_none() {
         contract.allowed_write_paths.clone_from(&args.write_paths);
@@ -174,76 +474,111 @@ async fn execute_run_inner(
             )));
         }
     }
-    // Resolve and attest the execution boundary before creating durable run state. Invalid
-    // sandbox configuration must fail without leaving an empty run behind for users to diagnose.
-    let process_backend = build_process_backend(process_backend, &args, &workspace).await?;
+    Ok((contract, workspace))
+}
 
-    let state = if let Some(override_path) = state_override {
-        absolute_or_join(cli_workspace, override_path)?
-    } else {
-        workspace.join(".pactrail")
-    };
-    fs::create_dir_all(state.join("runs")).map_err(|source| CliError::Io {
-        path: state.clone(),
-        source,
+fn normalized_run_args(
+    args: &RunArgs,
+    contract: &TaskContract,
+    process_backend: ProcessBackendArg,
+    process_approval: ProcessApprovalArg,
+) -> RunArgs {
+    let mut durable = args.clone();
+    durable.goal = Some(contract.goal.clone());
+    durable.task = None;
+    durable
+        .write_paths
+        .clone_from(&contract.allowed_write_paths);
+    durable.process_backend = Some(process_backend);
+    durable.allow_process = false;
+    durable.process_approval = Some(process_approval);
+    durable
+}
+
+struct ExecutionLease {
+    durable: RunLease,
+    _lock_file: fs::File,
+}
+
+fn acquire_execution_lease(
+    store: &mut EventStore,
+    run_root: &Path,
+    run_id: RunId,
+    contract: &TaskContract,
+) -> Result<ExecutionLease, CliError> {
+    const LEASE_GRACE_SECONDS: u64 = 5 * 60;
+    const MAX_LEASE_SECONDS: u64 = 30 * 24 * 60 * 60;
+    let ttl_seconds = contract
+        .budget
+        .wall_time_seconds
+        .checked_add(LEASE_GRACE_SECONDS)
+        .ok_or_else(|| CliError::Argument("task wall-time budget is too large".to_owned()))?;
+    if ttl_seconds > MAX_LEASE_SECONDS {
+        return Err(CliError::Argument(format!(
+            "task wall-time budget cannot exceed {} seconds when durable resume is enabled",
+            MAX_LEASE_SECONDS - LEASE_GRACE_SECONDS
+        )));
+    }
+    let lock_path = run_root.join("execution.lock");
+    let lock_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+        .map_err(|source| CliError::Io {
+            path: lock_path,
+            source,
+        })?;
+    lock_file.try_lock().map_err(|error| match error {
+        fs::TryLockError::WouldBlock => CliError::Argument(format!(
+            "run {run_id} is already active in another Pactrail process"
+        )),
+        fs::TryLockError::Error(source) => CliError::Io {
+            path: run_root.join("execution.lock"),
+            source,
+        },
     })?;
-    let run_id = RunId::new();
-    let run_root = state.join("runs").join(run_id.to_string());
-    let transaction =
-        WorkspaceTransaction::create(&workspace, &run_root, &contract.allowed_write_paths)?;
-    let mut store = EventStore::open(state.join("events.sqlite3"))?;
-    let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
-    let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
-    let registry = builtin_registry_with_process(process_tool)?;
-    let policy = PolicyEngine::new(contract.permissions.clone());
-    let driver = build_driver(&contract, &args)?;
-    let context_fragments = memory_context_fragments(&contract, &memory)?;
-    let engine = RunEngine::new(&driver, &registry, &policy)
-        .with_memory(&memory)
-        .with_context_fragments(context_fragments)
-        .with_max_turns(args.max_turns)
-        .with_cancellation(cancellation);
-    let fixed_approval = FixedApprovalResolver(match process_approval {
-        ProcessApprovalArg::Deny | ProcessApprovalArg::Prompt => ApprovalDecision::Deny,
-        ProcessApprovalArg::AllowRun => ApprovalDecision::AllowRun,
-    });
-    let engine = if process_approval == ProcessApprovalArg::Prompt {
-        engine
-    } else {
-        engine.with_approval_resolver(&fixed_approval)
-    };
-    let cancelled_contract = contract.clone();
-    let engine_result = match observer {
-        Some(observer) => {
-            engine
-                .execute_with_id_and_observer(run_id, contract, &transaction, &mut store, observer)
-                .await
-        }
-        None => {
-            engine
-                .execute_with_id(run_id, contract, &transaction, &mut store)
-                .await
-        }
-    };
-    let outcome = match engine_result {
-        Ok(outcome) => outcome,
-        Err(EngineError::Cancelled) => {
-            return cancelled_run(&run_root, &transaction, &store, run_id, cancelled_contract);
-        }
-        Err(source) => return Err(failed_run_error(&run_root, &state, &store, run_id, source)),
-    };
-    let mut receipt = outcome.receipt;
-    write_receipt(&run_root, &receipt)?;
-    crate::diff::write_receipt_diff(&run_root, &receipt)
-        .map_err(|error| CliError::Argument(format!("review artifact failed: {error}")))?;
+    // The OS lock is the live-owner authority and is released by the kernel on
+    // process death. A stable logical owner lets the surviving process renew
+    // stale SQLite metadata immediately after acquiring that authority.
+    let owner = format!("local:{run_id}");
+    let durable = store
+        .acquire_run_lease(run_id, &owner, Duration::from_secs(ttl_seconds))
+        .map_err(CliError::Store)?;
+    Ok(ExecutionLease {
+        durable,
+        _lock_file: lock_file,
+    })
+}
 
-    if args.apply && receipt.outcome == ReceiptOutcome::ReadyToApply {
-        receipt = apply_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
+fn release_execution_lease(store: &mut EventStore, lease: ExecutionLease) -> Result<(), CliError> {
+    let result = store
+        .release_run_lease(&lease.durable)
+        .map_err(CliError::Store);
+    drop(lease);
+    result
+}
+
+fn finish_run(
+    run_root: &Path,
+    transaction: &WorkspaceTransaction,
+    store: &mut EventStore,
+    memory: &MemoryStore,
+    outcome: RunOutcome,
+    apply: bool,
+) -> Result<CompletedRun, CliError> {
+    let mut receipt = outcome.receipt;
+    write_receipt(run_root, &receipt)?;
+    crate::diff::write_receipt_diff(run_root, &receipt)
+        .map_err(|error| CliError::Argument(format!("review artifact failed: {error}")))?;
+    if apply && receipt.outcome == ReceiptOutcome::ReadyToApply {
+        receipt = apply_ready_receipt(run_root, receipt, transaction, store)?;
         memory.remember_applied_run(&receipt)?;
     }
-    write_trace_artifact(&run_root, &store, receipt.run_id)?;
+    write_trace_artifact(run_root, store, receipt.run_id)?;
     Ok(CompletedRun {
-        run_root,
+        run_root: run_root.to_path_buf(),
         model_summary: outcome.final_text,
         receipt,
         tokens: outcome.usage.total(),
@@ -797,6 +1132,27 @@ fn render_trace_text(run_id: RunId, events: &[EventEnvelope]) -> String {
                     short_digest(&approval.binding.actor_fingerprint),
                     short_digest(&approval.binding.profile_digest),
                     approval.binding.resource
+                ));
+            }
+            RunEvent::EffectPrepared(effect) => {
+                lines.push(format!(
+                    "{prefix}  PREPARE   {}  {}  risk={}",
+                    effect.tool, effect.call_id, effect.risk
+                ));
+                lines.push(format!(
+                    "                    args={}  candidate={}  runtime={}",
+                    short_digest(&effect.arguments_digest),
+                    short_digest(&effect.candidate_digest_before),
+                    short_digest(&effect.runtime_profile_digest)
+                ));
+            }
+            RunEvent::EffectCompleted(effect) => {
+                lines.push(format!(
+                    "{prefix}  EFFECT    {}  {}  result={}  candidate={}",
+                    if effect.succeeded { "OK" } else { "FAIL" },
+                    effect.call_id,
+                    short_digest(&effect.result_digest),
+                    short_digest(&effect.candidate_digest_after)
                 ));
             }
             RunEvent::CheckpointCreated { checkpoint } => {
@@ -1646,6 +2002,76 @@ pub(crate) fn parse_run_id(value: &str) -> Result<RunId, CliError> {
         .map_err(|error| CliError::Argument(format!("invalid run id {value:?}: {error}")))
 }
 
+fn write_run_manifest(run_root: &Path, manifest: &RunManifest) -> Result<String, CliError> {
+    let path = run_root.join("run.json");
+    let backup = run_root.join("run.json.bak");
+    let bytes = serde_json::to_vec_pretty(manifest).map_err(CliError::Json)?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_RUN_MANIFEST_BYTES {
+        return Err(CliError::Argument(format!(
+            "run manifest exceeds the {MAX_RUN_MANIFEST_BYTES}-byte safety limit"
+        )));
+    }
+    write_atomic_artifact(&path, &backup, &bytes)?;
+    Ok(blake3::hash(&bytes).to_hex().to_string())
+}
+
+fn runtime_identity(
+    manifest_identity: &str,
+    process_backend: &dyn ProcessBackend,
+) -> Result<String, CliError> {
+    #[derive(Serialize)]
+    struct RuntimeIdentity<'a> {
+        manifest: &'a str,
+        process_backend: pactrail_tools::ProcessBackendDescriptor,
+    }
+
+    let bytes = serde_json::to_vec(&RuntimeIdentity {
+        manifest: manifest_identity,
+        process_backend: process_backend.descriptor(),
+    })
+    .map_err(CliError::Json)?;
+    Ok(blake3::hash(&bytes).to_hex().to_string())
+}
+
+fn read_run_manifest(run_root: &Path) -> Result<(RunManifest, String), CliError> {
+    let path = run_root.join("run.json");
+    let backup = run_root.join("run.json.bak");
+    if !path.exists() && backup.is_file() {
+        fs::rename(&backup, &path).map_err(|source| CliError::Io {
+            path: backup,
+            source,
+        })?;
+    }
+    let length = fs::metadata(&path)
+        .map_err(|source| CliError::Io {
+            path: path.clone(),
+            source,
+        })?
+        .len();
+    if length > MAX_RUN_MANIFEST_BYTES {
+        return Err(CliError::Argument(format!(
+            "run manifest {} exceeds the {MAX_RUN_MANIFEST_BYTES}-byte safety limit",
+            path.display()
+        )));
+    }
+    let mut bytes = Vec::with_capacity(usize::try_from(length).unwrap_or(0));
+    fs::File::open(&path)
+        .and_then(|mut file| file.read_to_end(&mut bytes))
+        .map_err(|source| CliError::Io {
+            path: path.clone(),
+            source,
+        })?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_RUN_MANIFEST_BYTES {
+        return Err(CliError::Argument(format!(
+            "run manifest {} grew beyond its safety limit while being read",
+            path.display()
+        )));
+    }
+    let digest = blake3::hash(&bytes).to_hex().to_string();
+    let manifest = serde_json::from_slice(&bytes).map_err(CliError::Json)?;
+    Ok((manifest, digest))
+}
+
 pub(crate) fn read_receipt(run_root: &Path) -> Result<ChangeReceipt, CliError> {
     let path = run_root.join("receipt.json");
     let backup = run_root.join("receipt.json.bak");
@@ -1742,7 +2168,7 @@ fn write_atomic_artifact(path: &Path, backup: &Path, bytes: &[u8]) -> Result<(),
     Ok(())
 }
 
-fn write_json<T: serde::Serialize + ?Sized>(value: &T) -> Result<(), CliError> {
+fn write_json<T: Serialize + ?Sized>(value: &T) -> Result<(), CliError> {
     let mut text = serde_json::to_string_pretty(value).map_err(CliError::Json)?;
     text.push('\n');
     write_stdout(&escape_json_terminal_controls(&text)).map_err(CliError::Output)

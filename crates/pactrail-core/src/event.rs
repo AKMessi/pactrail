@@ -1,9 +1,14 @@
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use time::OffsetDateTime;
 
-use crate::{ApprovalRecord, EVENT_SCHEMA_VERSION, Evidence, PolicyDecision, RunId, TaskContract};
+use crate::{
+    ApprovalRecord, EVENT_SCHEMA_VERSION, Evidence, MIN_EVENT_SCHEMA_VERSION, PolicyDecision,
+    RunId, TaskContract,
+};
 
 /// Integrity hash of an event envelope.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -85,7 +90,29 @@ pub struct ActionRecord {
     pub duration_ms: u64,
     /// Bounded non-sensitive diagnostic fields with stable string values.
     #[serde(default)]
-    pub attributes: std::collections::BTreeMap<String, String>,
+    pub attributes: BTreeMap<String, String>,
+}
+
+/// Write-ahead fence proving that one model-requested effect was admitted
+/// before the tool implementation received control.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+pub struct EffectPrepared {
+    pub call_id: String,
+    pub tool: String,
+    pub arguments_digest: String,
+    pub candidate_digest_before: String,
+    pub risk: String,
+    pub runtime_profile_digest: String,
+}
+
+/// Reconciliation fence written after the normalized tool result and resulting
+/// candidate state are both available.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+pub struct EffectCompleted {
+    pub call_id: String,
+    pub result_digest: String,
+    pub candidate_digest_after: String,
+    pub succeeded: bool,
 }
 
 /// Payload variants accepted by the deterministic run reducer.
@@ -98,6 +125,8 @@ pub enum RunEvent {
     EvidenceRecorded(Evidence),
     PolicyEvaluated(PolicyDecision),
     ApprovalDecided(ApprovalRecord),
+    EffectPrepared(EffectPrepared),
+    EffectCompleted(EffectCompleted),
     CheckpointCreated { checkpoint: String },
     NoteRecorded { message: String },
 }
@@ -117,6 +146,36 @@ pub struct EventEnvelope {
 }
 
 impl EventEnvelope {
+    fn compute_hash(
+        schema_version: u32,
+        run_id: RunId,
+        sequence: u64,
+        timestamp: OffsetDateTime,
+        previous_hash: &EventHash,
+        event: &RunEvent,
+    ) -> Result<EventHash, serde_json::Error> {
+        #[derive(Serialize)]
+        struct Hashable<'a> {
+            schema_version: u32,
+            run_id: RunId,
+            sequence: u64,
+            #[serde(with = "time::serde::rfc3339")]
+            timestamp: OffsetDateTime,
+            previous_hash: &'a EventHash,
+            event: &'a RunEvent,
+        }
+
+        let bytes = serde_json::to_vec(&Hashable {
+            schema_version,
+            run_id,
+            sequence,
+            timestamp,
+            previous_hash,
+            event,
+        })?;
+        Ok(EventHash(blake3::hash(&bytes).to_hex().to_string()))
+    }
+
     /// Constructs and hashes an envelope from canonical JSON fields.
     ///
     /// # Errors
@@ -129,27 +188,14 @@ impl EventEnvelope {
         previous_hash: EventHash,
         event: RunEvent,
     ) -> Result<Self, serde_json::Error> {
-        #[derive(Serialize)]
-        struct Hashable<'a> {
-            schema_version: u32,
-            run_id: RunId,
-            sequence: u64,
-            #[serde(with = "time::serde::rfc3339")]
-            timestamp: OffsetDateTime,
-            previous_hash: &'a EventHash,
-            event: &'a RunEvent,
-        }
-
-        let hashable = Hashable {
-            schema_version: EVENT_SCHEMA_VERSION,
+        let hash = Self::compute_hash(
+            EVENT_SCHEMA_VERSION,
             run_id,
             sequence,
             timestamp,
-            previous_hash: &previous_hash,
-            event: &event,
-        };
-        let bytes = serde_json::to_vec(&hashable)?;
-        let hash = EventHash(blake3::hash(&bytes).to_hex().to_string());
+            &previous_hash,
+            &event,
+        )?;
         Ok(Self {
             schema_version: EVENT_SCHEMA_VERSION,
             run_id,
@@ -167,14 +213,15 @@ impl EventEnvelope {
     ///
     /// Returns an error if the event cannot be serialized for verification.
     pub fn verify(&self) -> Result<bool, serde_json::Error> {
-        Self::new(
+        Self::compute_hash(
+            self.schema_version,
             self.run_id,
             self.sequence,
             self.timestamp,
-            self.previous_hash.clone(),
-            self.event.clone(),
+            &self.previous_hash,
+            &self.event,
         )
-        .map(|expected| expected.hash == self.hash)
+        .map(|expected| expected == self.hash)
     }
 }
 
@@ -187,6 +234,8 @@ pub struct RunSnapshot {
     pub evidence: Vec<Evidence>,
     pub actions: Vec<ActionRecord>,
     pub approvals: Vec<ApprovalRecord>,
+    pub pending_effects: BTreeMap<String, EffectPrepared>,
+    pub completed_effects: Vec<EffectCompleted>,
     pub last_sequence: Option<u64>,
     pub last_hash: EventHash,
 }
@@ -202,6 +251,8 @@ impl RunSnapshot {
             evidence: Vec::new(),
             actions: Vec::new(),
             approvals: Vec::new(),
+            pending_effects: BTreeMap::new(),
+            completed_effects: Vec::new(),
             last_sequence: None,
             last_hash: EventHash::genesis(),
         }
@@ -213,7 +264,7 @@ impl RunSnapshot {
     ///
     /// Returns a [`StateError`] when integrity, sequence, contract, or lifecycle invariants fail.
     pub fn apply(&mut self, envelope: &EventEnvelope) -> Result<(), StateError> {
-        if envelope.schema_version != EVENT_SCHEMA_VERSION {
+        if !(MIN_EVENT_SCHEMA_VERSION..=EVENT_SCHEMA_VERSION).contains(&envelope.schema_version) {
             return Err(StateError::UnsupportedSchema(envelope.schema_version));
         }
         if envelope.run_id != self.run_id {
@@ -262,6 +313,24 @@ impl RunSnapshot {
             RunEvent::ActionCompleted(action) => self.actions.push(action.clone()),
             RunEvent::EvidenceRecorded(evidence) => self.evidence.push(evidence.clone()),
             RunEvent::ApprovalDecided(approval) => self.approvals.push(approval.clone()),
+            RunEvent::EffectPrepared(effect) => {
+                if self.pending_effects.contains_key(&effect.call_id)
+                    || self
+                        .completed_effects
+                        .iter()
+                        .any(|completed| completed.call_id == effect.call_id)
+                {
+                    return Err(StateError::DuplicateEffect(effect.call_id.clone()));
+                }
+                self.pending_effects
+                    .insert(effect.call_id.clone(), effect.clone());
+            }
+            RunEvent::EffectCompleted(effect) => {
+                if self.pending_effects.remove(&effect.call_id).is_none() {
+                    return Err(StateError::UnpreparedEffect(effect.call_id.clone()));
+                }
+                self.completed_effects.push(effect.clone());
+            }
             RunEvent::PolicyEvaluated(_)
             | RunEvent::CheckpointCreated { .. }
             | RunEvent::NoteRecorded { .. } => {}
@@ -288,6 +357,10 @@ pub enum StateError {
     InvalidHash,
     #[error("run contract was registered more than once")]
     DuplicateContract,
+    #[error("effect call id {0:?} was prepared more than once")]
+    DuplicateEffect(String),
+    #[error("effect call id {0:?} completed without a matching preparation")]
+    UnpreparedEffect(String),
     #[error("task contract is invalid: {0}")]
     InvalidContract(#[from] crate::ContractError),
     #[error("state transition used stale state {actual:?}; current state is {expected:?}")]
@@ -412,6 +485,61 @@ mod tests {
     }
 
     #[test]
+    fn effects_must_be_prepared_once_and_completed_once() {
+        let run_id = RunId::new();
+        let mut snapshot = RunSnapshot::new(run_id);
+        let prepared = event(
+            run_id,
+            0,
+            EventHash::genesis(),
+            RunEvent::EffectPrepared(EffectPrepared {
+                call_id: "call-1".to_owned(),
+                tool: "write_file".to_owned(),
+                arguments_digest: "a".repeat(64),
+                candidate_digest_before: "b".repeat(64),
+                risk: "workspace_mutation".to_owned(),
+                runtime_profile_digest: "c".repeat(64),
+            }),
+        );
+        snapshot
+            .apply(&prepared)
+            .unwrap_or_else(|error| unreachable!("prepare: {error}"));
+        assert!(snapshot.pending_effects.contains_key("call-1"));
+        let completed = event(
+            run_id,
+            1,
+            prepared.hash,
+            RunEvent::EffectCompleted(EffectCompleted {
+                call_id: "call-1".to_owned(),
+                result_digest: "d".repeat(64),
+                candidate_digest_after: "e".repeat(64),
+                succeeded: true,
+            }),
+        );
+        snapshot
+            .apply(&completed)
+            .unwrap_or_else(|error| unreachable!("complete: {error}"));
+        assert!(snapshot.pending_effects.is_empty());
+        assert_eq!(snapshot.completed_effects.len(), 1);
+
+        let duplicate = event(
+            run_id,
+            2,
+            completed.hash,
+            RunEvent::EffectCompleted(EffectCompleted {
+                call_id: "call-1".to_owned(),
+                result_digest: "f".repeat(64),
+                candidate_digest_after: "0".repeat(64),
+                succeeded: true,
+            }),
+        );
+        assert!(matches!(
+            snapshot.apply(&duplicate),
+            Err(StateError::UnpreparedEffect(call_id)) if call_id == "call-1"
+        ));
+    }
+
+    #[test]
     fn illegal_transition_is_rejected() {
         let run_id = RunId::new();
         let envelope = event(
@@ -443,5 +571,53 @@ mod tests {
         .unwrap_or_else(|error| unreachable!("legacy action: {error}"));
         assert_eq!(action.duration_ms, 0);
         assert!(action.attributes.is_empty());
+    }
+
+    #[test]
+    fn schema_one_envelopes_remain_hash_verifiable_and_projectable() {
+        let run_id = RunId::new();
+        let timestamp = OffsetDateTime::UNIX_EPOCH;
+        let previous_hash = EventHash::genesis();
+        let event = RunEvent::NoteRecorded {
+            message: "written by v0.4".to_owned(),
+        };
+        let hash = EventEnvelope::compute_hash(1, run_id, 0, timestamp, &previous_hash, &event)
+            .unwrap_or_else(|error| unreachable!("legacy event hashes: {error}"));
+        let envelope = EventEnvelope {
+            schema_version: 1,
+            run_id,
+            sequence: 0,
+            timestamp,
+            previous_hash,
+            event,
+            hash,
+        };
+
+        assert!(envelope.verify().unwrap_or(false));
+        let mut snapshot = RunSnapshot::new(run_id);
+        snapshot
+            .apply(&envelope)
+            .unwrap_or_else(|error| unreachable!("legacy event projects: {error}"));
+        assert_eq!(snapshot.last_sequence, Some(0));
+    }
+
+    #[test]
+    fn future_event_schema_is_rejected_before_projection() {
+        let run_id = RunId::new();
+        let mut envelope = event(
+            run_id,
+            0,
+            EventHash::genesis(),
+            RunEvent::NoteRecorded {
+                message: "future".to_owned(),
+            },
+        );
+        envelope.schema_version = EVENT_SCHEMA_VERSION + 1;
+
+        let mut snapshot = RunSnapshot::new(run_id);
+        assert!(matches!(
+            snapshot.apply(&envelope),
+            Err(StateError::UnsupportedSchema(version)) if version == EVENT_SCHEMA_VERSION + 1
+        ));
     }
 }
