@@ -33,6 +33,14 @@ copy its benchmark claim into Pactrail.
   of assuming longer autonomous loops are always better. Pactrail uses graph
   evidence to improve localization and preserves deterministic verification as
   a separate authority.
+- [Tree-sitter: Using Parsers](https://tree-sitter.github.io/tree-sitter/using-parsers/)
+  documents the official incremental concrete-syntax-tree runtime and its Rust
+  binding. Pactrail embeds a bounded subset of official grammars for structural
+  declarations while preserving a feature-disabled lexical fallback.
+- [Language Server Protocol](https://microsoft.github.io/language-server-protocol/)
+  standardizes editor/server features including definitions and references.
+  Pactrail accepts only an explicit normalized reference snapshot in 0.8; it
+  does not infer that protocol support grants permission to start a server.
 
 ## Context and validation
 
@@ -55,16 +63,21 @@ copy its benchmark claim into Pactrail.
 
 ## Shipped evidence graph invariants
 
-1. The graph is derived without a model, network, compiler, or language server.
+1. The default graph is derived without a model, network, compiler, or language
+   server. Parser-backed structure is in-process and bounded.
 2. Definition and reference locations are workspace-relative and deterministic.
-3. References are labelled lexical; they cannot become verification evidence.
+3. References are labelled lexical, language-server, or corroborated; none can
+   become verification evidence.
 4. Construction has global and per-symbol limits with visible truncation.
-5. A file changing between graph passes aborts indexing instead of mixing
-   incompatible repository states.
+5. Current source is read and hashed once per build; graph structure comes from
+   that exact retained analysis rather than a second filesystem pass.
 6. Tool queries rebuild from the isolated candidate, so preceding edits are
    visible and the source workspace remains untouched.
 7. The model must read cited source before editing; graph results never replace
    current code.
+8. Optional LSP data is canonical, bounded, integrity-checked, exact-repository
+   bound, and validated completely before graph mutation. Pactrail does not
+   start a language server during indexing.
 
 ## Shipped trajectory compaction invariants
 
@@ -115,8 +128,9 @@ copy its benchmark claim into Pactrail.
 
 ## Deliberately deferred
 
-- Tree-sitter and optional LSP/type-resolution enrichment require language and
-  parser compatibility fixtures before they can strengthen lexical edges.
+- A built-in LSP process adapter remains deferred until executable identity,
+  initialization, synchronization, timeout, cancellation, and adversarial
+  protocol fixtures can share the same governed runtime boundary.
 - Learned embeddings are not a mandatory dependency; local and air-gapped use
   must retain deterministic retrieval.
 - Multiple candidate sampling and patch ranking require isolated child budgets

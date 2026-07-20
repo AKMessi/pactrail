@@ -75,19 +75,24 @@ Initialization fails closed and never downgrades to native execution.
 
 Repository indexing is deterministic and model-free. It records stable portable
 paths, BLAKE3 digests, sizes, coarse languages, imports, and symbol-like
-declarations. Oversized and non-UTF-8 files remain visible in topology without
-being retained for semantic scanning.
+declarations. The default build uses bounded embedded Tree-sitter grammars for
+Rust, Python, JavaScript, and TypeScript/TSX; unsupported, oversized, cancelled,
+or node-budget-exhausted parses use the deterministic lexical analyzer. A
+feature-disabled build removes the parser dependencies entirely. Non-UTF-8
+files remain visible in topology without semantic scanning.
 
 Every build hashes current file bytes. Bounded per-file derived structure is
-reused from a content-addressed cache keyed by content digest, language, and
-analysis revision; source text, previews, and instructions are never supplied
-by that cache. A malformed or unavailable entry is measured and recomputed.
+reused from a content-addressed cache keyed by content digest, language,
+analysis revision, and analyzer profile; source text, previews, and instructions
+are never supplied by that cache. A malformed or unavailable entry is measured and recomputed.
 This makes invalidation exact while keeping the cache outside durable authority.
 
 The index also derives a bounded repository evidence graph. Definition nodes
-come from project symbol declarations; edges point to exact file and line
-locations where the same project-defined identifier occurs. These edges are
-explicitly lexical evidence, not type-resolved calls. Construction is capped at
+come from project symbol declarations; default edges point to exact file and
+line locations where the same project-defined identifier occurs. An embedder
+may explicitly merge one bounded integrity-checked LSP reference snapshot for
+the exact repository digest. Every reference is labelled lexical,
+language-server, or corroborated; none is a runtime call claim. Construction is capped at
 200,000 definitions, 500,000 references, and 256 references per symbol. Cached
 identifier locations also have a per-file bound. The graph is built from the
 same current-byte analysis, eliminating a second filesystem read.
@@ -118,6 +123,11 @@ graph counts, and kernel-derived citation coverage. Coverage measures how much
 of the selected file set fit in the bounded pack; it is not a model-authored
 relevance or correctness score.
 
+Tree-sitter file count, lexical-fallback count, and syntax-error file count are
+also live and durable telemetry. Optional LSP evidence never starts a server:
+the SDK accepts only a prebuilt strict snapshot, validates every symbol/path/
+line before mutation, and folds the snapshot digest into context identity.
+
 Memory is advisory. It includes an identifier, kind, source, title, and content;
 it never overrides the task contract, scoped instructions, or current files.
 
@@ -128,7 +138,7 @@ UX/scheduling annotations: read-only, idempotent, parallel-safe, and risk class.
 The production registry currently provides:
 
 - `list_files`, `read_file`, `read_many_files`, and `search`;
-- `search_code_graph` for project definitions and bounded lexical references;
+- `search_code_graph` for project definitions and bounded reference evidence;
 - `search_change_impact` for bounded one-hop definition/reference relationships;
 - `write_file`, `replace_text`, atomic `edit_file`, and `remove_file`;
 - `workspace_changes` and `recall_memory`;
@@ -147,7 +157,8 @@ warning to read cited source before editing.
 
 `search_change_impact` uses direct task matches as seeds, then identifies files
 that reference seed-defined symbols and files defining symbols referenced by a
-seed. Scores and reasons are deterministic and bounded. The result is lexical
+seed. Scores and reasons are deterministic and bounded, and reference reasons
+retain lexical, language-server, or corroborated provenance. The result is
 navigation evidence, not a type-resolved dependency or runtime-impact claim,
 and is rebuilt from the current candidate for the same freshness guarantee.
 

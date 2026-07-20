@@ -484,6 +484,10 @@ impl RunActivity {
             cache_hits,
             cache_misses,
             rejected_cache_entries,
+            tree_sitter_files,
+            lexical_files,
+            unscanned_files,
+            syntax_error_files,
             citation_coverage_basis_points,
             graph_symbols,
             impact_files,
@@ -506,13 +510,21 @@ impl RunActivity {
         } else {
             format!(" · {rejected_cache_entries} rejected")
         };
+        let structure = format!(
+            "{tree_sitter_files} parsed · {lexical_files} lexical · {unscanned_files} unscanned"
+        );
+        let syntax_errors = if *syntax_error_files == 0 {
+            String::new()
+        } else {
+            format!(" · {syntax_error_files} syntax-error")
+        };
         let coverage_whole = citation_coverage_basis_points / 100;
         let coverage_fraction = citation_coverage_basis_points % 100;
         self.row(
             "◆",
             "context",
             &format!(
-                "{indexed_files} indexed · {cache}{rejected} · {cited_files} cited · {coverage_whole}.{coverage_fraction:02}% coverage · {graph_symbols} graph · {impact_files} impact · {} · {}{bounded}",
+                "{indexed_files} indexed · {cache}{rejected} · {structure}{syntax_errors} · {cited_files} cited · {coverage_whole}.{coverage_fraction:02}% coverage · {graph_symbols} graph · {impact_files} impact · {} · {}{bounded}",
                 format_bytes(u64::try_from(*rendered_bytes).unwrap_or(u64::MAX)),
                 format_duration(Duration::from_millis(*duration_ms))
             ),
