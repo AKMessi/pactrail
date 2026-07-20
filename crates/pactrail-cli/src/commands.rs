@@ -91,7 +91,34 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
             execute_mcp_command(&state, &cli.workspace, command).await
         }
         Command::Doctor { json } => doctor(json),
+        Command::Compatibility { json } => compatibility(json),
     }
+}
+
+fn compatibility(json_output: bool) -> Result<(), CliError> {
+    let manifest = crate::compatibility::manifest();
+    if json_output {
+        return write_json(&manifest);
+    }
+    let mut lines = vec![format!(
+        "Pactrail {} compatibility contract (manifest schema {})",
+        manifest.pactrail_version, manifest.manifest_schema
+    )];
+    for format in manifest.formats {
+        let durability = if format.durable { "durable" } else { "derived" };
+        lines.push(format!(
+            "  {:<27} v{:<3} reads >= v{:<3} {:<18} {}",
+            format.id,
+            format.current_schema,
+            format.minimum_readable_schema,
+            format.strategy.label(),
+            durability,
+        ));
+    }
+    lines.push(
+        "Unknown future schemas fail closed; no command silently downgrades state.".to_owned(),
+    );
+    write_human_stdout(&format!("{}\n", lines.join("\n"))).map_err(CliError::Output)
 }
 
 /// Structured result shared by scriptable and interactive frontends.
@@ -201,7 +228,8 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
     }
 }
 
-const RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;
+pub(crate) const RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;
+pub(crate) const MIN_RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;
 const MAX_RUN_MANIFEST_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

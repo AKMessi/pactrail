@@ -6,8 +6,8 @@ mod engine;
 mod verification;
 
 pub use checkpoint::{
-    CheckpointError, CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint,
-    contract_digest,
+    CHECKPOINT_SCHEMA_VERSION, CheckpointError, CheckpointIdentity, CheckpointStore,
+    MIN_CHECKPOINT_SCHEMA_VERSION, ResumePhase, RunCheckpoint, contract_digest,
 };
 pub use engine::{EngineError, RunEngine, RunObserver, RunOutcome, RunProgress};
 pub use verification::{VerificationCommand, detect_verification_commands};

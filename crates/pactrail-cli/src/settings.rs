@@ -8,7 +8,8 @@ use tempfile::NamedTempFile;
 
 use crate::cli::{CapabilitySetting, OciRuntimeArg, ProcessBackendArg, ProviderKind};
 
-const SETTINGS_SCHEMA: u16 = 4;
+pub(crate) const SETTINGS_SCHEMA: u16 = 4;
+pub(crate) const MIN_SETTINGS_SCHEMA: u16 = 1;
 const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
 const MAX_MODEL_BYTES: usize = 512;
 const MAX_BASE_URL_BYTES: usize = 2_048;

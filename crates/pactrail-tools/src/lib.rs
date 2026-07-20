@@ -22,8 +22,8 @@ pub use process_backend::{
     ProcessBackendError, ProcessBackendKind, ProcessExecution, ProcessRequest,
 };
 pub use registry::{
-    Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry,
-    ToolRisk,
+    TOOL_DESCRIPTOR_SCHEMA_VERSION, Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError,
+    ToolOutput, ToolRegistry, ToolRisk,
 };
 pub use structural::{SearchChangeImpactTool, SearchCodeGraphTool};
 

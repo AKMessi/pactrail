@@ -85,6 +85,12 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Print Pactrail's machine-readable persisted-format compatibility contract.
+    Compatibility {
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// Side-effect-free provider capability probe options.

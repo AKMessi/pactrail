@@ -18,7 +18,11 @@ use thiserror::Error;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-const DATABASE_SCHEMA_VERSION: i64 = 1;
+/// Current on-disk schema for the provenance memory database.
+pub const MEMORY_DATABASE_SCHEMA_VERSION: i64 = 1;
+
+/// Oldest initialized memory database schema this binary can open.
+pub const MIN_MEMORY_DATABASE_SCHEMA_VERSION: i64 = 1;
 const MAX_TITLE_BYTES: usize = 512;
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
 const MAX_TAGS: usize = 32;
@@ -222,7 +226,7 @@ impl MemoryStore {
         let version: i64 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(MemoryError::Database)?;
-        if !matches!(version, 0 | DATABASE_SCHEMA_VERSION) {
+        if !matches!(version, 0 | MEMORY_DATABASE_SCHEMA_VERSION) {
             return Err(MemoryError::UnsupportedDatabaseSchema(version));
         }
         connection
@@ -250,7 +254,7 @@ impl MemoryStore {
             .map_err(MemoryError::Database)?;
         if version == 0 {
             connection
-                .pragma_update(None, "user_version", DATABASE_SCHEMA_VERSION)
+                .pragma_update(None, "user_version", MEMORY_DATABASE_SCHEMA_VERSION)
                 .map_err(MemoryError::Database)?;
         }
         Ok(Self {

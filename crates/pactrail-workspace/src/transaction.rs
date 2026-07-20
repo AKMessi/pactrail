@@ -15,6 +15,12 @@ const METADATA_FILE: &str = "transaction.json";
 const WORKSPACE_DIRECTORY: &str = "workspace";
 const APPLY_JOURNAL_DIRECTORY: &str = "apply-journal";
 
+/// Current schema for isolated workspace transaction metadata.
+pub const TRANSACTION_SCHEMA_VERSION: u32 = 1;
+
+/// Oldest transaction metadata schema this binary can reopen.
+pub const MIN_TRANSACTION_SCHEMA_VERSION: u32 = 1;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct TransactionMetadata {
     schema_version: u32,
@@ -105,7 +111,7 @@ impl WorkspaceTransaction {
             });
         }
         let metadata = TransactionMetadata {
-            schema_version: 1,
+            schema_version: TRANSACTION_SCHEMA_VERSION,
             source_root,
             allowed_write_paths: allowed_write_paths.to_vec(),
             baseline,
@@ -132,7 +138,7 @@ impl WorkspaceTransaction {
             })?;
         let metadata_path = control_root.join(METADATA_FILE);
         let metadata: TransactionMetadata = read_json(&metadata_path)?;
-        if metadata.schema_version != 1 {
+        if metadata.schema_version != TRANSACTION_SCHEMA_VERSION {
             return Err(TransactionError::UnsupportedSchema(metadata.schema_version));
         }
         let workspace_root = control_root.join(WORKSPACE_DIRECTORY);

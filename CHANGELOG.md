@@ -26,6 +26,9 @@ follow [Semantic Versioning](https://semver.org/).
   size checked, BLAKE3-sealed, stripped of host paths, context-reserved,
   checkpoint-resumable, and mapped natively across OpenAI-compatible,
   Anthropic, and Gemini transports.
+- `pactrail compatibility` exposes a fixture-pinned JSON inventory of every
+  durable and public interchange schema, its owning crate, readable range, and
+  exact migration or rebuild policy.
 
 ### Security
 

@@ -408,8 +408,8 @@ pactrail run --task pactrail.task.toml --model qwen3-coder --output json
 ```
 
 Other discovery commands include `pactrail tools --json`, `pactrail schema`,
-`pactrail mcp list --json`, `pactrail memory list`, `pactrail list`, `pactrail doctor`, and
-`pactrail completion <shell>`.
+`pactrail compatibility --json`, `pactrail mcp list --json`, `pactrail memory
+list`, `pactrail list`, `pactrail doctor`, and `pactrail completion <shell>`.
 
 ## Reproducible evaluation
 
@@ -473,8 +473,8 @@ TaskContract ──> model-budgeted ContextPack ──> ModelDriver
 The twelve crates keep the core domain, storage, memory, context, Git evidence,
 models, MCP, tools, workspace transactions, engine, SDK, and CLI independently testable. See
 [Architecture](docs/architecture.md), [Threat model](docs/threat-model.md),
-[Interactive CLI](docs/interactive-cli.md), [Providers](docs/providers.md), and
-[Roadmap](docs/roadmap.md). The primary-paper mechanisms behind recent
+[Interactive CLI](docs/interactive-cli.md), [Providers](docs/providers.md),
+[Compatibility contracts](docs/compatibility.md), and [Roadmap](docs/roadmap.md). The primary-paper mechanisms behind recent
 architecture decisions are recorded in [Research foundations](docs/research-foundations.md).
 
 ## Durable local layout

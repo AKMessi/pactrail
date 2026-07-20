@@ -15,6 +15,9 @@ use thiserror::Error;
 
 use crate::PolicyEngine;
 
+/// Current schema of the provider-neutral tool descriptor contract.
+pub const TOOL_DESCRIPTOR_SCHEMA_VERSION: u32 = 1;
+
 pub(crate) fn replace_checked_preserving_newlines(
     text: &str,
     old: &str,

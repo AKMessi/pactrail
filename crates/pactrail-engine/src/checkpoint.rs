@@ -7,7 +7,11 @@ use pactrail_store::{ArtifactError, ArtifactStore, EventStore, StoreError, Store
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-const CHECKPOINT_SCHEMA_VERSION: u32 = 1;
+/// Current schema for content-addressed run checkpoints.
+pub const CHECKPOINT_SCHEMA_VERSION: u32 = 1;
+
+/// Oldest checkpoint schema this binary can resume.
+pub const MIN_CHECKPOINT_SCHEMA_VERSION: u32 = 1;
 const CHECKPOINT_EVENT_PREFIX: &str = "session:";
 const MAX_CONVERSATION_ITEMS: usize = 16_384;
 const MAX_CALL_IDS: usize = 65_536;
