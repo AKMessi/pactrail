@@ -12,6 +12,10 @@ const DEFAULT_MAX_SYMBOLS: usize = 12;
 const MAX_SYMBOLS: usize = 32;
 const DEFAULT_MAX_REFERENCES: usize = 20;
 const MAX_REFERENCES: usize = 128;
+const DEFAULT_MAX_SEEDS: usize = 8;
+const MAX_SEEDS: usize = 32;
+const DEFAULT_MAX_RELATED: usize = 32;
+const MAX_RELATED: usize = 256;
 const MAX_QUERY_BYTES: usize = 512;
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -54,7 +58,7 @@ impl Tool for SearchCodeGraphTool {
         value: Value,
     ) -> Result<ToolOutput, ToolError> {
         let request: SearchCodeGraphInput = input(value, "search_code_graph")?;
-        validate_request(&request)?;
+        validate_graph_request(&request)?;
         context.authorize(&Capability::FileRead, ".", "search_code_graph")?;
 
         // Build from the candidate on every invocation. This deliberately
@@ -100,13 +104,8 @@ impl Tool for SearchCodeGraphTool {
     }
 }
 
-fn validate_request(request: &SearchCodeGraphInput) -> Result<(), ToolError> {
-    let query = request.query.trim();
-    if query.is_empty() || query.len() > MAX_QUERY_BYTES || query.chars().any(char::is_control) {
-        return Err(ToolError::InvalidRange(format!(
-            "query must contain 1 to {MAX_QUERY_BYTES} bytes and no control characters"
-        )));
-    }
+fn validate_graph_request(request: &SearchCodeGraphInput) -> Result<(), ToolError> {
+    validate_query(&request.query)?;
     if !(1..=MAX_SYMBOLS).contains(&request.max_symbols) {
         return Err(ToolError::InvalidRange(format!(
             "max_symbols must be between 1 and {MAX_SYMBOLS}"
@@ -115,6 +114,92 @@ fn validate_request(request: &SearchCodeGraphInput) -> Result<(), ToolError> {
     if !(1..=MAX_REFERENCES).contains(&request.max_references_per_symbol) {
         return Err(ToolError::InvalidRange(format!(
             "max_references_per_symbol must be between 1 and {MAX_REFERENCES}"
+        )));
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct SearchChangeImpactInput {
+    /// File, symbol, or task concept whose likely one-hop impact should be explored.
+    query: String,
+    /// Maximum directly matched seed files.
+    #[serde(default = "default_max_seeds")]
+    max_seeds: usize,
+    /// Maximum lexically related files to return.
+    #[serde(default = "default_max_related")]
+    max_related: usize,
+}
+
+const fn default_max_seeds() -> usize {
+    DEFAULT_MAX_SEEDS
+}
+
+const fn default_max_related() -> usize {
+    DEFAULT_MAX_RELATED
+}
+
+/// Finds bounded one-hop lexical change-impact evidence in the current candidate.
+pub struct SearchChangeImpactTool;
+
+#[async_trait]
+impl Tool for SearchChangeImpactTool {
+    fn descriptor(&self) -> ToolDescriptor {
+        descriptor::<SearchChangeImpactInput>(
+            "search_change_impact",
+            "Find task-matched seed files and bounded one-hop files that define symbols used by them or reference symbols they define. Navigation evidence only; read cited source before editing.",
+            Capability::FileRead,
+        )
+    }
+
+    async fn execute(
+        &self,
+        context: &ToolContext<'_>,
+        value: Value,
+    ) -> Result<ToolOutput, ToolError> {
+        let request: SearchChangeImpactInput = input(value, "search_change_impact")?;
+        validate_query(&request.query)?;
+        if !(1..=MAX_SEEDS).contains(&request.max_seeds) {
+            return Err(ToolError::InvalidRange(format!(
+                "max_seeds must be between 1 and {MAX_SEEDS}"
+            )));
+        }
+        if !(1..=MAX_RELATED).contains(&request.max_related) {
+            return Err(ToolError::InvalidRange(format!(
+                "max_related must be between 1 and {MAX_RELATED}"
+            )));
+        }
+        context.authorize(&Capability::FileRead, ".", "search_change_impact")?;
+        let index = RepositoryIndex::build(context.workspace.workspace_root())?;
+        let result =
+            index.query_change_impact(request.query.trim(), request.max_seeds, request.max_related);
+        let truncated = result.result_truncated || result.graph_truncated;
+        Ok(ToolOutput {
+            summary: format!(
+                "found {} seed file(s) and {} of {} related file(s)",
+                result.seeds.len(),
+                result.related.len(),
+                result.total_related_files
+            ),
+            content: json!({
+                "method": "task-matched seeds plus one-hop project-definition and lexical-reference evidence",
+                "warning": "navigation evidence only; read cited source before editing and do not treat lexical relationships as proof of runtime impact",
+                "repository_digest": index.digest,
+                "result": result,
+            }),
+            observed_effects: vec!["repository.impact.search".to_owned()],
+            succeeded: true,
+            truncated,
+        })
+    }
+}
+
+fn validate_query(query: &str) -> Result<(), ToolError> {
+    let query = query.trim();
+    if query.is_empty() || query.len() > MAX_QUERY_BYTES || query.chars().any(char::is_control) {
+        return Err(ToolError::InvalidRange(format!(
+            "query must contain 1 to {MAX_QUERY_BYTES} bytes and no control characters"
         )));
     }
     Ok(())
@@ -182,5 +267,27 @@ mod tests {
                     .iter()
                     .any(|reference| { reference["path"] == "src/new_use.rs" }))
         );
+    }
+
+    #[tokio::test]
+    async fn searches_bounded_change_impact_in_the_current_candidate() {
+        let (_source, _control, transaction) = fixture();
+        let policy = PolicyEngine::local_default();
+        let context = ToolContext::new(&transaction, &policy, None);
+
+        let output = SearchChangeImpactTool
+            .execute(
+                &context,
+                json!({"query":"Receipt", "max_seeds":1, "max_related":8}),
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("impact search: {error}"));
+
+        assert_eq!(output.content["result"]["seeds"][0], "src/receipt.rs");
+        assert_eq!(
+            output.content["result"]["related"][0]["path"],
+            "src/use_receipt.rs"
+        );
+        assert!(!output.truncated);
     }
 }

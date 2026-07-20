@@ -112,6 +112,28 @@ pub struct GraphQueryResult {
     pub graph_truncated: bool,
 }
 
+/// One bounded path related to task-matched seed files by lexical graph evidence.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ImpactPathEvidence {
+    pub path: String,
+    pub score: usize,
+    pub reasons: Vec<String>,
+}
+
+/// Deterministic one-hop change-impact query result.
+///
+/// This is navigation evidence. It does not claim that changing a seed will
+/// alter runtime behavior in every related file.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ImpactQueryResult {
+    pub query: String,
+    pub seeds: Vec<String>,
+    pub related: Vec<ImpactPathEvidence>,
+    pub total_related_files: usize,
+    pub result_truncated: bool,
+    pub graph_truncated: bool,
+}
+
 /// Deterministic metadata extracted from one repository file.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct IndexedFile {
@@ -233,6 +255,7 @@ pub struct RetrievalTelemetry {
     pub cited_files: usize,
     pub graph_symbols: usize,
     pub graph_locations: usize,
+    pub impact_files: usize,
     /// Share of retrieved files that fit in the rendered pack, from 0 to 10,000.
     pub citation_coverage_basis_points: u16,
 }
@@ -352,21 +375,8 @@ impl RepositoryIndex {
             .files
             .values()
             .map(|file| {
-                let path = file.path.to_lowercase();
-                let symbol_text = file
-                    .symbols
-                    .iter()
-                    .map(|symbol| symbol.name.to_lowercase())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let score = tokens
-                    .iter()
-                    .map(|token| {
-                        usize::from(path.contains(token)) * 4
-                            + usize::from(symbol_text.contains(token)) * 3
-                    })
-                    .sum::<usize>();
-                (score, file)
+                let direct_score = direct_file_score(file, &tokens);
+                (direct_score, file)
             })
             .collect::<Vec<_>>();
         let graph_evidence = self.graph.query(query, 16, 64);
@@ -415,6 +425,132 @@ impl RepositoryIndex {
             retrieved.extend(anchors.into_iter().take(limit.min(8)).map(|(_, file)| file));
         }
         retrieved
+    }
+
+    /// Finds files plausibly affected by task-matched seed files.
+    ///
+    /// Relationships come from bounded project-definition and lexical-reference
+    /// evidence. Scores and reasons are deterministic navigation hints, not
+    /// type-resolved dependency or runtime-impact claims.
+    #[must_use]
+    pub fn query_change_impact(
+        &self,
+        query: &str,
+        max_seeds: usize,
+        max_related: usize,
+    ) -> ImpactQueryResult {
+        let tokens = query_tokens(query);
+        let mut seed_candidates = self
+            .files
+            .values()
+            .filter_map(|file| {
+                let score = direct_file_score(file, &tokens);
+                (score > 0).then_some((score, file))
+            })
+            .collect::<Vec<_>>();
+        seed_candidates.sort_by(|(left_score, left), (right_score, right)| {
+            right_score
+                .cmp(left_score)
+                .then_with(|| left.path.cmp(&right.path))
+        });
+        let seeds = seed_candidates
+            .into_iter()
+            .take(max_seeds)
+            .map(|(_, file)| file.path.clone())
+            .collect::<BTreeSet<_>>();
+        let mut related = BTreeMap::<String, (usize, BTreeSet<String>)>::new();
+        for (symbol, definitions) in &self.graph.definitions {
+            let references = self
+                .graph
+                .references
+                .get(symbol)
+                .map_or(&[][..], Vec::as_slice);
+            let definition_is_seed = definitions
+                .iter()
+                .any(|location| seeds.contains(&location.path));
+            let reference_is_seed = references
+                .iter()
+                .any(|location| seeds.contains(&location.path));
+            if definition_is_seed {
+                for reference in references
+                    .iter()
+                    .filter(|location| !seeds.contains(&location.path))
+                {
+                    add_impact_reason(
+                        &mut related,
+                        &reference.path,
+                        3,
+                        format!("references {symbol} defined by a seed"),
+                    );
+                }
+            }
+            if reference_is_seed {
+                for definition in definitions
+                    .iter()
+                    .filter(|location| !seeds.contains(&location.path))
+                {
+                    add_impact_reason(
+                        &mut related,
+                        &definition.path,
+                        4,
+                        format!("defines {symbol} referenced by a seed"),
+                    );
+                }
+            }
+        }
+        let total_related_files = related.len();
+        let mut related = related
+            .into_iter()
+            .map(|(path, (score, reasons))| ImpactPathEvidence {
+                path,
+                score,
+                reasons: reasons.into_iter().take(8).collect(),
+            })
+            .collect::<Vec<_>>();
+        related.sort_by(|left, right| {
+            right
+                .score
+                .cmp(&left.score)
+                .then_with(|| left.path.cmp(&right.path))
+        });
+        related.truncate(max_related);
+        ImpactQueryResult {
+            query: query.to_owned(),
+            seeds: seeds.into_iter().collect(),
+            result_truncated: related.len() < total_related_files,
+            related,
+            total_related_files,
+            graph_truncated: self.graph.truncated,
+        }
+    }
+}
+
+fn direct_file_score(file: &IndexedFile, tokens: &BTreeSet<String>) -> usize {
+    let path = file.path.to_lowercase();
+    let symbol_text = file
+        .symbols
+        .iter()
+        .map(|symbol| symbol.name.to_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ");
+    tokens
+        .iter()
+        .map(|token| {
+            usize::from(path.contains(token)) * 4 + usize::from(symbol_text.contains(token)) * 3
+        })
+        .sum()
+}
+
+fn add_impact_reason(
+    impact: &mut BTreeMap<String, (usize, BTreeSet<String>)>,
+    path: &str,
+    weight: usize,
+    reason: String,
+) {
+    let entry = impact.entry(path.to_owned()).or_default();
+    entry.0 = entry.0.saturating_add(weight);
+    if entry.1.len() < 8 {
+        entry.1.insert(reason);
     }
 }
 
@@ -1075,6 +1211,7 @@ impl ContextPack {
             serde_json::to_string_pretty(&model_contract).map_err(ContextError::Serialization)?;
         let retrieved = index.retrieve(&contract.goal, 40);
         let graph_evidence = index.graph.query(&contract.goal, 8, 16);
+        let impact_evidence = index.query_change_impact(&contract.goal, 8, 16);
         let language_summary = index
             .languages
             .iter()
@@ -1111,42 +1248,19 @@ impl ContextPack {
         append_fragments(&mut writer, fragments, &mut included_fragments);
         let mut cited_files = Vec::new();
         append_graph_evidence(&mut writer, &graph_evidence, &mut cited_files);
+        append_impact_evidence(&mut writer, &impact_evidence, &mut cited_files);
         append_topology(&mut writer, &retrieved, &mut cited_files);
         cited_files.sort();
         cited_files.dedup();
         let (rendered, truncated) = writer.finish();
         let rendered_bytes = rendered.len();
-        let retrieved_paths = retrieved
-            .iter()
-            .map(|file| file.path.as_str())
-            .collect::<BTreeSet<_>>();
-        let cited_retrieved_files = cited_files
-            .iter()
-            .filter(|path| retrieved_paths.contains(path.as_str()))
-            .count();
-        let citation_coverage_basis_points = if retrieved.is_empty() {
-            10_000
-        } else {
-            u16::try_from(
-                cited_retrieved_files
-                    .saturating_mul(10_000)
-                    .checked_div(retrieved.len())
-                    .unwrap_or_default()
-                    .min(10_000),
-            )
-            .unwrap_or(10_000)
-        };
-        let graph_locations = graph_evidence
-            .symbols
-            .iter()
-            .map(|symbol| {
-                symbol
-                    .definitions
-                    .len()
-                    .saturating_add(symbol.references.len())
-            })
-            .sum();
-        let cited_file_count = cited_files.len();
+        let retrieval = retrieval_telemetry(
+            &contract.goal,
+            &retrieved,
+            &cited_files,
+            &graph_evidence,
+            &impact_evidence,
+        );
         Ok(Self {
             repository_digest: index.digest.clone(),
             project_profile,
@@ -1157,15 +1271,56 @@ impl ContextPack {
             rendered_bytes,
             budget_bytes: budget.max_bytes,
             truncated,
-            retrieval: RetrievalTelemetry {
-                query_terms: query_tokens(&contract.goal).len(),
-                retrieved_files: retrieved.len(),
-                cited_files: cited_file_count,
-                graph_symbols: graph_evidence.symbols.len(),
-                graph_locations,
-                citation_coverage_basis_points,
-            },
+            retrieval,
         })
+    }
+}
+
+fn retrieval_telemetry(
+    query: &str,
+    retrieved: &[&IndexedFile],
+    cited_files: &[String],
+    graph_evidence: &GraphQueryResult,
+    impact_evidence: &ImpactQueryResult,
+) -> RetrievalTelemetry {
+    let retrieved_paths = retrieved
+        .iter()
+        .map(|file| file.path.as_str())
+        .collect::<BTreeSet<_>>();
+    let cited_retrieved_files = cited_files
+        .iter()
+        .filter(|path| retrieved_paths.contains(path.as_str()))
+        .count();
+    let citation_coverage_basis_points = if retrieved.is_empty() {
+        10_000
+    } else {
+        u16::try_from(
+            cited_retrieved_files
+                .saturating_mul(10_000)
+                .checked_div(retrieved.len())
+                .unwrap_or_default()
+                .min(10_000),
+        )
+        .unwrap_or(10_000)
+    };
+    let graph_locations = graph_evidence
+        .symbols
+        .iter()
+        .map(|symbol| {
+            symbol
+                .definitions
+                .len()
+                .saturating_add(symbol.references.len())
+        })
+        .sum();
+    RetrievalTelemetry {
+        query_terms: query_tokens(query).len(),
+        retrieved_files: retrieved.len(),
+        cited_files: cited_files.len(),
+        graph_symbols: graph_evidence.symbols.len(),
+        graph_locations,
+        impact_files: impact_evidence.related.len(),
+        citation_coverage_basis_points,
     }
 }
 
@@ -1403,6 +1558,31 @@ fn append_graph_evidence(
                     .iter()
                     .map(|reference| reference.path.clone()),
             );
+        }
+    }
+}
+
+fn append_impact_evidence(
+    writer: &mut PackWriter,
+    result: &ImpactQueryResult,
+    cited: &mut Vec<String>,
+) {
+    let mut heading_pending = true;
+    for related in &result.related {
+        let heading = if heading_pending {
+            "\n# Change-impact evidence\nThese are one-hop lexical relationships from task-matched seed files. Use them to choose what to inspect; they are not proof of runtime impact.\n\n"
+        } else {
+            "\n"
+        };
+        let entry = format!(
+            "{heading}- {} [score {}]: {}",
+            related.path,
+            related.score,
+            related.reasons.join("; ")
+        );
+        if writer.push_optional(&entry) {
+            heading_pending = false;
+            cited.push(related.path.clone());
         }
     }
 }
@@ -1743,6 +1923,35 @@ mod tests {
     }
 
     #[test]
+    fn change_impact_links_seed_definitions_and_seed_references() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::create_dir(root.path().join("src"))
+            .unwrap_or_else(|error| unreachable!("src: {error}"));
+        fs::write(
+            root.path().join("src/definition.rs"),
+            "pub struct Receipt;\n",
+        )
+        .unwrap_or_else(|error| unreachable!("definition: {error}"));
+        fs::write(
+            root.path().join("src/consumer.rs"),
+            "pub fn consume(value: Receipt) {}\n",
+        )
+        .unwrap_or_else(|error| unreachable!("consumer: {error}"));
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+
+        let downstream = index.query_change_impact("Receipt", 1, 8);
+        assert_eq!(downstream.seeds, vec!["src/definition.rs"]);
+        assert_eq!(downstream.related[0].path, "src/consumer.rs");
+        assert!(downstream.related[0].reasons[0].contains("references Receipt"));
+
+        let upstream = index.query_change_impact("consume", 1, 8);
+        assert_eq!(upstream.seeds, vec!["src/consumer.rs"]);
+        assert_eq!(upstream.related[0].path, "src/definition.rs");
+        assert!(upstream.related[0].reasons[0].contains("defines Receipt"));
+    }
+
+    #[test]
     fn graph_evidence_expands_initial_retrieval_and_context() {
         let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
         fs::create_dir(root.path().join("src"))
@@ -1766,8 +1975,10 @@ mod tests {
         let context = ContextPack::compile(&TaskContract::new("fix Receipt", "."), &index)
             .unwrap_or_else(|error| unreachable!("context: {error}"));
         assert!(context.rendered.contains("# Repository evidence graph"));
+        assert!(context.rendered.contains("# Change-impact evidence"));
         assert!(context.rendered.contains("src/consumer.rs:1"));
         assert!(context.cited_files.contains(&"src/consumer.rs".to_owned()));
+        assert_eq!(context.retrieval.impact_files, 1);
     }
 
     #[test]

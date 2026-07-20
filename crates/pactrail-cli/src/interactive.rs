@@ -486,6 +486,7 @@ impl RunActivity {
             rejected_cache_entries,
             citation_coverage_basis_points,
             graph_symbols,
+            impact_files,
             rendered_bytes,
             truncated,
             duration_ms,
@@ -511,7 +512,7 @@ impl RunActivity {
             "◆",
             "context",
             &format!(
-                "{indexed_files} indexed · {cache}{rejected} · {cited_files} cited · {coverage_whole}.{coverage_fraction:02}% coverage · {graph_symbols} graph · {} · {}{bounded}",
+                "{indexed_files} indexed · {cache}{rejected} · {cited_files} cited · {coverage_whole}.{coverage_fraction:02}% coverage · {graph_symbols} graph · {impact_files} impact · {} · {}{bounded}",
                 format_bytes(u64::try_from(*rendered_bytes).unwrap_or(u64::MAX)),
                 format_duration(Duration::from_millis(*duration_ms))
             ),

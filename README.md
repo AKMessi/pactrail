@@ -33,7 +33,7 @@ pactrail ❯ Fix the parser regression and add a test.
   ╭─ RUN 019f7a31  compatible/local-coder
   │ Fix the parser regression and add a test.
   │     0ms  ◇ state     contracting · validating task contract
-  │     4ms  ◆ context   186 indexed · 181 warm · 5 cold · 8 cited · 100.00% coverage · 4ms
+  │     4ms  ◆ context   186 indexed · 181 warm · 5 cold · 8 cited · 100.00% coverage · 3 graph · 4 impact · 4ms
   │   1.82s  ● model     turn 1 · 2 actions · 3,412 tokens · 1.8s
   │   1.84s  ● tool      read_many_files · 18.1 KiB · 12ms
   │   1.86s  ◆ tool      edit_file · changed src/parser.rs · 9ms
@@ -107,9 +107,9 @@ pactrail ❯ Fix the parser regression and add a test.
 ### Tool Kernel v2
 
 - Bounded file listing, single and batch reads, lexical search, exact replace,
-  repository-wide symbol/reference graph search, atomic multi-edit, write,
-  remove, candidate-change inspection, memory recall, and trusted native
-  verification.
+  repository-wide symbol/reference graph and one-hop change-impact search,
+  atomic multi-edit, write, remove, candidate-change inspection, memory recall,
+  and trusted native verification.
 - Per-tool read-only, idempotency, parallel-safety, capability, and risk metadata.
 - Consecutive parallel-safe reads overlap; mutations stay serial and durable
   results retain the model's call order.

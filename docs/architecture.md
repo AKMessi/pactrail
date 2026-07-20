@@ -129,6 +129,7 @@ The production registry currently provides:
 
 - `list_files`, `read_file`, `read_many_files`, and `search`;
 - `search_code_graph` for project definitions and bounded lexical references;
+- `search_change_impact` for bounded one-hop definition/reference relationships;
 - `write_file`, `replace_text`, atomic `edit_file`, and `remove_file`;
 - `workspace_changes` and `recall_memory`;
 - capability-gated `run_process` for detected verification.
@@ -143,6 +144,12 @@ candidate on each call. This avoids serving a stale pre-edit graph and keeps
 cache invalidation outside the trust boundary. The output carries the current
 repository digest, explicit truncation state, definition provenance, and a
 warning to read cited source before editing.
+
+`search_change_impact` uses direct task matches as seeds, then identifies files
+that reference seed-defined symbols and files defining symbols referenced by a
+seed. Scores and reasons are deterministic and bounded. The result is lexical
+navigation evidence, not a type-resolved dependency or runtime-impact claim,
+and is rebuilt from the current candidate for the same freshness guarantee.
 
 Each tool result is normalized, output-bounded, and compared against transaction
 manifests before and after execution. The event record contains a digest of the

@@ -23,7 +23,7 @@ pub use registry::{
     Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry,
     ToolRisk,
 };
-pub use structural::SearchCodeGraphTool;
+pub use structural::{SearchChangeImpactTool, SearchCodeGraphTool};
 
 /// Builds the production default set of local coding tools.
 ///
@@ -50,6 +50,7 @@ pub fn builtin_registry_with_process(
     registry.register(ListFilesTool)?;
     registry.register(SearchTool)?;
     registry.register(SearchCodeGraphTool)?;
+    registry.register(SearchChangeImpactTool)?;
     registry.register(WriteFileTool)?;
     registry.register(ReplaceTextTool)?;
     registry.register(EditFileTool)?;
