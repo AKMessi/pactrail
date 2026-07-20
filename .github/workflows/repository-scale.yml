@@ -1,0 +1,76 @@
+name: Repository scale budgets
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/repository-scale.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/pactrail-context/**"
+      - "crates/pactrail-tools/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/repository-scale.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/pactrail-context/**"
+      - "crates/pactrail-tools/**"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      files:
+        description: Synthetic source-file count (100-100000)
+        required: true
+        default: "10000"
+
+concurrency:
+  group: repository-scale-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+  BENCH_FILES: ${{ github.event_name == 'pull_request' && '2000' || github.event_name == 'push' && '5000' || github.event.inputs.files || '10000' }}
+
+jobs:
+  repository-scale:
+    name: Cold, warm, incremental, context, descriptors, and RSS
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: dtolnay/rust-toolchain@eac0f66a48bc4b70a10b9acd4c4e930f835d95ff # 1.95.0
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - name: Enforce descriptor catalog budget
+        run: cargo test --release --locked -p pactrail-tools --test descriptor_budget
+      - name: Build repository-scale runner outside measurement
+        run: cargo build --release --locked -p pactrail-context --example repository_scale
+      - name: Measure repository-scale budgets
+        env:
+          LC_ALL: C
+        run: |
+          mkdir -p artifacts
+          /usr/bin/time -v -o artifacts/resource-usage.txt \
+            target/release/examples/repository_scale \
+            --files "$BENCH_FILES" \
+            --context-bytes 32768 \
+            --max-cold-ms 60000 \
+            --max-warm-ms 60000 \
+            --max-incremental-ms 60000 \
+            --max-context-ms 10000 \
+            > artifacts/repository-scale.json
+          rss_kib="$(awk -F: '/Maximum resident set size/ {gsub(/^[[:space:]]+/, "", $2); print $2}' artifacts/resource-usage.txt)"
+          test -n "$rss_kib"
+          test "$rss_kib" -le 1572864
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: repository-scale-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
