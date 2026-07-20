@@ -175,6 +175,7 @@ pub struct RunEngine<'a> {
     memory: Option<&'a MemoryStore>,
     context_fragments: Vec<ContextFragment>,
     checkpoint_store: Option<&'a CheckpointStore>,
+    runtime_identity: Option<String>,
     max_turns: u16,
 }
 
@@ -195,6 +196,7 @@ impl<'a> RunEngine<'a> {
             memory: None,
             context_fragments: Vec::new(),
             checkpoint_store: None,
+            runtime_identity: None,
             max_turns: DEFAULT_MAX_TURNS,
         }
     }
@@ -238,6 +240,13 @@ impl<'a> RunEngine<'a> {
     #[must_use]
     pub const fn with_checkpoint_store(mut self, store: &'a CheckpointStore) -> Self {
         self.checkpoint_store = Some(store);
+        self
+    }
+
+    /// Binds resumable state to an opaque, non-secret runtime-configuration digest.
+    #[must_use]
+    pub fn with_runtime_identity(mut self, identity: impl Into<String>) -> Self {
+        self.runtime_identity = Some(identity.into());
         self
     }
 
@@ -316,6 +325,31 @@ impl<'a> RunEngine<'a> {
             store,
             observer,
             Some(checkpoint),
+        )
+        .await
+    }
+
+    /// Continues a non-terminal run without emitting transient UI observations.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error under the same resume-safety conditions as
+    /// [`Self::resume_with_observer`].
+    pub async fn resume(
+        &self,
+        run_id: RunId,
+        contract: TaskContract,
+        transaction: &WorkspaceTransaction,
+        store: &mut EventStore,
+        checkpoint: RunCheckpoint,
+    ) -> Result<RunOutcome, EngineError> {
+        self.resume_with_observer(
+            run_id,
+            contract,
+            transaction,
+            store,
+            checkpoint,
+            &SilentRunObserver,
         )
         .await
     }
@@ -1745,6 +1779,7 @@ impl RunEngine<'_> {
             model: &'a str,
             capabilities: &'a pactrail_models::ModelCapabilities,
             max_turns: u16,
+            runtime_identity: Option<&'a str>,
         }
 
         let model = serde_json::to_vec(&ModelProfile {
@@ -1752,6 +1787,7 @@ impl RunEngine<'_> {
             model: self.model.model(),
             capabilities: self.model.capabilities(),
             max_turns: self.max_turns,
+            runtime_identity: self.runtime_identity.as_deref(),
         })
         .map_err(CheckpointError::Encoding)?;
         let tools = serde_json::to_vec(tools).map_err(CheckpointError::Encoding)?;
@@ -2876,6 +2912,31 @@ mod tests {
         let reverse = candidate_changes_digest(&[second.clone(), first]);
         assert_eq!(forward, reverse);
         assert_ne!(forward, candidate_changes_digest(&[second]));
+    }
+
+    #[test]
+    fn checkpoint_profile_binds_the_external_runtime_identity() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "identity-test".to_owned(),
+            responses: Mutex::new(VecDeque::new()),
+            capabilities: ModelCapabilities::default(),
+        };
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let tools = registry.descriptors();
+        let first = RunEngine::new(&model, &registry, &policy)
+            .with_runtime_identity("a".repeat(64))
+            .checkpoint_profile_digests(&tools)
+            .unwrap_or_else(|error| unreachable!("first profile: {error}"));
+        let second = RunEngine::new(&model, &registry, &policy)
+            .with_runtime_identity("b".repeat(64))
+            .checkpoint_profile_digests(&tools)
+            .unwrap_or_else(|error| unreachable!("second profile: {error}"));
+
+        assert_ne!(first.0, second.0);
+        assert_eq!(first.1, second.1);
     }
 
     #[tokio::test]

@@ -14,6 +14,7 @@ publish = false
 
 [dependencies]
 anstyle.workspace = true
+blake3.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 directories.workspace = true

@@ -42,6 +42,11 @@ const MIN_TERMINAL_COLUMNS: usize = 40;
 const MAX_TERMINAL_COLUMNS: usize = 240;
 const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Kernel", "Safety", "Session"];
 const COMMANDS: &[CommandHelp] = &[
+    CommandHelp::new(
+        "Work",
+        "/resume [run]",
+        "continue an interrupted run from its safe checkpoint",
+    ),
     CommandHelp::new("Work", "/review [run]", "show receipt and immutable diff"),
     CommandHelp::new("Work", "/diff [run]", "review candidate changes"),
     CommandHelp::new("Work", "/apply [run]", "land a verified candidate"),
@@ -875,6 +880,10 @@ impl Session {
             "/turns" => self.set_turns(arguments)?,
             "/process" => self.set_process_access(arguments)?,
             "/runs" | "/history" => self.render_runs()?,
+            "/resume" => {
+                self.resume_run(self.resolve_resumable_run(arguments)?)
+                    .await?;
+            }
             "/trace" => self.render_trace(self.resolve_run(arguments)?)?,
             "/memory" => self.render_memories(arguments)?,
             "/remember" => self.remember(arguments)?,
@@ -962,7 +971,45 @@ impl Session {
         };
         drop(execution);
         activity.finish();
+        self.finish_run_activity(&activity, result)
+    }
 
+    async fn resume_run(&mut self, run_id: RunId) -> Result<(), CliError> {
+        let activity = RunActivity::new("durable session", self.theme.clone());
+        activity.set_message("validating checkpoint identity");
+        let cancellation = CancellationToken::new();
+        let mut execution = Box::pin(commands::execute_resume_with_observer_and_cancellation(
+            &self.workspace,
+            Some(&self.state),
+            run_id,
+            &activity,
+            cancellation.clone(),
+        ));
+        let result = tokio::select! {
+            result = &mut execution => result,
+            signal = tokio::signal::ctrl_c() => {
+                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                activity.row(
+                    "!",
+                    "cancel",
+                    "cancellation requested Â· cleaning up active work",
+                    TimelineTone::Warning,
+                );
+                activity.set_message("cancelling safely");
+                cancellation.cancel();
+                (&mut execution).await
+            }
+        };
+        drop(execution);
+        activity.finish();
+        self.finish_run_activity(&activity, result)
+    }
+
+    fn finish_run_activity(
+        &mut self,
+        activity: &RunActivity,
+        result: Result<CompletedRun, CliError>,
+    ) -> Result<(), CliError> {
         match result {
             Ok(completed) => {
                 self.emit(&activity.summary(true))?;
@@ -2033,6 +2080,35 @@ impl Session {
                 "run prefix {argument:?} is ambiguous"
             ))),
         }
+    }
+
+    fn resolve_resumable_run(&self, argument: &str) -> Result<RunId, CliError> {
+        let history = commands::run_history(&self.state)?;
+        let run_id = if argument.is_empty() {
+            history
+                .iter()
+                .find(|run| run.state == RunState::Executing)
+                .map(|run| run.run_id)
+                .ok_or_else(|| {
+                    CliError::Argument(
+                        "no interrupted executing run is available; use /runs to inspect history"
+                            .to_owned(),
+                    )
+                })?
+        } else {
+            self.resolve_run(argument)?
+        };
+        let state = history
+            .iter()
+            .find(|run| run.run_id == run_id)
+            .map(|run| run.state)
+            .ok_or_else(|| CliError::Argument(format!("run {run_id} is not discoverable")))?;
+        if state != RunState::Executing {
+            return Err(CliError::Argument(format!(
+                "run {run_id} is {state:?}, not an interrupted executing run"
+            )));
+        }
+        Ok(run_id)
     }
 
     fn persist(&mut self, settings: InteractiveSettings) -> Result<(), CliError> {

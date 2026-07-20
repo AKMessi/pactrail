@@ -32,6 +32,8 @@ pub struct Cli {
 pub enum Command {
     /// Execute a task in an isolated transaction.
     Run(RunArgs),
+    /// Continue an interrupted run from its latest safe checkpoint.
+    Resume(ResumeArgs),
     /// Inspect a durable run and its evidence receipt.
     Inspect(RunIdArgs),
     /// Render the integrity-checked execution trace for a run.
@@ -166,7 +168,8 @@ pub enum OciRuntimeArg {
 }
 
 /// Resolution mode for process requests that reach the approval boundary.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
 pub enum ProcessApprovalArg {
     /// Deny unresolved process approvals (the non-interactive default).
     #[default]
@@ -178,7 +181,8 @@ pub enum ProcessApprovalArg {
     Prompt,
 }
 
-#[derive(Debug, Args)]
+#[derive(Clone, Debug, Deserialize, Serialize, Args)]
+#[serde(deny_unknown_fields)]
 pub struct RunArgs {
     /// Natural-language software task.
     #[arg(required_unless_present = "task", conflicts_with = "task")]
@@ -295,15 +299,34 @@ pub enum ProviderKind {
     OpenAiCompatible,
 }
 
-#[derive(Clone, Copy, Debug, ValueEnum)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
 pub enum OutputFormat {
     Human,
     Json,
 }
 
+#[derive(Debug, Args)]
+pub struct ResumeArgs {
+    /// `UUIDv7` run identifier.
+    pub run_id: String,
+
+    /// Override how unresolved process approvals are handled after restart.
+    #[arg(long, value_enum)]
+    pub process_approval: Option<ProcessApprovalArg>,
+
+    /// Apply immediately only if resumed work reaches ready-to-apply state.
+    #[arg(long)]
+    pub apply: bool,
+
+    /// Result rendering format.
+    #[arg(long, value_enum, default_value = "human")]
+    pub output: OutputFormat,
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Command, OciRuntimeArg, ProcessBackendArg};
+    use super::{Cli, Command, OciRuntimeArg, OutputFormat, ProcessBackendArg};
     use clap::Parser;
 
     #[test]
@@ -314,6 +337,27 @@ mod tests {
             unreachable!("run command")
         };
         assert_eq!(args.request_timeout_seconds, 300);
+    }
+
+    #[test]
+    fn resume_parses_explicit_post_restart_authority() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "resume",
+            "018f53d2-a0d8-7c6a-8e22-6b6a4b0b0f54",
+            "--process-approval",
+            "deny",
+            "--apply",
+            "--output",
+            "json",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Resume(args)) = cli.command else {
+            unreachable!("resume command")
+        };
+        assert!(args.apply);
+        assert_eq!(args.output, OutputFormat::Json);
+        assert!(args.process_approval.is_some());
     }
 
     #[test]

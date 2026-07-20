@@ -2,9 +2,127 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 
 use serde_json::{Value, json};
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn interrupted_process_resumes_the_same_hash_linked_run() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|error| unreachable!("mock provider: {error}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|error| unreachable!("provider address: {error}"));
+    let (request_started, request_observed) = mpsc::sync_channel(1);
+    let server = thread::spawn(move || {
+        let (mut interrupted_stream, _address) = listener
+            .accept()
+            .unwrap_or_else(|error| unreachable!("first provider accept: {error}"));
+        read_request(&mut interrupted_stream);
+        request_started
+            .send(())
+            .unwrap_or_else(|error| unreachable!("request signal: {error}"));
+        let mut sink = Vec::new();
+        let _closed = interrupted_stream.read_to_end(&mut sink);
+
+        let (mut resumed_stream, _address) = listener
+            .accept()
+            .unwrap_or_else(|error| unreachable!("resume provider accept: {error}"));
+        read_request(&mut resumed_stream);
+        let response = json!({
+            "id": "resumed-summary",
+            "choices": [{
+                "message": {"content": "The interrupted run resumed from its durable checkpoint."},
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 18, "completion_tokens": 9}
+        });
+        write_response(&mut resumed_stream, &response);
+    });
+
+    let mut interrupted = Command::new(env!("CARGO_BIN_EXE_pactrail"));
+    interrupted
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "run",
+            "Explain this workspace",
+            "--provider",
+            "open-ai-compatible",
+            "--base-url",
+            &format!("http://{address}/v1"),
+            "--model",
+            "mock-coder",
+            "--output",
+            "json",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = interrupted
+        .spawn()
+        .unwrap_or_else(|error| unreachable!("interrupted run: {error}"));
+    if let Err(error) = request_observed.recv_timeout(Duration::from_secs(10)) {
+        let _kill = child.kill();
+        let _wait = child.wait();
+        unreachable!("model request was not observed: {error}");
+    }
+    let runs_root = workspace.path().join(".pactrail").join("runs");
+    let run_ids = std::fs::read_dir(&runs_root)
+        .unwrap_or_else(|error| unreachable!("runs: {error}"))
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(run_ids.len(), 1);
+    let run_id = &run_ids[0];
+    assert!(runs_root.join(run_id).join("run.json").is_file());
+    child
+        .kill()
+        .unwrap_or_else(|error| unreachable!("terminate interrupted run: {error}"));
+    child
+        .wait()
+        .unwrap_or_else(|error| unreachable!("reap interrupted run: {error}"));
+
+    let resumed = pactrail(workspace.path(), ["resume", run_id, "--output", "json"]);
+    assert!(
+        resumed.status.success(),
+        "resume failed: {}",
+        String::from_utf8_lossy(&resumed.stderr)
+    );
+    server
+        .join()
+        .unwrap_or_else(|_| unreachable!("provider thread panicked"));
+    let result: Value = serde_json::from_slice(&resumed.stdout)
+        .unwrap_or_else(|error| unreachable!("resume JSON: {error}"));
+    assert_eq!(result["run_id"], run_id.as_str());
+    assert_eq!(result["outcome"], "answered");
+    assert_eq!(result["tokens"], 27);
+
+    let trace = pactrail(workspace.path(), ["trace", run_id, "--json"]);
+    assert!(trace.status.success());
+    let trace: Value = serde_json::from_slice(&trace.stdout)
+        .unwrap_or_else(|error| unreachable!("trace JSON: {error}"));
+    let events = trace
+        .as_array()
+        .unwrap_or_else(|| unreachable!("trace is not an array"));
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| event["event"]["type"] == "contract_registered")
+            .count(),
+        1
+    );
+    assert!(events.iter().any(|event| {
+        event["event"]["type"] == "note_recorded"
+            && event["event"]["data"]["message"]
+                .as_str()
+                .is_some_and(|message| message.contains("resumed from safe session checkpoint"))
+    }));
+}
 
 #[test]
 fn complete_run_is_isolated_then_applies() {
@@ -817,17 +935,21 @@ fn serve_responses(listener: &TcpListener, responses: &[Value]) {
             .accept()
             .unwrap_or_else(|error| unreachable!("provider accept: {error}"));
         read_request(&mut stream);
-        let body = serde_json::to_vec(response)
-            .unwrap_or_else(|error| unreachable!("provider response: {error}"));
-        let header = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-            body.len()
-        );
-        stream
-            .write_all(header.as_bytes())
-            .and_then(|()| stream.write_all(&body))
-            .unwrap_or_else(|error| unreachable!("provider write: {error}"));
+        write_response(&mut stream, response);
     }
+}
+
+fn write_response(stream: &mut TcpStream, response: &Value) {
+    let body = serde_json::to_vec(response)
+        .unwrap_or_else(|error| unreachable!("provider response: {error}"));
+    let header = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    stream
+        .write_all(header.as_bytes())
+        .and_then(|()| stream.write_all(&body))
+        .unwrap_or_else(|error| unreachable!("provider write: {error}"));
 }
 
 fn read_request(stream: &mut TcpStream) {
