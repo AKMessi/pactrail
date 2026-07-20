@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::CommandFactory;
@@ -20,7 +21,9 @@ use pactrail_models::{
 };
 use pactrail_store::{EventStore, StoreError};
 use pactrail_tools::{
-    PolicyEngine, RunProcessTool, ToolError, ToolRisk, builtin_registry_with_process,
+    DisabledProcessBackend, NativeProcessBackend, OciProcessBackend, OciProcessConfig,
+    OciRuntimeKind, OciSandboxProfile, PolicyEngine, ProcessBackend, RunProcessTool, ToolError,
+    ToolRisk, builtin_registry_with_process,
 };
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
@@ -28,10 +31,11 @@ use secrecy::SecretString;
 use serde_json::json;
 use tempfile::NamedTempFile;
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 
 use crate::cli::{
-    Cli, Command, CompletionShell, MemoryCommand, MemoryKindArg, OutputFormat, ProviderKind,
-    RunArgs, RunIdArgs,
+    Cli, Command, CompletionShell, MemoryCommand, MemoryKindArg, OciRuntimeArg, OutputFormat,
+    ProcessBackendArg, ProviderKind, RunArgs, RunIdArgs,
 };
 use crate::output::{escape_json_terminal_controls, write_human_stdout, write_stdout};
 
@@ -120,6 +124,7 @@ async fn execute_run_inner(
     observer: Option<&dyn RunObserver>,
 ) -> Result<CompletedRun, CliError> {
     validate_model_limits(&args)?;
+    let process_backend = effective_process_backend(&args)?;
     let (mut contract, workspace) = load_contract(cli_workspace, &args)?;
     contract.workspace_root = workspace.display().to_string();
     if args.task.is_none() {
@@ -131,7 +136,7 @@ async fn execute_run_inner(
         contract.permissions.deny.insert(Capability::SecretUse);
         contract.permissions.deny.insert(Capability::ExternalWrite);
     }
-    configure_native_process_permissions(&mut contract, args.allow_process)?;
+    configure_process_permissions(&mut contract, process_backend)?;
     contract.validate().map_err(CliError::Contract)?;
     for required in [Capability::FileRead, Capability::FileWrite] {
         if !contract.permissions.allow.contains(&required) {
@@ -140,6 +145,10 @@ async fn execute_run_inner(
             )));
         }
     }
+    // Resolve and attest the execution boundary before creating durable run state. Invalid
+    // sandbox configuration must fail without leaving an empty run behind for users to diagnose.
+    let process_backend = build_process_backend(process_backend, &args, &workspace).await?;
+    let process_cancellation = CancellationToken::new();
 
     let state = if let Some(override_path) = state_override {
         absolute_or_join(cli_workspace, override_path)?
@@ -156,11 +165,7 @@ async fn execute_run_inner(
         WorkspaceTransaction::create(&workspace, &run_root, &contract.allowed_write_paths)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
-    let process_tool = if args.allow_process {
-        RunProcessTool::native_trusted()
-    } else {
-        RunProcessTool::disabled()
-    };
+    let process_tool = RunProcessTool::new(process_backend, process_cancellation);
     let registry = builtin_registry_with_process(process_tool)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
@@ -371,9 +376,20 @@ fn api_key_from_env(name: &str) -> Result<SecretString, CliError> {
         })
 }
 
-fn configure_native_process_permissions(
+fn effective_process_backend(args: &RunArgs) -> Result<ProcessBackendArg, CliError> {
+    match (args.process_backend, args.allow_process) {
+        (Some(ProcessBackendArg::Native) | None, true) => Ok(ProcessBackendArg::Native),
+        (Some(mode), true) => Err(CliError::Argument(format!(
+            "--allow-process is a deprecated alias for --process-backend native and conflicts with --process-backend {mode:?}"
+        ))),
+        (Some(mode), false) => Ok(mode),
+        (None, false) => Ok(ProcessBackendArg::Disabled),
+    }
+}
+
+fn configure_process_permissions(
     contract: &mut TaskContract,
-    cli_opt_in: bool,
+    backend: ProcessBackendArg,
 ) -> Result<(), CliError> {
     let effective = [
         Capability::ProcessSpawn,
@@ -381,16 +397,44 @@ fn configure_native_process_permissions(
         Capability::SecretUse,
         Capability::ExternalWrite,
     ];
-    if cli_opt_in {
-        for capability in &effective {
-            contract.permissions.deny.remove(capability);
-            contract.permissions.allow.insert(capability.clone());
+    match backend {
+        ProcessBackendArg::Disabled => {
+            if contract
+                .permissions
+                .allow
+                .contains(&Capability::ProcessSpawn)
+            {
+                return Err(CliError::Argument(
+                    "the task contract allows process_spawn but the selected process backend is disabled; select --process-backend native or oci explicitly"
+                        .to_owned(),
+                ));
+            }
+            contract.permissions.deny.insert(Capability::ProcessSpawn);
+        }
+        ProcessBackendArg::Oci => {
+            contract.permissions.deny.remove(&Capability::ProcessSpawn);
+            contract.permissions.allow.insert(Capability::ProcessSpawn);
+            for capability in [
+                Capability::Network,
+                Capability::SecretUse,
+                Capability::ExternalWrite,
+            ] {
+                contract.permissions.allow.remove(&capability);
+                contract.permissions.deny.insert(capability);
+            }
+        }
+        ProcessBackendArg::Native => {
+            for capability in &effective {
+                contract.permissions.deny.remove(capability);
+                contract.permissions.allow.insert(capability.clone());
+            }
         }
     }
-    if contract
-        .permissions
-        .allow
-        .contains(&Capability::ProcessSpawn)
+    if backend == ProcessBackendArg::Native
+        && contract
+            .permissions
+            .allow
+            .contains(&Capability::ProcessSpawn)
     {
         let missing = effective
             .iter()
@@ -405,6 +449,50 @@ fn configure_native_process_permissions(
         }
     }
     Ok(())
+}
+
+async fn build_process_backend(
+    backend: ProcessBackendArg,
+    args: &RunArgs,
+    source_workspace: &Path,
+) -> Result<Arc<dyn ProcessBackend>, CliError> {
+    let backend: Arc<dyn ProcessBackend> = match backend {
+        ProcessBackendArg::Disabled => Arc::new(DisabledProcessBackend),
+        ProcessBackendArg::Native => Arc::new(NativeProcessBackend),
+        ProcessBackendArg::Oci => {
+            let image = args.sandbox_image.clone().ok_or_else(|| {
+                CliError::Argument(
+                    "--process-backend oci requires --sandbox-image <local-image>".to_owned(),
+                )
+            })?;
+            let runtime = match args.sandbox_runtime {
+                OciRuntimeArg::Docker => OciRuntimeKind::Docker,
+                OciRuntimeArg::Podman => OciRuntimeKind::Podman,
+            };
+            let mut config = OciProcessConfig::for_runtime(runtime, image);
+            if let Some(executable) = &args.sandbox_runtime_executable {
+                config.runtime_executable = executable.as_os_str().to_owned();
+            }
+            config.profile = OciSandboxProfile {
+                memory_bytes: mebibytes(args.sandbox_memory_mib, "sandbox memory")?,
+                milli_cpus: args.sandbox_cpu_millis,
+                pids_limit: args.sandbox_pids,
+                tmpfs_bytes: mebibytes(args.sandbox_tmpfs_mib, "sandbox temporary space")?,
+            };
+            Arc::new(
+                OciProcessBackend::initialize(config, &[source_workspace.to_path_buf()])
+                    .await
+                    .map_err(|error| CliError::Tool(ToolError::ProcessBackend(error)))?,
+            )
+        }
+    };
+    Ok(backend)
+}
+
+fn mebibytes(value: u64, label: &str) -> Result<u64, CliError> {
+    value
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| CliError::Argument(format!("{label} is too large to represent in bytes")))
 }
 
 pub(crate) fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
@@ -1187,19 +1275,77 @@ pub(crate) fn doctor(json_output: bool) -> Result<(), CliError> {
             json!({ "program": program, "available": available })
         })
         .collect::<Vec<_>>();
+    let command_available = |name: &str| {
+        checks
+            .iter()
+            .any(|check| check["program"] == name && check["available"].as_bool().unwrap_or(false))
+    };
+    let process_backends = json!([
+        {
+            "id": "disabled",
+            "available": true,
+            "trust": "no process execution",
+            "network": "denied",
+            "filesystem": "none"
+        },
+        {
+            "id": "native",
+            "available": true,
+            "trust": "explicitly trusted host execution",
+            "network": "host authority",
+            "filesystem": "candidate working directory plus host process authority"
+        },
+        {
+            "id": "oci-docker",
+            "available": command_available("docker"),
+            "trust": "restricted local OCI execution",
+            "network": "denied",
+            "filesystem": "candidate-only writable bind mount; read-only image"
+        },
+        {
+            "id": "oci-podman",
+            "available": command_available("podman"),
+            "trust": "restricted local OCI execution",
+            "network": "denied",
+            "filesystem": "candidate-only writable bind mount; read-only image"
+        }
+    ]);
     let report = json!({
         "native_process_isolation": "workspace transaction only; not a host-filesystem or network sandbox",
-        "recommended_hostile_repo_backend": "run Pactrail inside an externally managed OCI container",
+        "recommended_hostile_repo_backend": "--process-backend oci --sandbox-image <local-image>",
+        "process_backends": process_backends,
         "commands": checks,
     });
     if json_output {
         write_json(&report)
     } else {
         let mut lines = vec![
-            "Native execution protects the working tree but is not a host-filesystem/network sandbox."
+            "Process boundaries".to_owned(),
+            "  disabled    ready       no process execution".to_owned(),
+            "  native      ready       trusted host authority; candidate working directory"
                 .to_owned(),
-            "For hostile repositories, run Pactrail itself inside an externally managed Docker or Podman container."
+            format!(
+                "  oci/docker  {:<10} network denied; candidate-only writable mount",
+                if command_available("docker") {
+                    "detected"
+                } else {
+                    "not found"
+                }
+            ),
+            format!(
+                "  oci/podman  {:<10} network denied; candidate-only writable mount",
+                if command_available("podman") {
+                    "detected"
+                } else {
+                    "not found"
+                }
+            ),
+            String::new(),
+            "Native mode is not a host-filesystem or network sandbox.".to_owned(),
+            "Use --process-backend oci --sandbox-image <local-image> for untrusted commands."
                 .to_owned(),
+            String::new(),
+            "Toolchain discovery".to_owned(),
         ];
         for check in checks {
             lines.push(format!(
@@ -1639,7 +1785,7 @@ mod tests {
             Capability::SecretUse,
             Capability::ExternalWrite,
         ]);
-        configure_native_process_permissions(&mut contract, true)
+        configure_process_permissions(&mut contract, ProcessBackendArg::Native)
             .unwrap_or_else(|error| unreachable!("native opt-in: {error}"));
         for capability in [
             Capability::ProcessSpawn,
@@ -1656,8 +1802,34 @@ mod tests {
     fn task_file_cannot_understate_native_process_access() {
         let mut contract = TaskContract::new("run checks", ".");
         contract.permissions.allow.insert(Capability::ProcessSpawn);
-        let result = configure_native_process_permissions(&mut contract, false);
+        let result = configure_process_permissions(&mut contract, ProcessBackendArg::Disabled);
         assert!(matches!(result, Err(CliError::Argument(_))));
+    }
+
+    #[test]
+    fn oci_process_mode_records_restricted_authority() {
+        let mut contract = TaskContract::new("run checks", ".");
+        contract.permissions.allow.extend([
+            Capability::Network,
+            Capability::SecretUse,
+            Capability::ExternalWrite,
+        ]);
+        configure_process_permissions(&mut contract, ProcessBackendArg::Oci)
+            .unwrap_or_else(|error| unreachable!("OCI permissions: {error}"));
+        assert!(
+            contract
+                .permissions
+                .allow
+                .contains(&Capability::ProcessSpawn)
+        );
+        for capability in [
+            Capability::Network,
+            Capability::SecretUse,
+            Capability::ExternalWrite,
+        ] {
+            assert!(contract.permissions.deny.contains(&capability));
+            assert!(!contract.permissions.allow.contains(&capability));
+        }
     }
 
     #[test]

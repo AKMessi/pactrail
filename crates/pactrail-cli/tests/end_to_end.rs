@@ -530,6 +530,13 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
             .as_str()
             .is_some_and(|value| value.contains("not a host-filesystem or network sandbox"))
     );
+    let process_backends = doctor["process_backends"]
+        .as_array()
+        .unwrap_or_else(|| unreachable!("process backend diagnostics missing"));
+    assert_eq!(process_backends.len(), 4);
+    assert_eq!(process_backends[0]["id"], "disabled");
+    assert_eq!(process_backends[0]["available"], true);
+    assert_eq!(process_backends[1]["id"], "native");
 
     for shell in ["bash", "elvish", "fish", "powershell", "zsh"] {
         let completion = pactrail(workspace.path(), ["completion", shell]);
@@ -539,7 +546,12 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
             "{shell} completion was unexpectedly empty"
         );
     }
+    assert!(!workspace.path().join(".pactrail").exists());
+}
 
+#[test]
+fn memory_lifecycle_is_scriptable_with_an_external_state_directory() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
     let add = pactrail_with_state(
         workspace.path(),
         [
@@ -596,6 +608,30 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
             .join("state")
             .join("memory.sqlite3")
             .is_file()
+    );
+    assert!(!workspace.path().join(".pactrail").exists());
+}
+
+#[test]
+fn incomplete_oci_configuration_fails_without_creating_run_state() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let output = pactrail(
+        workspace.path(),
+        [
+            "run",
+            "Execute the test suite",
+            "--provider",
+            "ollama",
+            "--model",
+            "local-model",
+            "--process-backend",
+            "oci",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("--process-backend oci requires --sandbox-image <local-image>")
     );
     assert!(!workspace.path().join(".pactrail").exists());
 }

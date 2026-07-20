@@ -1187,6 +1187,7 @@ dependencies = [
  "terminal_size",
  "thiserror",
  "tokio",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",

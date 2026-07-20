@@ -20,7 +20,7 @@ use reqwest::{StatusCode, Url};
 use serde_json::Value;
 use terminal_size::{Width, terminal_size};
 
-use crate::cli::{OutputFormat, ProviderKind, RunArgs};
+use crate::cli::{OciRuntimeArg, OutputFormat, ProcessBackendArg, ProviderKind, RunArgs};
 use crate::commands::{self, CliError, CompletedRun};
 use crate::diff::render_receipt_diff;
 use crate::output::{sanitize_terminal_text, write_human_stdout, write_stdout};
@@ -91,8 +91,8 @@ const COMMANDS: &[CommandHelp] = &[
     ),
     CommandHelp::new(
         "Safety",
-        "/process on|off",
-        "control trusted native verification",
+        "/process off|native|sandbox <image> [docker|podman]",
+        "select the process trust boundary",
     ),
     CommandHelp::new("Safety", "/context <tokens>", "set model context capacity"),
     CommandHelp::new(
@@ -829,7 +829,19 @@ impl Session {
             base_url: self.settings.effective_base_url(),
             api_key_env: self.settings.api_key_env.clone(),
             write_paths: vec![".".to_owned()],
-            allow_process: self.settings.allow_process,
+            process_backend: Some(self.settings.process_backend),
+            allow_process: false,
+            sandbox_runtime: self.settings.sandbox_runtime,
+            sandbox_runtime_executable: self
+                .settings
+                .sandbox_runtime_executable
+                .as_deref()
+                .map(PathBuf::from),
+            sandbox_image: self.settings.sandbox_image.clone(),
+            sandbox_memory_mib: self.settings.sandbox_memory_mib,
+            sandbox_cpu_millis: self.settings.sandbox_cpu_millis,
+            sandbox_pids: self.settings.sandbox_pids,
+            sandbox_tmpfs_mib: self.settings.sandbox_tmpfs_mib,
             apply: false,
             max_turns: self.settings.max_turns,
             context_tokens: self.settings.context_tokens,
@@ -885,7 +897,7 @@ impl Session {
             .settings
             .effective_model()
             .unwrap_or_else(|| "not configured".to_owned());
-        let process = banner_process(self.settings.allow_process);
+        let process = banner_process(self.settings.process_backend);
         let review = banner_review(self.pending_runs);
         let memory = banner_memory(self.memory_count);
         let mut lines = vec![format!(
@@ -1048,65 +1060,10 @@ impl Session {
             .unwrap_or_else(|| "not configured".to_owned());
         let endpoint =
             provider_base_url(&self.settings).unwrap_or_else(|| "not configured".to_owned());
-        let process = if self.settings.allow_process {
-            (
-                "trusted · host/network/secrets available".to_owned(),
-                TimelineTone::Warning,
-            )
-        } else {
-            ("blocked".to_owned(), TimelineTone::Success)
-        };
-        let key = if self.settings.provider == ProviderKind::Ollama {
-            ("not required for Ollama".to_owned(), TimelineTone::Muted)
-        } else if std::env::var(&self.settings.api_key_env).is_ok_and(|api_key| !api_key.is_empty())
-        {
-            (
-                format!("{} is set", self.settings.api_key_env),
-                TimelineTone::Success,
-            )
-        } else if self
-            .settings
-            .effective_base_url()
-            .as_deref()
-            .is_some_and(is_loopback_url)
-        {
-            (
-                format!(
-                    "{} is not set (optional for local endpoints)",
-                    self.settings.api_key_env
-                ),
-                TimelineTone::Muted,
-            )
-        } else {
-            (
-                format!("{} is not set", self.settings.api_key_env),
-                TimelineTone::Warning,
-            )
-        };
-        let review = if self.pending_runs == 0 {
-            ("none waiting".to_owned(), TimelineTone::Muted)
-        } else {
-            (
-                format!(
-                    "{} {} waiting",
-                    self.pending_runs,
-                    plural(self.pending_runs, "candidate", "candidates")
-                ),
-                TimelineTone::Warning,
-            )
-        };
-        let memory = if self.memory_count == 0 {
-            ("empty".to_owned(), TimelineTone::Muted)
-        } else {
-            (
-                format!(
-                    "{} active {}",
-                    self.memory_count,
-                    plural(self.memory_count, "entry", "entries")
-                ),
-                TimelineTone::Accent,
-            )
-        };
+        let process = self.process_status();
+        let key = self.credential_status();
+        let review = self.review_status();
+        let memory = self.memory_status();
         let fields = [
             (
                 "workspace",
@@ -1139,6 +1096,85 @@ impl Session {
             lines.extend(labelled_rows(&self.theme, columns, label, &value, tone));
         }
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
+    }
+
+    fn process_status(&self) -> (String, TimelineTone) {
+        match self.settings.process_backend {
+            ProcessBackendArg::Disabled => ("blocked".to_owned(), TimelineTone::Success),
+            ProcessBackendArg::Native => (
+                "native trusted · host/network/secrets available".to_owned(),
+                TimelineTone::Warning,
+            ),
+            ProcessBackendArg::Oci => (
+                format!(
+                    "OCI restricted · {} · network denied",
+                    self.settings
+                        .sandbox_image
+                        .as_deref()
+                        .unwrap_or("image not configured")
+                ),
+                TimelineTone::Success,
+            ),
+        }
+    }
+
+    fn credential_status(&self) -> (String, TimelineTone) {
+        if self.settings.provider == ProviderKind::Ollama {
+            ("not required for Ollama".to_owned(), TimelineTone::Muted)
+        } else if std::env::var(&self.settings.api_key_env).is_ok_and(|key| !key.is_empty()) {
+            (
+                format!("{} is set", self.settings.api_key_env),
+                TimelineTone::Success,
+            )
+        } else if self
+            .settings
+            .effective_base_url()
+            .as_deref()
+            .is_some_and(is_loopback_url)
+        {
+            (
+                format!(
+                    "{} is not set (optional for local endpoints)",
+                    self.settings.api_key_env
+                ),
+                TimelineTone::Muted,
+            )
+        } else {
+            (
+                format!("{} is not set", self.settings.api_key_env),
+                TimelineTone::Warning,
+            )
+        }
+    }
+
+    fn review_status(&self) -> (String, TimelineTone) {
+        if self.pending_runs == 0 {
+            ("none waiting".to_owned(), TimelineTone::Muted)
+        } else {
+            (
+                format!(
+                    "{} {} waiting",
+                    self.pending_runs,
+                    plural(self.pending_runs, "candidate", "candidates")
+                ),
+                TimelineTone::Warning,
+            )
+        }
+    }
+
+    fn memory_status(&self) -> (String, TimelineTone) {
+        if self.memory_count == 0 {
+            ("empty".to_owned(), TimelineTone::Muted)
+        } else {
+            (
+                format!(
+                    "{} active {}",
+                    self.memory_count,
+                    plural(self.memory_count, "entry", "entries")
+                ),
+                TimelineTone::Accent,
+            )
+        }
     }
 
     fn render_memories(&self, query: &str) -> Result<(), CliError> {
@@ -1475,25 +1511,53 @@ impl Session {
     }
 
     fn set_process_access(&mut self, argument: &str) -> Result<(), CliError> {
-        let enabled = match argument {
-            "on" => true,
-            "off" => false,
-            _ => return Err(CliError::Argument("usage: /process on|off".to_owned())),
-        };
+        let parts = argument.split_whitespace().collect::<Vec<_>>();
         let mut settings = self.settings.clone();
-        settings.allow_process = enabled;
-        self.persist(settings)?;
-        if enabled {
-            self.emit(&format!(
-                "{}\n{}\n",
-                self.theme.warning("Native process execution enabled."),
-                self.theme.muted("Commands can access the host filesystem, network, secrets, and external services.")
-            ))
-        } else {
-            self.emit(&format!(
-                "{}\n",
-                self.theme.success("Native process execution disabled.")
-            ))
+        match parts.as_slice() {
+            ["off"] => {
+                settings.process_backend = ProcessBackendArg::Disabled;
+                self.persist(settings)?;
+                self.emit(&format!(
+                    "{}\n",
+                    self.theme.success("Process execution disabled.")
+                ))
+            }
+            ["native" | "on"] => {
+                settings.process_backend = ProcessBackendArg::Native;
+                self.persist(settings)?;
+                self.emit(&format!(
+                    "{}\n{}\n",
+                    self.theme.warning("Trusted native process execution enabled."),
+                    self.theme.muted("Commands can access the host filesystem, network, secrets, and external services.")
+                ))
+            }
+            [mode, image] | [mode, image, "docker"] if matches!(*mode, "sandbox" | "oci") => {
+                settings.process_backend = ProcessBackendArg::Oci;
+                settings.sandbox_runtime = OciRuntimeArg::Docker;
+                settings.sandbox_image = Some((*image).to_owned());
+                self.persist(settings)?;
+                self.emit(&format!(
+                    "{} {}\n{}\n",
+                    self.theme.success("Restricted Docker execution configured with"),
+                    self.theme.accent(image),
+                    self.theme.muted("Candidate-only mount · network denied · bounded resources · local image only")
+                ))
+            }
+            [mode, image, "podman"] if matches!(*mode, "sandbox" | "oci") => {
+                settings.process_backend = ProcessBackendArg::Oci;
+                settings.sandbox_runtime = OciRuntimeArg::Podman;
+                settings.sandbox_image = Some((*image).to_owned());
+                self.persist(settings)?;
+                self.emit(&format!(
+                    "{} {}\n{}\n",
+                    self.theme.success("Restricted Podman execution configured with"),
+                    self.theme.accent(image),
+                    self.theme.muted("Candidate-only mount · network denied · bounded resources · local image only")
+                ))
+            }
+            _ => Err(CliError::Argument(
+                "usage: /process off|native|sandbox <local-image> [docker|podman]".to_owned(),
+            )),
         }
     }
 
@@ -2448,17 +2512,20 @@ fn content_width(columns: usize, prefix: usize, maximum: usize) -> usize {
     columns.saturating_sub(prefix).clamp(12, maximum)
 }
 
-fn banner_process(enabled: bool) -> (String, TimelineTone) {
-    if enabled {
-        (
-            "isolated edits · native processes trusted".to_owned(),
-            TimelineTone::Warning,
-        )
-    } else {
-        (
+fn banner_process(backend: ProcessBackendArg) -> (String, TimelineTone) {
+    match backend {
+        ProcessBackendArg::Disabled => (
             "isolated edits · native processes blocked".to_owned(),
             TimelineTone::Success,
-        )
+        ),
+        ProcessBackendArg::Native => (
+            "isolated edits · native processes trusted".to_owned(),
+            TimelineTone::Warning,
+        ),
+        ProcessBackendArg::Oci => (
+            "isolated edits · OCI-restricted processes".to_owned(),
+            TimelineTone::Success,
+        ),
     }
 }
 

@@ -1097,6 +1097,7 @@ impl<'a> RunEngine<'a> {
             .as_ref()
             .map_or(transaction, VerificationWorkspace::transaction);
         let mut command_results = Vec::new();
+        let mut verification_backends = BTreeSet::new();
         let mut diagnostics = Vec::new();
         for (index, command) in commands.iter().enumerate() {
             let Some(outcome) = self
@@ -1119,6 +1120,9 @@ impl<'a> RunEngine<'a> {
                 ));
             };
             command_results.push((command.description.clone(), outcome.succeeded));
+            if let Some(backend) = outcome.backend_kind {
+                verification_backends.insert(backend);
+            }
             diagnostics.push(outcome.diagnostic);
         }
         let all_passed = command_results.iter().all(|(_, passed)| *passed);
@@ -1160,7 +1164,9 @@ impl<'a> RunEngine<'a> {
             })
             .collect();
         let mut risks = Vec::new();
-        risks.push("Native verification processes are capability-gated but are not a host-filesystem or network sandbox; use an OCI runner for hostile repositories".to_owned());
+        if verification_backends.contains("native_trusted") {
+            risks.push("Native verification processes are capability-gated but retain host filesystem and network authority; use the OCI-restricted backend for hostile repositories".to_owned());
+        }
         if !all_passed {
             risks.push("At least one deterministic repository check failed".to_owned());
         }
@@ -1203,6 +1209,7 @@ impl<'a> RunEngine<'a> {
             Ok(output) => {
                 report_verification_end(observer, command, output.succeeded, duration_ms);
                 let attributes = verification_attributes(index, total, &output, phase);
+                let backend_kind = process_backend_attribute(&output.content, "kind");
                 let succeeded = output.succeeded;
                 let diagnostic = json!({
                     "check": command.description,
@@ -1224,6 +1231,7 @@ impl<'a> RunEngine<'a> {
                 Ok(Some(VerificationCommandOutcome {
                     succeeded,
                     diagnostic,
+                    backend_kind,
                 }))
             }
             Err(ToolError::ApprovalRequired { .. } | ToolError::Denied(_)) => {
@@ -1268,6 +1276,7 @@ impl<'a> RunEngine<'a> {
                         "repairable": false,
                         "tool_error": model_safe_tool_error(&error),
                     }),
+                    backend_kind: None,
                 }))
             }
         }
@@ -1298,6 +1307,7 @@ impl VerificationPhase {
 struct VerificationCommandOutcome {
     succeeded: bool,
     diagnostic: serde_json::Value,
+    backend_kind: Option<String>,
 }
 
 struct VerificationCommandRequest<'a> {
@@ -1313,6 +1323,7 @@ struct NormalizedToolResult {
     succeeded: bool,
     output_bytes: usize,
     truncated: bool,
+    backend_attributes: BTreeMap<String, String>,
 }
 
 struct ToolActionMetadata {
@@ -1332,6 +1343,7 @@ fn normalize_tool_result(
 ) -> NormalizedToolResult {
     match result {
         Ok(output) => {
+            let backend_attributes = process_backend_attributes(&output.content);
             observed_effects.extend(output.observed_effects);
             let (content, output_bytes, bounded) = bound_tool_content(output.content);
             NormalizedToolResult {
@@ -1345,6 +1357,7 @@ fn normalize_tool_result(
                 succeeded: output.succeeded,
                 output_bytes,
                 truncated: output.truncated || bounded,
+                backend_attributes,
             }
         }
         Err(error) => {
@@ -1362,6 +1375,7 @@ fn normalize_tool_result(
                 succeeded: false,
                 output_bytes,
                 truncated: false,
+                backend_attributes: BTreeMap::new(),
             }
         }
     }
@@ -1402,6 +1416,7 @@ fn tool_action(
             descriptor.annotations.parallel_safe.to_string(),
         );
     }
+    attributes.extend(result.backend_attributes.clone());
     ActionRecord {
         actor: format!("tool:{}", call.name),
         action: call.name.clone(),
@@ -1469,7 +1484,7 @@ fn verification_attributes(
     output: &ToolOutput,
     phase: VerificationPhase,
 ) -> BTreeMap<String, String> {
-    BTreeMap::from([
+    let mut attributes = BTreeMap::from([
         ("index".to_owned(), (index + 1).to_string()),
         ("total".to_owned(), total.to_string()),
         (
@@ -1482,7 +1497,37 @@ fn verification_attributes(
             "output_bytes".to_owned(),
             output.content.to_string().len().to_string(),
         ),
-    ])
+    ]);
+    attributes.extend(process_backend_attributes(&output.content));
+    attributes
+}
+
+fn process_backend_attributes(content: &serde_json::Value) -> BTreeMap<String, String> {
+    [
+        "kind",
+        "strength",
+        "runtime",
+        "runtime_fingerprint",
+        "image",
+        "image_identity",
+        "profile_digest",
+        "network",
+        "filesystem",
+    ]
+    .into_iter()
+    .filter_map(|field| {
+        process_backend_attribute(content, field)
+            .map(|value| (format!("process_backend_{field}"), value))
+    })
+    .collect()
+}
+
+fn process_backend_attribute(content: &serde_json::Value, field: &str) -> Option<String> {
+    content
+        .get("backend")?
+        .get(field)?
+        .as_str()
+        .map(str::to_owned)
 }
 
 struct VerificationResult {
@@ -3038,5 +3083,39 @@ mod tests {
             .snapshot(run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
         assert_eq!(snapshot.state, RunState::Failed);
+    }
+
+    #[test]
+    fn process_backend_attestation_is_promoted_to_trace_attributes() {
+        let content = json!({
+            "backend": {
+                "kind": "oci_restricted",
+                "strength": "oci_local_enforced",
+                "runtime": "docker",
+                "runtime_fingerprint": "runtime-digest",
+                "image": "pactrail-ci:local",
+                "image_identity": "sha256:image-digest",
+                "profile_digest": "profile-digest",
+                "network": "denied",
+                "filesystem": "candidate-only"
+            }
+        });
+        let attributes = process_backend_attributes(&content);
+        assert_eq!(
+            attributes.get("process_backend_kind").map(String::as_str),
+            Some("oci_restricted")
+        );
+        assert_eq!(
+            attributes
+                .get("process_backend_image_identity")
+                .map(String::as_str),
+            Some("sha256:image-digest")
+        );
+        assert_eq!(
+            attributes
+                .get("process_backend_profile_digest")
+                .map(String::as_str),
+            Some("profile-digest")
+        );
     }
 }
