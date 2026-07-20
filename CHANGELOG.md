@@ -6,6 +6,46 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-20
+
+### Added
+
+- Bounded SSE streaming for OpenAI-compatible Chat Completions, native
+  Anthropic Messages, and native Gemini GenerateContent, with transient live
+  text/tool/usage/first-byte progress and complete-turn execution authority.
+- Native Anthropic message/content-block/tool-result mapping with API version
+  negotiation, partial-JSON tool assembly, cache-token accounting, and strict
+  event-order validation.
+- Native Gemini system/content/function mapping with function IDs, stable
+  synthetic IDs for older responses, thought-signature round trips, safety
+  blocking, cache usage, and cumulative stream de-duplication.
+- Explicit model capability overrides for native tools, parallel calls,
+  structured output, vision, prompt caching, and reasoning controls. Effective
+  profiles are visible in `/status` and bound into durable resume identity.
+- Positive-only, no-execution capability probing through `/probe` and
+  `pactrail probe`, including stable JSON output for automation.
+- Fragmented local HTTP fixtures for every built-in transport plus malformed
+  frame, partial argument, duplicate event, usage regression, retry, redirect,
+  content-type, size, and disconnect coverage.
+
+### Changed
+
+- Streaming is enabled for new interactive settings while schema 1–3 settings
+  migrate atomically without silently changing an existing buffered selection.
+- Durable model trace actions now record the adapter, stream mode, bounded
+  provider metadata, and time to first byte where available.
+- Provider safety blocks are hard protocol failures and can never become an
+  empty successful answer or executable tool turn.
+- Tool descriptors and calls are removed from a run when native tools are
+  explicitly disabled; contradictory profiles fail before provider access.
+
+### Fixed
+
+- Direct embedders calling buffered `ModelDriver::invoke` no longer receive an
+  SSE response merely because the driver's interactive stream mode is enabled.
+- Provider metadata is scalar-allowlisted, length-bounded, and terminal-safe
+  before it enters the durable trace.
+
 ## [0.5.0] - 2026-07-20
 
 ### Added
@@ -212,7 +252,8 @@ follow [Semantic Versioning](https://semver.org/).
 - Bounded run-goal and memory previews now end with a visible ellipsis instead
   of silently dropping continuation text.
 
-[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/AKMessi/pactrail/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/AKMessi/pactrail/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AKMessi/pactrail/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/AKMessi/pactrail/compare/v0.2.0...v0.3.0

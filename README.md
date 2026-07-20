@@ -17,7 +17,7 @@ The central abstraction is not a chat wrapper or an agent persona. It is a
 durable, inspectable software change transaction.
 
 ```text
-  ╭─ P A C T R A I L  v0.5.0
+  ╭─ P A C T R A I L  v0.6.0
   │  verification-native coding · every change carries evidence
   ├─
   │ workspace  C:\work\project
@@ -137,8 +137,16 @@ pactrail ❯ Fix the parser regression and add a test.
 
 - Ollama, OpenAI, llama.cpp, vLLM, SGLang, LM Studio, LocalAI, and compatible
   hosted gateways through a bounded OpenAI Chat Completions adapter.
+- Native Anthropic Messages and Gemini GenerateContent adapters preserve typed
+  content blocks, function-call IDs, cached-token accounting, Gemini thought
+  signatures, and provider finish semantics without compatibility shims.
+- Bounded SSE streaming across all built-in transports provides live sanitized
+  text, tool, usage, and first-byte progress. Partial calls are never executable;
+  malformed framing and disconnects fail without silent buffered fallback.
 - A provider-neutral Rust `ModelDriver`, ordered conversation IR, typed tool
   calls/results, finish reasons, usage, request IDs, and extension metadata.
+- Explicit capability profiles and positive-only `/probe`/`pactrail probe`
+  diagnostics make model assumptions visible and resume-bound.
 - Remote endpoints require HTTPS. Plain HTTP is restricted to exact loopback
   hosts, redirects are disabled, and credentials are read from environment
   variables rather than CLI values or settings files.
@@ -364,10 +372,11 @@ containment fixture against Docker. Start with
 
 ## Project status
 
-Pactrail 0.4 is a production-grade developer preview: its invariants and failure
+Pactrail 0.6 is a production-grade developer preview: its invariants and failure
 modes are tested, while Rust APIs and versioned local formats may still evolve
-before 1.0. MCP, native provider adapters, streaming, resumable runs, and richer
-retrieval are roadmap work—not current claims.
+before 1.0. MCP, stable embedding APIs, repository-index caching, optional
+structural/LSP retrieval, and public release-candidate evaluation remain roadmap
+work—not current claims.
 
 It is ready for public evaluation, contributions, demos, and social launch as a
 developer preview. The OCI backend is a production containment option with an

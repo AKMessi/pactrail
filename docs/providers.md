@@ -1,24 +1,26 @@
 # Provider compatibility
 
-## Built-in transport
+## Built-in transports
 
-Pactrail currently implements the OpenAI Chat Completions tool-calling protocol
-through a provider-neutral `ModelDriver` interface.
+Pactrail normalizes three protocol families through one provider-neutral
+`ModelDriver` contract. Native adapters are used where compatibility layers
+would lose tool IDs, cache usage, finish semantics, or continuation state.
 
-| Endpoint | CLI provider | Authentication | Status |
-|---|---|---|---|
-| Ollama `/v1` | `ollama` | None | First-class local default |
-| OpenAI API | `open-ai` | `OPENAI_API_KEY` by default | Supported |
-| vLLM OpenAI server | `open-ai-compatible` | Optional environment key | Supported |
-| llama.cpp server | `open-ai-compatible` | Optional environment key | Supported |
-| SGLang | `open-ai-compatible` | Optional environment key | Supported |
-| LM Studio | `open-ai-compatible` | Optional environment key | Supported |
-| LocalAI | `open-ai-compatible` | Optional environment key | Supported |
-| Compatible hosted gateways | `open-ai-compatible` | Optional environment key | Supported over HTTPS |
+| Endpoint | CLI provider | Protocol | Authentication | Status |
+|---|---|---|---|---|
+| Ollama `/v1` | `ollama` | OpenAI Chat Completions | None | First-class local default |
+| OpenAI API | `open-ai` | OpenAI Chat Completions | `OPENAI_API_KEY` | Supported |
+| Anthropic API | `anthropic` | Native Messages | `ANTHROPIC_API_KEY` | Supported |
+| Gemini API | `gemini` | Native GenerateContent | `GEMINI_API_KEY` | Supported |
+| vLLM, llama.cpp, SGLang, LM Studio, LocalAI | `open-ai-compatible` | OpenAI Chat Completions | Optional environment key | Supported |
+| Compatible hosted gateways | `open-ai-compatible` | OpenAI Chat Completions | Optional environment key | Supported over HTTPS |
 
 Endpoint URLs containing credentials are rejected. Non-loopback HTTP is rejected.
 Responses are capped at 16 MiB, malformed tool arguments fail explicitly, and
-rate-limit/server failures use bounded exponential retries.
+rate-limit/server failures use bounded retries only before response acceptance.
+All three transports support explicit bounded streaming. A malformed,
+contradictory, oversized, or disconnected stream fails the turn; partial text
+and tool arguments never reach durable conversation or tool execution.
 
 Pactrail does not assume that model listing is available. `GET /models` is a UX
 convenience; a configured model ID remains usable when discovery returns 404 or
@@ -46,6 +48,50 @@ For hosted endpoints, keep credentials out of the URL and shell history:
 
 Pactrail reads the named environment variable at request time. It never writes
 the secret value to settings. Plain HTTP is accepted only for loopback hosts.
+
+Use native hosted adapters without an OpenAI compatibility shim:
+
+```text
+/provider anthropic
+/model claude-model-id
+/key-env ANTHROPIC_API_KEY
+```
+
+```text
+/provider gemini
+/model gemini-model-id
+/key-env GEMINI_API_KEY
+```
+
+`/stream on|off` is explicit and persistent. Pactrail never retries a rejected
+stream using a different protocol, provider, model, or weaker tool mode.
+
+## Capability profiles and probes
+
+The effective profile independently records native tools, parallel tool calls,
+structured output, vision, prompt caching, streaming, reasoning controls,
+context capacity, and output capacity. `/status` shows the profile and its
+`auto`, `on`, or `off` provenance. Override one fact explicitly with:
+
+```text
+/capability parallel-tools off
+/capability vision on
+/capability prompt-caching auto
+```
+
+The equivalent one-shot flags are `--native-tools`, `--parallel-tools`,
+`--structured-output`, `--vision`, `--prompt-caching`, and
+`--reasoning-controls`, each accepting `auto`, `on`, or `off`. Contradictory
+profiles fail before network access or durable run creation.
+
+`/probe` spends one bounded model turn with a synthetic read-only tool. Returned
+calls are normalized but never executed. It can positively observe native tool,
+parallel-call, streaming, and cache behavior; a missing observation is always
+reported as inconclusive. The scriptable form is:
+
+```console
+pactrail probe --provider gemini --model MODEL_ID --output json
+```
 
 ## Running a local GGUF model
 
@@ -116,9 +162,7 @@ Implement `ModelDriver` and translate the provider protocol to these normalized 
 - non-sensitive response metadata.
 
 Provider implementations must preserve assistant tool-call messages before tool
-results, redact secrets from errors, enforce bounded response bodies, reject
-insecure remote transport, and provide recorded protocol fixtures.
-
-The current adapter is non-streaming. Native Anthropic/Gemini protocols, SSE
-streaming, prompt-cache controls, and provider-specific token counting are
-tracked as roadmap work rather than emulated through provider-name conditionals.
+results, redact secrets from errors, enforce bounded response bodies and event
+frames, reject insecure remote transport, and provide deterministic buffered
+and fragmented-stream fixtures. Native adapters must preserve protocol-specific
+continuation data without allowing it to influence tool policy or execution.

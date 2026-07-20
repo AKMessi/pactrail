@@ -174,6 +174,30 @@ budgets from the configured context, output, and turn ceilings; explicit task
 contracts retain their declared resource governance. Failed calls, change requests, and
 mutation loops do not receive this fallback.
 
+## Provider and streaming boundary
+
+`pactrail-models` translates OpenAI-compatible Chat Completions, Anthropic
+Messages, and Gemini GenerateContent into the same ordered conversation,
+complete response, tool-call, finish-reason, and usage types. Protocol-specific
+continuation metadata is carried only in bounded extension maps; it cannot
+grant a capability or bypass the tool kernel.
+
+Streaming drivers emit transient observer events for response start, sanitized
+text, tool-call discovery, argument-byte progress, and cumulative usage. Each
+driver owns a bounded state machine that validates framing, ordering, IDs,
+argument JSON, finish semantics, usage monotonicity, and terminal completion.
+The engine receives only the final normalized `ModelResponse`. Partial text is
+not appended to durable conversation and partial tool input is never executed.
+A failed stream therefore resumes, when safe, from the preceding complete-turn
+checkpoint.
+
+The effective `ModelCapabilities` profile is compiled independently of the
+provider label and participates in checkpoint identity. User overrides are
+explicit. The optional capability probe sends one synthetic read-only tool
+request and executes nothing; it can produce positive observations but cannot
+infer support from a provider name or turn a missing observation into a
+negative capability decision.
+
 ## Durable memory
 
 Workspace memory uses a separate SQLite database in WAL mode with full

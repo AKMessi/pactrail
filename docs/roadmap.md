@@ -7,7 +7,7 @@ and user-facing failure mode are complete.
 This file distinguishes shipped behavior from planned work. It is not a release
 promise or a security claim.
 
-## Shipped through 0.5
+## Shipped through 0.6
 
 - Contract-first runs with explicit capability policy and overgrant detection.
 - Isolated workspace transactions, receipt-bound review/apply, source-drift
@@ -36,8 +36,15 @@ promise or a security claim.
 - Write-ahead and completed tool-effect fences with explicit uncertain-effect
   refusal. Candidate mutations and process effects are never replayed from an
   ambiguous crash boundary.
+- Native Anthropic Messages and Gemini GenerateContent adapters, plus bounded
+  OpenAI-compatible, Anthropic, and Gemini streaming with transient live output
+  and complete-turn execution authority.
+- Explicit, resume-bound capability profiles and a positive-only, no-execution
+  model probe available interactively and non-interactively.
+- Fragmented HTTP/SSE conformance fixtures covering native headers, framing,
+  tool assembly, usage, retries, contradictions, and incomplete streams.
 
-## 0.6 — streaming and provider intelligence
+## Shipped in 0.6 — streaming and provider intelligence
 
 - Bounded provider event streaming with live text/tool/token/latency updates and
   cancellation-safe transcript assembly.
