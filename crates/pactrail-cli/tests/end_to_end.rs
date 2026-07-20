@@ -9,6 +9,65 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 #[test]
+fn mcp_offline_lifecycle_is_scriptable_and_fails_closed() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+
+    let initialized = pactrail(workspace.path(), ["mcp", "init"]);
+    assert!(
+        initialized.status.success(),
+        "MCP init failed: {}",
+        String::from_utf8_lossy(&initialized.stderr)
+    );
+    let manifest_path = workspace.path().join(".pactrail").join("mcp.toml");
+    assert!(manifest_path.is_file());
+
+    let checked = pactrail(workspace.path(), ["mcp", "check", "--json"]);
+    assert!(checked.status.success());
+    let report: Value = serde_json::from_slice(&checked.stdout)
+        .unwrap_or_else(|error| unreachable!("MCP check JSON: {error}"));
+    assert_eq!(report["valid"], true);
+    assert_eq!(report["enabled_servers"], 0);
+
+    std::fs::write(
+        &manifest_path,
+        r#"schema = 1
+
+[[servers]]
+name = "demo"
+enabled = false
+startup_timeout_seconds = 10
+request_timeout_seconds = 10
+max_output_bytes = 4096
+environment = []
+resources = []
+prompts = []
+
+[servers.transport]
+kind = "streamable-http"
+url = "http://127.0.0.1:65535/mcp"
+allow_loopback_http = true
+
+[servers.tools]
+"#,
+    )
+    .unwrap_or_else(|error| unreachable!("write manifest: {error}"));
+
+    let listed = pactrail(workspace.path(), ["mcp", "list", "--json"]);
+    assert!(listed.status.success());
+    let servers: Value = serde_json::from_slice(&listed.stdout)
+        .unwrap_or_else(|error| unreachable!("MCP list JSON: {error}"));
+    assert_eq!(servers[0]["name"], "demo");
+    assert_eq!(servers[0]["snapshot"], "missing");
+
+    let enabled = pactrail(workspace.path(), ["mcp", "enable", "demo"]);
+    assert!(!enabled.status.success());
+    assert!(String::from_utf8_lossy(&enabled.stderr).contains("snapshot"));
+    let preserved = std::fs::read_to_string(&manifest_path)
+        .unwrap_or_else(|error| unreachable!("read manifest: {error}"));
+    assert!(preserved.contains("enabled = false"));
+}
+
+#[test]
 #[allow(clippy::too_many_lines)]
 fn interrupted_process_resumes_the_same_hash_linked_run() {
     let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));

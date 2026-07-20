@@ -6,6 +6,27 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Governed MCP 2025-11-25 support over bounded stdio and Streamable HTTP, with
+  explicit inspect/snapshot lifecycle, atomic integrity-checked catalogs,
+  local capability profiles, deterministic namespacing, selected
+  provenance-labelled context, lazy execution, and live identity/schema checks.
+- `pactrail mcp init|check|list|inspect|snapshot|enable|disable`, interactive
+  `/mcp`, MCP-aware `/tools` and `/status`, stable JSON diagnostics, and
+  cancellation-aware administrative connections.
+- A distinct request-scoped `mcp_invoke` capability and independent MCP approval
+  routing so native process trust cannot implicitly authorize a remote tool.
+
+### Security
+
+- MCP discovery never occurs during a normal run; only locally pinned snapshots
+  become model-visible and their digests are bound into resume identity.
+- MCP subprocesses receive no ambient environment, HTTP redirects and implicit
+  retries are disabled, remote HTTP is rejected, URL/query credentials are
+  rejected, results and schemas are bounded, and uncertain calls are never
+  replayed.
+
 ## [0.6.0] - 2026-07-20
 
 ### Added

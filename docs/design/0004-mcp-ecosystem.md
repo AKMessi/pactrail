@@ -65,15 +65,22 @@ require a new explicit snapshot.
 ### Authority model
 
 MCP annotations and descriptions are hints, never grants. Every remote tool has
-a local policy profile in the manifest. Its descriptor uses the strongest
-declared capability and the adapter additionally authorizes every declared
-capability before connection or invocation:
+a local policy profile in the manifest. A dedicated `mcp_invoke` capability
+keeps MCP authority independent from broad native-process authority. Its
+descriptor uses the strongest declared effect, and the adapter additionally
+authorizes every declared capability before connection or invocation:
 
 - stdio requires `process_spawn` plus the declared semantic effects;
 - HTTP requires `network` for the exact canonical origin plus the declared
   semantic effects;
 - named credential forwarding additionally requires `secret_use`; and
 - any tool capable of modifying a remote service requires `external_write`.
+
+`mcp_invoke` remains request-scoped even under `--mcp-approval allow-run`, so
+every grant is bound to the run, snapshot, public tool, argument digest,
+transport identity, and profile digest. Process and MCP approval modes are
+routed independently. A complete task contract must declare `mcp_invoke` and
+every underlying effect explicitly.
 
 If a profile is absent, the tool is not registered. Pactrail never infers
 read-only or idempotent behavior from a server annotation. Parallel safety is
@@ -88,7 +95,7 @@ execution; OCI-contained MCP is a later additive transport.
 
 For HTTP, the manifest URL must be canonical. Production endpoints require
 HTTPS. Plain HTTP is limited to literal loopback hosts when explicitly enabled.
-User information, fragments, non-default ports, redirects, private-address
+User information, query parameters, fragments, redirects, implicit endpoint
 discovery, and server-selected authorization endpoints are rejected. Bearer
 credentials may come only from a named environment variable and are redacted
 from errors and traces.

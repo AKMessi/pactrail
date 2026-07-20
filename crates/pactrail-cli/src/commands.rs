@@ -38,9 +38,11 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
 use crate::cli::{
-    Cli, Command, CompletionShell, MemoryCommand, MemoryKindArg, OciRuntimeArg, OutputFormat,
-    ProbeArgs, ProcessApprovalArg, ProcessBackendArg, ProviderKind, ResumeArgs, RunArgs, RunIdArgs,
+    Cli, Command, CompletionShell, McpApprovalArg, McpCommand, MemoryCommand, MemoryKindArg,
+    OciRuntimeArg, OutputFormat, ProbeArgs, ProcessApprovalArg, ProcessBackendArg, ProviderKind,
+    ResumeArgs, RunArgs, RunIdArgs,
 };
+use crate::mcp::{McpCliError, McpRuntime};
 use crate::output::{
     escape_json_terminal_controls, write_human_stdout, write_stderr, write_stdout,
 };
@@ -72,13 +74,20 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
             list(&state, json)
         }
-        Command::Tools { json } => tools(json),
+        Command::Tools { json } => {
+            let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
+            tools(&state, json)
+        }
         Command::Schema => schema(),
         Command::TaskTemplate { goal } => task_template(&cli.workspace, goal),
         Command::Completion { shell } => completion(shell),
         Command::Memory { command } => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
             memory(&state, command)
+        }
+        Command::Mcp { command } => {
+            let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
+            execute_mcp_command(&state, &cli.workspace, command).await
         }
         Command::Doctor { json } => doctor(json),
     }
@@ -90,6 +99,31 @@ pub(crate) struct CompletedRun {
     pub model_summary: String,
     pub receipt: ChangeReceipt,
     pub tokens: u64,
+}
+
+async fn execute_mcp_command(
+    state: &Path,
+    workspace: &Path,
+    command: McpCommand,
+) -> Result<(), CliError> {
+    let cancellation = CancellationToken::new();
+    let mut execution = Box::pin(crate::mcp::execute(
+        state,
+        workspace,
+        command,
+        cancellation.clone(),
+    ));
+    tokio::select! {
+        result = &mut execution => result.map_err(CliError::from),
+        signal = tokio::signal::ctrl_c() => {
+            signal.map_err(|source| CliError::Io {
+                path: PathBuf::from("<ctrl-c>"),
+                source,
+            })?;
+            cancellation.cancel();
+            (&mut execution).await.map_err(CliError::from)
+        }
+    }
 }
 
 pub(crate) async fn probe_model_capabilities(
@@ -140,6 +174,7 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         process_backend: Some(ProcessBackendArg::Disabled),
         allow_process: false,
         process_approval: Some(ProcessApprovalArg::Deny),
+        mcp_approval: Some(McpApprovalArg::Deny),
         sandbox_runtime: OciRuntimeArg::Docker,
         sandbox_runtime_executable: None,
         sandbox_image: None,
@@ -218,6 +253,7 @@ impl RunManifest {
         validate_model_limits(&self.args)?;
         let _backend = effective_process_backend(&self.args)?;
         let _approval = effective_process_approval(&self.args)?;
+        let _mcp_approval = effective_mcp_approval(&self.args);
         Ok(())
     }
 }
@@ -315,13 +351,22 @@ async fn execute_resume_inner(
     if let Some(process_approval) = resume_args.process_approval {
         args.process_approval = Some(process_approval);
     }
+    if let Some(mcp_approval) = resume_args.mcp_approval {
+        args.mcp_approval = Some(mcp_approval);
+    }
     args.apply |= resume_args.apply;
     args.output = resume_args.output;
     let process_backend_kind = effective_process_backend(&args)?;
     let process_approval = effective_process_approval(&args)?;
+    let mcp_approval = effective_mcp_approval(&args);
+    let mcp_runtime = McpRuntime::load(&state)?;
     let process_backend =
         build_process_backend(process_backend_kind, &args, transaction.source_root()).await?;
-    let runtime_identity = runtime_identity(&manifest_identity, process_backend.as_ref())?;
+    let runtime_identity = runtime_identity(
+        &manifest_identity,
+        process_backend.as_ref(),
+        mcp_runtime.snapshot_digests(),
+    )?;
 
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
     let checkpoints = CheckpointStore::open(state.join("artifacts").join("checkpoints"))
@@ -331,24 +376,23 @@ async fn execute_resume_inner(
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
     let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
-    let registry = builtin_registry_with_process(process_tool)?;
+    let mut registry = builtin_registry_with_process(process_tool)?;
+    mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
     let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
+        .with_context_fragments(mcp_runtime.context_fragments())
         .with_checkpoint_store(&checkpoints)
         .with_runtime_identity(runtime_identity)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
-    let fixed_approval = FixedApprovalResolver(match process_approval {
-        ProcessApprovalArg::Deny | ProcessApprovalArg::Prompt => ApprovalDecision::Deny,
-        ProcessApprovalArg::AllowRun => ApprovalDecision::AllowRun,
-    });
-    let engine = if process_approval == ProcessApprovalArg::Prompt {
-        engine
-    } else {
-        engine.with_approval_resolver(&fixed_approval)
+    let approval_resolver = ConfiguredApprovalResolver {
+        process: process_approval,
+        mcp: mcp_approval,
+        observer,
     };
+    let engine = engine.with_approval_resolver(&approval_resolver);
     let cancelled_contract = contract.clone();
     let lease = acquire_execution_lease(&mut store, &run_root, run_id, &contract)?;
     let engine_result = match observer {
@@ -418,6 +462,7 @@ pub(crate) async fn execute_resume_with_observer_and_cancellation(
         ResumeArgs {
             run_id: run_id.to_string(),
             process_approval: Some(ProcessApprovalArg::Prompt),
+            mcp_approval: Some(McpApprovalArg::Prompt),
             apply: false,
             output: OutputFormat::Human,
         },
@@ -437,17 +482,25 @@ async fn execute_run_inner(
     validate_model_limits(&args)?;
     let process_backend = effective_process_backend(&args)?;
     let process_approval = effective_process_approval(&args)?;
-    let (contract, workspace) = prepare_run_contract(cli_workspace, &args, process_backend)?;
-    let durable_args = normalized_run_args(&args, &contract, process_backend, process_approval);
+    let mcp_approval = effective_mcp_approval(&args);
+    let (contract, workspace, state, mcp_runtime) = prepare_run_contract(
+        cli_workspace,
+        state_override,
+        &args,
+        process_backend,
+        mcp_approval,
+    )?;
+    let durable_args = normalized_run_args(
+        &args,
+        &contract,
+        process_backend,
+        process_approval,
+        mcp_approval,
+    );
     // Resolve and attest the execution boundary before creating durable run state. Invalid
     // sandbox configuration must fail without leaving an empty run behind for users to diagnose.
     let process_backend = build_process_backend(process_backend, &args, &workspace).await?;
 
-    let state = if let Some(override_path) = state_override {
-        absolute_or_join(cli_workspace, override_path)?
-    } else {
-        workspace.join(".pactrail")
-    };
     fs::create_dir_all(state.join("runs")).map_err(|source| CliError::Io {
         path: state.clone(),
         source,
@@ -466,16 +519,22 @@ async fn execute_run_inner(
             args: durable_args,
         },
     )?;
-    let runtime_identity = runtime_identity(&manifest_identity, process_backend.as_ref())?;
+    let runtime_identity = runtime_identity(
+        &manifest_identity,
+        process_backend.as_ref(),
+        mcp_runtime.snapshot_digests(),
+    )?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
     let checkpoints = CheckpointStore::open(state.join("artifacts").join("checkpoints"))
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
     let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
-    let registry = builtin_registry_with_process(process_tool)?;
+    let mut registry = builtin_registry_with_process(process_tool)?;
+    mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
-    let context_fragments = memory_context_fragments(&contract, &memory)?;
+    let mut context_fragments = memory_context_fragments(&contract, &memory)?;
+    context_fragments.extend(mcp_runtime.context_fragments());
     let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
@@ -483,15 +542,12 @@ async fn execute_run_inner(
         .with_runtime_identity(runtime_identity)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
-    let fixed_approval = FixedApprovalResolver(match process_approval {
-        ProcessApprovalArg::Deny | ProcessApprovalArg::Prompt => ApprovalDecision::Deny,
-        ProcessApprovalArg::AllowRun => ApprovalDecision::AllowRun,
-    });
-    let engine = if process_approval == ProcessApprovalArg::Prompt {
-        engine
-    } else {
-        engine.with_approval_resolver(&fixed_approval)
+    let approval_resolver = ConfiguredApprovalResolver {
+        process: process_approval,
+        mcp: mcp_approval,
+        observer,
     };
+    let engine = engine.with_approval_resolver(&approval_resolver);
     let cancelled_contract = contract.clone();
     let lease = acquire_execution_lease(&mut store, &run_root, run_id, &contract)?;
     let engine_result = match observer {
@@ -526,21 +582,43 @@ async fn execute_run_inner(
 
 fn prepare_run_contract(
     cli_workspace: &Path,
+    state_override: Option<&Path>,
     args: &RunArgs,
     process_backend: ProcessBackendArg,
-) -> Result<(TaskContract, PathBuf), CliError> {
+    mcp_approval: McpApprovalArg,
+) -> Result<(TaskContract, PathBuf, PathBuf, McpRuntime), CliError> {
     let (mut contract, workspace) = load_contract(cli_workspace, args)?;
+    let state = if let Some(override_path) = state_override {
+        absolute_or_join(cli_workspace, override_path)?
+    } else {
+        workspace.join(".pactrail")
+    };
+    let mcp_runtime = McpRuntime::load(&state)?;
     contract.workspace_root = workspace.display().to_string();
     if args.task.is_none() {
         contract.allowed_write_paths.clone_from(&args.write_paths);
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);
         contract.permissions.allow.insert(Capability::MemoryRead);
+        contract.permissions.deny.insert(Capability::McpInvoke);
         contract.permissions.deny.insert(Capability::Network);
         contract.permissions.deny.insert(Capability::SecretUse);
         contract.permissions.deny.insert(Capability::ExternalWrite);
     }
-    configure_process_permissions(&mut contract, process_backend, args.task.is_some())?;
+    configure_process_permissions(
+        &mut contract,
+        process_backend,
+        args.task.is_some(),
+        mcp_runtime
+            .required_capabilities()
+            .contains(&Capability::ProcessSpawn),
+    )?;
+    configure_mcp_permissions(
+        &mut contract,
+        mcp_runtime.required_capabilities(),
+        mcp_approval,
+        args.task.is_some(),
+    )?;
     contract.validate().map_err(CliError::Contract)?;
     for required in [Capability::FileRead, Capability::FileWrite] {
         if !contract.permissions.allow.contains(&required) {
@@ -549,7 +627,7 @@ fn prepare_run_contract(
             )));
         }
     }
-    Ok((contract, workspace))
+    Ok((contract, workspace, state, mcp_runtime))
 }
 
 fn normalized_run_args(
@@ -557,6 +635,7 @@ fn normalized_run_args(
     contract: &TaskContract,
     process_backend: ProcessBackendArg,
     process_approval: ProcessApprovalArg,
+    mcp_approval: McpApprovalArg,
 ) -> RunArgs {
     let mut durable = args.clone();
     durable.goal = Some(contract.goal.clone());
@@ -567,6 +646,7 @@ fn normalized_run_args(
     durable.process_backend = Some(process_backend);
     durable.allow_process = false;
     durable.process_approval = Some(process_approval);
+    durable.mcp_approval = Some(mcp_approval);
     durable
 }
 
@@ -1012,11 +1092,36 @@ fn effective_process_approval(args: &RunArgs) -> Result<ProcessApprovalArg, CliE
     }
 }
 
-struct FixedApprovalResolver(ApprovalDecision);
+fn effective_mcp_approval(args: &RunArgs) -> McpApprovalArg {
+    args.mcp_approval.unwrap_or(McpApprovalArg::Deny)
+}
 
-impl ApprovalResolver for FixedApprovalResolver {
-    fn resolve(&self, _request: &ApprovalRequest) -> ApprovalDecision {
-        self.0
+struct ConfiguredApprovalResolver<'a> {
+    process: ProcessApprovalArg,
+    mcp: McpApprovalArg,
+    observer: Option<&'a dyn RunObserver>,
+}
+
+impl ApprovalResolver for ConfiguredApprovalResolver<'_> {
+    fn resolve(&self, request: &ApprovalRequest) -> ApprovalDecision {
+        let decision = if request.binding.backend_kind.starts_with("mcp_") {
+            match self.mcp {
+                McpApprovalArg::Deny => Some(ApprovalDecision::Deny),
+                McpApprovalArg::AllowRun => Some(ApprovalDecision::AllowRun),
+                McpApprovalArg::Prompt => None,
+            }
+        } else {
+            match self.process {
+                ProcessApprovalArg::Deny => Some(ApprovalDecision::Deny),
+                ProcessApprovalArg::AllowRun => Some(ApprovalDecision::AllowRun),
+                ProcessApprovalArg::Prompt => None,
+            }
+        };
+        decision.unwrap_or_else(|| {
+            self.observer.map_or(ApprovalDecision::Deny, |observer| {
+                observer.on_approval_request(request)
+            })
+        })
     }
 }
 
@@ -1024,6 +1129,7 @@ fn configure_process_permissions(
     contract: &mut TaskContract,
     backend: ProcessBackendArg,
     authoritative_permissions: bool,
+    mcp_requires_process: bool,
 ) -> Result<(), CliError> {
     let effective = [
         Capability::ProcessSpawn,
@@ -1033,18 +1139,21 @@ fn configure_process_permissions(
     ];
     match backend {
         ProcessBackendArg::Disabled => {
-            if contract
-                .permissions
-                .allow
-                .contains(&Capability::ProcessSpawn)
-                || contract.permissions.ask.contains(&Capability::ProcessSpawn)
+            if !mcp_requires_process
+                && (contract
+                    .permissions
+                    .allow
+                    .contains(&Capability::ProcessSpawn)
+                    || contract.permissions.ask.contains(&Capability::ProcessSpawn))
             {
                 return Err(CliError::Argument(
                     "the task contract permits process_spawn but the selected process backend is disabled; select --process-backend native or oci explicitly"
                         .to_owned(),
                 ));
             }
-            contract.permissions.deny.insert(Capability::ProcessSpawn);
+            if !mcp_requires_process {
+                contract.permissions.deny.insert(Capability::ProcessSpawn);
+            }
         }
         ProcessBackendArg::Oci => {
             if contract
@@ -1103,6 +1212,58 @@ fn configure_process_permissions(
         }
     }
     validate_native_authority(contract, backend, &effective)?;
+    Ok(())
+}
+
+fn configure_mcp_permissions(
+    contract: &mut TaskContract,
+    required: &std::collections::BTreeSet<Capability>,
+    approval: McpApprovalArg,
+    authoritative_permissions: bool,
+) -> Result<(), CliError> {
+    if required.is_empty() {
+        if !authoritative_permissions {
+            contract.permissions.deny.insert(Capability::McpInvoke);
+        }
+        return Ok(());
+    }
+    if authoritative_permissions {
+        let missing = required
+            .iter()
+            .filter(|capability| {
+                !contract.permissions.allow.contains(*capability)
+                    && !contract.permissions.ask.contains(*capability)
+            })
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            return Err(CliError::Argument(format!(
+                "enabled MCP snapshots require task-contract authority for: {}",
+                missing.join(", ")
+            )));
+        }
+        return Ok(());
+    }
+
+    match approval {
+        McpApprovalArg::Deny => {
+            contract.permissions.allow.remove(&Capability::McpInvoke);
+            contract.permissions.ask.remove(&Capability::McpInvoke);
+            contract.permissions.deny.insert(Capability::McpInvoke);
+        }
+        McpApprovalArg::AllowRun | McpApprovalArg::Prompt => {
+            for capability in required {
+                contract.permissions.deny.remove(capability);
+                if !contract.permissions.allow.contains(capability) {
+                    contract.permissions.ask.insert(capability.clone());
+                }
+            }
+            // MCP invocation always remains request-scoped, even for allow-run. The
+            // resolver records each exact snapshot/tool/argument-bound grant.
+            contract.permissions.allow.remove(&Capability::McpInvoke);
+            contract.permissions.ask.insert(Capability::McpInvoke);
+        }
+    }
     Ok(())
 }
 
@@ -1737,8 +1898,11 @@ pub(crate) fn completed_runs(state: &Path) -> Result<Vec<ChangeReceipt>, CliErro
     Ok(receipts)
 }
 
-fn tools(json_output: bool) -> Result<(), CliError> {
-    let descriptors = builtin_registry_with_process(RunProcessTool::disabled())?.descriptors();
+fn tools(state: &Path, json_output: bool) -> Result<(), CliError> {
+    let cancellation = CancellationToken::new();
+    let mut registry = builtin_registry_with_process(RunProcessTool::disabled())?;
+    McpRuntime::load(state)?.register(&mut registry, &cancellation)?;
+    let descriptors = registry.descriptors();
     if json_output {
         write_json(&descriptors)
     } else {
@@ -1795,6 +1959,7 @@ fn task_template(workspace: &Path, goal: String) -> Result<(), CliError> {
     contract.permissions.allow.insert(Capability::FileRead);
     contract.permissions.allow.insert(Capability::FileWrite);
     contract.permissions.allow.insert(Capability::MemoryRead);
+    contract.permissions.deny.insert(Capability::McpInvoke);
     contract.permissions.deny.insert(Capability::Network);
     contract.permissions.deny.insert(Capability::SecretUse);
     contract.permissions.deny.insert(Capability::ExternalWrite);
@@ -2195,6 +2360,7 @@ fn write_run_manifest(run_root: &Path, manifest: &RunManifest) -> Result<String,
 fn runtime_identity(
     manifest_identity: &str,
     process_backend: &dyn ProcessBackend,
+    mcp_snapshot_digests: &[String],
 ) -> Result<String, CliError> {
     #[derive(Serialize)]
     struct RuntimeIdentity<'a> {
@@ -2202,11 +2368,28 @@ fn runtime_identity(
         process_backend: pactrail_tools::ProcessBackendDescriptor,
     }
 
-    let bytes = serde_json::to_vec(&RuntimeIdentity {
-        manifest: manifest_identity,
-        process_backend: process_backend.descriptor(),
-    })
-    .map_err(CliError::Json)?;
+    let process_backend = process_backend.descriptor();
+    // Preserve the pre-MCP identity for runs without MCP so v0.6 checkpoints remain resumable.
+    let bytes = if mcp_snapshot_digests.is_empty() {
+        serde_json::to_vec(&RuntimeIdentity {
+            manifest: manifest_identity,
+            process_backend,
+        })
+        .map_err(CliError::Json)?
+    } else {
+        #[derive(Serialize)]
+        struct RuntimeIdentityWithMcp<'a> {
+            manifest: &'a str,
+            process_backend: pactrail_tools::ProcessBackendDescriptor,
+            mcp_snapshot_digests: &'a [String],
+        }
+        serde_json::to_vec(&RuntimeIdentityWithMcp {
+            manifest: manifest_identity,
+            process_backend,
+            mcp_snapshot_digests,
+        })
+        .map_err(CliError::Json)?
+    };
     Ok(blake3::hash(&bytes).to_hex().to_string())
 }
 
@@ -2390,6 +2573,8 @@ pub enum CliError {
     Tool(#[from] ToolError),
     #[error("workspace memory failed: {0}")]
     Memory(#[from] MemoryError),
+    #[error("{0}")]
+    Mcp(#[from] McpCliError),
     #[error("receipt failed: {0}")]
     Receipt(#[from] pactrail_core::ReceiptError),
 }
@@ -2620,7 +2805,7 @@ mod tests {
             Capability::SecretUse,
             Capability::ExternalWrite,
         ]);
-        configure_process_permissions(&mut contract, ProcessBackendArg::Native, false)
+        configure_process_permissions(&mut contract, ProcessBackendArg::Native, false, false)
             .unwrap_or_else(|error| unreachable!("native opt-in: {error}"));
         assert!(contract.permissions.ask.contains(&Capability::ProcessSpawn));
         assert!(
@@ -2640,11 +2825,67 @@ mod tests {
     }
 
     #[test]
+    fn mcp_authority_is_request_scoped_and_independent_from_process_authority() {
+        let mut contract = TaskContract::new("query remote issue", ".");
+        contract.permissions.deny.extend([
+            Capability::McpInvoke,
+            Capability::Network,
+            Capability::ExternalWrite,
+        ]);
+        let required = std::collections::BTreeSet::from([
+            Capability::McpInvoke,
+            Capability::Network,
+            Capability::ExternalWrite,
+        ]);
+        configure_mcp_permissions(&mut contract, &required, McpApprovalArg::AllowRun, false)
+            .unwrap_or_else(|error| unreachable!("MCP permissions: {error}"));
+        for capability in required {
+            assert!(contract.permissions.ask.contains(&capability));
+            assert!(!contract.permissions.allow.contains(&capability));
+            assert!(!contract.permissions.deny.contains(&capability));
+        }
+
+        let resolver = ConfiguredApprovalResolver {
+            process: ProcessApprovalArg::Deny,
+            mcp: McpApprovalArg::AllowRun,
+            observer: None,
+        };
+        let request = ApprovalRequest {
+            binding: pactrail_core::ApprovalBinding {
+                run_id: RunId::new(),
+                capability: Capability::McpInvoke,
+                resource: "demo::mcp__demo__query".to_owned(),
+                actor_fingerprint: "actor".to_owned(),
+                backend_kind: "mcp_streamable_http".to_owned(),
+                backend_identity: Some("runtime".to_owned()),
+                profile_digest: "snapshot".to_owned(),
+            },
+            reason: "test".to_owned(),
+            presentation: std::collections::BTreeMap::new(),
+        };
+        assert_eq!(resolver.resolve(&request), ApprovalDecision::AllowRun);
+        let mut process_request = request;
+        process_request.binding.backend_kind = "native".to_owned();
+        assert_eq!(resolver.resolve(&process_request), ApprovalDecision::Deny);
+    }
+
+    #[test]
+    fn authoritative_contract_must_declare_every_enabled_mcp_effect() {
+        let mut contract = TaskContract::new("query remote issue", ".");
+        contract.permissions.allow.insert(Capability::McpInvoke);
+        let required =
+            std::collections::BTreeSet::from([Capability::McpInvoke, Capability::Network]);
+        let result =
+            configure_mcp_permissions(&mut contract, &required, McpApprovalArg::Deny, true);
+        assert!(matches!(result, Err(CliError::Argument(_))));
+    }
+
+    #[test]
     fn task_file_cannot_understate_native_process_access() {
         let mut contract = TaskContract::new("run checks", ".");
         contract.permissions.allow.insert(Capability::ProcessSpawn);
         let result =
-            configure_process_permissions(&mut contract, ProcessBackendArg::Disabled, true);
+            configure_process_permissions(&mut contract, ProcessBackendArg::Disabled, true, false);
         assert!(matches!(result, Err(CliError::Argument(_))));
     }
 
@@ -2656,7 +2897,7 @@ mod tests {
             Capability::SecretUse,
             Capability::ExternalWrite,
         ]);
-        configure_process_permissions(&mut contract, ProcessBackendArg::Oci, false)
+        configure_process_permissions(&mut contract, ProcessBackendArg::Oci, false, false)
             .unwrap_or_else(|error| unreachable!("OCI permissions: {error}"));
         assert!(contract.permissions.ask.contains(&Capability::ProcessSpawn));
         for capability in [
@@ -2673,7 +2914,8 @@ mod tests {
     fn explicit_contract_denial_cannot_be_overridden_by_backend_selection() {
         let mut contract = TaskContract::new("run checks", ".");
         contract.permissions.deny.insert(Capability::ProcessSpawn);
-        let result = configure_process_permissions(&mut contract, ProcessBackendArg::Oci, true);
+        let result =
+            configure_process_permissions(&mut contract, ProcessBackendArg::Oci, true, false);
         assert!(matches!(result, Err(CliError::Argument(_))));
         assert!(
             contract

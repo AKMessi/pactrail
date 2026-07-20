@@ -13,6 +13,8 @@ pub enum Capability {
     FileWrite,
     /// Read provenance-tagged memory associated with the active workspace.
     MemoryRead,
+    /// Invoke a locally profiled tool from a pinned MCP server catalog.
+    McpInvoke,
     /// Spawn a local process.
     ProcessSpawn,
     /// Connect to a network resource.
@@ -58,6 +60,7 @@ impl fmt::Display for Capability {
             Self::FileRead => "file_read",
             Self::FileWrite => "file_write",
             Self::MemoryRead => "memory_read",
+            Self::McpInvoke => "mcp_invoke",
             Self::ProcessSpawn => "process_spawn",
             Self::Network => "network",
             Self::SecretUse => "secret_use",

@@ -1445,6 +1445,7 @@ dependencies = [
  "pactrail-context",
  "pactrail-core",
  "pactrail-engine",
+ "pactrail-mcp",
  "pactrail-memory",
  "pactrail-models",
  "pactrail-store",

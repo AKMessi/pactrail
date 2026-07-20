@@ -224,6 +224,7 @@ impl McpServerConfig {
     #[must_use]
     pub fn required_capabilities(&self, profile: &McpToolProfile) -> BTreeSet<Capability> {
         let mut capabilities = profile.capabilities.clone();
+        capabilities.insert(Capability::McpInvoke);
         capabilities.insert(self.transport.primary_capability());
         if !self.environment.is_empty() {
             capabilities.insert(Capability::SecretUse);
@@ -319,6 +320,11 @@ impl McpToolProfile {
                 "tool profile {tool:?} must declare at least one capability"
             )));
         }
+        if self.capabilities.contains(&Capability::McpInvoke) {
+            return Err(McpError::InvalidManifest(format!(
+                "tool profile {tool:?} cannot declare the internal mcp_invoke capability"
+            )));
+        }
         if self.parallel_safe && !(self.read_only && self.idempotent) {
             return Err(McpError::InvalidManifest(format!(
                 "tool profile {tool:?} may be parallel-safe only when read-only and idempotent"
@@ -407,9 +413,14 @@ fn validate_http_url(value: &str, allow_loopback_http: bool) -> Result<(), McpEr
     validate_bounded_text("MCP URL", value, 2_048)?;
     let url = Url::parse(value)
         .map_err(|error| McpError::InvalidManifest(format!("invalid MCP URL: {error}")))?;
-    if !url.username().is_empty() || url.password().is_some() || url.fragment().is_some() {
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+        || url.query().is_some()
+    {
         return Err(McpError::InvalidManifest(
-            "MCP URLs cannot contain user information or fragments".to_owned(),
+            "MCP URLs cannot contain user information, query parameters, or fragments; pass credentials through an allowlisted bearer-token environment variable"
+                .to_owned(),
         ));
     }
     match url.scheme() {
@@ -485,7 +496,7 @@ const fn default_output_bytes() -> usize {
 
 const fn capability_rank(capability: &Capability) -> u8 {
     match capability {
-        Capability::FileRead | Capability::MemoryRead => 0,
+        Capability::FileRead | Capability::MemoryRead | Capability::McpInvoke => 0,
         Capability::FileWrite => 1,
         Capability::Network => 2,
         Capability::SecretUse => 3,
@@ -580,6 +591,43 @@ mod tests {
             servers: vec![configured],
         };
         assert!(manifest.validate().is_err());
+    }
+
+    #[test]
+    fn manifest_rejects_internal_authority_and_url_credentials() {
+        let mut internal = server();
+        internal.tools.insert(
+            "internal".to_owned(),
+            McpToolProfile {
+                capabilities: BTreeSet::from([Capability::McpInvoke]),
+                read_only: true,
+                idempotent: true,
+                parallel_safe: true,
+            },
+        );
+        assert!(
+            McpManifest {
+                schema: MCP_MANIFEST_SCHEMA,
+                servers: vec![internal],
+            }
+            .validate()
+            .is_err()
+        );
+
+        let mut query_secret = server();
+        query_secret.transport = McpTransportConfig::StreamableHttp {
+            url: "https://example.com/mcp?api_key=secret".to_owned(),
+            allow_loopback_http: false,
+            bearer_token_env: None,
+        };
+        assert!(
+            McpManifest {
+                schema: MCP_MANIFEST_SCHEMA,
+                servers: vec![query_secret],
+            }
+            .validate()
+            .is_err()
+        );
     }
 
     #[test]

@@ -4,6 +4,7 @@ mod cli;
 mod commands;
 mod diff;
 mod interactive;
+mod mcp;
 mod output;
 mod settings;
 mod theme;

@@ -204,6 +204,7 @@ fn approval_resource(
             "arguments_digest": blake3::hash(arguments.to_string().as_bytes()).to_hex().to_string(),
         })
         .to_string(),
+        Capability::McpInvoke => format!("{}::{}", config.name, tool.public_name),
         Capability::FileRead | Capability::FileWrite | Capability::MemoryRead => ".".to_owned(),
     }
 }

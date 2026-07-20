@@ -1008,12 +1008,17 @@ mod tests {
     #[tokio::test]
     async fn fragmented_http_catalog_and_call_obey_the_pinned_contract() {
         let (url, server) = spawn_http_server("hello from MCP".to_owned());
+        let mut server = Some(server);
         let config = http_config(&url, 8_192, None);
         let workspace =
             TempDir::new().unwrap_or_else(|error| unreachable!("temporary workspace: {error}"));
-        let catalog = discover(&config, workspace.path(), CancellationToken::new())
-            .await
-            .unwrap_or_else(|error| unreachable!("bounded discovery: {error}"));
+        let catalog = match discover(&config, workspace.path(), CancellationToken::new()).await {
+            Ok(catalog) => catalog,
+            Err(error) => unreachable!(
+                "bounded discovery: {error}; server: {:?}",
+                server.take().map(std::thread::JoinHandle::join)
+            ),
+        };
         let snapshot = McpSnapshot::build(&config, catalog)
             .unwrap_or_else(|error| unreachable!("valid snapshot: {error}"));
         let tool = snapshot
@@ -1028,11 +1033,20 @@ mod tests {
             workspace.path(),
             CancellationToken::new(),
         )
-        .await
-        .unwrap_or_else(|error| unreachable!("bounded invocation: {error}"));
+        .await;
+        let result = match result {
+            Ok(result) => result,
+            Err(error) => unreachable!(
+                "bounded invocation: {error}; server: {:?}",
+                server.take().map(std::thread::JoinHandle::join)
+            ),
+        };
         assert!(result.succeeded);
         assert_eq!(result.content["content"][0]["text"], "hello from MCP");
-        assert!(matches!(server.join(), Ok(Ok(7))));
+        assert!(matches!(
+            server.and_then(|server| server.join().ok()),
+            Some(Ok(7))
+        ));
     }
 
     #[tokio::test]
@@ -1116,6 +1130,8 @@ mod tests {
             while requests < 7 && Instant::now() < deadline {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Accepted sockets inherit nonblocking mode on Windows.
+                        stream.set_nonblocking(false)?;
                         stream.set_read_timeout(Some(Duration::from_secs(2)))?;
                         let body = read_http_body(&mut stream)?;
                         let request: Value =
