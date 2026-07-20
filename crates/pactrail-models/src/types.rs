@@ -79,14 +79,28 @@ pub enum ConversationItem {
 // mutually exclusive states.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(default)]
 pub struct ModelCapabilities {
     pub native_tools: bool,
     pub parallel_tools: bool,
     pub structured_output: bool,
     pub vision: bool,
     pub prompt_caching: bool,
+    pub streaming: bool,
+    pub reasoning_controls: bool,
     pub context_tokens: u64,
     pub max_output_tokens: u64,
+    pub source: CapabilitySource,
+}
+
+/// Provenance of the effective model capability profile.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapabilitySource {
+    #[default]
+    ConservativeDefault,
+    UserDeclared,
+    Probed,
 }
 
 impl Default for ModelCapabilities {
@@ -97,8 +111,11 @@ impl Default for ModelCapabilities {
             structured_output: false,
             vision: false,
             prompt_caching: false,
+            streaming: false,
+            reasoning_controls: false,
             context_tokens: 32_768,
             max_output_tokens: 4_096,
+            source: CapabilitySource::ConservativeDefault,
         }
     }
 }

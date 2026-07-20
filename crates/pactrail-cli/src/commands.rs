@@ -18,7 +18,7 @@ use pactrail_memory::{
     MemoryDraft, MemoryError, MemoryId, MemoryKind, MemoryMatch, MemoryRecord, MemoryStore,
 };
 use pactrail_models::{
-    ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
+    CapabilitySource, ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
@@ -754,8 +754,11 @@ fn build_driver(
             CliError::Argument("a model is required; pass --model or set PACTRAIL_MODEL".to_owned())
         })?;
     let capabilities = ModelCapabilities {
+        streaming: !args.no_stream,
+        reasoning_controls: args.disable_thinking,
         context_tokens: args.context_tokens,
         max_output_tokens: args.max_output_tokens,
+        source: CapabilitySource::UserDeclared,
         ..ModelCapabilities::default()
     };
     let config = match args.provider {
@@ -769,6 +772,7 @@ fn build_driver(
             api_key: None,
             timeout: Duration::from_secs(args.request_timeout_seconds),
             capabilities,
+            stream: !args.no_stream,
             disable_thinking: args.disable_thinking,
         },
         ProviderKind::OpenAi => OpenAiCompatibleConfig {
@@ -781,6 +785,7 @@ fn build_driver(
             api_key: Some(api_key_from_env(&args.api_key_env)?),
             timeout: Duration::from_secs(args.request_timeout_seconds),
             capabilities,
+            stream: !args.no_stream,
             disable_thinking: args.disable_thinking,
         },
         ProviderKind::OpenAiCompatible => OpenAiCompatibleConfig {
@@ -795,6 +800,7 @@ fn build_driver(
                 .map(SecretString::from),
             timeout: Duration::from_secs(args.request_timeout_seconds),
             capabilities,
+            stream: !args.no_stream,
             disable_thinking: args.disable_thinking,
         },
     };

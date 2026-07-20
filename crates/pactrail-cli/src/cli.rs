@@ -183,6 +183,7 @@ pub enum ProcessApprovalArg {
 
 #[derive(Clone, Debug, Deserialize, Serialize, Args)]
 #[serde(deny_unknown_fields)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct RunArgs {
     /// Natural-language software task.
     #[arg(required_unless_present = "task", conflicts_with = "task")]
@@ -279,6 +280,11 @@ pub struct RunArgs {
     )]
     pub request_timeout_seconds: u64,
 
+    /// Disable provider response streaming and wait for one buffered response.
+    #[arg(long)]
+    #[serde(default = "legacy_buffered_transport")]
+    pub no_stream: bool,
+
     /// Send the provider extension `thinking.type=disabled`.
     ///
     /// Use this for compatible providers such as `DeepSeek` V4 when Pactrail's
@@ -297,6 +303,10 @@ pub enum ProviderKind {
     Ollama,
     OpenAi,
     OpenAiCompatible,
+}
+
+const fn legacy_buffered_transport() -> bool {
+    true
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]

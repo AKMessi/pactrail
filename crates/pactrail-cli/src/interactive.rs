@@ -96,6 +96,11 @@ const COMMANDS: &[CommandHelp] = &[
         "select the API-key environment variable",
     ),
     CommandHelp::new(
+        "Model",
+        "/stream on|off",
+        "select live SSE or buffered provider responses",
+    ),
+    CommandHelp::new(
         "Kernel",
         "/tools",
         "inspect typed tools, capabilities, and risk classes",
@@ -543,8 +548,7 @@ impl RunActivity {
                     .lines()
                     .rev()
                     .find(|line| !line.trim().is_empty())
-                    .map(str::trim)
-                    .unwrap_or("generating");
+                    .map_or("generating", str::trim);
                 self.set_message(format!(
                     "turn {} · {} · {}",
                     self.turn.load(Ordering::Relaxed),
@@ -946,6 +950,7 @@ impl Session {
             "/provider" => self.set_provider(arguments)?,
             "/endpoint" => self.set_endpoint(arguments)?,
             "/key-env" => self.set_api_key_env(arguments)?,
+            "/stream" => self.set_streaming(arguments)?,
             "/context" => self.set_context(arguments)?,
             "/output-tokens" => self.set_output_tokens(arguments)?,
             "/turns" => self.set_turns(arguments)?,
@@ -1013,6 +1018,7 @@ impl Session {
             context_tokens: self.settings.context_tokens,
             max_output_tokens: self.settings.max_output_tokens,
             request_timeout_seconds: 300,
+            no_stream: !self.settings.streaming,
             disable_thinking: false,
             output: OutputFormat::Human,
         };
@@ -1297,6 +1303,19 @@ impl Session {
                 TimelineTone::Accent,
             ),
             ("endpoint", endpoint, TimelineTone::Normal),
+            (
+                "transport",
+                if self.settings.streaming {
+                    "streaming · bounded SSE".to_owned()
+                } else {
+                    "buffered · complete JSON".to_owned()
+                },
+                if self.settings.streaming {
+                    TimelineTone::Accent
+                } else {
+                    TimelineTone::Muted
+                },
+            ),
             ("credential", key.0, key.1),
             (
                 "limits",
@@ -1691,6 +1710,30 @@ impl Session {
             "{} {}\n",
             self.theme.success("API key environment variable saved:"),
             self.theme.code(argument)
+        ))
+    }
+
+    fn set_streaming(&mut self, argument: &str) -> Result<(), CliError> {
+        let streaming = match argument.trim().to_ascii_lowercase().as_str() {
+            "on" | "true" | "stream" | "streaming" => true,
+            "off" | "false" | "buffered" => false,
+            _ => {
+                return Err(CliError::Argument(
+                    "usage: /stream <on|off>; no protocol fallback is automatic".to_owned(),
+                ));
+            }
+        };
+        let mut settings = self.settings.clone();
+        settings.streaming = streaming;
+        self.persist(settings)?;
+        self.emit(&format!(
+            "{} {}\n",
+            self.theme.success("Model transport selected:"),
+            if streaming {
+                self.theme.accent("streaming · bounded SSE")
+            } else {
+                self.theme.text("buffered · complete JSON")
+            }
         ))
     }
 
