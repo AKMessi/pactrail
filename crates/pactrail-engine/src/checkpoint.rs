@@ -200,9 +200,18 @@ impl CheckpointStore {
         events: &EventStore,
         run_id: RunId,
     ) -> Result<RunCheckpoint, CheckpointError> {
-        let events = events.load(run_id)?;
-        let head = events.last().ok_or(CheckpointError::NotFound(run_id))?;
+        let envelopes = events.load(run_id)?;
+        let head = envelopes.last().ok_or(CheckpointError::NotFound(run_id))?;
         let RunEvent::CheckpointCreated { checkpoint } = &head.event else {
+            let snapshot = events.snapshot(run_id)?;
+            if let Some(effect) = snapshot.pending_effects.values().next() {
+                return Err(CheckpointError::UncertainEffect {
+                    run_id,
+                    call_id: effect.call_id.clone(),
+                    tool: effect.tool.clone(),
+                    risk: effect.risk.clone(),
+                });
+            }
             return Err(CheckpointError::NotAtHead {
                 run_id,
                 head_sequence: head.sequence,
@@ -294,6 +303,15 @@ pub enum CheckpointError {
     NotFound(RunId),
     #[error("run {run_id} event head {head_sequence} is not a safe checkpoint")]
     NotAtHead { run_id: RunId, head_sequence: u64 },
+    #[error(
+        "run {run_id} stopped with uncertain {risk} effect {tool}/{call_id}; automatic replay is forbidden"
+    )]
+    UncertainEffect {
+        run_id: RunId,
+        call_id: String,
+        tool: String,
+        risk: String,
+    },
     #[error("invalid checkpoint event reference {0:?}")]
     InvalidEventReference(String),
     #[error("checkpoint belongs to run {actual}, expected {expected}")]
@@ -317,7 +335,7 @@ pub enum CheckpointError {
 
 #[cfg(test)]
 mod tests {
-    use pactrail_core::{RunEvent, RunState};
+    use pactrail_core::{EffectPrepared, RunEvent, RunState};
     use pactrail_models::Message;
 
     use super::*;
@@ -408,5 +426,55 @@ mod tests {
         value.schema_version = CHECKPOINT_SCHEMA_VERSION;
         value.run_id = RunId::new();
         assert_ne!(value.run_id, run_id);
+    }
+
+    #[test]
+    fn uncertain_effect_is_reported_instead_of_replayed() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let checkpoints = CheckpointStore::open(root.path())
+            .unwrap_or_else(|error| unreachable!("checkpoint store: {error}"));
+        let mut events = EventStore::open_in_memory()
+            .unwrap_or_else(|error| unreachable!("event store: {error}"));
+        let run_id = RunId::new();
+        let contract = events
+            .append(
+                run_id,
+                0,
+                RunEvent::ContractRegistered(TaskContract::new("fix it", ".")),
+            )
+            .unwrap_or_else(|error| unreachable!("contract: {error}"));
+        let checkpoint = checkpoint(run_id, contract.sequence, contract.hash);
+        let artifact = checkpoints
+            .put(&checkpoint)
+            .unwrap_or_else(|error| unreachable!("artifact: {error}"));
+        events
+            .append(
+                run_id,
+                1,
+                RunEvent::CheckpointCreated {
+                    checkpoint: CheckpointStore::event_reference(&artifact),
+                },
+            )
+            .unwrap_or_else(|error| unreachable!("checkpoint event: {error}"));
+        events
+            .append(
+                run_id,
+                2,
+                RunEvent::EffectPrepared(EffectPrepared {
+                    call_id: "call-1".to_owned(),
+                    tool: "write_file".to_owned(),
+                    arguments_digest: "a".repeat(64),
+                    candidate_digest_before: "b".repeat(64),
+                    risk: "workspace_mutation".to_owned(),
+                    runtime_profile_digest: "c".repeat(64),
+                }),
+            )
+            .unwrap_or_else(|error| unreachable!("effect: {error}"));
+
+        assert!(matches!(
+            checkpoints.load_head(&events, run_id),
+            Err(CheckpointError::UncertainEffect { call_id, tool, .. })
+                if call_id == "call-1" && tool == "write_file"
+        ));
     }
 }

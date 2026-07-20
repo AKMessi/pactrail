@@ -9,8 +9,9 @@ use pactrail_context::{
 };
 use pactrail_core::{
     ActionRecord, ApprovalDecision, ApprovalRequest, Capability, ChangeReceipt, ContractError,
-    EventHash, Evidence, EvidenceGrade, EvidenceId, EvidenceKind, EvidenceStatus, FileChange,
-    ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState, TaskContract,
+    EffectCompleted, EffectPrepared, EventHash, Evidence, EvidenceGrade, EvidenceId, EvidenceKind,
+    EvidenceStatus, FileChange, ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent, RunId,
+    RunState, TaskContract,
 };
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
@@ -889,15 +890,43 @@ impl<'a> RunEngine<'a> {
                 text: response.text,
                 calls: response.tool_calls.clone(),
             });
+            self.persist_checkpoint(
+                &mut durable_checkpoint,
+                transaction,
+                &mut journal,
+                CheckpointLoopState {
+                    phase: ResumePhase::BeforeTools,
+                    next_turn: turn,
+                    elapsed_active_ms: active_base_ms
+                        .saturating_add(elapsed_millis(active_started)),
+                    conversation: &conversation,
+                    usage,
+                    call_ids: &call_ids,
+                    previous_tool_signature: previous_tool_signature.as_ref(),
+                    repeated_tool_turns,
+                    consecutive_failed_tool_turns,
+                    automatic_repair_cycles,
+                    final_text: &final_text,
+                    recovery_risk: recovery_risk.as_deref(),
+                },
+            )?;
             let mut any_tool_succeeded = false;
             for batch in self.schedule_tool_batches(response.tool_calls) {
+                let candidate_before = candidate_changes_digest(&transaction.changes()?);
+                for call in &batch {
+                    journal.append(RunEvent::EffectPrepared(
+                        self.effect_preparation(call, &candidate_before),
+                    ))?;
+                }
                 let executions = self
                     .execute_tool_batch(run_id, transaction, observer, turn + 1, batch)
                     .await?;
                 for execution in executions {
                     any_tool_succeeded |= execution.succeeded;
+                    let effect_completion = Self::effect_completion(&execution, transaction)?;
                     append_policy_audit(&mut journal, execution.policy_audit)?;
-                    journal.append(RunEvent::ActionCompleted(execution.action))?;
+                    journal.append(RunEvent::ActionCompleted(execution.action.clone()))?;
+                    journal.append(RunEvent::EffectCompleted(effect_completion))?;
                     if let Some(error) = execution.fatal_error {
                         return Err(EngineError::ProcessCleanup(error));
                     }
@@ -1320,6 +1349,60 @@ impl<'a> RunEngine<'a> {
         batches
     }
 
+    fn effect_preparation(&self, call: &ToolCall, candidate_digest: &str) -> EffectPrepared {
+        let risk = self.tools.descriptor(&call.name).map_or_else(
+            || "unknown".to_owned(),
+            |descriptor| {
+                serde_json::to_value(descriptor.annotations.risk)
+                    .ok()
+                    .and_then(|value| value.as_str().map(str::to_owned))
+                    .unwrap_or_else(|| "unknown".to_owned())
+            },
+        );
+        let runtime_profile_digest = self.runtime_identity.clone().unwrap_or_else(|| {
+            blake3::hash(b"pactrail:runtime-profile:unbound:v1")
+                .to_hex()
+                .to_string()
+        });
+        EffectPrepared {
+            call_id: call.id.clone(),
+            tool: call.name.clone(),
+            arguments_digest: blake3::hash(call.arguments.to_string().as_bytes())
+                .to_hex()
+                .to_string(),
+            candidate_digest_before: candidate_digest.to_owned(),
+            risk,
+            runtime_profile_digest,
+        }
+    }
+
+    fn effect_completion(
+        execution: &CompletedToolExecution,
+        transaction: &WorkspaceTransaction,
+    ) -> Result<EffectCompleted, EngineError> {
+        #[derive(Serialize)]
+        struct CompletedEffect<'a> {
+            result: &'a ToolResult,
+            action: &'a ActionRecord,
+            succeeded: bool,
+        }
+
+        let bytes = serde_json::to_vec(&CompletedEffect {
+            result: &execution.result,
+            action: &execution.action,
+            succeeded: execution.succeeded,
+        })
+        .map_err(|error| {
+            EngineError::Protocol(format!("tool completion could not be fenced: {error}"))
+        })?;
+        Ok(EffectCompleted {
+            call_id: execution.call_id.clone(),
+            result_digest: blake3::hash(&bytes).to_hex().to_string(),
+            candidate_digest_after: candidate_changes_digest(&transaction.changes()?),
+            succeeded: execution.succeeded,
+        })
+    }
+
     async fn execute_tool_batch(
         &self,
         run_id: RunId,
@@ -1408,6 +1491,7 @@ impl<'a> RunEngine<'a> {
             &normalized,
         );
         Ok(CompletedToolExecution {
+            call_id: call.id,
             result: normalized.result,
             action,
             succeeded: normalized.succeeded,
@@ -1877,6 +1961,7 @@ fn is_process_cleanup_engine_error(error: &EngineError) -> bool {
 }
 
 struct CompletedToolExecution {
+    call_id: String,
     result: ToolResult,
     action: ActionRecord,
     succeeded: bool,
@@ -3417,6 +3502,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::too_many_lines)]
     async fn tool_loop_produces_isolated_change_receipt() {
         let responses = VecDeque::from([
             ModelResponse {
@@ -3491,6 +3577,31 @@ mod tests {
             .snapshot(outcome.run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
         assert_eq!(snapshot.state, RunState::AwaitingApply);
+        assert!(snapshot.pending_effects.is_empty());
+        assert_eq!(snapshot.completed_effects.len(), 1);
+        assert_eq!(snapshot.completed_effects[0].call_id, "call-1");
+        assert!(snapshot.completed_effects[0].succeeded);
+        let events = store
+            .load(outcome.run_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"));
+        let prepared = events
+            .iter()
+            .position(|event| matches!(event.event, RunEvent::EffectPrepared(_)))
+            .unwrap_or_else(|| unreachable!("prepared effect"));
+        let action = events
+            .iter()
+            .position(|event| {
+                matches!(
+                    &event.event,
+                    RunEvent::ActionCompleted(action) if action.actor == "tool:write_file"
+                )
+            })
+            .unwrap_or_else(|| unreachable!("tool action"));
+        let completed = events
+            .iter()
+            .position(|event| matches!(event.event, RunEvent::EffectCompleted(_)))
+            .unwrap_or_else(|| unreachable!("completed effect"));
+        assert!(prepared < action && action < completed);
         let progress = observer.events();
         assert!(progress.iter().any(|event| matches!(
             event,

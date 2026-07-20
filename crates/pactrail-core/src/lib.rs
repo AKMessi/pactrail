@@ -13,7 +13,8 @@ pub use contract::{
     Budget, ContractError, Obligation, ObligationKind, PermissionSet, TaskContract,
 };
 pub use event::{
-    ActionRecord, EventEnvelope, EventHash, RunEvent, RunSnapshot, RunState, StateError,
+    ActionRecord, EffectCompleted, EffectPrepared, EventEnvelope, EventHash, RunEvent, RunSnapshot,
+    RunState, StateError,
 };
 pub use evidence::{Evidence, EvidenceGrade, EvidenceKind, EvidenceStatus};
 pub use id::{ApprovalId, EvidenceId, ObligationId, RunId};

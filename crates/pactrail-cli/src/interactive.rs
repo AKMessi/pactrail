@@ -2328,6 +2328,12 @@ fn render_trace_event(
                 ApprovalDecision::Deny => TimelineTone::Danger,
             },
         ),
+        RunEvent::EffectPrepared(effect) => {
+            render_prepared_effect(theme, columns, &time, &sequence, effect)
+        }
+        RunEvent::EffectCompleted(effect) => {
+            render_completed_effect(theme, columns, &time, &sequence, effect)
+        }
         RunEvent::CheckpointCreated { checkpoint } => trace_detail_rows(
             theme,
             columns,
@@ -2347,6 +2353,57 @@ fn render_trace_event(
             TimelineTone::Muted,
         ),
     }
+}
+
+fn render_prepared_effect(
+    theme: &Theme,
+    columns: usize,
+    time: &str,
+    sequence: &str,
+    effect: &pactrail_core::EffectPrepared,
+) -> Vec<String> {
+    trace_detail_rows(
+        theme,
+        columns,
+        time,
+        sequence,
+        "â†’",
+        &format!(
+            "effect prepared Â· {} Â· {} Â· {} Â· candidate {}",
+            effect.tool,
+            effect.call_id,
+            effect.risk,
+            short_digest(&effect.candidate_digest_before)
+        ),
+        TimelineTone::Warning,
+    )
+}
+
+fn render_completed_effect(
+    theme: &Theme,
+    columns: usize,
+    time: &str,
+    sequence: &str,
+    effect: &pactrail_core::EffectCompleted,
+) -> Vec<String> {
+    trace_detail_rows(
+        theme,
+        columns,
+        time,
+        sequence,
+        if effect.succeeded { "âœ“" } else { "Ã—" },
+        &format!(
+            "effect completed Â· {} Â· result {} Â· candidate {}",
+            effect.call_id,
+            short_digest(&effect.result_digest),
+            short_digest(&effect.candidate_digest_after)
+        ),
+        if effect.succeeded {
+            TimelineTone::Success
+        } else {
+            TimelineTone::Danger
+        },
+    )
 }
 
 fn render_trace_action(

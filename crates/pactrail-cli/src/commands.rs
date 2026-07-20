@@ -1134,6 +1134,27 @@ fn render_trace_text(run_id: RunId, events: &[EventEnvelope]) -> String {
                     approval.binding.resource
                 ));
             }
+            RunEvent::EffectPrepared(effect) => {
+                lines.push(format!(
+                    "{prefix}  PREPARE   {}  {}  risk={}",
+                    effect.tool, effect.call_id, effect.risk
+                ));
+                lines.push(format!(
+                    "                    args={}  candidate={}  runtime={}",
+                    short_digest(&effect.arguments_digest),
+                    short_digest(&effect.candidate_digest_before),
+                    short_digest(&effect.runtime_profile_digest)
+                ));
+            }
+            RunEvent::EffectCompleted(effect) => {
+                lines.push(format!(
+                    "{prefix}  EFFECT    {}  {}  result={}  candidate={}",
+                    if effect.succeeded { "OK" } else { "FAIL" },
+                    effect.call_id,
+                    short_digest(&effect.result_digest),
+                    short_digest(&effect.candidate_digest_after)
+                ));
+            }
             RunEvent::CheckpointCreated { checkpoint } => {
                 lines.push(format!("{prefix}  CHECKPT   {checkpoint}"));
             }

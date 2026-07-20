@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -85,7 +87,29 @@ pub struct ActionRecord {
     pub duration_ms: u64,
     /// Bounded non-sensitive diagnostic fields with stable string values.
     #[serde(default)]
-    pub attributes: std::collections::BTreeMap<String, String>,
+    pub attributes: BTreeMap<String, String>,
+}
+
+/// Write-ahead fence proving that one model-requested effect was admitted
+/// before the tool implementation received control.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+pub struct EffectPrepared {
+    pub call_id: String,
+    pub tool: String,
+    pub arguments_digest: String,
+    pub candidate_digest_before: String,
+    pub risk: String,
+    pub runtime_profile_digest: String,
+}
+
+/// Reconciliation fence written after the normalized tool result and resulting
+/// candidate state are both available.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+pub struct EffectCompleted {
+    pub call_id: String,
+    pub result_digest: String,
+    pub candidate_digest_after: String,
+    pub succeeded: bool,
 }
 
 /// Payload variants accepted by the deterministic run reducer.
@@ -98,6 +122,8 @@ pub enum RunEvent {
     EvidenceRecorded(Evidence),
     PolicyEvaluated(PolicyDecision),
     ApprovalDecided(ApprovalRecord),
+    EffectPrepared(EffectPrepared),
+    EffectCompleted(EffectCompleted),
     CheckpointCreated { checkpoint: String },
     NoteRecorded { message: String },
 }
@@ -187,6 +213,8 @@ pub struct RunSnapshot {
     pub evidence: Vec<Evidence>,
     pub actions: Vec<ActionRecord>,
     pub approvals: Vec<ApprovalRecord>,
+    pub pending_effects: BTreeMap<String, EffectPrepared>,
+    pub completed_effects: Vec<EffectCompleted>,
     pub last_sequence: Option<u64>,
     pub last_hash: EventHash,
 }
@@ -202,6 +230,8 @@ impl RunSnapshot {
             evidence: Vec::new(),
             actions: Vec::new(),
             approvals: Vec::new(),
+            pending_effects: BTreeMap::new(),
+            completed_effects: Vec::new(),
             last_sequence: None,
             last_hash: EventHash::genesis(),
         }
@@ -262,6 +292,24 @@ impl RunSnapshot {
             RunEvent::ActionCompleted(action) => self.actions.push(action.clone()),
             RunEvent::EvidenceRecorded(evidence) => self.evidence.push(evidence.clone()),
             RunEvent::ApprovalDecided(approval) => self.approvals.push(approval.clone()),
+            RunEvent::EffectPrepared(effect) => {
+                if self.pending_effects.contains_key(&effect.call_id)
+                    || self
+                        .completed_effects
+                        .iter()
+                        .any(|completed| completed.call_id == effect.call_id)
+                {
+                    return Err(StateError::DuplicateEffect(effect.call_id.clone()));
+                }
+                self.pending_effects
+                    .insert(effect.call_id.clone(), effect.clone());
+            }
+            RunEvent::EffectCompleted(effect) => {
+                if self.pending_effects.remove(&effect.call_id).is_none() {
+                    return Err(StateError::UnpreparedEffect(effect.call_id.clone()));
+                }
+                self.completed_effects.push(effect.clone());
+            }
             RunEvent::PolicyEvaluated(_)
             | RunEvent::CheckpointCreated { .. }
             | RunEvent::NoteRecorded { .. } => {}
@@ -288,6 +336,10 @@ pub enum StateError {
     InvalidHash,
     #[error("run contract was registered more than once")]
     DuplicateContract,
+    #[error("effect call id {0:?} was prepared more than once")]
+    DuplicateEffect(String),
+    #[error("effect call id {0:?} completed without a matching preparation")]
+    UnpreparedEffect(String),
     #[error("task contract is invalid: {0}")]
     InvalidContract(#[from] crate::ContractError),
     #[error("state transition used stale state {actual:?}; current state is {expected:?}")]
@@ -408,6 +460,61 @@ mod tests {
         assert!(matches!(
             snapshot.apply(&envelope),
             Err(StateError::InvalidHash)
+        ));
+    }
+
+    #[test]
+    fn effects_must_be_prepared_once_and_completed_once() {
+        let run_id = RunId::new();
+        let mut snapshot = RunSnapshot::new(run_id);
+        let prepared = event(
+            run_id,
+            0,
+            EventHash::genesis(),
+            RunEvent::EffectPrepared(EffectPrepared {
+                call_id: "call-1".to_owned(),
+                tool: "write_file".to_owned(),
+                arguments_digest: "a".repeat(64),
+                candidate_digest_before: "b".repeat(64),
+                risk: "workspace_mutation".to_owned(),
+                runtime_profile_digest: "c".repeat(64),
+            }),
+        );
+        snapshot
+            .apply(&prepared)
+            .unwrap_or_else(|error| unreachable!("prepare: {error}"));
+        assert!(snapshot.pending_effects.contains_key("call-1"));
+        let completed = event(
+            run_id,
+            1,
+            prepared.hash,
+            RunEvent::EffectCompleted(EffectCompleted {
+                call_id: "call-1".to_owned(),
+                result_digest: "d".repeat(64),
+                candidate_digest_after: "e".repeat(64),
+                succeeded: true,
+            }),
+        );
+        snapshot
+            .apply(&completed)
+            .unwrap_or_else(|error| unreachable!("complete: {error}"));
+        assert!(snapshot.pending_effects.is_empty());
+        assert_eq!(snapshot.completed_effects.len(), 1);
+
+        let duplicate = event(
+            run_id,
+            2,
+            completed.hash,
+            RunEvent::EffectCompleted(EffectCompleted {
+                call_id: "call-1".to_owned(),
+                result_digest: "f".repeat(64),
+                candidate_digest_after: "0".repeat(64),
+                succeeded: true,
+            }),
+        );
+        assert!(matches!(
+            snapshot.apply(&duplicate),
+            Err(StateError::UnpreparedEffect(call_id)) if call_id == "call-1"
         ));
     }
 
