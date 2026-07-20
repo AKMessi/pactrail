@@ -36,8 +36,10 @@ pub struct RunCheckpoint {
     pub model_profile_digest: String,
     pub tool_profile_digest: String,
     pub context_digest: String,
+    pub project_profile: String,
     pub phase: ResumePhase,
     pub next_turn: u16,
+    pub elapsed_active_ms: u64,
     pub conversation: Vec<ConversationItem>,
     pub usage: Usage,
     pub call_ids: BTreeSet<String>,
@@ -81,8 +83,10 @@ impl RunCheckpoint {
             model_profile_digest: identity.model_profile_digest,
             tool_profile_digest: identity.tool_profile_digest,
             context_digest: identity.context_digest,
+            project_profile: String::new(),
             phase: ResumePhase::BeforeModel,
             next_turn: 0,
+            elapsed_active_ms: 0,
             conversation,
             usage: Usage::default(),
             call_ids: BTreeSet::new(),
@@ -137,6 +141,7 @@ impl RunCheckpoint {
             validate_control_string("recovery_risk", risk)?;
         }
         validate_control_string("final_text", &self.final_text)?;
+        validate_control_string("project_profile", &self.project_profile)?;
         if self.phase == ResumePhase::BeforeTools {
             let has_pending_calls = self
                 .conversation
