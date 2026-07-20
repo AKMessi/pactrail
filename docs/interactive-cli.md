@@ -26,6 +26,8 @@ animated current-operation line. It shows:
 - repository context size, cited/indexed files, warm/cold index reuse,
   kernel-derived citation coverage, graph evidence, compilation time, and
   whether model-budgeting omitted optional entries;
+- sealed image count, decoded bytes, conservative input-token reservation, and
+  digest prefixes without host paths or base64;
 - model turn, latency, tool-call count, provider-reported tokens, and aggregate
   model time;
 - the active typed tool, changed path, duration, and bounded output count;
@@ -162,6 +164,25 @@ context budget and are also available through the model's read-only
 `recall_memory` tool. Applied receipts create integrity-checked historical
 records. The model cannot add or delete memory.
 
+## Next-task image queue
+
+Vision input is explicit and consumed by the next submitted task:
+
+```text
+/capability vision on
+/image add "C:\work\reference\broken.png"
+/image list
+Fix the regression visible in the screenshot.
+```
+
+`/image clear` empties the queue. Adding validates the file immediately and
+shows its filename, dimensions, decoded size, and digest prefix. The queue keeps
+paths only in the live CLI process; a valid task submission seals bytes into the
+provider-neutral user turn and clears the queue. A preflight failure keeps the
+queue available for correction. The source path is never sent or stored. The
+sealed image is stored in the local checkpoint and sent to the configured
+provider, so attachment is a data-disclosure decision.
+
 ## Tool kernel inspector
 
 `/tools` lists every model-visible tool with its capability, risk class, and
@@ -185,6 +206,7 @@ serially.
 | Work | `/discard [run]` | Reject a candidate and preserve evidence. |
 | Work | `/runs` | Browse durable history. |
 | Work | `/inspect [run]` | Show a receipt without its diff. |
+| Work | `/image add <path>\|list\|clear` | Manage sealed image evidence for the next task. |
 | Memory | `/memory [query]` | Browse or search active workspace memory. |
 | Memory | `/remember [kind] <text>` | Save a human-authored memory. |
 | Memory | `/forget <id>` | Soft-delete a memory by full/unique ID prefix. |
@@ -204,7 +226,7 @@ serially.
 | Safety | `/context <tokens>` | Set declared context capacity. |
 | Safety | `/output-tokens <tokens>` | Set per-turn output limit. |
 | Safety | `/turns <count>` | Set the model-turn safety bound. |
-| Session | `/status` | Show model, limits, policy, memory, and review state. |
+| Session | `/status` | Show model, limits, policy, queued images, memory, and review state. |
 | Session | `/doctor` | Inspect runtimes and isolation boundaries. |
 | Session | `/help [command]` | Browse grouped or focused help. |
 | Session | `/clear` | Clear the terminal. |

@@ -156,6 +156,32 @@ roll back or prove the absence of a remote side effect. Use read-only,
 idempotent profiles where possible and treat write-capable servers as privileged
 integrations.
 
+## Image artifact boundary
+
+Image input is explicit user-provided data, never a repository-discovered URL.
+The CLI rejects symlinks and non-regular files, reads through a per-file bound,
+recognizes PNG/JPEG/WebP from bytes rather than extension, validates bounded
+header/container structure and dimensions, and seals the complete bytes with
+BLAKE3 before durable run creation. The host path is discarded. Duplicate
+digests, more than four images, more than 4 MiB per image, more than 12 MiB in
+aggregate, zero dimensions, and edges above 8,000 pixels fail closed.
+
+The portable filename and image pixels remain untrusted model evidence. They
+cannot grant capabilities or override the contract/system policy. Drivers use
+only inline base64 payloads: they do not fetch image URLs, follow redirects, or
+perform implicit file uploads. Traces expose bounded counts, sizes, token
+estimates, and digest prefixes, never host paths or base64.
+
+Sealed bytes are intentionally persisted in content-addressed run checkpoints
+so an interrupted run resumes the exact evidence without reopening a mutable
+source file. They are also sent to the selected provider on every model turn.
+Anyone who can read `.pactrail` state can read those bytes, and the provider can
+retain or process them under its own policy. Users must not attach credentials,
+private screenshots, or other data they are not authorized to store locally and
+send to that provider. Header checks and bounds reduce malformed-container and
+resource risks; Pactrail does not claim to malware-scan pixels or prove semantic
+image safety.
+
 ## Process execution boundaries
 
 Process execution has no automatic mode. It is disabled by default and selecting

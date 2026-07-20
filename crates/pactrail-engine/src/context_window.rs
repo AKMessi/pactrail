@@ -24,12 +24,26 @@ pub(crate) struct ContextWindow {
 }
 
 impl ContextWindow {
+    #[cfg(test)]
     pub(crate) fn from_model_limits(context_tokens: u64, max_output_tokens: u64) -> Self {
+        Self::from_model_limits_with_request_ceiling(
+            context_tokens,
+            max_output_tokens,
+            MAX_REQUEST_CEILING_BYTES,
+        )
+    }
+
+    pub(crate) fn from_model_limits_with_request_ceiling(
+        context_tokens: u64,
+        max_output_tokens: u64,
+        request_ceiling_bytes: usize,
+    ) -> Self {
         let input_tokens = context_tokens.saturating_sub(max_output_tokens);
         let request_ceiling =
             usize::try_from(input_tokens.saturating_mul(ESTIMATED_BYTES_PER_TOKEN))
                 .unwrap_or(MAX_REQUEST_CEILING_BYTES)
-                .clamp(MIN_REQUEST_CEILING_BYTES, MAX_REQUEST_CEILING_BYTES);
+                .clamp(MIN_REQUEST_CEILING_BYTES, MAX_REQUEST_CEILING_BYTES)
+                .min(request_ceiling_bytes.max(MIN_REQUEST_CEILING_BYTES));
         Self {
             high_water_bytes: percentage(request_ceiling, HIGH_WATER_PERCENT),
             target_bytes: percentage(request_ceiling, TARGET_PERCENT),
@@ -140,7 +154,7 @@ pub(crate) enum ContextWindowError {
 
 #[derive(Serialize)]
 struct RequestView<'a> {
-    conversation: &'a [ConversationItem],
+    conversation: Value,
     tools: &'a [ToolDescriptor],
 }
 
@@ -153,10 +167,7 @@ fn request_fingerprint(
     conversation: &[ConversationItem],
     tools: &[ToolDescriptor],
 ) -> Result<RequestFingerprint, serde_json::Error> {
-    let bytes = serde_json::to_vec(&RequestView {
-        conversation,
-        tools,
-    })?;
+    let bytes = normalized_request_bytes(conversation, tools)?;
     Ok(RequestFingerprint {
         bytes: bytes.len(),
         digest: blake3::hash(&bytes).to_hex().to_string(),
@@ -167,11 +178,45 @@ fn request_bytes(
     conversation: &[ConversationItem],
     tools: &[ToolDescriptor],
 ) -> Result<usize, serde_json::Error> {
+    normalized_request_bytes(conversation, tools).map(|bytes| bytes.len())
+}
+
+fn normalized_request_bytes(
+    conversation: &[ConversationItem],
+    tools: &[ToolDescriptor],
+) -> Result<Vec<u8>, serde_json::Error> {
+    let mut conversation = serde_json::to_value(conversation)?;
+    if let Some(items) = conversation.as_array_mut() {
+        for item in items {
+            if item.get("type").and_then(Value::as_str) != Some("user_content") {
+                continue;
+            }
+            let Some(images) = item
+                .get_mut("data")
+                .and_then(|data| data.get_mut("images"))
+                .and_then(Value::as_array_mut)
+            else {
+                continue;
+            };
+            for image in images {
+                let digest = image
+                    .get("digest")
+                    .and_then(Value::as_str)
+                    .unwrap_or("invalid")
+                    .to_owned();
+                if let Some(object) = image.as_object_mut() {
+                    object.insert(
+                        "data_base64".to_owned(),
+                        Value::String(format!("<sealed-image:{digest}>")),
+                    );
+                }
+            }
+        }
+    }
     serde_json::to_vec(&RequestView {
         conversation,
         tools,
     })
-    .map(|bytes| bytes.len())
 }
 
 fn compact_result_at(
@@ -311,7 +356,7 @@ fn percentage(value: usize, percent: u64) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use pactrail_models::{Message, ToolCall};
+    use pactrail_models::{ImageArtifact, Message, ToolCall, UserContent};
 
     use super::*;
 
@@ -432,5 +477,34 @@ mod tests {
         let window = ContextWindow::from_model_limits(4_096, 512);
         assert_eq!(window.high_water_bytes, 11_468);
         assert_eq!(window.target_bytes, 9_318);
+    }
+
+    #[test]
+    fn sealed_image_payloads_do_not_masquerade_as_text_context() {
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend_from_slice(&13_u32.to_be_bytes());
+        png.extend_from_slice(b"IHDR");
+        png.extend_from_slice(&640_u32.to_be_bytes());
+        png.extend_from_slice(&480_u32.to_be_bytes());
+        png.extend_from_slice(&[8, 2, 0, 0, 0]);
+        png.extend_from_slice(&[0; 4]);
+        png.extend_from_slice(&1_000_000_u32.to_be_bytes());
+        png.extend_from_slice(b"IDAT");
+        png.extend(std::iter::repeat_n(0, 1_000_000));
+        png.extend_from_slice(&[0; 4]);
+        png.extend_from_slice(&0_u32.to_be_bytes());
+        png.extend_from_slice(b"IEND");
+        png.extend_from_slice(&[0; 4]);
+        let image = ImageArtifact::from_bytes("screen.png", &png)
+            .unwrap_or_else(|error| unreachable!("image: {error}"));
+        let conversation = vec![ConversationItem::UserContent(
+            UserContent::new("inspect", vec![image])
+                .unwrap_or_else(|error| unreachable!("content: {error}")),
+        )];
+
+        let fingerprint = request_fingerprint(&conversation, &[])
+            .unwrap_or_else(|error| unreachable!("fingerprint: {error}"));
+
+        assert!(fingerprint.bytes < 1_024);
     }
 }

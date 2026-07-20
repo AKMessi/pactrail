@@ -71,6 +71,11 @@ pactrail ❯ Fix the parser regression and add a test.
   unsupported or exhausted parses use the lexical index. Optional SDK-provided
   LSP snapshots preserve lexical, language-server, and corroborated provenance
   without Pactrail silently starting an external process.
+- **Images are artifacts, not ambient URLs.** Explicit PNG, JPEG, and WebP
+  inputs are read once, header-validated, dimension/byte bounded, BLAKE3-sealed,
+  stripped of host paths, and carried by the provider-neutral conversation.
+  Their estimated visual-token cost is reserved before repository context is
+  built, and checkpoint resume restores the exact sealed bytes.
 - **Git is evidence, not ambient shell authority.** Built-in status, diff, and
   history tools read the exact source repository in process with hard bounds.
   HEAD/index/raw-worktree evidence and Pactrail's isolated candidate stay
@@ -183,6 +188,10 @@ pactrail ❯ Fix the parser regression and add a test.
 - Native Anthropic Messages and Gemini GenerateContent adapters preserve typed
   content blocks, function-call IDs, cached-token accounting, Gemini thought
   signatures, and provider finish semantics without compatibility shims.
+- Explicit image input maps the same sealed artifact to OpenAI-compatible data
+  URLs, Anthropic base64 image blocks, and Gemini inline data. Four images,
+  4 MiB each and 12 MiB total are accepted; PNG, JPEG, and WebP form the
+  deliberately portable format intersection.
 - Bounded SSE streaming across all built-in transports provides live sanitized
   text, tool, usage, and first-byte progress. Partial calls are never executable;
   malformed framing and disconnects fail without silent buffered fallback.
@@ -264,6 +273,26 @@ Fix the failing parser tests and add a regression test.
 /diff
 /apply
 ```
+
+Attach screenshots or visual references without exposing a host path:
+
+```text
+/capability vision on
+/image add "C:\work\references\failure.png"
+Explain this failure and fix the responsible code.
+```
+
+For a one-shot run, repeat `--image` as needed:
+
+```console
+pactrail run --vision on --image failure.png --image expected.webp "Match the expected UI"
+```
+
+Only enable `vision` for a model that actually accepts image input. The image
+filename, sealed bytes, media type, dimensions, and digest become run-local
+checkpoint state; the original path does not. The bytes are sent to the chosen
+model provider on every turn, so do not attach secrets you would not send to
+that provider.
 
 You can also ask normal repository questions. They produce terminal `ANSWERED`
 runs with integrity-checked receipts and traces, but no candidate or apply step:

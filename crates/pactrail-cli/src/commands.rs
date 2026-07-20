@@ -19,8 +19,9 @@ use pactrail_memory::{
 };
 use pactrail_models::{
     AnthropicConfig, AnthropicDriver, CapabilityProbeReport, CapabilitySource, GeminiConfig,
-    GeminiDriver, ModelCapabilities, ModelDriver, ModelError, OpenAiCompatibleConfig,
-    OpenAiCompatibleDriver, probe_capabilities as run_capability_probe,
+    GeminiDriver, ImageArtifact, MAX_INPUT_IMAGE_BYTES, ModelCapabilities, ModelDriver, ModelError,
+    OpenAiCompatibleConfig, OpenAiCompatibleDriver, probe_capabilities as run_capability_probe,
+    validate_image_set,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
@@ -166,6 +167,7 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
     RunArgs {
         goal: None,
         task: None,
+        images: Vec::new(),
         provider: args.provider,
         model: Some(args.model),
         base_url: args.base_url,
@@ -240,6 +242,7 @@ impl RunManifest {
             ));
         }
         if self.args.task.is_some()
+            || !self.args.images.is_empty()
             || self.args.allow_process
             || self.args.goal.as_deref() != Some(self.contract.goal.as_str())
             || self.args.write_paths != self.contract.allowed_write_paths
@@ -480,7 +483,7 @@ async fn execute_run_inner(
     observer: Option<&dyn RunObserver>,
     cancellation: CancellationToken,
 ) -> Result<CompletedRun, CliError> {
-    validate_model_limits(&args)?;
+    let input_images = prepare_input_images(cli_workspace, &args)?;
     let process_backend = effective_process_backend(&args)?;
     let process_approval = effective_process_approval(&args)?;
     let mcp_approval = effective_mcp_approval(&args);
@@ -542,6 +545,7 @@ async fn execute_run_inner(
         .with_repository_cache(state.join("artifacts").join("repository-index"))
         .with_checkpoint_store(&checkpoints)
         .with_runtime_identity(runtime_identity)
+        .with_input_images(input_images)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
     let approval_resolver = ConfiguredApprovalResolver {
@@ -649,7 +653,100 @@ fn normalized_run_args(
     durable.allow_process = false;
     durable.process_approval = Some(process_approval);
     durable.mcp_approval = Some(mcp_approval);
+    durable.images.clear();
     durable
+}
+
+pub(crate) fn load_input_images(paths: &[PathBuf]) -> Result<Vec<ImageArtifact>, CliError> {
+    let mut images = Vec::with_capacity(paths.len());
+    for path in paths {
+        let metadata = fs::symlink_metadata(path).map_err(|source| CliError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(CliError::Argument(format!(
+                "image input {} must be a regular file, not a symlink or special file",
+                path.display()
+            )));
+        }
+        if metadata.len() == 0 || metadata.len() > MAX_INPUT_IMAGE_BYTES as u64 {
+            return Err(CliError::Argument(format!(
+                "image input {} has {} bytes; expected 1..={MAX_INPUT_IMAGE_BYTES}",
+                path.display(),
+                metadata.len()
+            )));
+        }
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| {
+                CliError::Argument(format!(
+                    "image input {} has no portable UTF-8 filename",
+                    path.display()
+                ))
+            })?;
+        let mut file = fs::File::open(path).map_err(|source| CliError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        let opened = file.metadata().map_err(|source| CliError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        if !opened.is_file() || opened.len() != metadata.len() {
+            return Err(CliError::Argument(format!(
+                "image input {} changed while it was being sealed",
+                path.display()
+            )));
+        }
+        let expected_len = usize::try_from(opened.len()).map_err(|_| {
+            CliError::Argument(format!("image input {} is too large", path.display()))
+        })?;
+        let mut bytes = Vec::with_capacity(expected_len);
+        Read::by_ref(&mut file)
+            .take(MAX_INPUT_IMAGE_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|source| CliError::Io {
+                path: path.clone(),
+                source,
+            })?;
+        if bytes.len() != expected_len {
+            return Err(CliError::Argument(format!(
+                "image input {} changed while it was being sealed",
+                path.display()
+            )));
+        }
+        images.push(
+            ImageArtifact::from_bytes(name, &bytes)
+                .map_err(|error| CliError::Argument(format!("{}: {error}", path.display())))?,
+        );
+    }
+    validate_image_set(&images).map_err(|error| CliError::Argument(error.to_string()))?;
+    Ok(images)
+}
+
+fn prepare_input_images(root: &Path, args: &RunArgs) -> Result<Vec<ImageArtifact>, CliError> {
+    validate_model_limits(args)?;
+    let paths = args
+        .images
+        .iter()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                root.join(path)
+            }
+        })
+        .collect::<Vec<_>>();
+    let images = load_input_images(&paths)?;
+    if !images.is_empty() && !configured_capabilities(args).vision {
+        return Err(CliError::Argument(
+            "--image requires vision support; pass --vision on only when the configured model accepts image input"
+                .to_owned(),
+        ));
+    }
+    Ok(images)
 }
 
 struct ExecutionLease {
@@ -2595,6 +2692,43 @@ mod tests {
     use pactrail_core::{Evidence, EvidenceKind};
 
     use super::*;
+
+    fn tiny_png(width: u32, height: u32) -> Vec<u8> {
+        let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+        bytes.extend_from_slice(&13_u32.to_be_bytes());
+        bytes.extend_from_slice(b"IHDR");
+        bytes.extend_from_slice(&width.to_be_bytes());
+        bytes.extend_from_slice(&height.to_be_bytes());
+        bytes.extend_from_slice(&[8, 2, 0, 0, 0]);
+        bytes.extend_from_slice(&[0; 4]);
+        bytes.extend_from_slice(&0_u32.to_be_bytes());
+        bytes.extend_from_slice(b"IEND");
+        bytes.extend_from_slice(&[0; 4]);
+        bytes
+    }
+
+    #[test]
+    fn image_loader_erases_paths_and_rejects_duplicate_content() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let first = root.path().join("screen.not-an-extension");
+        let second = root.path().join("copy.png");
+        fs::write(&first, tiny_png(100, 50)).unwrap_or_else(|error| unreachable!("first: {error}"));
+        fs::write(&second, tiny_png(100, 50))
+            .unwrap_or_else(|error| unreachable!("second: {error}"));
+
+        let images = load_input_images(std::slice::from_ref(&first))
+            .unwrap_or_else(|error| unreachable!("load: {error}"));
+        assert_eq!(images[0].name(), "screen.not-an-extension");
+        assert!(
+            !serde_json::to_string(&images[0])
+                .unwrap_or_else(|error| unreachable!("json: {error}"))
+                .contains(&root.path().display().to_string())
+        );
+        assert!(matches!(
+            load_input_images(&[first, second]),
+            Err(CliError::Argument(message)) if message.contains("more than once")
+        ));
+    }
 
     struct ReadyFixture {
         source: tempfile::TempDir,

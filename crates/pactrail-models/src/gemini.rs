@@ -9,6 +9,7 @@ use serde_json::{Map, Value, json};
 use tracing::warn;
 
 use crate::sse::SseDecoder;
+use crate::types::{validate_request_body_size, validate_request_images};
 use crate::{
     ConversationItem, FinishReason, Message, ModelCapabilities, ModelDriver, ModelError,
     ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, Usage,
@@ -223,6 +224,8 @@ fn request_body(config: &GeminiConfig, request: &ModelRequest) -> Result<Value, 
             "at least one message is required".to_owned(),
         ));
     }
+    validate_request_images(&request.conversation, config.capabilities.vision)
+        .map_err(ModelError::InvalidRequest)?;
     if request.max_output_tokens == 0
         || request.max_output_tokens > config.capabilities.max_output_tokens
     {
@@ -265,6 +268,7 @@ fn request_body(config: &GeminiConfig, request: &ModelRequest) -> Result<Value, 
             "functionCallingConfig": {"mode": "AUTO"}
         });
     }
+    validate_request_body_size(&body).map_err(ModelError::InvalidRequest)?;
     Ok(body)
 }
 
@@ -288,6 +292,25 @@ fn gemini_contents(conversation: &[ConversationItem]) -> Result<(String, Vec<Val
                     }
                 };
                 push_content(&mut contents, role, vec![json!({"text": content})])?;
+            }
+            ConversationItem::UserContent(content) => {
+                let mut parts =
+                    Vec::with_capacity(content.images.len().saturating_mul(2).saturating_add(1));
+                if !content.text.is_empty() {
+                    parts.push(json!({"text": content.text}));
+                }
+                for image in &content.images {
+                    parts.push(json!({
+                        "text": format!("Attached image: {}", image.name()),
+                    }));
+                    parts.push(json!({
+                        "inlineData": {
+                            "mimeType": image.media_type().as_str(),
+                            "data": image.data_base64(),
+                        },
+                    }));
+                }
+                push_content(&mut contents, "user", parts)?;
             }
             ConversationItem::AssistantToolCalls { text, calls } => {
                 let mut parts = Vec::with_capacity(calls.len().saturating_add(1));
@@ -1027,6 +1050,32 @@ mod tests {
             body["contents"][2]["parts"][0]["functionResponse"]["id"],
             "call-1"
         );
+    }
+
+    #[test]
+    fn maps_sealed_images_to_gemini_inline_data() {
+        let image = crate::ImageArtifact::from_bytes(
+            "screen.png",
+            &crate::test_support::tiny_png(640, 480),
+        )
+        .unwrap_or_else(|error| unreachable!("image: {error}"));
+        let request = ModelRequest {
+            conversation: vec![ConversationItem::UserContent(
+                crate::UserContent::new("inspect this", vec![image.clone()])
+                    .unwrap_or_else(|error| unreachable!("content: {error}")),
+            )],
+            tools: Vec::new(),
+            max_output_tokens: 128,
+            temperature: Some(0.0),
+        };
+        let mut config = config();
+        config.capabilities.vision = true;
+        let body = request_body(&config, &request)
+            .unwrap_or_else(|error| unreachable!("vision request: {error}"));
+        let parts = &body["contents"][0]["parts"];
+        assert_eq!(parts[0]["text"], "inspect this");
+        assert_eq!(parts[2]["inlineData"]["mimeType"], "image/png");
+        assert_eq!(parts[2]["inlineData"]["data"], image.data_base64());
     }
 
     #[test]

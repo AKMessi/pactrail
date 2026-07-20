@@ -93,6 +93,55 @@ reported as inconclusive. The scriptable form is:
 pactrail probe --provider gemini --model MODEL_ID --output json
 ```
 
+## Image input
+
+Pactrail exposes vision as an explicit model capability, not a provider-name
+assumption. Enable it only for a compatible model, then attach one or more local
+images:
+
+```text
+/capability vision on
+/image add screenshot.png
+/image list
+Inspect the screenshot and fix the layout bug.
+```
+
+The non-interactive equivalent is:
+
+```console
+pactrail run --provider anthropic --model MODEL_ID --vision on --image screenshot.png "Fix the visible layout bug"
+```
+
+The portable envelope is intentionally narrower than any individual provider:
+PNG, JPEG, or WebP; at most four images; at most 4 MiB decoded per image and
+12 MiB decoded in total; non-zero dimensions no larger than 8,000 pixels per
+edge. Pactrail recognizes the byte signature and bounded header/container
+structure instead of trusting the extension. Symlinks and special files are
+rejected. Duplicate content is rejected by digest.
+
+The CLI erases the host path after reading. A portable filename, media type,
+dimensions, byte count, BLAKE3 digest, and base64 payload live in the ordered
+provider-neutral user turn and its local checkpoint. OpenAI-compatible drivers
+emit a base64 data URL, Anthropic emits a base64 image source block, and Gemini
+emits `inlineData`. No adapter fetches a remote image URL or uploads to an
+implicit provider file store.
+
+Pactrail reserves a conservative visual-token estimate before repository
+context compilation. A declared context window too small for the images and
+output reservation fails before model access. Provider token accounting remains
+authoritative. Every first-party adapter also rejects a serialized inline
+request above 20 MiB. Because inline bytes are resent with conversation history,
+image runs can cost more and take longer; use only the visual evidence the task
+needs.
+
+The wire shapes follow the providers' primary documentation: OpenAI Chat
+Completions accepts base64 data URLs, Anthropic Messages accepts base64 image
+content blocks, and Gemini GenerateContent accepts base64 inline data with a
+20 MiB total inline request limit. See [OpenAI images and
+vision](https://developers.openai.com/api/docs/guides/images-vision),
+[Anthropic vision](https://platform.claude.com/docs/en/build-with-claude/vision),
+and [Gemini image understanding](https://ai.google.dev/gemini-api/docs/generate-content/image-understanding).
+
 ## Running a local GGUF model
 
 Pactrail is a harness, not a GGUF inference runtime. Start the model with a

@@ -7,7 +7,7 @@ so a repository cannot cause arbitrary extension code to load.
 
 The facade crate is `pactrail-sdk`. During the pre-1.0 series it is consumed
 from the repository or a pinned Git revision; crates.io publication and the
-SemVer stability window are v1 release work. `SDK_API_REVISION` is currently 3.
+SemVer stability window are v1 release work. `SDK_API_REVISION` is currently 4.
 
 ## Custom model provider
 
@@ -47,6 +47,33 @@ Drivers own protocol parsing, response-size limits, credentials, and transport
 timeouts. They return typed tool calls but never execute them. Implement
 `invoke_with_observer` only when the provider has a true bounded streaming
 transport; the final `ModelResponse` remains the sole execution authority.
+
+## Image artifacts
+
+Embedding hosts can construct the same provider-neutral image contract with
+`ImageArtifact::from_bytes`, group it in `UserContent`, or pass sealed artifacts
+to `RunEngine::with_input_images`. Construction validates the portable
+PNG/JPEG/WebP envelope and erases host paths; deserialization re-decodes the
+base64 payload and rechecks type, dimensions, byte count, and BLAKE3 digest.
+
+```rust,no_run
+use pactrail_sdk::model::ImageArtifact;
+use pactrail_sdk::prelude::*;
+
+# fn build(engine: RunEngine<'_>, png: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+let image = ImageArtifact::from_bytes("screenshot.png", png)?;
+let engine = engine.with_input_images(vec![image]);
+# let _ = engine;
+# Ok(())
+# }
+```
+
+Custom vision drivers receive `ConversationItem::UserContent`; they must map
+only the sealed inline bytes, preserve order, enforce their own request limit,
+and reject images when `ModelCapabilities::vision` is false. They must not
+resolve filenames as paths or treat pixels/labels as instructions. The engine
+reserves visual-token capacity, checkpoints the exact provider-neutral turn,
+and exposes only bounded artifact metadata in progress and traces.
 
 ## Custom tool
 
