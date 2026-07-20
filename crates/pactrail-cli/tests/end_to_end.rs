@@ -687,7 +687,7 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
     let tools = tools
         .as_array()
         .unwrap_or_else(|| unreachable!("tool descriptors were not an array"));
-    assert_eq!(tools.len(), 13);
+    assert_eq!(tools.len(), 16);
     assert!(tools.iter().any(|tool| tool["name"] == "run_process"));
     let graph = tools
         .iter()
@@ -701,6 +701,15 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
         .unwrap_or_else(|| unreachable!("change-impact tool was not registered"));
     assert_eq!(impact["required_capability"], "file_read");
     assert_eq!(impact["annotations"]["parallel_safe"], true);
+    for name in ["git_status", "git_diff", "git_history"] {
+        let git_tool = tools
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap_or_else(|| unreachable!("Git evidence tool {name} was not registered"));
+        assert_eq!(git_tool["required_capability"], "file_read");
+        assert_eq!(git_tool["annotations"]["read_only"], true);
+        assert_eq!(git_tool["annotations"]["parallel_safe"], true);
+    }
 
     let schema = pactrail(workspace.path(), ["schema"]);
     assert!(schema.status.success());

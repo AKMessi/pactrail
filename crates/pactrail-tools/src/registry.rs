@@ -363,6 +363,8 @@ pub enum ToolError {
     Workspace(#[from] TransactionError),
     #[error("repository evidence graph failed: {0}")]
     RepositoryGraph(#[from] ContextError),
+    #[error("Git evidence failed: {0}")]
+    GitEvidence(#[from] pactrail_git::GitError),
     #[error("tool I/O failed at {path}: {source}")]
     Io {
         path: std::path::PathBuf,

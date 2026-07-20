@@ -7,7 +7,7 @@ so a repository cannot cause arbitrary extension code to load.
 
 The facade crate is `pactrail-sdk`. During the pre-1.0 series it is consumed
 from the repository or a pinned Git revision; crates.io publication and the
-SemVer stability window are v1 release work. `SDK_API_REVISION` is currently 2.
+SemVer stability window are v1 release work. `SDK_API_REVISION` is currently 3.
 
 ## Custom model provider
 
@@ -118,3 +118,20 @@ This API does not start or communicate with a language server. Process/network
 authority, protocol lifecycle, timeouts, cancellation, and executable trust
 remain the embedding host's responsibility. Invalid or stale snapshots fail
 before graph mutation.
+
+## Read-only Git evidence
+
+The `git` module exposes `GitInspector` and its typed status, diff, history, and
+error records. `tool` exposes the three corresponding built-ins. The inspector
+opens only a repository with a real `.git` directory rooted exactly at the
+supplied workspace. It enables none of Gitoxide's command, network-client,
+credential, status/filter-pipeline, or remote-operation features, and its
+private implementation exposes and calls none of those operations. Worktree
+files, tree traversal, object size, output, and history all have hard bounds.
+
+Status deliberately reports HEAD-to-index, index-to-raw-worktree, and
+Pactrail-candidate state separately. The raw comparison does not apply Git
+clean filters and never executes hooks, textconv, submodule helpers, filesystem
+monitors, or external commands. Results say when a path is unscanned or output
+is truncated; embedders must preserve that uncertainty instead of converting
+it to a clean result.

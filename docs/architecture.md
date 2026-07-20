@@ -38,6 +38,7 @@ receipt-bound.
 | `pactrail-memory` | Provenance-aware SQLite memories, ranking, soft deletion, applied-receipt ingestion | Prompt authority or model-authored writes |
 | `pactrail-workspace` | Safe relative paths, manifests, candidate copies, diffs, apply journal, rollback | Provider calls or evidence claims |
 | `pactrail-context` | Repository index, instruction scopes, retrieval, model-aware pack budgeting | Filesystem mutation or provider tokenization |
+| `pactrail-git` | Bounded, process-free HEAD/index/raw-worktree evidence | Commands, hooks, filters, credentials, remotes, or candidate mutation |
 | `pactrail-tools` | Tool contracts, annotations, registry, capability policy, bounded built-ins | Run lifecycle or source landing |
 | `pactrail-models` | Provider-neutral conversation IR and bounded model transport | Tool execution or workspace access |
 | `pactrail-mcp` | Governed MCP manifests, pinned catalogs, bounded transports, and Tool Kernel adapters | Local policy assignment or implicit discovery |
@@ -140,6 +141,7 @@ The production registry currently provides:
 - `list_files`, `read_file`, `read_many_files`, and `search`;
 - `search_code_graph` for project definitions and bounded reference evidence;
 - `search_change_impact` for bounded one-hop definition/reference relationships;
+- `git_status`, `git_diff`, and `git_history` for process-free source repository evidence;
 - `write_file`, `replace_text`, atomic `edit_file`, and `remove_file`;
 - `workspace_changes` and `recall_memory`;
 - capability-gated `run_process` for detected verification.
@@ -161,6 +163,18 @@ seed. Scores and reasons are deterministic and bounded, and reference reasons
 retain lexical, language-server, or corroborated provenance. The result is
 navigation evidence, not a type-resolved dependency or runtime-impact claim,
 and is rebuilt from the current candidate for the same freshness guarantee.
+
+Git evidence is intentionally a separate crate and a narrower boundary than a
+shell wrapper. It opens only `.git` at the exact source root with isolated,
+strict, trusted configuration. Pactrail enables object, index, and revision
+reads but none of Gitoxide's command, network-client, credential, status/filter,
+or remote-operation features; its private inspector contains no such call site.
+`git_status` presents source
+HEAD-to-index, index-to-raw-worktree, and isolated-candidate changes as distinct
+records. `git_diff` is a bounded raw HEAD-to-source navigation artifact;
+candidate inspection remains transaction-owned. `git_history` is newest-first,
+bounded, and omits email addresses. Huge trees, indexes, files, histories, and
+outputs either truncate visibly or become explicit inconclusive evidence.
 
 Each tool result is normalized, output-bounded, and compared against transaction
 manifests before and after execution. The event record contains a digest of the

@@ -13,7 +13,7 @@
 ///
 /// This revision tracks source-level extension compatibility independently of
 /// durable task, event, receipt, checkpoint, and MCP schema versions.
-pub const SDK_API_REVISION: u32 = 2;
+pub const SDK_API_REVISION: u32 = 3;
 
 /// Provider-neutral model extension contracts and built-in adapters.
 pub mod model {
@@ -29,15 +29,23 @@ pub mod model {
 /// Typed tool extension contracts, policy, approvals, and built-in tools.
 pub mod tool {
     pub use pactrail_tools::{
-        ApprovalResolver, DisabledProcessBackend, EditFileTool, ListFilesTool,
-        NativeProcessBackend, OciProcessBackend, OciProcessConfig, OciRuntimeKind,
-        OciSandboxProfile, PolicyAuditEntry, PolicyAuditLog, PolicyEngine, ProcessBackend,
-        ProcessBackendDescriptor, ProcessBackendError, ProcessBackendKind, ProcessExecution,
-        ProcessRequest, ReadFileTool, ReadManyFilesTool, RecallMemoryTool, RemoveFileTool,
-        ReplaceTextTool, RunProcessTool, SearchChangeImpactTool, SearchCodeGraphTool, SearchTool,
-        Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry,
-        ToolRisk, WorkspaceChangesTool, WriteFileTool, builtin_registry,
-        builtin_registry_with_process,
+        ApprovalResolver, DisabledProcessBackend, EditFileTool, GitDiffTool, GitHistoryTool,
+        GitStatusTool, ListFilesTool, NativeProcessBackend, OciProcessBackend, OciProcessConfig,
+        OciRuntimeKind, OciSandboxProfile, PolicyAuditEntry, PolicyAuditLog, PolicyEngine,
+        ProcessBackend, ProcessBackendDescriptor, ProcessBackendError, ProcessBackendKind,
+        ProcessExecution, ProcessRequest, ReadFileTool, ReadManyFilesTool, RecallMemoryTool,
+        RemoveFileTool, ReplaceTextTool, RunProcessTool, SearchChangeImpactTool,
+        SearchCodeGraphTool, SearchTool, Tool, ToolAnnotations, ToolContext, ToolDescriptor,
+        ToolError, ToolOutput, ToolRegistry, ToolRisk, WorkspaceChangesTool, WriteFileTool,
+        builtin_registry, builtin_registry_with_process,
+    };
+}
+
+/// Process-free, bounded Git repository evidence.
+pub mod git {
+    pub use pactrail_git::{
+        GitChangeKind, GitCommitRecord, GitDiff, GitError, GitHistory, GitInspector, GitPathStatus,
+        GitScanTelemetry, GitStatus,
     };
 }
 

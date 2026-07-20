@@ -71,6 +71,11 @@ pactrail ❯ Fix the parser regression and add a test.
   unsupported or exhausted parses use the lexical index. Optional SDK-provided
   LSP snapshots preserve lexical, language-server, and corroborated provenance
   without Pactrail silently starting an external process.
+- **Git is evidence, not ambient shell authority.** Built-in status, diff, and
+  history tools read the exact source repository in process with hard bounds.
+  HEAD/index/raw-worktree evidence and Pactrail's isolated candidate stay
+  visibly separate; hooks, filters, credentials, remotes, and commands are not
+  part of the boundary.
 - **Long runs stay evidence-dense.** Pactrail measures the serialized
   conversation and tool schemas against a model-derived high-water mark. Old
   tool results become deterministic, digest-bound navigation envelopes while
@@ -113,8 +118,8 @@ pactrail ❯ Fix the parser regression and add a test.
 
 - Bounded file listing, single and batch reads, lexical search, exact replace,
   repository-wide symbol/reference graph and one-hop change-impact search,
-  atomic multi-edit, write, remove, candidate-change inspection, memory recall,
-  and trusted native verification.
+  read-only Git status/diff/history, atomic multi-edit, write, remove,
+  candidate-change inspection, memory recall, and trusted native verification.
 - Per-tool read-only, idempotency, parallel-safety, capability, and risk metadata.
 - Consecutive parallel-safe reads overlap; mutations stay serial and durable
   results retain the model's call order.
@@ -430,8 +435,8 @@ TaskContract ──> model-budgeted ContextPack ──> ModelDriver
               Evidence + ChangeReceipt ──> apply / discard
 ```
 
-The eleven crates keep the core domain, storage, memory, context, models, MCP,
-tools, workspace transactions, engine, SDK, and CLI independently testable. See
+The twelve crates keep the core domain, storage, memory, context, Git evidence,
+models, MCP, tools, workspace transactions, engine, SDK, and CLI independently testable. See
 [Architecture](docs/architecture.md), [Threat model](docs/threat-model.md),
 [Interactive CLI](docs/interactive-cli.md), [Providers](docs/providers.md), and
 [Roadmap](docs/roadmap.md). The primary-paper mechanisms behind recent
@@ -477,7 +482,8 @@ Pactrail 0.7 is a production-grade developer preview: its invariants and failure
 modes are tested, while Rust APIs and versioned local formats may still evolve
 before 1.0. Governed MCP, the static embedding facade, content-addressed
 repository analysis, bounded parser-backed structure, and explicit optional LSP
-reference ingestion are implemented. A built-in governed LSP process adapter
+reference ingestion, plus bounded process-free Git evidence, are implemented.
+A built-in governed LSP process adapter
 and public release-candidate evaluation remain roadmap work—not current claims.
 
 It is ready for public evaluation, contributions, demos, and social launch as a

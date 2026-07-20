@@ -76,15 +76,22 @@ Exit criterion: disconnects, poisoned descriptions, malformed schemas,
 oversized results, collisions, and unauthorized effects have deterministic
 tests and legible CLI diagnostics.
 
+## Shipped toward 0.8
+
+- Content-addressed repository-index invalidation with exact current-byte
+  hashing, cache rejection telemetry, and deterministic cold fallback.
+- Bounded embedded Tree-sitter structure for Rust, Python, JavaScript, and
+  TypeScript/TSX plus a dependency-light lexical-only build.
+- Optional integrity-bound LSP reference snapshots with visible lexical,
+  language-server, and corroborated provenance; Pactrail starts no LSP.
+- Repository evidence graph, one-hop change-impact retrieval, context
+  usefulness telemetry, and kernel-derived citation coverage.
+- First-class `git_status`, `git_diff`, and `git_history` tools backed by a
+  dedicated bounded, process-free crate. Source Git state and Pactrail candidate
+  state remain separate; write/remote/hosting authority is absent.
+
 ## 0.8 — repository-scale intelligence and performance
 
-- Incremental repository-index invalidation with content-addressed cache entries.
-- Tree-sitter structure and optional LSP references without making an LSP a hard
-  dependency; the bounded lexical graph remains the deterministic fallback.
-- Change-impact retrieval, context usefulness telemetry, and explicit citation
-  coverage without model-authored relevance claims becoming authority.
-- First-class Git status/diff/history tools that are read-only by default;
-  commits, branches, remotes, and hosting actions require separate capabilities.
 - Large-monorepo latency, memory, descriptor-count, and context-budget suites.
 - Image input as an explicit artifact capability.
 
