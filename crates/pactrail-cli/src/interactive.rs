@@ -1359,13 +1359,17 @@ impl Session {
     }
 
     fn credential_status(&self) -> (String, TimelineTone) {
+        let key_env = if self.settings.provider == ProviderKind::Anthropic
+            && self.settings.api_key_env == "OPENAI_API_KEY"
+        {
+            "ANTHROPIC_API_KEY"
+        } else {
+            &self.settings.api_key_env
+        };
         if self.settings.provider == ProviderKind::Ollama {
             ("not required for Ollama".to_owned(), TimelineTone::Muted)
-        } else if std::env::var(&self.settings.api_key_env).is_ok_and(|key| !key.is_empty()) {
-            (
-                format!("{} is set", self.settings.api_key_env),
-                TimelineTone::Success,
-            )
+        } else if std::env::var(key_env).is_ok_and(|key| !key.is_empty()) {
+            (format!("{key_env} is set"), TimelineTone::Success)
         } else if self
             .settings
             .effective_base_url()
@@ -1373,17 +1377,11 @@ impl Session {
             .is_some_and(is_loopback_url)
         {
             (
-                format!(
-                    "{} is not set (optional for local endpoints)",
-                    self.settings.api_key_env
-                ),
+                format!("{key_env} is not set (optional for local endpoints)"),
                 TimelineTone::Muted,
             )
         } else {
-            (
-                format!("{} is not set", self.settings.api_key_env),
-                TimelineTone::Warning,
-            )
+            (format!("{key_env} is not set"), TimelineTone::Warning)
         }
     }
 
@@ -1649,7 +1647,8 @@ impl Session {
         let mut values = arguments.split_whitespace();
         let provider = values.next().and_then(parse_provider).ok_or_else(|| {
             CliError::Argument(
-                "usage: /provider <ollama|open-ai|open-ai-compatible> [base-url]".to_owned(),
+                "usage: /provider <ollama|open-ai|anthropic|open-ai-compatible> [base-url]"
+                    .to_owned(),
             )
         })?;
         let base_url = values.next().map(str::to_owned);
@@ -1661,6 +1660,9 @@ impl Session {
         }
         let mut settings = self.settings.clone();
         settings.provider = provider;
+        if provider == ProviderKind::Anthropic && settings.api_key_env == "OPENAI_API_KEY" {
+            "ANTHROPIC_API_KEY".clone_into(&mut settings.api_key_env);
+        }
         settings.base_url = base_url.or_else(|| {
             (provider == ProviderKind::OpenAiCompatible)
                 .then(|| self.settings.base_url.clone())
@@ -2683,18 +2685,30 @@ impl Prompt for SessionPrompt {
 
 async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>, ModelListError> {
     let base_url = provider_base_url(settings).ok_or(ModelListError::MissingEndpoint)?;
-    let endpoint = models_endpoint(&base_url)?;
+    let endpoint = models_endpoint(&base_url, settings.provider)?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
         .redirect(reqwest::redirect::Policy::none())
         .user_agent(concat!("pactrail/", env!("CARGO_PKG_VERSION")))
         .build()?;
     let mut request = client.get(endpoint);
-    if settings.provider != ProviderKind::Ollama
-        && let Ok(api_key) = std::env::var(&settings.api_key_env)
+    let key_env = if settings.provider == ProviderKind::Anthropic
+        && settings.api_key_env == "OPENAI_API_KEY"
+    {
+        "ANTHROPIC_API_KEY"
+    } else {
+        &settings.api_key_env
+    };
+    if let Ok(api_key) = std::env::var(key_env)
         && !api_key.is_empty()
     {
-        request = request.bearer_auth(api_key);
+        request = match settings.provider {
+            ProviderKind::Ollama => request,
+            ProviderKind::Anthropic => request
+                .header("x-api-key", api_key)
+                .header("anthropic-version", "2023-06-01"),
+            ProviderKind::OpenAi | ProviderKind::OpenAiCompatible => request.bearer_auth(api_key),
+        };
     }
     let response = request.send().await?;
     let status = response.status();
@@ -2752,10 +2766,15 @@ async fn read_bounded(response: reqwest::Response) -> Result<Vec<u8>, ModelListE
     Ok(bytes)
 }
 
-fn models_endpoint(base_url: &str) -> Result<Url, ModelListError> {
+fn models_endpoint(base_url: &str, provider: ProviderKind) -> Result<Url, ModelListError> {
     validate_base_url(base_url)
         .map_err(|error| ModelListError::InvalidEndpoint(error.to_string()))?;
-    Url::parse(&format!("{}/models", base_url.trim_end_matches('/')))
+    let suffix = if provider == ProviderKind::Anthropic {
+        "/v1/models"
+    } else {
+        "/models"
+    };
+    Url::parse(&format!("{}{suffix}", base_url.trim_end_matches('/')))
         .map_err(|error| ModelListError::InvalidEndpoint(error.to_string()))
 }
 
@@ -2792,6 +2811,7 @@ fn provider_base_url(settings: &InteractiveSettings) -> Option<String> {
             ProviderKind::Ollama => Some("http://127.0.0.1:11434/v1".to_owned()),
             ProviderKind::OpenAi => Some("https://api.openai.com/v1".to_owned()),
             ProviderKind::OpenAiCompatible => None,
+            ProviderKind::Anthropic => Some("https://api.anthropic.com".to_owned()),
         })
 }
 
@@ -2826,6 +2846,7 @@ fn parse_provider(value: &str) -> Option<ProviderKind> {
         "compatible" | "openai-compatible" | "open-ai-compatible" => {
             Some(ProviderKind::OpenAiCompatible)
         }
+        "anthropic" | "claude" => Some(ProviderKind::Anthropic),
         _ => None,
     }
 }
@@ -2835,6 +2856,7 @@ fn provider_label(provider: ProviderKind) -> &'static str {
         ProviderKind::Ollama => "ollama",
         ProviderKind::OpenAi => "open-ai",
         ProviderKind::OpenAiCompatible => "open-ai-compatible",
+        ProviderKind::Anthropic => "anthropic",
     }
 }
 

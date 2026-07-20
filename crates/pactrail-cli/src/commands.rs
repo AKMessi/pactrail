@@ -18,7 +18,8 @@ use pactrail_memory::{
     MemoryDraft, MemoryError, MemoryId, MemoryKind, MemoryMatch, MemoryRecord, MemoryStore,
 };
 use pactrail_models::{
-    CapabilitySource, ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
+    AnthropicConfig, AnthropicDriver, CapabilitySource, ModelCapabilities, ModelDriver, ModelError,
+    OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
@@ -259,7 +260,7 @@ async fn execute_resume_inner(
     let registry = builtin_registry_with_process(process_tool)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
-    let engine = RunEngine::new(&driver, &registry, &policy)
+    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_checkpoint_store(&checkpoints)
         .with_runtime_identity(runtime_identity)
@@ -401,7 +402,7 @@ async fn execute_run_inner(
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
     let context_fragments = memory_context_fragments(&contract, &memory)?;
-    let engine = RunEngine::new(&driver, &registry, &policy)
+    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
         .with_checkpoint_store(&checkpoints)
@@ -742,10 +743,7 @@ fn generated_model_token_budget(context_tokens: u64, output_tokens: u64, max_tur
         .saturating_mul(u64::from(max_turns))
 }
 
-fn build_driver(
-    contract: &TaskContract,
-    args: &RunArgs,
-) -> Result<OpenAiCompatibleDriver, CliError> {
+fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn ModelDriver>, CliError> {
     let model = args
         .model
         .clone()
@@ -761,50 +759,82 @@ fn build_driver(
         source: CapabilitySource::UserDeclared,
         ..ModelCapabilities::default()
     };
-    let config = match args.provider {
-        ProviderKind::Ollama => OpenAiCompatibleConfig {
-            name: "ollama".to_owned(),
-            base_url: args
-                .base_url
-                .clone()
-                .unwrap_or_else(|| "http://127.0.0.1:11434/v1".to_owned()),
-            model,
-            api_key: None,
-            timeout: Duration::from_secs(args.request_timeout_seconds),
-            capabilities,
-            stream: !args.no_stream,
-            disable_thinking: args.disable_thinking,
-        },
-        ProviderKind::OpenAi => OpenAiCompatibleConfig {
-            name: "openai".to_owned(),
-            base_url: args
-                .base_url
-                .clone()
-                .unwrap_or_else(|| "https://api.openai.com/v1".to_owned()),
-            model,
-            api_key: Some(api_key_from_env(&args.api_key_env)?),
-            timeout: Duration::from_secs(args.request_timeout_seconds),
-            capabilities,
-            stream: !args.no_stream,
-            disable_thinking: args.disable_thinking,
-        },
-        ProviderKind::OpenAiCompatible => OpenAiCompatibleConfig {
-            name: "openai-compatible".to_owned(),
-            base_url: args.base_url.clone().ok_or_else(|| {
-                CliError::Argument("--base-url is required for open-ai-compatible".to_owned())
-            })?,
-            model,
-            api_key: std::env::var(&args.api_key_env)
-                .ok()
-                .filter(|api_key| !api_key.is_empty())
-                .map(SecretString::from),
-            timeout: Duration::from_secs(args.request_timeout_seconds),
-            capabilities,
-            stream: !args.no_stream,
-            disable_thinking: args.disable_thinking,
-        },
+    let driver: Box<dyn ModelDriver> = match args.provider {
+        ProviderKind::Ollama => Box::new(
+            OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
+                name: "ollama".to_owned(),
+                base_url: args
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "http://127.0.0.1:11434/v1".to_owned()),
+                model,
+                api_key: None,
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+                disable_thinking: args.disable_thinking,
+            })
+            .map_err(CliError::Model)?,
+        ),
+        ProviderKind::OpenAi => Box::new(
+            OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
+                name: "openai".to_owned(),
+                base_url: args
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://api.openai.com/v1".to_owned()),
+                model,
+                api_key: Some(api_key_from_env(&args.api_key_env)?),
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+                disable_thinking: args.disable_thinking,
+            })
+            .map_err(CliError::Model)?,
+        ),
+        ProviderKind::OpenAiCompatible => Box::new(
+            OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
+                name: "openai-compatible".to_owned(),
+                base_url: args.base_url.clone().ok_or_else(|| {
+                    CliError::Argument("--base-url is required for open-ai-compatible".to_owned())
+                })?,
+                model,
+                api_key: std::env::var(&args.api_key_env)
+                    .ok()
+                    .filter(|api_key| !api_key.is_empty())
+                    .map(SecretString::from),
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+                disable_thinking: args.disable_thinking,
+            })
+            .map_err(CliError::Model)?,
+        ),
+        ProviderKind::Anthropic => Box::new(
+            AnthropicDriver::new(AnthropicConfig {
+                name: "anthropic".to_owned(),
+                base_url: args
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://api.anthropic.com".to_owned()),
+                model,
+                api_key: api_key_from_env(provider_key_env(args.provider, &args.api_key_env))?,
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+            })
+            .map_err(CliError::Model)?,
+        ),
     };
-    OpenAiCompatibleDriver::new(config).map_err(CliError::Model)
+    Ok(driver)
+}
+
+fn provider_key_env(provider: ProviderKind, configured: &str) -> &str {
+    if provider == ProviderKind::Anthropic && configured == "OPENAI_API_KEY" {
+        "ANTHROPIC_API_KEY"
+    } else {
+        configured
+    }
 }
 
 fn api_key_from_env(name: &str) -> Result<SecretString, CliError> {

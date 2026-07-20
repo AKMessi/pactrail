@@ -303,6 +303,7 @@ pub enum ProviderKind {
     Ollama,
     OpenAi,
     OpenAiCompatible,
+    Anthropic,
 }
 
 const fn legacy_buffered_transport() -> bool {
