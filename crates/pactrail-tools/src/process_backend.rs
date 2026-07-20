@@ -239,7 +239,16 @@ impl Default for OciSandboxProfile {
             milli_cpus: 2_000,
             pids_limit: 128,
             tmpfs_bytes: 512 * 1024 * 1024,
-            user: default_oci_user(),
+            user: {
+                #[cfg(unix)]
+                {
+                    Some(default_oci_user())
+                }
+                #[cfg(not(unix))]
+                {
+                    None
+                }
+            },
         }
     }
 }
@@ -345,6 +354,7 @@ impl OciProcessBackend {
         reject_runtime_inside(&runtime_path, forbidden_roots)?;
         let runtime_fingerprint = digest_file(&runtime_path)?;
         probe_runtime(&runtime_path, config.runtime).await?;
+        validate_local_runtime_endpoint(&runtime_path, config.runtime).await?;
         let image_identity = resolve_image_identity(&runtime_path, &config.image).await?;
         let profile_digest = config.profile.digest()?;
         let descriptor = ProcessBackendDescriptor {
@@ -689,6 +699,126 @@ async fn probe_runtime(
     Ok(())
 }
 
+async fn validate_local_runtime_endpoint(
+    runtime_path: &Path,
+    kind: OciRuntimeKind,
+) -> Result<(), ProcessBackendError> {
+    match kind {
+        OciRuntimeKind::Docker => {
+            if std::env::var_os("DOCKER_CONTEXT").is_none()
+                && let Some(endpoint) = std::env::var_os("DOCKER_HOST")
+            {
+                let endpoint =
+                    endpoint
+                        .to_str()
+                        .ok_or(ProcessBackendError::RemoteRuntimeEndpoint {
+                            kind,
+                            endpoint_digest: "non-utf8".to_owned(),
+                        })?;
+                return require_local_endpoint(kind, endpoint);
+            }
+            let mut command = runtime_command(runtime_path);
+            command.args([
+                "context",
+                "inspect",
+                "--format",
+                "{{json .Endpoints.docker.Host}}",
+            ]);
+            let captured = execute_child(
+                command,
+                kind.executable_name(),
+                RUNTIME_PROBE_TIMEOUT,
+                RUNTIME_PROBE_OUTPUT_BYTES,
+                &CancellationToken::new(),
+            )
+            .await?;
+            if captured.exit_code != Some(0) {
+                return Err(ProcessBackendError::RuntimeEndpointProbe { kind });
+            }
+            let endpoint: String = serde_json::from_slice(&captured.stdout)
+                .map_err(|_| ProcessBackendError::RuntimeEndpointProbe { kind })?;
+            require_local_endpoint(kind, &endpoint)
+        }
+        OciRuntimeKind::Podman => {
+            if let Some(endpoint) = std::env::var_os("CONTAINER_HOST") {
+                let endpoint =
+                    endpoint
+                        .to_str()
+                        .ok_or(ProcessBackendError::RemoteRuntimeEndpoint {
+                            kind,
+                            endpoint_digest: "non-utf8".to_owned(),
+                        })?;
+                return require_local_endpoint(kind, endpoint);
+            }
+            let mut command = runtime_command(runtime_path);
+            command.args(["system", "connection", "list", "--format", "json"]);
+            let captured = execute_child(
+                command,
+                kind.executable_name(),
+                RUNTIME_PROBE_TIMEOUT,
+                RUNTIME_PROBE_OUTPUT_BYTES,
+                &CancellationToken::new(),
+            )
+            .await?;
+            if captured.exit_code != Some(0) {
+                return Err(ProcessBackendError::RuntimeEndpointProbe { kind });
+            }
+            let connections: Vec<PodmanConnection> = serde_json::from_slice(&captured.stdout)
+                .map_err(|_| ProcessBackendError::RuntimeEndpointProbe { kind })?;
+            if let Some(connection) = connections.iter().find(|connection| connection.default) {
+                require_local_endpoint(kind, &connection.uri)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct PodmanConnection {
+    #[serde(rename = "URI")]
+    uri: String,
+    #[serde(rename = "Default")]
+    default: bool,
+}
+
+fn require_local_endpoint(kind: OciRuntimeKind, endpoint: &str) -> Result<(), ProcessBackendError> {
+    if endpoint.len() <= 4_096
+        && !endpoint.contains(['\0', '\n', '\r'])
+        && match kind {
+            OciRuntimeKind::Docker => {
+                endpoint.starts_with("unix://") || endpoint.starts_with("npipe://")
+            }
+            OciRuntimeKind::Podman => {
+                endpoint.starts_with("unix://")
+                    || endpoint.starts_with("npipe://")
+                    || endpoint
+                        .strip_prefix("ssh://")
+                        .is_some_and(ssh_endpoint_is_loopback)
+            }
+        }
+    {
+        return Ok(());
+    }
+    Err(ProcessBackendError::RemoteRuntimeEndpoint {
+        kind,
+        endpoint_digest: blake3::hash(endpoint.as_bytes()).to_hex()[..16].to_owned(),
+    })
+}
+
+fn ssh_endpoint_is_loopback(endpoint: &str) -> bool {
+    let authority = endpoint.split('/').next().unwrap_or_default();
+    let host_port = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    if let Some(bracketed) = host_port.strip_prefix('[')
+        && let Some((host, suffix)) = bracketed.split_once(']')
+    {
+        return host == "::1" && (suffix.is_empty() || suffix.starts_with(':'));
+    }
+    let host = host_port.split(':').next().unwrap_or_default();
+    host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1"
+}
+
 async fn resolve_image_identity(
     runtime_path: &Path,
     image: &str,
@@ -870,14 +1000,33 @@ fn bind_mount_argument(workspace: &Path) -> Result<String, ProcessBackendError> 
     let source = workspace
         .to_str()
         .ok_or_else(|| ProcessBackendError::NonUtf8Workspace(workspace.to_path_buf()))?;
-    if source.contains('\0') || source.contains('\n') || source.contains('\r') {
+    #[cfg(windows)]
+    let source = {
+        if source.starts_with(r"\\?\UNC\") {
+            return Err(ProcessBackendError::UnsafeMountPath(
+                workspace.to_path_buf(),
+            ));
+        }
+        let source = source.strip_prefix(r"\\?\").unwrap_or(source);
+        let bytes = source.as_bytes();
+        if bytes.len() < 3
+            || !bytes[0].is_ascii_alphabetic()
+            || bytes[1] != b':'
+            || !matches!(bytes[2], b'\\' | b'/')
+        {
+            return Err(ProcessBackendError::UnsafeMountPath(
+                workspace.to_path_buf(),
+            ));
+        }
+        source
+    };
+    if source.contains(['\0', '\n', '\r', ',', '"']) {
         return Err(ProcessBackendError::UnsafeMountPath(
             workspace.to_path_buf(),
         ));
     }
-    let escaped = source.replace('"', "\"\"");
     Ok(format!(
-        "type=bind,source=\"{escaped}\",target={CONTAINER_WORKSPACE}"
+        "type=bind,source={source},target={CONTAINER_WORKSPACE}"
     ))
 }
 
@@ -895,17 +1044,12 @@ fn copy_native_toolchain_environment(command: &mut Command) {
 }
 
 #[cfg(unix)]
-fn default_oci_user() -> Option<String> {
-    Some(format!(
+fn default_oci_user() -> String {
+    format!(
         "{}:{}",
         rustix::process::getuid().as_raw(),
         rustix::process::getgid().as_raw()
-    ))
-}
-
-#[cfg(not(unix))]
-const fn default_oci_user() -> Option<String> {
-    None
+    )
 }
 
 /// Process backend initialization or execution failure.
@@ -947,6 +1091,15 @@ pub enum ProcessBackendError {
         path: PathBuf,
         expected: &'static str,
     },
+    #[error("OCI runtime {kind:?} could not report a parseable local daemon endpoint")]
+    RuntimeEndpointProbe { kind: OciRuntimeKind },
+    #[error(
+        "OCI runtime {kind:?} selected a non-local or unsupported daemon endpoint (digest {endpoint_digest}); remote daemons are not supported"
+    )]
+    RemoteRuntimeEndpoint {
+        kind: OciRuntimeKind,
+        endpoint_digest: String,
+    },
     #[error(
         "OCI image {image:?} is not available locally; Pactrail never pulls sandbox images implicitly"
     )]
@@ -955,7 +1108,7 @@ pub enum ProcessBackendError {
     InvalidImageIdentity(String),
     #[error("workspace path is not valid UTF-8 and cannot be mounted safely: {0:?}")]
     NonUtf8Workspace(PathBuf),
-    #[error("workspace mount path contains an unsafe control character: {0:?}")]
+    #[error("workspace mount path cannot be encoded safely for the OCI runtime: {0:?}")]
     UnsafeMountPath(PathBuf),
     #[error("process {program:?} could not be started: {source}")]
     Spawn {
@@ -1121,6 +1274,34 @@ mod tests {
     }
 
     #[test]
+    fn runtime_endpoint_policy_accepts_only_local_transports() {
+        for endpoint in [
+            "unix:///var/run/docker.sock",
+            "npipe:////./pipe/docker_engine",
+        ] {
+            assert!(require_local_endpoint(OciRuntimeKind::Docker, endpoint).is_ok());
+        }
+        for endpoint in ["tcp://127.0.0.1:2375", "ssh://builder@example.com/run"] {
+            assert!(require_local_endpoint(OciRuntimeKind::Docker, endpoint).is_err());
+        }
+        for endpoint in [
+            "unix:///run/user/1000/podman.sock",
+            "ssh://core@127.0.0.1:53298/run/user/501/podman.sock",
+            "ssh://core@localhost/run/podman.sock",
+            "ssh://core@[::1]:53298/run/podman.sock",
+        ] {
+            assert!(require_local_endpoint(OciRuntimeKind::Podman, endpoint).is_ok());
+        }
+        assert!(
+            require_local_endpoint(
+                OciRuntimeKind::Podman,
+                "ssh://core@example.com/run/podman.sock"
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
     fn profile_limits_fail_closed() {
         let profile = OciSandboxProfile {
             pids_limit: 0,
@@ -1205,7 +1386,13 @@ mod tests {
             &cancellation,
         )
         .await;
-        assert_eq!(write.exit_code, Some(0));
+        assert_eq!(
+            write.exit_code,
+            Some(0),
+            "first contained command failed: stdout={:?}, stderr={:?}",
+            String::from_utf8_lossy(&write.stdout),
+            String::from_utf8_lossy(&write.stderr)
+        );
         assert_eq!(
             std::fs::read_to_string(workspace.path().join("output.txt")).ok(),
             Some("candidate-only\n".to_owned())

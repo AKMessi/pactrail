@@ -27,6 +27,8 @@ follow [Semantic Versioning](https://semver.org/).
   attestation in status/doctor/traces, and a pinned hostile-repository Docker CI
   fixture covering host reads/writes, ambient secrets, network egress, root
   mutation, and daemon-socket exposure.
+- Local Docker/Podman endpoint validation with credential-safe diagnostics;
+  remote daemon transports fail closed before image inspection or run creation.
 
 ### Changed
 

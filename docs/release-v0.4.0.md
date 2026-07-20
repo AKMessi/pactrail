@@ -14,8 +14,10 @@ and evidence remain independently visible and durable.
   network, no Linux capabilities, no ambient host environment, and explicit
   CPU, memory, PID, output, and wall-time ceilings.
 - Runtime executables are resolved outside the workspace and fingerprinted.
-  Missing runtimes, images, or required controls fail before run state is
-  created; restricted execution never silently falls back to native.
+  Selected daemon endpoints are probed and non-local transports are rejected
+  without echoing endpoint credentials. Missing runtimes, images, or required
+  controls fail before run state is created; restricted execution never
+  silently falls back to native.
 - Process requests cross an exact approval boundary bound to the run, command,
   arguments, environment-variable names, executable actor, backend identity,
   and profile digest. One-call, exact run-scoped, and deny decisions are
