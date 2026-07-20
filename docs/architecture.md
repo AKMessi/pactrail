@@ -294,6 +294,12 @@ and its own BLAKE3 hash. Loading a run verifies the entire chain and replays
 events through the same lifecycle reducer. Sequence gaps, cross-run records,
 unknown schema versions, invalid transitions, and tampering fail closed.
 
+Schema versions are owned beside their readers and aggregated without duplicate
+magic numbers by `pactrail compatibility --json`. The fixture-pinned inventory
+separates authoritative durable state from rebuildable caches and makes each
+reader's exact-version, historical-read, atomic-migration, or safe-rebuild policy
+visible before an upgrade. See [Compatibility contracts](compatibility.md).
+
 Action events cover context compilation and compaction, model requests, tools,
 and verifier commands. Policy decisions, evidence, checkpoints, notes, and state
 transitions share the same journal. The CLI exports the verified stream to run-local

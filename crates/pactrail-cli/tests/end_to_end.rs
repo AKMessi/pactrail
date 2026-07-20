@@ -847,6 +847,22 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
     assert_eq!(process_backends[0]["available"], true);
     assert_eq!(process_backends[1]["id"], "native");
 
+    let compatibility = pactrail(workspace.path(), ["compatibility", "--json"]);
+    assert!(compatibility.status.success());
+    let compatibility: Value = serde_json::from_slice(&compatibility.stdout)
+        .unwrap_or_else(|error| unreachable!("compatibility JSON: {error}"));
+    assert_eq!(compatibility["manifest_schema"], 1);
+    assert_eq!(compatibility["formats"].as_array().map(Vec::len), Some(17));
+    assert!(
+        compatibility["formats"]
+            .as_array()
+            .is_some_and(|formats| formats.iter().any(|format| {
+                format["id"] == "event_envelope"
+                    && format["current_schema"] == 2
+                    && format["minimum_readable_schema"] == 1
+            }))
+    );
+
     for shell in ["bash", "elvish", "fish", "powershell", "zsh"] {
         let completion = pactrail(workspace.path(), ["completion", shell]);
         assert!(completion.status.success(), "{shell} completion failed");

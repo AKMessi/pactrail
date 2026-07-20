@@ -11,7 +11,8 @@ use crate::{
     ModelStreamEvent, ModelStreamObserver, Usage,
 };
 
-const PROBE_SCHEMA: u16 = 1;
+/// Current portable capability-probe report schema.
+pub const CAPABILITY_PROBE_SCHEMA_VERSION: u16 = 1;
 const PROBE_TOOL_NAME: &str = "pactrail_capability_probe";
 
 /// Positive observations from one bounded, side-effect-free model invocation.
@@ -109,7 +110,7 @@ pub async fn probe_capabilities(
     }
     let valid_probe_calls = nonces.len();
     Ok(CapabilityProbeReport {
-        schema: PROBE_SCHEMA,
+        schema: CAPABILITY_PROBE_SCHEMA_VERSION,
         adapter: driver.name().to_owned(),
         model: driver.model().to_owned(),
         native_tools: ProbeObservation::from_observed(valid_probe_calls >= 1),

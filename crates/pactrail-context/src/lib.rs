@@ -38,7 +38,8 @@ const ESTIMATED_BYTES_PER_TOKEN: u64 = 3;
 const CONTEXT_PACK_INPUT_SHARE: u64 = 4;
 const TRUNCATION_NOTICE: &str =
     "\n\n[Context pack reached its model-derived budget. Use tools to inspect omitted sources.]";
-const INDEX_CACHE_SCHEMA_VERSION: u32 = 2;
+/// Current schema for rebuildable repository-index cache entries.
+pub const INDEX_CACHE_SCHEMA_VERSION: u32 = 2;
 const MAX_INDEX_CACHE_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Current schema for optional language-server reference snapshots.

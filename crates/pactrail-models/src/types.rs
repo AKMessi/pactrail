@@ -10,6 +10,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
+/// Current schema of Pactrail's provider-neutral conversation and request IR.
+pub const MODEL_IR_SCHEMA_VERSION: u32 = 1;
+
 /// Maximum number of image artifacts accepted on one user turn.
 pub const MAX_INPUT_IMAGES: usize = 4;
 /// Maximum decoded bytes accepted for one image artifact.

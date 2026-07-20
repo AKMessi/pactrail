@@ -8,6 +8,12 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use thiserror::Error;
 use time::OffsetDateTime;
 
+/// Current on-disk schema for the append-only event database.
+pub const EVENT_DATABASE_SCHEMA_VERSION: i64 = 2;
+
+/// Oldest initialized event database schema this binary migrates in place.
+pub const MIN_EVENT_DATABASE_SCHEMA_VERSION: i64 = 1;
+
 /// SQLite-backed append-only event store.
 #[derive(Debug)]
 pub struct EventStore {
@@ -44,7 +50,7 @@ impl EventStore {
         let database_version: i64 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(StoreError::Database)?;
-        if !matches!(database_version, 0..=2) {
+        if !(0..=EVENT_DATABASE_SCHEMA_VERSION).contains(&database_version) {
             return Err(StoreError::UnsupportedDatabaseSchema(database_version));
         }
         connection
@@ -71,9 +77,9 @@ impl EventStore {
                  COMMIT;",
             )
             .map_err(StoreError::Database)?;
-        if database_version < 2 {
+        if database_version < EVENT_DATABASE_SCHEMA_VERSION {
             connection
-                .pragma_update(None, "user_version", 2)
+                .pragma_update(None, "user_version", EVENT_DATABASE_SCHEMA_VERSION)
                 .map_err(StoreError::Database)?;
         }
         Ok(Self { connection })
