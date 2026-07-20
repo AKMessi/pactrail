@@ -45,6 +45,7 @@ pub struct RunCheckpoint {
     pub repeated_tool_turns: u16,
     pub consecutive_failed_tool_turns: u16,
     pub automatic_repair_cycles: u16,
+    pub final_text: String,
     pub recovery_risk: Option<String>,
 }
 
@@ -89,6 +90,7 @@ impl RunCheckpoint {
             repeated_tool_turns: 0,
             consecutive_failed_tool_turns: 0,
             automatic_repair_cycles: 0,
+            final_text: String::new(),
             recovery_risk: None,
         };
         checkpoint.validate()?;
@@ -134,6 +136,7 @@ impl RunCheckpoint {
         if let Some(risk) = &self.recovery_risk {
             validate_control_string("recovery_risk", risk)?;
         }
+        validate_control_string("final_text", &self.final_text)?;
         if self.phase == ResumePhase::BeforeTools {
             let has_pending_calls = self
                 .conversation

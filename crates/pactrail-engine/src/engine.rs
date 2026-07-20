@@ -9,8 +9,8 @@ use pactrail_context::{
 };
 use pactrail_core::{
     ActionRecord, ApprovalDecision, ApprovalRequest, Capability, ChangeReceipt, ContractError,
-    Evidence, EvidenceGrade, EvidenceId, EvidenceKind, EvidenceStatus, FileChange, ReceiptError,
-    ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState, TaskContract,
+    EventHash, Evidence, EvidenceGrade, EvidenceId, EvidenceKind, EvidenceStatus, FileChange,
+    ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState, TaskContract,
 };
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
@@ -23,13 +23,15 @@ use pactrail_tools::{
     ToolError, ToolOutput, ToolRegistry,
 };
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
+use serde::Serialize;
 use serde_json::json;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+use crate::checkpoint::{CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint};
 use crate::context_window::{CompactionReport, ContextWindow};
-use crate::{VerificationCommand, detect_verification_commands};
+use crate::{CheckpointError, VerificationCommand, detect_verification_commands};
 
 const DEFAULT_MAX_TURNS: u16 = 24;
 const STALLED_TOOL_TURN_LIMIT: u16 = 3;
@@ -170,6 +172,7 @@ pub struct RunEngine<'a> {
     cancellation: CancellationToken,
     memory: Option<&'a MemoryStore>,
     context_fragments: Vec<ContextFragment>,
+    checkpoint_store: Option<&'a CheckpointStore>,
     max_turns: u16,
 }
 
@@ -189,6 +192,7 @@ impl<'a> RunEngine<'a> {
             cancellation: CancellationToken::new(),
             memory: None,
             context_fragments: Vec::new(),
+            checkpoint_store: None,
             max_turns: DEFAULT_MAX_TURNS,
         }
     }
@@ -225,6 +229,13 @@ impl<'a> RunEngine<'a> {
     #[must_use]
     pub fn with_context_fragments(mut self, fragments: Vec<ContextFragment>) -> Self {
         self.context_fragments = fragments;
+        self
+    }
+
+    /// Enables content-addressed provider-neutral session checkpoints.
+    #[must_use]
+    pub const fn with_checkpoint_store(mut self, store: &'a CheckpointStore) -> Self {
+        self.checkpoint_store = Some(store);
         self
     }
 
@@ -432,6 +443,48 @@ impl<'a> RunEngine<'a> {
         let mut automatic_repair_cycles = 0_u16;
         let mut accepted_completion_gate = None;
         let tool_descriptors = self.tools.descriptors();
+        let mut durable_checkpoint = self
+            .checkpoint_store
+            .map(|_| {
+                let (event_sequence, event_hash) = journal.head()?;
+                let (model_profile_digest, tool_profile_digest) =
+                    self.checkpoint_profile_digests(&tool_descriptors)?;
+                RunCheckpoint::initial(
+                    CheckpointIdentity {
+                        run_id,
+                        event_sequence,
+                        event_hash,
+                        contract: &contract,
+                        candidate_digest: candidate_changes_digest(&transaction.changes()?),
+                        model_profile_digest,
+                        tool_profile_digest,
+                        context_digest: blake3::hash(context_pack.rendered.as_bytes())
+                            .to_hex()
+                            .to_string(),
+                    },
+                    conversation.clone(),
+                )
+                .map_err(EngineError::from)
+            })
+            .transpose()?;
+        self.persist_checkpoint(
+            &mut durable_checkpoint,
+            transaction,
+            &mut journal,
+            CheckpointLoopState {
+                phase: ResumePhase::BeforeModel,
+                next_turn: 0,
+                conversation: &conversation,
+                usage,
+                call_ids: &call_ids,
+                previous_tool_signature: previous_tool_signature.as_ref(),
+                repeated_tool_turns,
+                consecutive_failed_tool_turns,
+                automatic_repair_cycles,
+                final_text: &final_text,
+                recovery_risk: recovery_risk.as_deref(),
+            },
+        )?;
 
         for turn in 0..max_turns {
             self.check_cancelled()?;
@@ -616,6 +669,24 @@ impl<'a> RunEngine<'a> {
                             previous_tool_signature = None;
                             repeated_tool_turns = 0;
                             consecutive_failed_tool_turns = 0;
+                            self.persist_checkpoint(
+                                &mut durable_checkpoint,
+                                transaction,
+                                &mut journal,
+                                CheckpointLoopState {
+                                    phase: ResumePhase::BeforeModel,
+                                    next_turn: turn.saturating_add(1),
+                                    conversation: &conversation,
+                                    usage,
+                                    call_ids: &call_ids,
+                                    previous_tool_signature: previous_tool_signature.as_ref(),
+                                    repeated_tool_turns,
+                                    consecutive_failed_tool_turns,
+                                    automatic_repair_cycles,
+                                    final_text: &final_text,
+                                    recovery_risk: recovery_risk.as_deref(),
+                                },
+                            )?;
                             continue;
                         } else if validation.passed() {
                             accepted_completion_gate = Some((candidate_digest, validation));
@@ -757,6 +828,24 @@ impl<'a> RunEngine<'a> {
                 ));
                 break;
             }
+            self.persist_checkpoint(
+                &mut durable_checkpoint,
+                transaction,
+                &mut journal,
+                CheckpointLoopState {
+                    phase: ResumePhase::BeforeModel,
+                    next_turn: turn.saturating_add(1),
+                    conversation: &conversation,
+                    usage,
+                    call_ids: &call_ids,
+                    previous_tool_signature: previous_tool_signature.as_ref(),
+                    repeated_tool_turns,
+                    consecutive_failed_tool_turns,
+                    automatic_repair_cycles,
+                    final_text: &final_text,
+                    recovery_risk: recovery_risk.as_deref(),
+                },
+            )?;
         }
 
         if final_text.is_empty() {
@@ -799,6 +888,25 @@ impl<'a> RunEngine<'a> {
                 )]),
             }))?;
         }
+
+        self.persist_checkpoint(
+            &mut durable_checkpoint,
+            transaction,
+            &mut journal,
+            CheckpointLoopState {
+                phase: ResumePhase::BeforeVerification,
+                next_turn: max_turns,
+                conversation: &conversation,
+                usage,
+                call_ids: &call_ids,
+                previous_tool_signature: previous_tool_signature.as_ref(),
+                repeated_tool_turns,
+                consecutive_failed_tool_turns,
+                automatic_repair_cycles,
+                final_text: &final_text,
+                recovery_risk: recovery_risk.as_deref(),
+            },
+        )?;
 
         transition(&mut journal, &mut state, RunState::Verifying, observer)?;
         let changes = transaction.changes()?;
@@ -1379,7 +1487,81 @@ impl<'a> RunEngine<'a> {
     }
 }
 
+#[derive(Clone, Copy)]
+struct CheckpointLoopState<'a> {
+    phase: ResumePhase,
+    next_turn: u16,
+    conversation: &'a Vec<ConversationItem>,
+    usage: Usage,
+    call_ids: &'a BTreeSet<String>,
+    previous_tool_signature: Option<&'a Vec<(String, String)>>,
+    repeated_tool_turns: u16,
+    consecutive_failed_tool_turns: u16,
+    automatic_repair_cycles: u16,
+    final_text: &'a str,
+    recovery_risk: Option<&'a str>,
+}
+
 impl RunEngine<'_> {
+    fn checkpoint_profile_digests(
+        &self,
+        tools: &[ToolDescriptor],
+    ) -> Result<(String, String), EngineError> {
+        #[derive(Serialize)]
+        struct ModelProfile<'a> {
+            provider: &'a str,
+            model: &'a str,
+            capabilities: &'a pactrail_models::ModelCapabilities,
+            max_turns: u16,
+        }
+
+        let model = serde_json::to_vec(&ModelProfile {
+            provider: self.model.name(),
+            model: self.model.model(),
+            capabilities: self.model.capabilities(),
+            max_turns: self.max_turns,
+        })
+        .map_err(CheckpointError::Encoding)?;
+        let tools = serde_json::to_vec(tools).map_err(CheckpointError::Encoding)?;
+        Ok((
+            blake3::hash(&model).to_hex().to_string(),
+            blake3::hash(&tools).to_hex().to_string(),
+        ))
+    }
+
+    fn persist_checkpoint(
+        &self,
+        checkpoint: &mut Option<RunCheckpoint>,
+        transaction: &WorkspaceTransaction,
+        journal: &mut Journal<'_>,
+        state: CheckpointLoopState<'_>,
+    ) -> Result<(), EngineError> {
+        let (Some(store), Some(checkpoint)) = (self.checkpoint_store, checkpoint.as_mut()) else {
+            return Ok(());
+        };
+        let (event_sequence, event_hash) = journal.head()?;
+        checkpoint.event_sequence = event_sequence;
+        checkpoint.event_hash = event_hash;
+        checkpoint.candidate_digest = candidate_changes_digest(&transaction.changes()?);
+        checkpoint.phase = state.phase;
+        checkpoint.next_turn = state.next_turn;
+        checkpoint.conversation.clone_from(state.conversation);
+        checkpoint.usage = state.usage;
+        checkpoint.call_ids.clone_from(state.call_ids);
+        checkpoint
+            .previous_tool_signature
+            .clone_from(&state.previous_tool_signature.cloned());
+        checkpoint.repeated_tool_turns = state.repeated_tool_turns;
+        checkpoint.consecutive_failed_tool_turns = state.consecutive_failed_tool_turns;
+        checkpoint.automatic_repair_cycles = state.automatic_repair_cycles;
+        state.final_text.clone_into(&mut checkpoint.final_text);
+        checkpoint.recovery_risk = state.recovery_risk.map(str::to_owned);
+        let artifact = store.put(checkpoint)?;
+        journal.append(RunEvent::CheckpointCreated {
+            checkpoint: CheckpointStore::event_reference(&artifact),
+        })
+    }
+
     async fn invoke_model(&self, request: &ModelRequest) -> Result<ModelResponse, EngineError> {
         tokio::select! {
             biased;
@@ -1813,6 +1995,15 @@ impl<'a> Journal<'a> {
         }
         Ok(())
     }
+
+    fn head(&self) -> Result<(u64, EventHash), EngineError> {
+        let sequence = self.sequence.checked_sub(1).ok_or_else(|| {
+            EngineError::InvalidConfiguration(
+                "cannot checkpoint a run before its first durable event".to_owned(),
+            )
+        })?;
+        Ok((sequence, EventHash(self.last_hash.clone())))
+    }
 }
 
 fn compact_model_context(
@@ -2171,6 +2362,8 @@ pub enum EngineError {
     Context(#[from] ContextError),
     #[error("event storage failed: {0}")]
     Store(#[from] StoreError),
+    #[error("durable checkpoint failed: {0}")]
+    Checkpoint(#[from] CheckpointError),
     #[error("model invocation failed: {0}")]
     Model(#[from] ModelError),
     #[error("workspace transaction failed: {0}")]

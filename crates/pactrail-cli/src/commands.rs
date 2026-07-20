@@ -13,7 +13,7 @@ use pactrail_core::{
     EvidenceGrade, EvidenceId, EvidenceKind, EvidenceStatus, ReceiptInput, ReceiptOutcome,
     RunEvent, RunId, RunState, TaskContract,
 };
-use pactrail_engine::{EngineError, RunEngine, RunObserver};
+use pactrail_engine::{CheckpointStore, EngineError, RunEngine, RunObserver};
 use pactrail_memory::{
     MemoryDraft, MemoryError, MemoryId, MemoryKind, MemoryMatch, MemoryRecord, MemoryStore,
 };
@@ -192,6 +192,8 @@ async fn execute_run_inner(
     let transaction =
         WorkspaceTransaction::create(&workspace, &run_root, &contract.allowed_write_paths)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
+    let checkpoints = CheckpointStore::open(state.join("artifacts").join("checkpoints"))
+        .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
     let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
     let registry = builtin_registry_with_process(process_tool)?;
@@ -201,6 +203,7 @@ async fn execute_run_inner(
     let engine = RunEngine::new(&driver, &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
+        .with_checkpoint_store(&checkpoints)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
     let fixed_approval = FixedApprovalResolver(match process_approval {
