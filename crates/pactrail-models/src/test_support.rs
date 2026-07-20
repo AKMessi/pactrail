@@ -1,6 +1,20 @@
 use std::io::{Error, ErrorKind, Read};
 use std::net::TcpStream;
 
+pub(crate) fn tiny_png(width: u32, height: u32) -> Vec<u8> {
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    bytes.extend_from_slice(&13_u32.to_be_bytes());
+    bytes.extend_from_slice(b"IHDR");
+    bytes.extend_from_slice(&width.to_be_bytes());
+    bytes.extend_from_slice(&height.to_be_bytes());
+    bytes.extend_from_slice(&[8, 2, 0, 0, 0]);
+    bytes.extend_from_slice(&[0; 4]);
+    bytes.extend_from_slice(&0_u32.to_be_bytes());
+    bytes.extend_from_slice(b"IEND");
+    bytes.extend_from_slice(&[0; 4]);
+    bytes
+}
+
 pub(crate) fn read_http_request(stream: &mut TcpStream) -> std::io::Result<Vec<u8>> {
     const LIMIT: usize = 64 * 1024;
     let mut request = Vec::new();

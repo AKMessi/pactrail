@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use pactrail_core::{EventHash, RunEvent, RunId, TaskContract};
-use pactrail_models::{ConversationItem, Usage};
+use pactrail_models::{ConversationItem, Usage, validate_image_set};
 use pactrail_store::{ArtifactError, ArtifactStore, EventStore, StoreError, StoredArtifact};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -127,6 +127,20 @@ impl RunCheckpoint {
                 limit: MAX_CONVERSATION_ITEMS,
             });
         }
+        let images = self
+            .conversation
+            .iter()
+            .filter_map(|item| match item {
+                ConversationItem::UserContent(content) => Some(content.images.iter()),
+                ConversationItem::Message(_)
+                | ConversationItem::AssistantToolCalls { .. }
+                | ConversationItem::ToolResult(_) => None,
+            })
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>();
+        validate_image_set(&images)
+            .map_err(|error| CheckpointError::InvalidImages(error.to_string()))?;
         if self.call_ids.len() > MAX_CALL_IDS {
             return Err(CheckpointError::BoundExceeded {
                 field: "call_ids",
@@ -299,6 +313,8 @@ pub enum CheckpointError {
     InvalidString { field: &'static str },
     #[error("checkpoint phase is inconsistent: {0}")]
     InvalidPhase(&'static str),
+    #[error("checkpoint image artifacts are invalid: {0}")]
+    InvalidImages(String),
     #[error("run {0} has no durable session checkpoint")]
     NotFound(RunId),
     #[error("run {run_id} event head {head_sequence} is not a safe checkpoint")]
@@ -336,7 +352,7 @@ pub enum CheckpointError {
 #[cfg(test)]
 mod tests {
     use pactrail_core::{EffectPrepared, RunEvent, RunState};
-    use pactrail_models::Message;
+    use pactrail_models::{ImageArtifact, Message, UserContent};
 
     use super::*;
 
@@ -476,5 +492,37 @@ mod tests {
             Err(CheckpointError::UncertainEffect { call_id, tool, .. })
                 if call_id == "call-1" && tool == "write_file"
         ));
+    }
+
+    #[test]
+    fn checkpoint_round_trip_preserves_and_revalidates_sealed_images() {
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend_from_slice(&13_u32.to_be_bytes());
+        png.extend_from_slice(b"IHDR");
+        png.extend_from_slice(&10_u32.to_be_bytes());
+        png.extend_from_slice(&20_u32.to_be_bytes());
+        png.extend_from_slice(&[8, 2, 0, 0, 0]);
+        png.extend_from_slice(&[0; 4]);
+        png.extend_from_slice(&0_u32.to_be_bytes());
+        png.extend_from_slice(b"IEND");
+        png.extend_from_slice(&[0; 4]);
+        let image = ImageArtifact::from_bytes("screen.png", &png)
+            .unwrap_or_else(|error| unreachable!("image: {error}"));
+        let mut checkpoint = checkpoint(RunId::new(), 0, EventHash("0".repeat(64)));
+        checkpoint.conversation = vec![ConversationItem::UserContent(
+            UserContent::new("inspect", vec![image.clone()])
+                .unwrap_or_else(|error| unreachable!("content: {error}")),
+        )];
+
+        let bytes = serde_json::to_vec(&checkpoint)
+            .unwrap_or_else(|error| unreachable!("serialize: {error}"));
+        let restored: RunCheckpoint =
+            serde_json::from_slice(&bytes).unwrap_or_else(|error| unreachable!("restore: {error}"));
+
+        assert_eq!(restored, checkpoint);
+        let ConversationItem::UserContent(content) = &restored.conversation[0] else {
+            unreachable!("multimodal user content")
+        };
+        assert_eq!(content.images[0].digest(), image.digest());
     }
 }

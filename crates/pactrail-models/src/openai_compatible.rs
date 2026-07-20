@@ -9,9 +9,11 @@ use serde_json::{Value, json};
 use tracing::warn;
 
 use crate::sse::{SseDecoder, SseEvent};
+use crate::types::{validate_request_body_size, validate_request_images};
 use crate::{
     ConversationItem, FinishReason, Message, ModelCapabilities, ModelDriver, ModelError,
     ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, Usage,
+    UserContent,
 };
 
 const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
@@ -630,6 +632,8 @@ fn request_body(
             "at least one message is required".to_owned(),
         ));
     }
+    validate_request_images(&request.conversation, config.capabilities.vision)
+        .map_err(ModelError::InvalidRequest)?;
     if request.max_output_tokens == 0
         || request.max_output_tokens > config.capabilities.max_output_tokens
     {
@@ -678,6 +682,7 @@ fn request_body(
         body["temperature"] = json!(temperature);
     }
 
+    validate_request_body_size(&body).map_err(ModelError::InvalidRequest)?;
     Ok(body)
 }
 
@@ -720,6 +725,7 @@ fn canonical_messages(conversation: &[ConversationItem]) -> Result<Vec<Value>, M
 fn conversation_json(item: &ConversationItem) -> Result<Value, ModelError> {
     match item {
         ConversationItem::Message(message) => Ok(message_json(message)),
+        ConversationItem::UserContent(content) => Ok(openai_user_content(content)),
         ConversationItem::AssistantToolCalls { text, calls } => {
             let calls = calls
                 .iter()
@@ -748,6 +754,30 @@ fn conversation_json(item: &ConversationItem) -> Result<Value, ModelError> {
             "content": serde_json::to_string(&result.content).map_err(ModelError::Json)?,
         })),
     }
+}
+
+fn openai_user_content(content: &UserContent) -> Value {
+    let mut blocks = Vec::with_capacity(content.images.len().saturating_mul(2).saturating_add(1));
+    if !content.text.is_empty() {
+        blocks.push(json!({"type": "text", "text": content.text}));
+    }
+    for image in &content.images {
+        blocks.push(json!({
+            "type": "text",
+            "text": format!("Attached image: {}", image.name()),
+        }));
+        blocks.push(json!({
+            "type": "image_url",
+            "image_url": {
+                "url": format!(
+                    "data:{};base64,{}",
+                    image.media_type().as_str(),
+                    image.data_base64()
+                ),
+            },
+        }));
+    }
+    json!({"role": "user", "content": blocks})
 }
 
 fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResponse, ModelError> {
@@ -1023,6 +1053,37 @@ mod tests {
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0]["role"], "user");
         assert_eq!(messages[1]["role"], "assistant");
+    }
+
+    #[test]
+    fn maps_sealed_images_to_openai_data_urls_and_enforces_vision() {
+        let image = crate::ImageArtifact::from_bytes(
+            "screen.png",
+            &crate::test_support::tiny_png(640, 480),
+        )
+        .unwrap_or_else(|error| unreachable!("image: {error}"));
+        let request = ModelRequest {
+            conversation: vec![ConversationItem::UserContent(
+                UserContent::new("inspect this", vec![image.clone()])
+                    .unwrap_or_else(|error| unreachable!("content: {error}")),
+            )],
+            tools: Vec::new(),
+            max_output_tokens: 128,
+            temperature: Some(0.0),
+        };
+        let mut vision = config("https://api.example.com/v1");
+        vision.capabilities.vision = true;
+        let body = request_body(&vision, &request, false)
+            .unwrap_or_else(|error| unreachable!("vision request: {error}"));
+        assert_eq!(body["messages"][0]["content"][0]["text"], "inspect this");
+        assert_eq!(
+            body["messages"][0]["content"][2]["image_url"]["url"],
+            format!("data:image/png;base64,{}", image.data_base64())
+        );
+        assert!(matches!(
+            request_body(&config("https://api.example.com/v1"), &request, false),
+            Err(ModelError::InvalidRequest(message)) if message.contains("vision")
+        ));
     }
 
     #[test]

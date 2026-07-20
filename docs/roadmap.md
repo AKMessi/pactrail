@@ -92,10 +92,14 @@ tests and legible CLI diagnostics.
 - Reproducible repository-scale cold/warm/incremental, targeted-context, tool
   descriptor, release-latency, and Linux peak-RSS budgets with retained raw CI
   artifacts.
+- Explicit integrity-bound PNG/JPEG/WebP artifacts across OpenAI-compatible,
+  Anthropic, and Gemini transports, with CLI attachment queues, context
+  reservation, durable resume, and path/base64-safe traces.
 
 ## 0.8 — repository-scale intelligence and performance
 
-- Image input as an explicit artifact capability.
+All planned 0.8 implementation items are shipped on `main`; release packaging
+remains part of the versioned release process.
 
 Exit criterion: cold/warm performance and retrieval-relevance suites cover tiny
 local models through hosted models without hidden prompt truncation.

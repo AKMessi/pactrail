@@ -103,8 +103,9 @@ For each run, the compiler:
 1. Rewrites the model-visible workspace root to `.` so host paths never enter
    tool instructions.
 2. Derives a conservative context byte ceiling from declared context and output
-   token limits, reserving most of the window for tool schemas, conversation,
-   tool results, and generation.
+   token limits after subtracting the integrity-bound image artifact estimate,
+   reserving most of the remaining window for tool schemas, conversation, tool
+   results, and generation.
 3. Requires the task contract and root `AGENTS.md` to fit in full. Failure is
    explicit rather than silently dropping authoritative instructions.
 4. Labels nested `AGENTS.md` files with their virtual directory scope.
@@ -232,6 +233,25 @@ mutation loops do not receive this fallback.
 
 ## Provider and streaming boundary
 
+Image input extends the ordered conversation IR with `UserContent`, not with a
+provider-specific side channel. Each `ImageArtifact` contains only a portable
+filename, fixed media type, dimensions, byte count, complete base64 payload,
+and BLAKE3 digest. The constructors and deserializer enforce the same bounds, so
+checkpoint loading cannot bypass validation. Payload storage uses shared
+immutable ownership to keep per-turn conversation cloning constant-time for the
+large field. Context fingerprinting substitutes the image digest for base64;
+the engine separately reserves a conservative 768-pixel-tile token estimate
+before it compiles repository context. This avoids counting transport encoding
+as text while still failing an impossible model window before invocation.
+
+The initial user turn owns the images and is checkpointed as one atomic
+provider-neutral item. OpenAI-compatible adapters map it to text and data-URL
+content parts, Anthropic to labelled base64 image/text blocks, and Gemini to
+text plus `inlineData`. Every adapter independently rejects image content when
+the effective model profile does not declare vision. Resume obtains images only
+from the head-bound checkpoint and forbids injection of new image bytes into an
+existing run.
+
 `pactrail-models` translates OpenAI-compatible Chat Completions, Anthropic
 Messages, and Gemini GenerateContent into the same ordered conversation,
 complete response, tool-call, finish-reason, and usage types. Protocol-specific
@@ -297,7 +317,8 @@ controller state into bounded content-addressed checkpoint artifacts. A
 The checkpoint points back to the preceding event sequence/hash and also binds
 the task contract, candidate change set, repository context, model/tool
 profiles, secret-free CLI manifest, resolved process-runtime/image profile,
-token use, turn counters, repair state, and elapsed active budget.
+sealed input artifacts, token use, turn counters, repair state, and elapsed
+active budget.
 
 `pactrail resume <run-id>` reopens the existing workspace transaction and reads
 the original `run.json`; it never reloads a mutable task file. Before appending

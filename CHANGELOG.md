@@ -21,6 +21,11 @@ follow [Semantic Versioning](https://semver.org/).
   cold/warm/one-file incremental indexing, targeted context, release latency,
   Linux peak RSS, and retained schema-versioned raw reports. Built-in tool
   descriptors now have count, aggregate/per-tool byte, and schema-depth gates.
+- Explicit PNG/JPEG/WebP task artifacts through repeatable `--image` and the
+  interactive `/image add|list|clear` queue. Image bytes are format/dimension/
+  size checked, BLAKE3-sealed, stripped of host paths, context-reserved,
+  checkpoint-resumable, and mapped natively across OpenAI-compatible,
+  Anthropic, and Gemini transports.
 
 ### Security
 
@@ -30,11 +35,16 @@ follow [Semantic Versioning](https://semver.org/).
   workspace boundary, and applies independent traversal/hash/object/diff/history
   limits. Commands, hooks, filters, credentials, remotes, and network clients
   are not exposed or invoked.
+- Image loading rejects symlinks, special files, duplicate content, malformed
+  bounded container structure, unsupported formats, oversized payloads, and
+  dangerous dimensions before durable run creation. Traces omit base64 and
+  host paths; attached image data is explicitly treated as untrusted evidence.
 
 ### Changed
 
-- The Rust embedding surface revision is 3 and now includes typed structural,
-  LSP-provenance, Git evidence, and Git tool contracts.
+- The Rust embedding surface revision is 4 and now includes typed structural,
+  LSP-provenance, Git evidence/tool contracts, and sealed multimodal user
+  content.
 
 ## [0.7.0] - 2026-07-21
 

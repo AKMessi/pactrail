@@ -311,6 +311,12 @@ pub struct RunArgs {
     #[arg(long, conflicts_with = "goal")]
     pub task: Option<PathBuf>,
 
+    /// Attach a local PNG, JPEG, or WebP to the task. Repeatable; paths are
+    /// sealed to bytes and are never persisted or sent to the model.
+    #[arg(long = "image", value_name = "PATH")]
+    #[serde(skip)]
+    pub images: Vec<PathBuf>,
+
     /// Configured provider kind.
     #[arg(long, value_enum, default_value = "ollama")]
     pub provider: ProviderKind,
@@ -665,6 +671,10 @@ mod tests {
             "auto",
             "--vision",
             "on",
+            "--image",
+            "screen.png",
+            "--image",
+            "reference.webp",
             "task",
         ])
         .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
@@ -674,6 +684,13 @@ mod tests {
         assert_eq!(args.native_tools, CapabilitySetting::Off);
         assert_eq!(args.parallel_tools, CapabilitySetting::Auto);
         assert_eq!(args.vision, CapabilitySetting::On);
+        assert_eq!(
+            args.images,
+            [
+                std::path::PathBuf::from("screen.png"),
+                std::path::PathBuf::from("reference.webp")
+            ]
+        );
     }
 
     #[test]

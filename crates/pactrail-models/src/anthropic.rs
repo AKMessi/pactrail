@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use tracing::warn;
 
 use crate::sse::{SseDecoder, SseEvent};
+use crate::types::{validate_request_body_size, validate_request_images};
 use crate::{
     ConversationItem, FinishReason, Message, ModelCapabilities, ModelDriver, ModelError,
     ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, Usage,
@@ -209,6 +210,8 @@ fn request_body(
             "at least one message is required".to_owned(),
         ));
     }
+    validate_request_images(&request.conversation, config.capabilities.vision)
+        .map_err(ModelError::InvalidRequest)?;
     if request.max_output_tokens == 0
         || request.max_output_tokens > config.capabilities.max_output_tokens
     {
@@ -253,6 +256,7 @@ fn request_body(
         }
         body["temperature"] = json!(temperature);
     }
+    validate_request_body_size(&body).map_err(ModelError::InvalidRequest)?;
     Ok(body)
 }
 
@@ -282,6 +286,28 @@ fn anthropic_messages(
                     role,
                     vec![json!({"type": "text", "text": content})],
                 )?;
+            }
+            ConversationItem::UserContent(content) => {
+                let mut blocks =
+                    Vec::with_capacity(content.images.len().saturating_mul(2).saturating_add(1));
+                for image in &content.images {
+                    blocks.push(json!({
+                        "type": "text",
+                        "text": format!("Attached image: {}", image.name()),
+                    }));
+                    blocks.push(json!({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": image.media_type().as_str(),
+                            "data": image.data_base64(),
+                        },
+                    }));
+                }
+                if !content.text.is_empty() {
+                    blocks.push(json!({"type": "text", "text": content.text}));
+                }
+                push_message_blocks(&mut messages, "user", blocks)?;
             }
             ConversationItem::AssistantToolCalls { text, calls } => {
                 let mut blocks = Vec::with_capacity(calls.len().saturating_add(1));
@@ -1118,6 +1144,34 @@ mod tests {
         assert_eq!(body["messages"][1]["content"][0]["type"], "tool_use");
         assert_eq!(body["messages"][2]["content"][0]["type"], "tool_result");
         assert_eq!(body["tool_choice"]["disable_parallel_tool_use"], false);
+    }
+
+    #[test]
+    fn maps_sealed_images_to_anthropic_base64_blocks() {
+        let image = crate::ImageArtifact::from_bytes(
+            "screen.png",
+            &crate::test_support::tiny_png(640, 480),
+        )
+        .unwrap_or_else(|error| unreachable!("image: {error}"));
+        let request = ModelRequest {
+            conversation: vec![ConversationItem::UserContent(
+                crate::UserContent::new("inspect this", vec![image.clone()])
+                    .unwrap_or_else(|error| unreachable!("content: {error}")),
+            )],
+            tools: Vec::new(),
+            max_output_tokens: 128,
+            temperature: Some(0.0),
+        };
+        let mut config = config();
+        config.capabilities.vision = true;
+        let body = request_body(&config, &request, false)
+            .unwrap_or_else(|error| unreachable!("vision request: {error}"));
+        let content = &body["messages"][0]["content"];
+        assert_eq!(content[1]["type"], "image");
+        assert_eq!(content[1]["source"]["type"], "base64");
+        assert_eq!(content[1]["source"]["media_type"], "image/png");
+        assert_eq!(content[1]["source"]["data"], image.data_base64());
+        assert_eq!(content[2]["text"], "inspect this");
     }
 
     #[test]

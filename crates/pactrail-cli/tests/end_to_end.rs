@@ -296,6 +296,111 @@ fn complete_run_is_isolated_then_applies() {
 }
 
 #[test]
+fn image_run_is_provider_native_path_free_and_trace_safe() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let attachments =
+        tempfile::tempdir().unwrap_or_else(|error| unreachable!("attachments: {error}"));
+    let image_path = attachments.path().join("failure.png");
+    let attachment_directory = attachments
+        .path()
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_else(|| unreachable!("attachment directory name"))
+        .to_owned();
+    std::fs::write(&image_path, tiny_png(320, 200))
+        .unwrap_or_else(|error| unreachable!("image: {error}"));
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|error| unreachable!("mock provider: {error}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|error| unreachable!("provider address: {error}"));
+    let server = thread::spawn(move || {
+        let (mut stream, _address) = listener
+            .accept()
+            .unwrap_or_else(|error| unreachable!("provider accept: {error}"));
+        let request = capture_request(&mut stream);
+        write_response(
+            &mut stream,
+            &json!({
+                "id": "vision-summary",
+                "choices": [{
+                    "message": {"content": "The screenshot shows a bounded fixture."},
+                    "finish_reason": "stop"
+                }],
+                "usage": {"prompt_tokens": 30, "completion_tokens": 8}
+            }),
+        );
+        request
+    });
+
+    let output = pactrail(
+        workspace.path(),
+        [
+            "run",
+            "Explain what the screenshot shows",
+            "--provider",
+            "open-ai-compatible",
+            "--base-url",
+            &format!("http://{address}/v1"),
+            "--model",
+            "mock-vision",
+            "--vision",
+            "on",
+            "--image",
+            path_text(&image_path),
+            "--no-stream",
+            "--output",
+            "json",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "vision run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let request = server
+        .join()
+        .unwrap_or_else(|_| unreachable!("provider thread panicked"));
+    let header_end =
+        find_bytes(&request, b"\r\n\r\n").unwrap_or_else(|| unreachable!("HTTP headers missing"));
+    let body: Value = serde_json::from_slice(&request[header_end + 4..])
+        .unwrap_or_else(|error| unreachable!("request JSON: {error}"));
+    let data_url = body["messages"][1]["content"][2]["image_url"]["url"]
+        .as_str()
+        .unwrap_or_else(|| unreachable!("image data URL missing"));
+    assert!(data_url.starts_with("data:image/png;base64,"));
+    assert!(!String::from_utf8_lossy(&request).contains(path_text(&image_path)));
+    assert!(!String::from_utf8_lossy(&request).contains(&attachment_directory));
+
+    let result: Value = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| unreachable!("run JSON: {error}"));
+    assert_eq!(result["outcome"], "answered");
+    let run_id = result["run_id"]
+        .as_str()
+        .unwrap_or_else(|| unreachable!("run id missing"));
+    let manifest: Value = serde_json::from_slice(
+        &std::fs::read(
+            workspace
+                .path()
+                .join(".pactrail")
+                .join("runs")
+                .join(run_id)
+                .join("run.json"),
+        )
+        .unwrap_or_else(|error| unreachable!("manifest: {error}")),
+    )
+    .unwrap_or_else(|error| unreachable!("manifest JSON: {error}"));
+    assert!(manifest["args"].get("images").is_none());
+    let trace = pactrail(workspace.path(), ["trace", run_id, "--json"]);
+    assert!(trace.status.success());
+    let trace_text = String::from_utf8_lossy(&trace.stdout);
+    assert!(trace_text.contains("seal_image_artifacts"));
+    assert!(!trace_text.contains("data:image"));
+    assert!(!trace_text.contains(path_text(&image_path)));
+    assert!(!trace_text.contains("failure.png"));
+}
+
+#[test]
 fn failed_run_exports_trace_and_remains_discoverable() {
     let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
     let listener = TcpListener::bind("127.0.0.1:0")
@@ -1040,6 +1145,10 @@ fn write_response(stream: &mut TcpStream, response: &Value) {
 }
 
 fn read_request(stream: &mut TcpStream) {
+    drop(capture_request(stream));
+}
+
+fn capture_request(stream: &mut TcpStream) -> Vec<u8> {
     let mut bytes = Vec::new();
     let mut buffer = [0_u8; 4096];
     let mut expected = None;
@@ -1070,6 +1179,21 @@ fn read_request(stream: &mut TcpStream) {
         }
     }
     assert!(bytes.starts_with(b"POST /v1/chat/completions HTTP/1.1"));
+    bytes
+}
+
+fn tiny_png(width: u32, height: u32) -> Vec<u8> {
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    bytes.extend_from_slice(&13_u32.to_be_bytes());
+    bytes.extend_from_slice(b"IHDR");
+    bytes.extend_from_slice(&width.to_be_bytes());
+    bytes.extend_from_slice(&height.to_be_bytes());
+    bytes.extend_from_slice(&[8, 2, 0, 0, 0]);
+    bytes.extend_from_slice(&[0; 4]);
+    bytes.extend_from_slice(&0_u32.to_be_bytes());
+    bytes.extend_from_slice(b"IEND");
+    bytes.extend_from_slice(&[0; 4]);
+    bytes
 }
 
 fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {

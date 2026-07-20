@@ -68,6 +68,11 @@ const COMMANDS: &[CommandHelp] = &[
         "inspect a receipt without its diff",
     ),
     CommandHelp::new(
+        "Work",
+        "/image add <path>|list|clear",
+        "attach sealed image evidence to the next task",
+    ),
+    CommandHelp::new(
         "Memory",
         "/memory [query]",
         "browse or search workspace memory",
@@ -218,6 +223,7 @@ pub(crate) async fn launch(
         pending_runs,
         memory_count,
         known_models: Vec::new(),
+        pending_images: Vec::new(),
     };
     session.bootstrap().await?;
     if let Some(goal) = initial_goal {
@@ -237,6 +243,7 @@ struct Session {
     pending_runs: usize,
     memory_count: usize,
     known_models: Vec<String>,
+    pending_images: Vec<PathBuf>,
 }
 
 #[derive(Clone, Copy)]
@@ -474,6 +481,36 @@ impl RunActivity {
             );
             self.set_message(message);
         }
+    }
+
+    fn on_input_artifacts(&self, progress: &RunProgress) {
+        let RunProgress::InputArtifactsReady {
+            count,
+            total_bytes,
+            estimated_input_tokens,
+            digests,
+        } = progress
+        else {
+            return;
+        };
+        let digest_labels = digests
+            .iter()
+            .map(|digest| digest.chars().take(8).collect::<String>())
+            .collect::<Vec<_>>()
+            .join(", ");
+        self.row(
+            "â—ˆ",
+            "images",
+            &format!(
+                "{} sealed Â· {} Â· ~{} input tokens Â· {}",
+                count,
+                format_bytes(*total_bytes),
+                format_count(*estimated_input_tokens),
+                digest_labels
+            ),
+            TimelineTone::Accent,
+        );
+        self.set_message("image evidence sealed");
     }
 
     fn on_context_progress(&self, progress: &RunProgress) {
@@ -818,6 +855,7 @@ impl RunObserver for RunActivity {
     fn on_progress(&self, progress: &RunProgress) {
         match progress {
             RunProgress::RunStarted { .. } => self.on_run_started(progress),
+            RunProgress::InputArtifactsReady { .. } => self.on_input_artifacts(progress),
             RunProgress::StateChanged { .. } => self.on_state_progress(progress),
             RunProgress::ContextBuilt { .. } => self.on_context_progress(progress),
             RunProgress::ContextCompacted { .. } => self.on_compaction_progress(progress),
@@ -991,6 +1029,7 @@ impl Session {
             "/status" | "/settings" | "/config" => self.render_status()?,
             "/doctor" => commands::doctor(false)?,
             "/tools" => self.render_tools()?,
+            "/image" | "/images" | "/attach" => self.handle_images(arguments)?,
             "/mcp" => self.handle_mcp(arguments).await?,
             "/models" => self.refresh_models().await?,
             "/model" => self.set_model(arguments)?,
@@ -1043,7 +1082,8 @@ impl Session {
             return Ok(());
         };
         let activity = RunActivity::new(&model, self.theme.clone());
-        let args = run_args_from_settings(&self.settings, Some(goal), model);
+        let mut args = run_args_from_settings(&self.settings, Some(goal), model);
+        args.images.clone_from(&self.pending_images);
 
         let cancellation = CancellationToken::new();
         let mut execution = Box::pin(commands::execute_run_with_observer_and_cancellation(
@@ -1070,6 +1110,13 @@ impl Session {
         };
         drop(execution);
         activity.finish();
+        let images_consumed = match &result {
+            Ok(_) => true,
+            Err(error) => error.run_id().is_some(),
+        };
+        if images_consumed {
+            self.pending_images.clear();
+        }
         self.finish_run_activity(&activity, result)
     }
 
@@ -1204,6 +1251,15 @@ impl Session {
             &memory.0,
             memory.1,
         ));
+        if !self.pending_images.is_empty() {
+            lines.extend(frame_field(
+                &self.theme,
+                columns,
+                "images",
+                &format!("{} queued for next task", self.pending_images.len()),
+                TimelineTone::Accent,
+            ));
+        }
         let footer = if columns < 76 {
             "Task · /help · // escapes /"
         } else {
@@ -1304,6 +1360,100 @@ impl Session {
             .map(|line| self.theme.muted(&line)),
         );
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
+    }
+
+    fn handle_images(&mut self, arguments: &str) -> Result<(), CliError> {
+        let (operation, value) = split_command(arguments);
+        match operation {
+            "" | "list" => {
+                if !value.is_empty() {
+                    return Err(CliError::Argument(
+                        "/image list does not accept an argument".to_owned(),
+                    ));
+                }
+                if self.pending_images.is_empty() {
+                    return self.emit(&format!(
+                        "\n{}\n  {}\n\n",
+                        self.theme.heading("Next-task images"),
+                        self.theme.muted("None queued. Use /image add <path>.")
+                    ));
+                }
+                let artifacts = commands::load_input_images(&self.pending_images)?;
+                let mut lines = vec![self.theme.heading("Next-task images")];
+                for (index, artifact) in artifacts.iter().enumerate() {
+                    lines.push(format!(
+                        "  {}  {}  {}x{} Â· {} Â· {}",
+                        self.theme.accent(&(index + 1).to_string()),
+                        self.theme.text(artifact.name()),
+                        artifact.width(),
+                        artifact.height(),
+                        format_bytes(artifact.bytes()),
+                        self.theme.code(&artifact.digest()[..12]),
+                    ));
+                }
+                lines.push(self.theme.muted(
+                    "Paths stay local. Sealed bytes and digests are consumed by the next task.",
+                ));
+                self.emit(&format!("\n{}\n\n", lines.join("\n")))
+            }
+            "add" => {
+                let path = parse_image_path(value)?;
+                let path = if path.is_absolute() {
+                    path
+                } else {
+                    self.workspace.join(path)
+                };
+                let mut candidate = self.pending_images.clone();
+                candidate.push(path);
+                let artifacts = commands::load_input_images(&candidate)?;
+                let artifact = artifacts.last().ok_or_else(|| {
+                    CliError::Argument(
+                        "image attachment validation returned no artifact".to_owned(),
+                    )
+                })?;
+                let detail = format!(
+                    "queued {} Â· {}x{} Â· {} Â· {}",
+                    artifact.name(),
+                    artifact.width(),
+                    artifact.height(),
+                    format_bytes(artifact.bytes()),
+                    &artifact.digest()[..12]
+                );
+                self.pending_images = candidate;
+                self.emit(&format!(
+                    "\n{}\n  {}\n",
+                    self.theme.success("Image ready"),
+                    detail
+                ))?;
+                if self.settings.vision.resolve(false) {
+                    self.emit("\n")
+                } else {
+                    self.emit(&format!(
+                        "  {}\n\n",
+                        self.theme.warning(
+                            "Vision is not enabled. Use /capability vision on only for a vision-capable model."
+                        )
+                    ))
+                }
+            }
+            "clear" => {
+                if !value.is_empty() {
+                    return Err(CliError::Argument(
+                        "/image clear does not accept an argument".to_owned(),
+                    ));
+                }
+                let removed = self.pending_images.len();
+                self.pending_images.clear();
+                self.emit(&format!(
+                    "\n{}\n\n",
+                    self.theme
+                        .muted(&format!("Cleared {removed} queued image(s)."))
+                ))
+            }
+            _ => Err(CliError::Argument(
+                "use /image add <path>, /image list, or /image clear".to_owned(),
+            )),
+        }
     }
 
     async fn handle_mcp(&self, arguments: &str) -> Result<(), CliError> {
@@ -1413,6 +1563,19 @@ impl Session {
             ("mcp", mcp.0, mcp.1),
             ("review", review.0, review.1),
             ("memory", memory.0, memory.1),
+            (
+                "images",
+                if self.pending_images.is_empty() {
+                    "none queued Â· /image add <path>".to_owned()
+                } else {
+                    format!("{} queued for next task", self.pending_images.len())
+                },
+                if self.pending_images.is_empty() {
+                    TimelineTone::Muted
+                } else {
+                    TimelineTone::Accent
+                },
+            ),
         ];
         let mut lines = vec![self.theme.heading("Session")];
         for (label, value, tone) in fields {
@@ -3209,6 +3372,7 @@ fn run_args_from_settings(
     RunArgs {
         goal,
         task: None,
+        images: Vec::new(),
         provider: settings.provider,
         model: Some(model),
         base_url: settings.effective_base_url(),
@@ -3250,6 +3414,28 @@ fn split_command(line: &str) -> (&str, &str) {
         .map_or((line, ""), |(command, arguments)| {
             (command, arguments.trim())
         })
+}
+
+fn parse_image_path(value: &str) -> Result<PathBuf, CliError> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(CliError::Argument(
+            "/image add requires one local file path".to_owned(),
+        ));
+    }
+    let unquoted = if (value.starts_with('"') && value.ends_with('"'))
+        || (value.starts_with('\'') && value.ends_with('\''))
+    {
+        value
+            .get(1..value.len().saturating_sub(1))
+            .ok_or_else(|| CliError::Argument("image path quoting is invalid".to_owned()))?
+    } else {
+        value
+    };
+    if unquoted.is_empty() || unquoted.contains(['\0', '\r', '\n']) {
+        return Err(CliError::Argument("image path is invalid".to_owned()));
+    }
+    Ok(PathBuf::from(unquoted))
 }
 
 fn mcp_server_argument(
@@ -3791,6 +3977,20 @@ mod tests {
             wrap_text("https://example.com/a/very/long/path", 10),
             ["https://ex", "ample.com/", "a/very/lon", "g/path"]
         );
+    }
+
+    #[test]
+    fn image_paths_support_spaces_without_accepting_empty_or_multiline_values() {
+        assert_eq!(
+            parse_image_path(r#""C:\work files\screen.png""#).ok(),
+            Some(PathBuf::from(r"C:\work files\screen.png"))
+        );
+        assert_eq!(
+            parse_image_path("screenshots/failure.png").ok(),
+            Some(PathBuf::from("screenshots/failure.png"))
+        );
+        assert!(parse_image_path("").is_err());
+        assert!(parse_image_path("bad\npath.png").is_err());
     }
 
     #[test]

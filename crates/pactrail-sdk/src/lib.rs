@@ -13,16 +13,19 @@
 ///
 /// This revision tracks source-level extension compatibility independently of
 /// durable task, event, receipt, checkpoint, and MCP schema versions.
-pub const SDK_API_REVISION: u32 = 3;
+pub const SDK_API_REVISION: u32 = 4;
 
 /// Provider-neutral model extension contracts and built-in adapters.
 pub mod model {
     pub use pactrail_models::{
         AnthropicConfig, AnthropicDriver, CapabilityProbeReport, CapabilitySource,
-        ConversationItem, FinishReason, GeminiConfig, GeminiDriver, Message, ModelCapabilities,
-        ModelDriver, ModelError, ModelRequest, ModelResponse, ModelStreamEvent,
-        ModelStreamObserver, OpenAiCompatibleConfig, OpenAiCompatibleDriver, ProbeObservation,
-        Role, ToolCall, ToolResult, Usage, probe_capabilities,
+        ConversationItem, FinishReason, GeminiConfig, GeminiDriver, ImageArtifact,
+        ImageArtifactError, ImageMediaType, ImageSetSummary, MAX_INLINE_MODEL_REQUEST_BYTES,
+        MAX_INPUT_IMAGE_BYTES, MAX_INPUT_IMAGE_DIMENSION, MAX_INPUT_IMAGES,
+        MAX_TOTAL_INPUT_IMAGE_BYTES, Message, ModelCapabilities, ModelDriver, ModelError,
+        ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, OpenAiCompatibleConfig,
+        OpenAiCompatibleDriver, ProbeObservation, Role, ToolCall, ToolResult, Usage, UserContent,
+        probe_capabilities, validate_image_set,
     };
 }
 
@@ -96,8 +99,8 @@ pub mod prelude {
     };
     pub use pactrail_engine::{RunEngine, RunObserver, RunOutcome, RunProgress};
     pub use pactrail_models::{
-        ModelCapabilities, ModelDriver, ModelError, ModelRequest, ModelResponse,
-        ModelStreamObserver,
+        ImageArtifact, ModelCapabilities, ModelDriver, ModelError, ModelRequest, ModelResponse,
+        ModelStreamObserver, UserContent,
     };
     pub use pactrail_store::EventStore;
     pub use pactrail_tools::{
