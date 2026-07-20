@@ -177,6 +177,16 @@ pactrail ❯ Fix the parser regression and add a test.
   hosts, redirects are disabled, and credentials are read from environment
   variables rather than CLI values or settings files.
 
+### Rust embedding
+
+`pactrail-sdk` is a static facade for applications embedding the real Pactrail
+kernel. It reexports the provider-neutral `ModelDriver`, typed `Tool`, policy,
+engine, MCP, transaction, store, checkpoint, memory, and context contracts. An
+out-of-tree-style compatibility fixture implements a custom provider and tool
+and composes them with `RunEngine`. See the [embedding guide](docs/embedding.md).
+The pre-1.0 SDK is consumed from a pinned Git revision; crates.io publication
+and the formal SemVer support window remain v1 release work.
+
 ## Install
 
 Install the latest checksum-verified release without Rust.

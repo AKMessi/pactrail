@@ -8,6 +8,7 @@ members = [
     "crates/pactrail-memory",
     "crates/pactrail-mcp",
     "crates/pactrail-models",
+    "crates/pactrail-sdk",
     "crates/pactrail-store",
     "crates/pactrail-tools",
     "crates/pactrail-workspace",

@@ -40,7 +40,9 @@ receipt-bound.
 | `pactrail-context` | Repository index, instruction scopes, retrieval, model-aware pack budgeting | Filesystem mutation or provider tokenization |
 | `pactrail-tools` | Tool contracts, annotations, registry, capability policy, bounded built-ins | Run lifecycle or source landing |
 | `pactrail-models` | Provider-neutral conversation IR and bounded model transport | Tool execution or workspace access |
+| `pactrail-mcp` | Governed MCP manifests, pinned catalogs, bounded transports, and Tool Kernel adapters | Local policy assignment or implicit discovery |
 | `pactrail-engine` | Orchestration, tool scheduling, effect reconciliation, budgets, verification | CLI persistence policy |
+| `pactrail-sdk` | Stable embedding facade over provider, tool, engine, MCP, and durable-state contracts | A second execution path or dynamic native plugin loading |
 | `pactrail` | Interactive/scriptable UX, settings, run artifacts, apply/discard commands | Weakening lower-layer invariants |
 
 Dependencies point inward. The domain layer cannot call a provider or mutate a
@@ -54,7 +56,8 @@ against the contract before a run starts; an effective runtime grant absent
 from the durable contract is an invalid configuration.
 
 The built-in capabilities distinguish file reads, file writes, memory reads,
-process execution, network, secret use, and external writes. Denial wins.
+MCP invocation, process execution, network, secret use, and external writes.
+Denial wins.
 Undeclared process authority requires approval; it is never silently granted.
 Each approval is bound to the run, exact non-secret request, executable actor,
 backend identity, and resource-profile digest. Policy evaluation and human or

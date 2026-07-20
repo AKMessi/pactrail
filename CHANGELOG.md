@@ -17,6 +17,9 @@ follow [Semantic Versioning](https://semver.org/).
   cancellation-aware administrative connections.
 - A distinct request-scoped `mcp_invoke` capability and independent MCP approval
   routing so native process trust cannot implicitly authorize a remote tool.
+- `pactrail-sdk`, a static Rust embedding facade with subsystem/prelude exports,
+  a documented custom-provider/custom-tool path, and a compile-time external
+  extension compatibility fixture using the real execution kernel.
 
 ### Security
 
