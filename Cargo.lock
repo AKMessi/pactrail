@@ -1301,6 +1301,7 @@ dependencies = [
  "pactrail-core",
  "pactrail-memory",
  "pactrail-workspace",
+ "rustix",
  "schemars",
  "serde",
  "serde_json",

@@ -228,6 +228,8 @@ pub struct OciSandboxProfile {
     pub milli_cpus: u32,
     pub pids_limit: u32,
     pub tmpfs_bytes: u64,
+    /// Numeric container UID:GID. Unix hosts default to the invoking user.
+    pub user: Option<String>,
 }
 
 impl Default for OciSandboxProfile {
@@ -237,6 +239,7 @@ impl Default for OciSandboxProfile {
             milli_cpus: 2_000,
             pids_limit: 128,
             tmpfs_bytes: 512 * 1024 * 1024,
+            user: default_oci_user(),
         }
     }
 }
@@ -267,6 +270,19 @@ impl OciSandboxProfile {
         if !(1024 * 1024..=64 * 1024 * 1024 * 1024).contains(&self.tmpfs_bytes) {
             return Err(ProcessBackendError::InvalidConfiguration(
                 "OCI temporary space must be between 1 MiB and 64 GiB".to_owned(),
+            ));
+        }
+        if self.user.as_deref().is_some_and(|user| {
+            let Some((uid, gid)) = user.split_once(':') else {
+                return true;
+            };
+            uid.is_empty()
+                || gid.is_empty()
+                || !uid.bytes().all(|byte| byte.is_ascii_digit())
+                || !gid.bytes().all(|byte| byte.is_ascii_digit())
+        }) {
+            return Err(ProcessBackendError::InvalidConfiguration(
+                "OCI user must be a numeric UID:GID pair".to_owned(),
             ));
         }
         Ok(())
@@ -428,6 +444,9 @@ impl OciProcessBackend {
             OsString::from(format!("--workdir={CONTAINER_WORKSPACE}")),
             OsString::from(format!("--entrypoint={}", request.program)),
         ];
+        if let Some(user) = &self.profile.user {
+            args.insert(args.len() - 1, OsString::from(format!("--user={user}")));
+        }
         for (name, value) in &request.environment {
             args.push(OsString::from("--env"));
             args.push(OsString::from(format!("{name}={value}")));
@@ -875,6 +894,20 @@ fn copy_native_toolchain_environment(command: &mut Command) {
     }
 }
 
+#[cfg(unix)]
+fn default_oci_user() -> Option<String> {
+    Some(format!(
+        "{}:{}",
+        rustix::process::getuid().as_raw(),
+        rustix::process::getgid().as_raw()
+    ))
+}
+
+#[cfg(not(unix))]
+const fn default_oci_user() -> Option<String> {
+    None
+}
+
 /// Process backend initialization or execution failure.
 #[derive(Debug, Error)]
 pub enum ProcessBackendError {
@@ -967,6 +1000,8 @@ pub enum ProcessBackendError {
 mod tests {
     use super::*;
 
+    const OCI_TEST_IMAGE_ENV: &str = "PACTRAIL_OCI_TEST_IMAGE";
+
     fn request() -> ProcessRequest {
         ProcessRequest {
             program: "cargo".to_owned(),
@@ -1027,6 +1062,9 @@ mod tests {
         assert!(args.iter().any(|argument| argument == "RUST_BACKTRACE=1"));
         assert_eq!(args[args.len() - 2], "test");
         assert_eq!(args[args.len() - 1], "--workspace");
+        if cfg!(unix) {
+            assert!(args.iter().any(|argument| argument.starts_with("--user=")));
+        }
     }
 
     #[test]
@@ -1131,5 +1169,117 @@ mod tests {
             }
         );
         assert!(matches!(result, Err(ProcessBackendError::Cancelled { .. })));
+    }
+
+    #[tokio::test]
+    #[ignore = "requires a Docker daemon and the pinned local containment fixture"]
+    async fn oci_backend_blocks_hostile_effects() {
+        assert_eq!(
+            std::env::var("PACTRAIL_OCI_TEST").ok().as_deref(),
+            Some("1"),
+            "set PACTRAIL_OCI_TEST=1 only after provisioning the local fixture"
+        );
+        let image = std::env::var(OCI_TEST_IMAGE_ENV)
+            .unwrap_or_else(|_| "pactrail-oci-fixture:local".to_owned());
+        let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        std::fs::write(workspace.path().join("input.txt"), b"candidate-only\n")
+            .unwrap_or_else(|error| unreachable!("candidate input: {error}"));
+        let outside = tempfile::tempdir().unwrap_or_else(|error| unreachable!("outside: {error}"));
+        let host_secret = outside.path().join("host-secret.txt");
+        let secret_marker = "pactrail-host-secret-must-not-escape";
+        std::fs::write(&host_secret, secret_marker)
+            .unwrap_or_else(|error| unreachable!("host secret: {error}"));
+
+        let backend = OciProcessBackend::initialize(
+            OciProcessConfig::for_runtime(OciRuntimeKind::Docker, image),
+            &[workspace.path().to_path_buf()],
+        )
+        .await
+        .unwrap_or_else(|error| unreachable!("OCI backend: {error}"));
+        let cancellation = CancellationToken::new();
+
+        let write = execute_oci_shell(
+            &backend,
+            workspace.path(),
+            "cat input.txt > output.txt",
+            &cancellation,
+        )
+        .await;
+        assert_eq!(write.exit_code, Some(0));
+        assert_eq!(
+            std::fs::read_to_string(workspace.path().join("output.txt")).ok(),
+            Some("candidate-only\n".to_owned())
+        );
+
+        let root_write = execute_oci_shell(
+            &backend,
+            workspace.path(),
+            "echo escaped > /pactrail-host-escape",
+            &cancellation,
+        )
+        .await;
+        assert_ne!(root_write.exit_code, Some(0));
+
+        let host_read = execute_oci_shell(
+            &backend,
+            workspace.path(),
+            &format!(
+                "cat {}",
+                shell_single_quote(&host_secret.display().to_string())
+            ),
+            &cancellation,
+        )
+        .await;
+        assert_ne!(host_read.exit_code, Some(0));
+        assert!(!String::from_utf8_lossy(&host_read.stdout).contains(secret_marker));
+
+        let environment = execute_oci_shell(&backend, workspace.path(), "env", &cancellation).await;
+        assert_eq!(environment.exit_code, Some(0));
+        assert!(!String::from_utf8_lossy(&environment.stdout).contains(secret_marker));
+        assert!(!String::from_utf8_lossy(&environment.stdout).contains("PACTRAIL_HOST_SECRET"));
+
+        let network = execute_oci_shell(
+            &backend,
+            workspace.path(),
+            "wget -q -T 2 -O - http://1.1.1.1",
+            &cancellation,
+        )
+        .await;
+        assert_ne!(network.exit_code, Some(0));
+
+        let socket = execute_oci_shell(
+            &backend,
+            workspace.path(),
+            "test ! -e /var/run/docker.sock && test ! -e /run/podman/podman.sock",
+            &cancellation,
+        )
+        .await;
+        assert_eq!(socket.exit_code, Some(0));
+    }
+
+    async fn execute_oci_shell(
+        backend: &OciProcessBackend,
+        workspace: &Path,
+        script: &str,
+        cancellation: &CancellationToken,
+    ) -> ProcessExecution {
+        backend
+            .execute(
+                workspace,
+                &ProcessRequest {
+                    program: "sh".to_owned(),
+                    args: vec!["-c".to_owned(), script.to_owned()],
+                    timeout: Duration::from_secs(10),
+                    max_output_bytes: 64 * 1024,
+                    environment: BTreeMap::new(),
+                },
+                cancellation,
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("OCI command {script:?}: {error}"))
+    }
+
+    fn shell_single_quote(value: &str) -> String {
+        format!("'{}'", value.replace('\'', "'\\''"))
     }
 }

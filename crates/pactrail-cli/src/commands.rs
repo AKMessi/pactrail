@@ -648,11 +648,13 @@ async fn build_process_backend(
             if let Some(executable) = &args.sandbox_runtime_executable {
                 config.runtime_executable = executable.as_os_str().to_owned();
             }
+            let default_profile = OciSandboxProfile::default();
             config.profile = OciSandboxProfile {
                 memory_bytes: mebibytes(args.sandbox_memory_mib, "sandbox memory")?,
                 milli_cpus: args.sandbox_cpu_millis,
                 pids_limit: args.sandbox_pids,
                 tmpfs_bytes: mebibytes(args.sandbox_tmpfs_mib, "sandbox temporary space")?,
+                user: default_profile.user,
             };
             Arc::new(
                 OciProcessBackend::initialize(config, &[source_workspace.to_path_buf()])
