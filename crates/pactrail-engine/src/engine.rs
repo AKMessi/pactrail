@@ -16,7 +16,7 @@ use pactrail_core::{
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
     ConversationItem, FinishReason, Message, ModelDriver, ModelError, ModelRequest, ModelResponse,
-    ToolCall, ToolResult, Usage,
+    ModelStreamEvent, ModelStreamObserver, ToolCall, ToolResult, Usage,
 };
 use pactrail_store::{EventStore, StoreError};
 use pactrail_tools::{
@@ -81,6 +81,19 @@ pub enum RunProgress {
     },
     /// A model request is about to begin.
     ModelTurnStarted { turn: u16, max_turns: u16 },
+    /// A provider response stream produced its first bytes.
+    ModelStreamStarted {
+        provider_request_id: Option<String>,
+        time_to_first_byte_ms: u64,
+    },
+    /// A transient assistant-text fragment arrived. It is not durable authority.
+    ModelTextDelta { text: String },
+    /// A streamed tool call began, but is not executable until the turn completes.
+    ModelToolCallStarted { index: usize, name: String },
+    /// Partial argument bytes arrived for a non-executable streamed tool call.
+    ModelToolArgumentsDelta { index: usize, bytes: usize },
+    /// The provider reported cumulative usage during the response stream.
+    ModelUsageUpdate { usage: Usage },
     /// A model request completed and returned control to the engine.
     ModelTurnCompleted {
         turn: u16,
@@ -148,6 +161,42 @@ impl RunObserver for SilentRunObserver {
 }
 
 struct ObserverApprovalResolver<'a>(&'a dyn RunObserver);
+
+struct ObserverModelStream<'a>(&'a dyn RunObserver);
+
+impl ModelStreamObserver for ObserverModelStream<'_> {
+    fn on_event(&self, event: &ModelStreamEvent) {
+        let progress = match event {
+            ModelStreamEvent::ResponseStarted {
+                provider_request_id,
+                time_to_first_byte_ms,
+            } => RunProgress::ModelStreamStarted {
+                provider_request_id: provider_request_id.clone(),
+                time_to_first_byte_ms: *time_to_first_byte_ms,
+            },
+            ModelStreamEvent::TextDelta { text } => {
+                RunProgress::ModelTextDelta { text: text.clone() }
+            }
+            ModelStreamEvent::ToolCallStarted { index, name, .. } => {
+                RunProgress::ModelToolCallStarted {
+                    index: *index,
+                    name: name.clone(),
+                }
+            }
+            ModelStreamEvent::ToolArgumentsDelta { index, bytes } => {
+                RunProgress::ModelToolArgumentsDelta {
+                    index: *index,
+                    bytes: *bytes,
+                }
+            }
+            ModelStreamEvent::UsageUpdate { usage } => {
+                RunProgress::ModelUsageUpdate { usage: *usage }
+            }
+            _ => return,
+        };
+        self.0.on_progress(&progress);
+    }
+}
 
 impl ApprovalResolver for ObserverApprovalResolver<'_> {
     fn resolve(&self, request: &ApprovalRequest) -> ApprovalDecision {
@@ -665,7 +714,7 @@ impl<'a> RunEngine<'a> {
                 temperature: Some(0.0),
             };
             let model_started = Instant::now();
-            let response = match self.invoke_model(&request).await {
+            let response = match self.invoke_model(&request, observer).await {
                 Ok(response) => response,
                 Err(EngineError::Cancelled) => return Err(EngineError::Cancelled),
                 Err(error) => {
@@ -1230,7 +1279,7 @@ impl<'a> RunEngine<'a> {
             temperature: Some(0.0),
         };
         let model_started = Instant::now();
-        let response = self.invoke_model(&request).await?;
+        let response = self.invoke_model(&request, observer).await?;
         let duration_ms = elapsed_millis(model_started);
         observer.on_progress(&RunProgress::ModelTurnCompleted {
             turn,
@@ -1917,11 +1966,18 @@ impl RunEngine<'_> {
         })
     }
 
-    async fn invoke_model(&self, request: &ModelRequest) -> Result<ModelResponse, EngineError> {
+    async fn invoke_model(
+        &self,
+        request: &ModelRequest,
+        observer: &dyn RunObserver,
+    ) -> Result<ModelResponse, EngineError> {
+        let stream_observer = ObserverModelStream(observer);
         tokio::select! {
             biased;
             () = self.cancellation.cancelled() => Err(EngineError::Cancelled),
-            result = self.model.invoke(request) => result.map_err(EngineError::Model),
+            result = self.model.invoke_with_observer(request, &stream_observer) => {
+                result.map_err(EngineError::Model)
+            },
         }
     }
 

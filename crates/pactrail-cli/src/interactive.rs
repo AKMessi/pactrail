@@ -302,6 +302,7 @@ struct RunActivity {
     tool_calls: AtomicUsize,
     model_tokens: AtomicU64,
     model_time_ms: AtomicU64,
+    stream_bytes: AtomicUsize,
     truncated_outputs: AtomicUsize,
     run_approvals: Mutex<BTreeSet<String>>,
     started: Instant,
@@ -327,6 +328,7 @@ impl RunActivity {
             tool_calls: AtomicUsize::new(0),
             model_tokens: AtomicU64::new(0),
             model_time_ms: AtomicU64::new(0),
+            stream_bytes: AtomicUsize::new(0),
             truncated_outputs: AtomicUsize::new(0),
             run_approvals: Mutex::new(BTreeSet::new()),
             started: Instant::now(),
@@ -508,7 +510,70 @@ impl RunActivity {
         match progress {
             RunProgress::ModelTurnStarted { turn, max_turns } => {
                 self.turn.store(*turn, Ordering::Relaxed);
+                self.stream_bytes.store(0, Ordering::Relaxed);
                 self.set_message(format!("turn {turn}/{max_turns} · asking {}", self.model));
+            }
+            RunProgress::ModelStreamStarted {
+                provider_request_id,
+                time_to_first_byte_ms,
+            } => {
+                let request = provider_request_id
+                    .as_deref()
+                    .map(|id| format!(" · request {}", truncate(id, 18)))
+                    .unwrap_or_default();
+                self.row(
+                    "◉",
+                    "stream",
+                    &format!("first byte · {time_to_first_byte_ms}ms{request}"),
+                    TimelineTone::Accent,
+                );
+                self.set_message(format!(
+                    "turn {} · receiving {}",
+                    self.turn.load(Ordering::Relaxed),
+                    self.model
+                ));
+            }
+            RunProgress::ModelTextDelta { text } => {
+                let received = self
+                    .stream_bytes
+                    .fetch_add(text.len(), Ordering::Relaxed)
+                    .saturating_add(text.len());
+                let safe_text = sanitize_terminal_text(text);
+                let preview = safe_text
+                    .lines()
+                    .rev()
+                    .find(|line| !line.trim().is_empty())
+                    .map(str::trim)
+                    .unwrap_or("generating");
+                self.set_message(format!(
+                    "turn {} · {} · {}",
+                    self.turn.load(Ordering::Relaxed),
+                    truncate(preview, 46),
+                    format_bytes(u64::try_from(received).unwrap_or(u64::MAX))
+                ));
+            }
+            RunProgress::ModelToolCallStarted { index, name } => {
+                self.set_message(format!(
+                    "turn {} · preparing #{} {}",
+                    self.turn.load(Ordering::Relaxed),
+                    index.saturating_add(1),
+                    sanitize_terminal_text(name)
+                ));
+            }
+            RunProgress::ModelToolArgumentsDelta { index, bytes } => {
+                self.set_message(format!(
+                    "turn {} · assembling #{} · {} arguments",
+                    self.turn.load(Ordering::Relaxed),
+                    index.saturating_add(1),
+                    format_bytes(u64::try_from(*bytes).unwrap_or(u64::MAX))
+                ));
+            }
+            RunProgress::ModelUsageUpdate { usage } => {
+                self.set_message(format!(
+                    "turn {} · {} tokens reported",
+                    self.turn.load(Ordering::Relaxed),
+                    format_count(usage.total())
+                ));
             }
             RunProgress::ModelTurnCompleted {
                 turn,
@@ -705,7 +770,13 @@ impl RunObserver for RunActivity {
             RunProgress::StateChanged { .. } => self.on_state_progress(progress),
             RunProgress::ContextBuilt { .. } => self.on_context_progress(progress),
             RunProgress::ContextCompacted { .. } => self.on_compaction_progress(progress),
-            RunProgress::ModelTurnStarted { .. } | RunProgress::ModelTurnCompleted { .. } => {
+            RunProgress::ModelTurnStarted { .. }
+            | RunProgress::ModelStreamStarted { .. }
+            | RunProgress::ModelTextDelta { .. }
+            | RunProgress::ModelToolCallStarted { .. }
+            | RunProgress::ModelToolArgumentsDelta { .. }
+            | RunProgress::ModelUsageUpdate { .. }
+            | RunProgress::ModelTurnCompleted { .. } => {
                 self.on_model_progress(progress);
             }
             RunProgress::ToolStarted { .. } | RunProgress::ToolCompleted { .. } => {

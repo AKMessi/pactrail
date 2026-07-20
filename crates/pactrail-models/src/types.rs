@@ -162,3 +162,30 @@ pub struct ModelResponse {
     /// Non-sensitive provider metadata preserved for diagnostics.
     pub extensions: serde_json::Map<String, Value>,
 }
+
+/// Transient, non-authoritative progress from one model response stream.
+///
+/// These events are suitable for live user interfaces. Pactrail does not
+/// persist them or allow partial tool arguments to reach the tool kernel.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ModelStreamEvent {
+    /// The provider accepted the request and response bytes began arriving.
+    ResponseStarted {
+        provider_request_id: Option<String>,
+        time_to_first_byte_ms: u64,
+    },
+    /// A validated UTF-8 assistant-text fragment.
+    TextDelta { text: String },
+    /// A typed tool call began. Arguments are not yet executable.
+    ToolCallStarted {
+        index: usize,
+        id: String,
+        name: String,
+    },
+    /// Additional JSON argument bytes arrived for an in-progress tool call.
+    ToolArgumentsDelta { index: usize, bytes: usize },
+    /// Provider-reported cumulative usage became available.
+    UsageUpdate { usage: Usage },
+}
