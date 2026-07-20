@@ -1,6 +1,6 @@
 # Design 0001: process containment, approvals, and cancellation
 
-Status: accepted for implementation on `feat/v04-containment`  
+Status: implemented; adversarial Docker validation required by CI
 Target: v0.4
 
 ## Problem
@@ -64,6 +64,7 @@ The initial backend runs one short-lived container per command with:
 - bounded memory, CPU, PID count, output, and wall time;
 - no host devices, daemon socket, host namespaces, or additional mounts;
 - no implicit host environment forwarding;
+- a numeric invoking-user UID:GID on Unix hosts to avoid root-owned outputs;
 - an immutable locally resolved image identity and `--pull=never`;
 - automatic container removal plus explicit forced cleanup after cancellation,
   timeout, client failure, or abnormal exit.

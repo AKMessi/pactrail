@@ -6,6 +6,37 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-20
+
+### Added
+
+- Three explicit process backends: fail-closed disabled execution, trusted
+  native host execution, and restricted OCI execution through a locally
+  attested Docker or Podman runtime. OCI runs pin the locally resolved image
+  identity, mount only the isolated candidate, use a read-only root and bounded
+  private temporary space, disable network and capabilities, apply CPU/memory/PID
+  ceilings, and never pull or silently downgrade to native execution.
+- Versioned, exact-scope process approvals with one-call, run-scoped, and deny
+  decisions bound to the request, run, actor, backend identity, and profile
+  digest. Policy evaluation and approval decisions are separate hash-linked
+  trace events and are retained in receipts.
+- End-to-end cancellation across provider requests, tools, native children, OCI
+  containers, verification, repair, and interactive Ctrl-C, with bounded cleanup
+  and integrity-checked candidate preservation.
+- Atomic settings-schema migration for the new process modes, detailed backend
+  attestation in status/doctor/traces, and a pinned hostile-repository Docker CI
+  fixture covering host reads/writes, ambient secrets, network egress, root
+  mutation, and daemon-socket exposure.
+
+### Changed
+
+- Unresolved capabilities now fail closed or require an explicit scoped
+  approval instead of being treated as implicitly denied without an auditable
+  decision. Non-interactive process approvals still deny by default.
+- `--allow-process` and `/process on` remain deprecated compatibility aliases
+  for trusted native execution; new code should use `--process-backend` or
+  `/process off|native|sandbox` explicitly.
+
 ## [0.3.0] - 2026-07-19
 
 ### Added
@@ -146,7 +177,8 @@ follow [Semantic Versioning](https://semver.org/).
 - Bounded run-goal and memory previews now end with a visible ellipsis instead
   of silently dropping continuation text.
 
-[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/AKMessi/pactrail/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/AKMessi/pactrail/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/AKMessi/pactrail/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AKMessi/pactrail/releases/tag/v0.1.0

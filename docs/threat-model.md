@@ -1,7 +1,8 @@
 # Threat model
 
-This document describes Pactrail 0.1 as shipped. It is not a claim that model
-execution or native processes are intrinsically safe.
+This document describes Pactrail 0.4 as shipped. It is not a claim that model
+execution, native processes, containers, or third-party providers are
+intrinsically safe.
 
 ## Assets and trust boundaries
 
@@ -51,6 +52,9 @@ validation.
 - Tool inputs use JSON Schema contracts and deserialize into bounded Rust types.
 - Every call is capability-gated; denial wins and runtime overgrant fails before
   execution.
+- Process approvals bind the exact non-secret request, run, executable actor,
+  backend identity, and profile digest. Policy evaluation, approval, and effect
+  are separate hash-linked events.
 - Tool and process results have retained/model-visible output ceilings.
 - Deterministic verification runs in a disposable candidate snapshot, keeping
   ordinary build and test artifacts out of the receipt-bound candidate tree.
@@ -88,25 +92,62 @@ the model and user must still compare memory with current code.
 Operational logs and provider error messages can still contain data produced by
 third-party libraries or endpoints. Treat debug logs as potentially sensitive.
 
-## Critical limitation: native processes
+## Process execution boundaries
 
-`--allow-process` or `/process on` is an explicit trust decision. A child starts
-in either the candidate workspace or a disposable verification snapshot with a
-scrubbed/rebuilt operational environment, but Pactrail 0.1 does not provide an
-OS or container sandbox. The child can attempt to read other host files, find
-secrets, use the network, modify the source tree directly, or affect external
-services.
+Process execution has no automatic mode. It is disabled by default and selecting
+a backend does not itself approve a request. Non-interactive approvals deny by
+default; interactive approvals show and bind the exact request.
+
+### Restricted OCI
+
+`--process-backend oci` or `/process sandbox <image>` runs each approved command
+through a locally attested Docker or Podman executable and a locally resolved
+immutable image identity. Pactrail never pulls during a run or silently falls
+back to native execution. The generated invocation mounts only the canonical
+candidate workspace, makes the image root read-only, supplies bounded private
+temporary storage, disables networking and Linux capabilities, enables
+`no-new-privileges`, avoids daemon sockets and host namespaces, forwards no
+ambient host environment, and enforces memory, CPU, PID, output, and wall-time
+limits. On Unix hosts, writes use the invoking numeric UID:GID.
+
+This is labelled `oci_restricted`, not `fully_sandboxed`. The local image is
+treated as untrusted; the configured runtime, daemon, host kernel or desktop VM,
+and user account remain trusted computing base. Container isolation does not
+protect against their compromise, an image exploiting a kernel/runtime defect,
+runtime misconfiguration outside Pactrail, or denial of service beyond the
+enforced ceilings.
+
+### Trusted native
+
+`--process-backend native`, `/process native`, and the deprecated
+`--allow-process` or `/process on` aliases are explicit trust decisions. A child
+starts in either the candidate or a disposable verification snapshot with a
+scrubbed/rebuilt operational environment, but there is no OS or container
+boundary. It can attempt to read other host files, find secrets, use the network,
+modify the source tree directly, or affect external services.
 
 The transaction protects normal tool-based landing; it cannot contain hostile
 native code. Pactrail therefore records process, network, secret-use, and
 external-write authority together, and rejects task files that understate it.
-Keep processes disabled for untrusted repositories. `pactrail doctor` reports
-available runtimes but does not imply they are active sandboxes.
+Keep native processes disabled for untrusted repositories. `pactrail doctor`
+reports available runtimes and their fingerprint but does not imply a backend is
+active or upgrade its strength label.
 
-## Out of scope in 0.1
+### Cancellation and cleanup
 
-- containment of arbitrary native code without an external sandbox backend;
+The CLI propagates one cancellation token through provider I/O, tool scheduling,
+native child termination, OCI force-removal, verification, and repair. Pactrail
+does not claim successful cancellation until bounded cleanup completes. Safe
+candidate changes are retained in an integrity-checked receipt; cleanup failure
+is a hard error and remains diagnosable in durable state.
+
+## Out of scope in 0.4
+
 - protection from a compromised user account, kernel, filesystem, or provider;
+- protection from a compromised container runtime, daemon, desktop VM, or a
+  malicious image that exploits one of those trusted components;
+- remote container daemons, privileged containers, arbitrary mounts, host
+  networking, device forwarding, or model-selected images;
 - cryptographic identity/non-repudiation for local receipts;
 - automatic secret brokering or least-privilege remote credentials;
 - remote side effects such as pull requests, messages, or deployments;

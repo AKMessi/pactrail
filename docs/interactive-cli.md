@@ -177,7 +177,9 @@ serially.
 | Model | `/endpoint <url>` | Change only the endpoint. |
 | Model | `/key-env <name>` | Select the key environment variable. |
 | Kernel | `/tools` | Inspect typed tools, capabilities, and risk. |
-| Safety | `/process on\|off` | Control trusted native execution. |
+| Safety | `/process off` | Disable all process execution. |
+| Safety | `/process native` | Select trusted, unsandboxed host execution. |
+| Safety | `/process sandbox <image> [docker\|podman]` | Select restricted OCI execution with a local image. |
 | Safety | `/context <tokens>` | Set declared context capacity. |
 | Safety | `/output-tokens <tokens>` | Set per-turn output limit. |
 | Safety | `/turns <count>` | Set the model-turn safety bound. |
@@ -188,17 +190,33 @@ serially.
 | Session | `/quit` | End the session. |
 
 Tab completes commands, arrow keys browse persistent history, and Ctrl-R
-searches it. Ctrl-C cancels the current input and Ctrl-D exits. Prefix a task
-with `//` when the task text itself begins with `/`. Unknown commands provide a
-bounded typo suggestion when the match is unambiguous.
+searches it. Ctrl-C clears idle input or cancels an active run all the way
+through provider I/O, tools, verification, and process cleanup. Safe candidate
+changes remain available for review after cancellation. Ctrl-D exits. Prefix a
+task with `//` when the task text itself begins with `/`. Unknown commands
+provide a bounded typo suggestion when the match is unambiguous.
 
-## Native process safety
+## Process execution and approvals
 
-`/process off` is the default. `/process on` lets registered verification
-commands run from the candidate directory, but the child is not confined by an
-OS or container sandbox. It may reach host files, network, inherited operational
-environment, or external services. Pactrail records this effective authority in
-the task contract; enable it only for trusted repositories.
+`/process off` is the default. `/process sandbox <image> [docker|podman]` uses a
+locally available image through the restricted OCI profile. Pactrail pins the
+resolved image identity, never pulls during a run, mounts only the candidate,
+disables networking and privilege gain, clears ambient environment, and enforces
+resource ceilings. If the runtime, local image, or required controls are not
+available, the run fails before durable state is created; it never falls back to
+native execution.
+
+`/process native` runs registered commands directly on the host. The child is
+not confined by an OS or container boundary and may reach host files, network,
+operational environment, or external services. Use it only for trusted
+repositories. `/process on` remains a deprecated alias for this mode.
+
+Selecting a backend does not approve a command. When the model first requests a
+process, Pactrail shows its exact program, arguments, environment-variable names,
+backend identity, resource profile, and scope. Choose a one-call approval, an
+exact run-scoped approval, or deny it. The decision and preceding policy
+evaluation are separate hash-linked trace events. Non-interactive runs deny by
+default; automation must opt in with `--process-approval allow-run`.
 
 ## Automation
 

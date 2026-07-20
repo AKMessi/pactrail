@@ -13,7 +13,7 @@ categories.workspace = true
 publish = false
 
 [dependencies]
-pactrail-core = { version = "0.3.0", path = "../pactrail-core" }
+pactrail-core = { version = "0.4.0", path = "../pactrail-core" }
 rusqlite.workspace = true
 schemars.workspace = true
 serde.workspace = true
