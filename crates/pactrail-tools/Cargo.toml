@@ -16,15 +16,19 @@ workspace = true
 async-trait.workspace = true
 blake3.workspace = true
 ignore.workspace = true
-pactrail-core = { version = "0.3.0", path = "../pactrail-core" }
-pactrail-context = { version = "0.3.0", path = "../pactrail-context" }
-pactrail-memory = { version = "0.3.0", path = "../pactrail-memory" }
-pactrail-workspace = { version = "0.3.0", path = "../pactrail-workspace" }
+pactrail-core = { version = "0.4.0", path = "../pactrail-core" }
+pactrail-context = { version = "0.4.0", path = "../pactrail-context" }
+pactrail-memory = { version = "0.4.0", path = "../pactrail-memory" }
+pactrail-workspace = { version = "0.4.0", path = "../pactrail-workspace" }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+rustix.workspace = true

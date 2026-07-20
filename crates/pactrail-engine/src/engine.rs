@@ -8,9 +8,9 @@ use pactrail_context::{
     ContextBudget, ContextError, ContextFragment, ContextPack, RepositoryIndex,
 };
 use pactrail_core::{
-    ActionRecord, Capability, ChangeReceipt, ContractError, Evidence, EvidenceGrade, EvidenceId,
-    EvidenceKind, EvidenceStatus, FileChange, ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent,
-    RunId, RunState, TaskContract,
+    ActionRecord, ApprovalDecision, ApprovalRequest, Capability, ChangeReceipt, ContractError,
+    Evidence, EvidenceGrade, EvidenceId, EvidenceKind, EvidenceStatus, FileChange, ReceiptError,
+    ReceiptInput, ReceiptOutcome, RunEvent, RunId, RunState, TaskContract,
 };
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
@@ -19,11 +19,13 @@ use pactrail_models::{
 };
 use pactrail_store::{EventStore, StoreError};
 use pactrail_tools::{
-    PolicyEngine, ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry,
+    ApprovalResolver, PolicyAuditEntry, PolicyAuditLog, PolicyEngine, ToolContext, ToolDescriptor,
+    ToolError, ToolOutput, ToolRegistry,
 };
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use serde_json::json;
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::context_window::{CompactionReport, ContextWindow};
@@ -35,6 +37,7 @@ const MAX_AUTOMATIC_REPAIR_CYCLES: u16 = 1;
 const MAX_MODEL_TOOL_RESULT_BYTES: usize = 256 * 1024;
 const MAX_REPAIR_DIAGNOSTIC_BYTES: usize = 24 * 1024;
 const MAX_VERIFICATION_STREAM_BYTES: usize = 12 * 1024;
+const CANCELLATION_CLEANUP_GRACE: std::time::Duration = std::time::Duration::from_secs(30);
 const READ_ONLY_STEERING_PROMPT: &str = r"Pactrail loop controller: the immediately preceding successful read-only call was identical to an earlier call and returned no new evidence. Do not repeat it. Read a relevant file, use another evidence-producing tool, or answer the original question from the evidence already available.";
 const READ_ONLY_RECOVERY_PROMPT: &str = r"Pactrail recovery controller: you repeated an identical successful read-only tool request and it cannot produce new evidence. Tool access is now intentionally disabled for this final recovery turn. Answer the user's original informational question using only the repository context and tool results already present in this conversation. Cite concrete workspace-relative file names when possible. Clearly distinguish observed facts from inference, say when the available evidence is insufficient, and do not emit tool-call JSON.";
 const SYSTEM_PROMPT: &str = r"You are the Builder inside Pactrail, a verification-native coding harness.
@@ -120,19 +123,31 @@ pub enum RunProgress {
     },
 }
 
-/// Receives synchronous progress notifications from the execution engine.
+/// Receives synchronous progress notifications and scoped approval requests.
 ///
-/// Implementations should return quickly and must not perform model or tool
-/// work. Progress is observational and never changes durable run semantics.
+/// Implementations should return quickly and must not perform model or tool work.
 pub trait RunObserver: Send + Sync {
     /// Observes one execution activity update.
     fn on_progress(&self, progress: &RunProgress);
+
+    /// Resolves one exact approval request. Non-interactive observers deny by default.
+    fn on_approval_request(&self, _request: &ApprovalRequest) -> ApprovalDecision {
+        ApprovalDecision::Deny
+    }
 }
 
 struct SilentRunObserver;
 
 impl RunObserver for SilentRunObserver {
     fn on_progress(&self, _progress: &RunProgress) {}
+}
+
+struct ObserverApprovalResolver<'a>(&'a dyn RunObserver);
+
+impl ApprovalResolver for ObserverApprovalResolver<'_> {
+    fn resolve(&self, request: &ApprovalRequest) -> ApprovalDecision {
+        self.0.on_approval_request(request)
+    }
 }
 
 /// Successful result of one complete engine run.
@@ -151,6 +166,8 @@ pub struct RunEngine<'a> {
     model: &'a dyn ModelDriver,
     tools: &'a ToolRegistry,
     policy: &'a PolicyEngine,
+    approval_resolver: Option<&'a dyn ApprovalResolver>,
+    cancellation: CancellationToken,
     memory: Option<&'a MemoryStore>,
     context_fragments: Vec<ContextFragment>,
     max_turns: u16,
@@ -159,7 +176,7 @@ pub struct RunEngine<'a> {
 impl<'a> RunEngine<'a> {
     /// Creates an engine from explicit model, tool, and policy dependencies.
     #[must_use]
-    pub const fn new(
+    pub fn new(
         model: &'a dyn ModelDriver,
         tools: &'a ToolRegistry,
         policy: &'a PolicyEngine,
@@ -168,6 +185,8 @@ impl<'a> RunEngine<'a> {
             model,
             tools,
             policy,
+            approval_resolver: None,
+            cancellation: CancellationToken::new(),
             memory: None,
             context_fragments: Vec::new(),
             max_turns: DEFAULT_MAX_TURNS,
@@ -185,6 +204,20 @@ impl<'a> RunEngine<'a> {
     #[must_use]
     pub const fn with_memory(mut self, memory: &'a MemoryStore) -> Self {
         self.memory = Some(memory);
+        self
+    }
+
+    /// Resolves contract-declared ask decisions and records them in the run journal.
+    #[must_use]
+    pub const fn with_approval_resolver(mut self, resolver: &'a dyn ApprovalResolver) -> Self {
+        self.approval_resolver = Some(resolver);
+        self
+    }
+
+    /// Propagates one run-scoped cancellation signal through model and tool work.
+    #[must_use]
+    pub fn with_cancellation(mut self, cancellation: CancellationToken) -> Self {
+        self.cancellation = cancellation;
         self
     }
 
@@ -246,21 +279,36 @@ impl<'a> RunEngine<'a> {
     ) -> Result<RunOutcome, EngineError> {
         contract.validate()?;
         let wall_time_seconds = contract.budget.wall_time_seconds;
-        let result = tokio::time::timeout(
-            std::time::Duration::from_secs(wall_time_seconds),
-            self.execute_inner(run_id, contract, transaction, store, observer),
-        )
-        .await;
-        match result {
-            Ok(Ok(outcome)) => Ok(outcome),
-            Ok(Err(error)) => {
-                ensure_failed_state(store, run_id, observer);
-                Err(error)
+        let mut execution =
+            Box::pin(self.execute_inner(run_id, contract, transaction, store, observer));
+        let result = tokio::select! {
+            result = &mut execution => Some(result),
+            () = tokio::time::sleep(std::time::Duration::from_secs(wall_time_seconds)) => None,
+        };
+        if let Some(result) = result {
+            drop(execution);
+            match result {
+                Ok(outcome) => Ok(outcome),
+                Err(EngineError::Cancelled) => {
+                    ensure_cancelled_state(store, run_id, observer);
+                    Err(EngineError::Cancelled)
+                }
+                Err(error) => {
+                    ensure_failed_state(store, run_id, observer);
+                    Err(error)
+                }
             }
-            Err(_) => {
-                ensure_failed_state(store, run_id, observer);
-                Err(EngineError::WallTimeExceeded { wall_time_seconds })
+        } else {
+            self.cancellation.cancel();
+            let cleanup = tokio::time::timeout(CANCELLATION_CLEANUP_GRACE, &mut execution).await;
+            drop(execution);
+            ensure_failed_state(store, run_id, observer);
+            if let Ok(Err(error)) = cleanup
+                && is_process_cleanup_engine_error(&error)
+            {
+                return Err(error);
             }
+            Err(EngineError::WallTimeExceeded { wall_time_seconds })
         }
     }
 
@@ -386,6 +434,7 @@ impl<'a> RunEngine<'a> {
         let tool_descriptors = self.tools.descriptors();
 
         for turn in 0..max_turns {
+            self.check_cancelled()?;
             compact_model_context(
                 context_window,
                 &mut conversation,
@@ -404,11 +453,12 @@ impl<'a> RunEngine<'a> {
                 temperature: Some(0.0),
             };
             let model_started = Instant::now();
-            let response = match self.model.invoke(&request).await {
+            let response = match self.invoke_model(&request).await {
                 Ok(response) => response,
+                Err(EngineError::Cancelled) => return Err(EngineError::Cancelled),
                 Err(error) => {
                     transition(&mut journal, &mut state, RunState::Failed, observer)?;
-                    return Err(EngineError::Model(error));
+                    return Err(error);
                 }
             };
             let model_duration_ms = elapsed_millis(model_started);
@@ -611,11 +661,15 @@ impl<'a> RunEngine<'a> {
             let mut any_tool_succeeded = false;
             for batch in self.schedule_tool_batches(response.tool_calls) {
                 let executions = self
-                    .execute_tool_batch(transaction, observer, turn + 1, batch)
+                    .execute_tool_batch(run_id, transaction, observer, turn + 1, batch)
                     .await?;
                 for execution in executions {
                     any_tool_succeeded |= execution.succeeded;
+                    append_policy_audit(&mut journal, execution.policy_audit)?;
                     journal.append(RunEvent::ActionCompleted(execution.action))?;
+                    if let Some(error) = execution.fatal_error {
+                        return Err(EngineError::ProcessCleanup(error));
+                    }
                     conversation.push(ConversationItem::ToolResult(execution.result));
                 }
             }
@@ -818,6 +872,7 @@ impl<'a> RunEngine<'a> {
             final_event_hash: journal.last_hash.clone(),
             changes,
             evidence: verification.evidence,
+            approvals: journal.approvals.clone(),
             unresolved_risks: verification.risks,
         })?;
         Ok(RunOutcome {
@@ -873,7 +928,7 @@ impl<'a> RunEngine<'a> {
             temperature: Some(0.0),
         };
         let model_started = Instant::now();
-        let response = self.model.invoke(&request).await?;
+        let response = self.invoke_model(&request).await?;
         let duration_ms = elapsed_millis(model_started);
         observer.on_progress(&RunProgress::ModelTurnCompleted {
             turn,
@@ -996,6 +1051,7 @@ impl<'a> RunEngine<'a> {
 
     async fn execute_tool_batch(
         &self,
+        run_id: RunId,
         transaction: &WorkspaceTransaction,
         observer: &dyn RunObserver,
         turn: u16,
@@ -1003,13 +1059,21 @@ impl<'a> RunEngine<'a> {
     ) -> Result<Vec<CompletedToolExecution>, EngineError> {
         let scheduled_parallel = calls.len() > 1;
         let futures = calls.into_iter().map(|call| {
-            self.execute_tool_call(transaction, observer, turn, call, scheduled_parallel)
+            self.execute_tool_call(
+                run_id,
+                transaction,
+                observer,
+                turn,
+                call,
+                scheduled_parallel,
+            )
         });
         join_all(futures).await.into_iter().collect()
     }
 
     async fn execute_tool_call(
         &self,
+        run_id: RunId,
         transaction: &WorkspaceTransaction,
         observer: &dyn RunObserver,
         turn: u16,
@@ -1025,15 +1089,22 @@ impl<'a> RunEngine<'a> {
             .to_string();
         let descriptor = self.tools.descriptor(&call.name);
         let before = change_map(transaction.changes()?);
-        let tool_context = ToolContext {
-            workspace: transaction,
-            policy: self.policy,
-            memory: self.memory,
-        };
+        let policy_audit = PolicyAuditLog::default();
+        let observer_resolver = ObserverApprovalResolver(observer);
+        let approval_resolver = self.approval_resolver.unwrap_or(&observer_resolver);
+        let tool_context = ToolContext::new(transaction, self.policy, self.memory)
+            .with_policy_audit(run_id, Some(approval_resolver), &policy_audit);
         let result = self
             .tools
             .execute(&call.name, &tool_context, call.arguments.clone())
             .await;
+        let policy_audit = policy_audit.drain()?;
+        let fatal_error = process_cleanup_error(&result);
+        if fatal_error.is_none()
+            && (self.cancellation.is_cancelled() || is_cancelled_tool_result(&result))
+        {
+            return Err(EngineError::Cancelled);
+        }
         let after = change_map(transaction.changes()?);
         let changed_files = changed_paths(&before, &after);
         let mut observed_effects = changed_files
@@ -1069,6 +1140,8 @@ impl<'a> RunEngine<'a> {
             result: normalized.result,
             action,
             succeeded: normalized.succeeded,
+            policy_audit,
+            fatal_error,
         })
     }
 
@@ -1097,6 +1170,7 @@ impl<'a> RunEngine<'a> {
             .as_ref()
             .map_or(transaction, VerificationWorkspace::transaction);
         let mut command_results = Vec::new();
+        let mut verification_backends = BTreeSet::new();
         let mut diagnostics = Vec::new();
         for (index, command) in commands.iter().enumerate() {
             let Some(outcome) = self
@@ -1119,6 +1193,9 @@ impl<'a> RunEngine<'a> {
                 ));
             };
             command_results.push((command.description.clone(), outcome.succeeded));
+            if let Some(backend) = outcome.backend_kind {
+                verification_backends.insert(backend);
+            }
             diagnostics.push(outcome.diagnostic);
         }
         let all_passed = command_results.iter().all(|(_, passed)| *passed);
@@ -1160,7 +1237,9 @@ impl<'a> RunEngine<'a> {
             })
             .collect();
         let mut risks = Vec::new();
-        risks.push("Native verification processes are capability-gated but are not a host-filesystem or network sandbox; use an OCI runner for hostile repositories".to_owned());
+        if verification_backends.contains("native_trusted") {
+            risks.push("Native verification processes are capability-gated but retain host filesystem and network authority; use the OCI-restricted backend for hostile repositories".to_owned());
+        }
         if !all_passed {
             risks.push("At least one deterministic repository check failed".to_owned());
         }
@@ -1186,23 +1265,21 @@ impl<'a> RunEngine<'a> {
         } = request;
         report_verification_start(observer, command, index, total);
         let started = Instant::now();
-        let context = ToolContext {
-            workspace: transaction,
-            policy: self.policy,
-            memory: self.memory,
-        };
         let value = json!({
             "program": command.program,
             "args": command.args,
             "timeout_seconds": 600,
             "max_output_bytes": MAX_VERIFICATION_STREAM_BYTES,
         });
-        let result = self.tools.execute("run_process", &context, value).await;
+        let result = self
+            .execute_audited_verification_process(transaction, journal, observer, value)
+            .await?;
         let duration_ms = elapsed_millis(started);
         match result {
             Ok(output) => {
                 report_verification_end(observer, command, output.succeeded, duration_ms);
                 let attributes = verification_attributes(index, total, &output, phase);
+                let backend_kind = process_backend_attribute(&output.content, "kind");
                 let succeeded = output.succeeded;
                 let diagnostic = json!({
                     "check": command.description,
@@ -1224,6 +1301,7 @@ impl<'a> RunEngine<'a> {
                 Ok(Some(VerificationCommandOutcome {
                     succeeded,
                     diagnostic,
+                    backend_kind,
                 }))
             }
             Err(ToolError::ApprovalRequired { .. } | ToolError::Denied(_)) => {
@@ -1268,16 +1346,104 @@ impl<'a> RunEngine<'a> {
                         "repairable": false,
                         "tool_error": model_safe_tool_error(&error),
                     }),
+                    backend_kind: None,
                 }))
             }
         }
     }
+
+    async fn execute_audited_verification_process(
+        &self,
+        transaction: &WorkspaceTransaction,
+        journal: &mut Journal<'_>,
+        observer: &dyn RunObserver,
+        input: serde_json::Value,
+    ) -> Result<Result<ToolOutput, ToolError>, EngineError> {
+        let policy_audit = PolicyAuditLog::default();
+        let observer_resolver = ObserverApprovalResolver(observer);
+        let approval_resolver = self.approval_resolver.unwrap_or(&observer_resolver);
+        let context = ToolContext::new(transaction, self.policy, self.memory).with_policy_audit(
+            journal.run_id,
+            Some(approval_resolver),
+            &policy_audit,
+        );
+        let result = self.tools.execute("run_process", &context, input).await;
+        append_policy_audit(journal, policy_audit.drain()?)?;
+        if let Some(error) = process_cleanup_error(&result) {
+            return Err(EngineError::ProcessCleanup(error));
+        }
+        if self.cancellation.is_cancelled() || is_cancelled_tool_result(&result) {
+            return Err(EngineError::Cancelled);
+        }
+        Ok(result)
+    }
+}
+
+impl RunEngine<'_> {
+    async fn invoke_model(&self, request: &ModelRequest) -> Result<ModelResponse, EngineError> {
+        tokio::select! {
+            biased;
+            () = self.cancellation.cancelled() => Err(EngineError::Cancelled),
+            result = self.model.invoke(request) => result.map_err(EngineError::Model),
+        }
+    }
+
+    fn check_cancelled(&self) -> Result<(), EngineError> {
+        if self.cancellation.is_cancelled() {
+            Err(EngineError::Cancelled)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+fn is_cancelled_tool_result(result: &Result<ToolOutput, ToolError>) -> bool {
+    matches!(
+        result,
+        Err(ToolError::ProcessBackend(
+            pactrail_tools::ProcessBackendError::Cancelled { .. }
+        ))
+    )
+}
+
+fn process_cleanup_error(result: &Result<ToolOutput, ToolError>) -> Option<String> {
+    match result {
+        Err(ToolError::ProcessBackend(
+            error @ pactrail_tools::ProcessBackendError::CleanupAfterFailure { .. },
+        )) => Some(error.to_string()),
+        _ => None,
+    }
+}
+
+fn is_process_cleanup_engine_error(error: &EngineError) -> bool {
+    matches!(
+        error,
+        EngineError::ProcessCleanup(_)
+            | EngineError::Tool(ToolError::ProcessBackend(
+                pactrail_tools::ProcessBackendError::CleanupAfterFailure { .. }
+            ))
+    )
 }
 
 struct CompletedToolExecution {
     result: ToolResult,
     action: ActionRecord,
     succeeded: bool,
+    policy_audit: Vec<PolicyAuditEntry>,
+    fatal_error: Option<String>,
+}
+
+fn append_policy_audit(
+    journal: &mut Journal<'_>,
+    entries: Vec<PolicyAuditEntry>,
+) -> Result<(), EngineError> {
+    for entry in entries {
+        journal.append(match entry {
+            PolicyAuditEntry::Evaluation(decision) => RunEvent::PolicyEvaluated(decision),
+            PolicyAuditEntry::Approval(approval) => RunEvent::ApprovalDecided(approval),
+        })?;
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy)]
@@ -1298,6 +1464,7 @@ impl VerificationPhase {
 struct VerificationCommandOutcome {
     succeeded: bool,
     diagnostic: serde_json::Value,
+    backend_kind: Option<String>,
 }
 
 struct VerificationCommandRequest<'a> {
@@ -1313,6 +1480,7 @@ struct NormalizedToolResult {
     succeeded: bool,
     output_bytes: usize,
     truncated: bool,
+    backend_attributes: BTreeMap<String, String>,
 }
 
 struct ToolActionMetadata {
@@ -1332,6 +1500,7 @@ fn normalize_tool_result(
 ) -> NormalizedToolResult {
     match result {
         Ok(output) => {
+            let backend_attributes = process_backend_attributes(&output.content);
             observed_effects.extend(output.observed_effects);
             let (content, output_bytes, bounded) = bound_tool_content(output.content);
             NormalizedToolResult {
@@ -1345,6 +1514,7 @@ fn normalize_tool_result(
                 succeeded: output.succeeded,
                 output_bytes,
                 truncated: output.truncated || bounded,
+                backend_attributes,
             }
         }
         Err(error) => {
@@ -1362,6 +1532,7 @@ fn normalize_tool_result(
                 succeeded: false,
                 output_bytes,
                 truncated: false,
+                backend_attributes: BTreeMap::new(),
             }
         }
     }
@@ -1402,6 +1573,7 @@ fn tool_action(
             descriptor.annotations.parallel_safe.to_string(),
         );
     }
+    attributes.extend(result.backend_attributes.clone());
     ActionRecord {
         actor: format!("tool:{}", call.name),
         action: call.name.clone(),
@@ -1469,7 +1641,7 @@ fn verification_attributes(
     output: &ToolOutput,
     phase: VerificationPhase,
 ) -> BTreeMap<String, String> {
-    BTreeMap::from([
+    let mut attributes = BTreeMap::from([
         ("index".to_owned(), (index + 1).to_string()),
         ("total".to_owned(), total.to_string()),
         (
@@ -1482,7 +1654,37 @@ fn verification_attributes(
             "output_bytes".to_owned(),
             output.content.to_string().len().to_string(),
         ),
-    ])
+    ]);
+    attributes.extend(process_backend_attributes(&output.content));
+    attributes
+}
+
+fn process_backend_attributes(content: &serde_json::Value) -> BTreeMap<String, String> {
+    [
+        "kind",
+        "strength",
+        "runtime",
+        "runtime_fingerprint",
+        "image",
+        "image_identity",
+        "profile_digest",
+        "network",
+        "filesystem",
+    ]
+    .into_iter()
+    .filter_map(|field| {
+        process_backend_attribute(content, field)
+            .map(|value| (format!("process_backend_{field}"), value))
+    })
+    .collect()
+}
+
+fn process_backend_attribute(content: &serde_json::Value, field: &str) -> Option<String> {
+    content
+        .get("backend")?
+        .get(field)?
+        .as_str()
+        .map(str::to_owned)
 }
 
 struct VerificationResult {
@@ -1584,6 +1786,7 @@ struct Journal<'a> {
     store: &'a mut EventStore,
     sequence: u64,
     last_hash: String,
+    approvals: Vec<pactrail_core::ApprovalRecord>,
 }
 
 impl<'a> Journal<'a> {
@@ -1593,13 +1796,21 @@ impl<'a> Journal<'a> {
             store,
             sequence: 0,
             last_hash: "0".repeat(64),
+            approvals: Vec::new(),
         }
     }
 
     fn append(&mut self, event: RunEvent) -> Result<(), EngineError> {
+        let approval = match &event {
+            RunEvent::ApprovalDecided(approval) => Some(approval.clone()),
+            _ => None,
+        };
         let envelope = self.store.append(self.run_id, self.sequence, event)?;
         self.sequence = self.sequence.saturating_add(1);
         self.last_hash = envelope.hash.0;
+        if let Some(approval) = approval {
+            self.approvals.push(approval);
+        }
         Ok(())
     }
 }
@@ -1705,6 +1916,42 @@ fn ensure_failed_state(store: &mut EventStore, run_id: RunId, observer: &dyn Run
     observer.on_progress(&RunProgress::StateChanged {
         state: RunState::Failed,
     });
+}
+
+fn ensure_cancelled_state(store: &mut EventStore, run_id: RunId, observer: &dyn RunObserver) {
+    transition_terminal_state(store, run_id, RunState::Cancelled, observer, "cancelled");
+}
+
+fn transition_terminal_state(
+    store: &mut EventStore,
+    run_id: RunId,
+    terminal: RunState,
+    observer: &dyn RunObserver,
+    label: &str,
+) {
+    let snapshot = match store.snapshot(run_id) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            warn!(%run_id, %error, "could not inspect {label} run lifecycle");
+            return;
+        }
+    };
+    if snapshot.last_sequence.is_none() || snapshot.state.is_terminal() {
+        return;
+    }
+    let sequence = snapshot.last_sequence.map_or(0, |value| value + 1);
+    if let Err(error) = store.append(
+        run_id,
+        sequence,
+        RunEvent::StateChanged {
+            from: snapshot.state,
+            to: terminal,
+        },
+    ) {
+        warn!(%run_id, %error, "could not finalize {label} run lifecycle");
+        return;
+    }
+    observer.on_progress(&RunProgress::StateChanged { state: terminal });
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1928,6 +2175,10 @@ pub enum EngineError {
     Model(#[from] ModelError),
     #[error("workspace transaction failed: {0}")]
     Transaction(#[from] TransactionError),
+    #[error("tool kernel failed: {0}")]
+    Tool(#[from] ToolError),
+    #[error("process cleanup failed: {0}")]
+    ProcessCleanup(String),
     #[error("change receipt failed: {0}")]
     Receipt(#[from] ReceiptError),
     #[error("engine configuration is invalid: {0}")]
@@ -1940,6 +2191,8 @@ pub enum EngineError {
     BudgetExceeded { used: u64, limit: u64 },
     #[error("run exceeded its {wall_time_seconds}-second wall-time budget")]
     WallTimeExceeded { wall_time_seconds: u64 },
+    #[error("run was cancelled")]
+    Cancelled,
     #[error("model did not complete within {0} turns")]
     MaxTurns(u16),
     #[error("model stalled for {consecutive_turns} consecutive tool turns because {reason}")]
@@ -2224,6 +2477,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn external_cancellation_interrupts_model_io_and_is_durable() {
+        let model = SlowModel {
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let cancellation = CancellationToken::new();
+        let engine =
+            RunEngine::new(&model, &registry, &policy).with_cancellation(cancellation.clone());
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let mut contract = TaskContract::new("Wait forever", source.path().display().to_string());
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let run_id = RunId::new();
+
+        let (result, ()) = tokio::join!(
+            engine.execute_with_id(run_id, contract, &transaction, &mut store),
+            async {
+                tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                cancellation.cancel();
+            }
+        );
+        assert!(matches!(result, Err(EngineError::Cancelled)));
+        let snapshot = store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        assert_eq!(snapshot.state, RunState::Cancelled);
+    }
+
+    #[tokio::test]
     async fn context_failure_finalizes_the_started_run() {
         let model = ScriptedModel {
             name: "scripted".to_owned(),
@@ -2281,8 +2574,10 @@ mod tests {
             &[".".to_owned()],
         )
         .unwrap_or_else(|error| unreachable!("transaction: {error}"));
-        let registry = pactrail_tools::builtin_registry()
-            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let registry = pactrail_tools::builtin_registry_with_process(
+            pactrail_tools::RunProcessTool::native_trusted(),
+        )
+        .unwrap_or_else(|error| unreachable!("tools: {error}"));
         let mut contract = TaskContract::new(
             "Explain this Rust project",
             source.path().display().to_string(),
@@ -2666,8 +2961,10 @@ mod tests {
             capabilities: ModelCapabilities::default(),
         };
         let (_source, _control, transaction) = rust_verification_fixture();
-        let registry = pactrail_tools::builtin_registry()
-            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let registry = pactrail_tools::builtin_registry_with_process(
+            pactrail_tools::RunProcessTool::native_trusted(),
+        )
+        .unwrap_or_else(|error| unreachable!("tools: {error}"));
         let mut contract = TaskContract::new("Fix answer and verify it", ".");
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);
@@ -2758,8 +3055,10 @@ mod tests {
             capabilities: ModelCapabilities::default(),
         };
         let (_source, _control, transaction) = rust_verification_fixture();
-        let registry = pactrail_tools::builtin_registry()
-            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let registry = pactrail_tools::builtin_registry_with_process(
+            pactrail_tools::RunProcessTool::native_trusted(),
+        )
+        .unwrap_or_else(|error| unreachable!("tools: {error}"));
         let mut contract = TaskContract::new("Set the verified answer", ".");
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);
@@ -3032,5 +3331,39 @@ mod tests {
             .snapshot(run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
         assert_eq!(snapshot.state, RunState::Failed);
+    }
+
+    #[test]
+    fn process_backend_attestation_is_promoted_to_trace_attributes() {
+        let content = json!({
+            "backend": {
+                "kind": "oci_restricted",
+                "strength": "oci_local_enforced",
+                "runtime": "docker",
+                "runtime_fingerprint": "runtime-digest",
+                "image": "pactrail-ci:local",
+                "image_identity": "sha256:image-digest",
+                "profile_digest": "profile-digest",
+                "network": "denied",
+                "filesystem": "candidate-only"
+            }
+        });
+        let attributes = process_backend_attributes(&content);
+        assert_eq!(
+            attributes.get("process_backend_kind").map(String::as_str),
+            Some("oci_restricted")
+        );
+        assert_eq!(
+            attributes
+                .get("process_backend_image_identity")
+                .map(String::as_str),
+            Some("sha256:image-digest")
+        );
+        assert_eq!(
+            attributes
+                .get("process_backend_profile_digest")
+                .map(String::as_str),
+            Some("profile-digest")
+        );
     }
 }

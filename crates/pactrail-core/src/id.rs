@@ -66,3 +66,7 @@ typed_id!(
     "Unique identifier for a task acceptance obligation."
 );
 typed_id!(EvidenceId, "Unique identifier for an evidence record.");
+typed_id!(
+    ApprovalId,
+    "Unique identifier for a scoped approval decision."
+);

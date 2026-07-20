@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pactrail_context::ContextError;
-use pactrail_core::{Capability, PolicyDecision};
+use pactrail_core::{
+    ApprovalDecision, ApprovalRecord, ApprovalRequest, Capability, PolicyDecision, RunId,
+};
 use pactrail_memory::{MemoryError, MemoryStore};
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::JsonSchema;
@@ -94,6 +96,14 @@ impl ToolAnnotations {
         parallel_safe: false,
         risk: ToolRisk::HostExecution,
     };
+
+    /// Standard annotation set for a restricted external process boundary.
+    pub const RESTRICTED_EXECUTION: Self = Self {
+        read_only: false,
+        idempotent: false,
+        parallel_safe: false,
+        risk: ToolRisk::RestrictedExecution,
+    };
 }
 
 /// Human-readable tool risk class.
@@ -102,6 +112,7 @@ impl ToolAnnotations {
 pub enum ToolRisk {
     ReadOnly,
     WorkspaceMutation,
+    RestrictedExecution,
     HostExecution,
 }
 
@@ -120,9 +131,43 @@ pub struct ToolContext<'a> {
     pub workspace: &'a WorkspaceTransaction,
     pub policy: &'a PolicyEngine,
     pub memory: Option<&'a MemoryStore>,
+    pub run_id: Option<RunId>,
+    pub approval_resolver: Option<&'a dyn crate::ApprovalResolver>,
+    pub policy_audit: Option<&'a crate::PolicyAuditLog>,
 }
 
-impl ToolContext<'_> {
+impl<'a> ToolContext<'a> {
+    /// Creates a context with no interactive approval resolver.
+    #[must_use]
+    pub const fn new(
+        workspace: &'a WorkspaceTransaction,
+        policy: &'a PolicyEngine,
+        memory: Option<&'a MemoryStore>,
+    ) -> Self {
+        ToolContext {
+            workspace,
+            policy,
+            memory,
+            run_id: None,
+            approval_resolver: None,
+            policy_audit: None,
+        }
+    }
+
+    /// Attaches run-scoped approval resolution and policy auditing.
+    #[must_use]
+    pub const fn with_policy_audit(
+        mut self,
+        run_id: RunId,
+        resolver: Option<&'a dyn crate::ApprovalResolver>,
+        audit: &'a crate::PolicyAuditLog,
+    ) -> Self {
+        self.run_id = Some(run_id);
+        self.approval_resolver = resolver;
+        self.policy_audit = Some(audit);
+        self
+    }
+
     /// Requires an allowed policy decision for one effect.
     ///
     /// # Errors
@@ -146,6 +191,68 @@ impl ToolContext<'_> {
                 reason,
             }),
         }
+    }
+
+    /// Resolves a request whose exact actor and enforcement boundary are approval-bound.
+    ///
+    /// # Errors
+    ///
+    /// Denies missing, expired, malformed, or negative decisions and fails closed if the
+    /// policy audit record cannot be retained.
+    pub fn authorize_request(&self, request: ApprovalRequest) -> Result<(), ToolError> {
+        let decision = self.policy.evaluate(
+            &request.binding.capability,
+            request.binding.resource.clone(),
+            Some(request.binding.actor_fingerprint.clone()),
+        );
+        match decision {
+            PolicyDecision::Allow { .. } => Ok(()),
+            PolicyDecision::Deny { reason } => Err(ToolError::Denied(reason)),
+            PolicyDecision::Ask { scope, reason } => {
+                if scope.capability != request.binding.capability
+                    || scope.resource != request.binding.resource
+                    || scope.actor_fingerprint.as_deref()
+                        != Some(request.binding.actor_fingerprint.as_str())
+                    || self.run_id != Some(request.binding.run_id)
+                {
+                    return Err(ToolError::Denied(
+                        "approval request does not match the evaluated policy scope".to_owned(),
+                    ));
+                }
+                self.audit(crate::PolicyAuditEntry::Evaluation(PolicyDecision::Ask {
+                    scope,
+                    reason,
+                }))?;
+                let Some(resolver) = self.approval_resolver else {
+                    return Err(ToolError::ApprovalRequired {
+                        capability: request.binding.capability,
+                        resource: request.binding.resource,
+                        reason: request.reason,
+                    });
+                };
+                let record =
+                    ApprovalRecord::new(request.binding.clone(), resolver.resolve(&request));
+                self.audit(crate::PolicyAuditEntry::Approval(record.clone()))?;
+                if !record.is_valid_at(record.created_at) {
+                    return Err(ToolError::Denied(
+                        "approval decision is expired or has an unsupported schema".to_owned(),
+                    ));
+                }
+                match record.decision {
+                    ApprovalDecision::AllowOnce | ApprovalDecision::AllowRun => Ok(()),
+                    ApprovalDecision::Deny => Err(ToolError::Denied(
+                        "the scoped approval request was denied".to_owned(),
+                    )),
+                }
+            }
+        }
+    }
+
+    fn audit(&self, entry: crate::PolicyAuditEntry) -> Result<(), ToolError> {
+        self.policy_audit.map_or_else(
+            || Err(ToolError::PolicyAuditUnavailable),
+            |audit| audit.push(entry),
+        )
     }
 }
 
@@ -250,6 +357,8 @@ pub enum ToolError {
         resource: String,
         reason: String,
     },
+    #[error("policy audit buffer is unavailable")]
+    PolicyAuditUnavailable,
     #[error("workspace operation failed: {0}")]
     Workspace(#[from] TransactionError),
     #[error("repository evidence graph failed: {0}")]
@@ -270,6 +379,8 @@ pub enum ToolError {
     Timeout { program: String, seconds: u64 },
     #[error("process output task failed: {0}")]
     Join(tokio::task::JoinError),
+    #[error("process backend failed: {0}")]
+    ProcessBackend(#[from] crate::ProcessBackendError),
     #[error("file is not valid UTF-8: {0}")]
     NonUtf8(std::path::PathBuf),
     #[error("requested range is invalid: {0}")]

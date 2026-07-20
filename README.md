@@ -219,11 +219,24 @@ connect Pactrail to its `/v1` endpoint. A key variable may contain any non-empty
 placeholder if that server requires an authorization header; Pactrail does not
 need a real remote credential for a local endpoint.
 
-Native processes are disabled by default. `/process on` permits detected tests
-and other registered process calls, but those children have the host process's
-filesystem, network, secret, and external-service authority. The edit
-transaction is not an operating-system sandbox. Enable this only for trusted
-repositories.
+Processes are disabled by default. For untrusted repositories, select the
+restricted OCI backend with a prebuilt local image:
+
+```text
+/process sandbox pactrail-rust:local docker
+```
+
+Pactrail resolves the local image to an immutable digest and never pulls during
+a run. Each command gets only the candidate workspace, a read-only image root,
+private temporary storage, no network, no capabilities, no ambient environment,
+and bounded CPU, memory, PIDs, output, and wall time. Docker or Podman and the
+host kernel/desktop VM remain trusted infrastructure; this boundary is labelled
+`oci_restricted`, not "fully sandboxed."
+
+`/process native` is available for trusted repositories. It runs directly on
+the host with broad filesystem, network, secret, and external-service authority.
+Every process request still requires an exact scoped approval recorded in the
+trace and receipt. `/process off` restores the fail-closed default.
 
 ## Automation and CI
 
@@ -231,6 +244,7 @@ No-subcommand mode intentionally requires a terminal. Use subcommands in scripts
 
 ```console
 pactrail run "Fix the parser" --model qwen3-coder --output json
+pactrail run "Fix the parser" --model qwen3-coder --output json --process-backend oci --sandbox-image pactrail-rust:local --process-approval allow-run
 pactrail trace <RUN_ID> --json
 pactrail inspect <RUN_ID> --json
 pactrail apply <RUN_ID> --json
@@ -332,21 +346,23 @@ cargo test --workspace --all-features --locked
 cargo doc --workspace --all-features --no-deps --locked
 ```
 
-CI runs those gates plus release builds on Linux, macOS, and Windows, and applies
-the dependency/license policy in `deny.toml`. Start with
+CI runs those gates plus release builds on Linux, macOS, and Windows, applies
+the dependency/license policy in `deny.toml`, and runs a hostile-repository
+containment fixture against Docker. Start with
 [CONTRIBUTING.md](CONTRIBUTING.md) and [Development](docs/development.md).
 
 ## Project status
 
-Pactrail 0.2 is a production-grade developer preview: its invariants and failure
+Pactrail 0.4 is a production-grade developer preview: its invariants and failure
 modes are tested, while Rust APIs and versioned local formats may still evolve
-before 1.0. OCI/OS sandbox backends, MCP, native provider adapters, streaming,
-and richer retrieval are roadmap work—not current security claims.
+before 1.0. MCP, native provider adapters, streaming, resumable runs, and richer
+retrieval are roadmap work—not current claims.
 
 It is ready for public evaluation, contributions, demos, and social launch as a
-developer preview. Do not describe native process execution as sandboxed: when
-enabled, child processes inherit host filesystem, network, environment, and
-external-service authority.
+developer preview. The OCI backend is a production containment option with an
+adversarial CI fixture; it is not protection from a compromised runtime, daemon,
+kernel, desktop VM, or user account. Native process execution remains explicitly
+trusted and unsandboxed.
 
 ## License
 

@@ -1,13 +1,16 @@
 use std::borrow::Cow;
+use std::collections::BTreeSet;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU16, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use pactrail_core::{
-    ActionRecord, ChangeReceipt, EventEnvelope, FileChange, ReceiptOutcome, RunEvent, RunId,
-    RunState,
+    ActionRecord, ApprovalDecision, ApprovalRequest, ChangeReceipt, EventEnvelope, FileChange,
+    ReceiptOutcome, RunEvent, RunId, RunState,
 };
 use pactrail_engine::{RunObserver, RunProgress};
 use pactrail_memory::{MemoryDraft, MemoryKind};
@@ -19,8 +22,11 @@ use reedline::{
 use reqwest::{StatusCode, Url};
 use serde_json::Value;
 use terminal_size::{Width, terminal_size};
+use tokio_util::sync::CancellationToken;
 
-use crate::cli::{OutputFormat, ProviderKind, RunArgs};
+use crate::cli::{
+    OciRuntimeArg, OutputFormat, ProcessApprovalArg, ProcessBackendArg, ProviderKind, RunArgs,
+};
 use crate::commands::{self, CliError, CompletedRun};
 use crate::diff::render_receipt_diff;
 use crate::output::{sanitize_terminal_text, write_human_stdout, write_stdout};
@@ -91,8 +97,8 @@ const COMMANDS: &[CommandHelp] = &[
     ),
     CommandHelp::new(
         "Safety",
-        "/process on|off",
-        "control trusted native verification",
+        "/process off|native|sandbox <image> [docker|podman]",
+        "select the process trust boundary",
     ),
     CommandHelp::new("Safety", "/context <tokens>", "set model context capacity"),
     CommandHelp::new(
@@ -292,6 +298,7 @@ struct RunActivity {
     model_tokens: AtomicU64,
     model_time_ms: AtomicU64,
     truncated_outputs: AtomicUsize,
+    run_approvals: Mutex<BTreeSet<String>>,
     started: Instant,
     columns: usize,
 }
@@ -316,6 +323,7 @@ impl RunActivity {
             model_tokens: AtomicU64::new(0),
             model_time_ms: AtomicU64::new(0),
             truncated_outputs: AtomicUsize::new(0),
+            run_approvals: Mutex::new(BTreeSet::new()),
             started: Instant::now(),
             columns: terminal_columns(),
         }
@@ -710,6 +718,83 @@ impl RunObserver for RunActivity {
             _ => {}
         }
     }
+
+    fn on_approval_request(&self, request: &ApprovalRequest) -> ApprovalDecision {
+        let cache_key = format!(
+            "{}:{}:{}:{}",
+            request.binding.capability,
+            request.binding.actor_fingerprint,
+            request.binding.backend_kind,
+            request.binding.profile_digest
+        );
+        if self
+            .run_approvals
+            .lock()
+            .is_ok_and(|approvals| approvals.contains(&cache_key))
+        {
+            return ApprovalDecision::AllowRun;
+        }
+        if !std::io::stdin().is_terminal() {
+            return ApprovalDecision::Deny;
+        }
+        let decision = self.progress.suspend(|| prompt_for_approval(request));
+        if decision == ApprovalDecision::AllowRun {
+            let inserted = self
+                .run_approvals
+                .lock()
+                .is_ok_and(|mut approvals| approvals.insert(cache_key));
+            if !inserted {
+                return ApprovalDecision::Deny;
+            }
+        }
+        self.row(
+            match decision {
+                ApprovalDecision::AllowOnce | ApprovalDecision::AllowRun => "✓",
+                ApprovalDecision::Deny => "×",
+            },
+            "approval",
+            match decision {
+                ApprovalDecision::AllowOnce => "allowed once",
+                ApprovalDecision::AllowRun => "allowed for this exact request during the run",
+                ApprovalDecision::Deny => "denied",
+            },
+            match decision {
+                ApprovalDecision::AllowOnce | ApprovalDecision::AllowRun => TimelineTone::Warning,
+                ApprovalDecision::Deny => TimelineTone::Danger,
+            },
+        );
+        decision
+    }
+}
+
+fn prompt_for_approval(request: &ApprovalRequest) -> ApprovalDecision {
+    let field = |name: &str| {
+        request
+            .presentation
+            .get(name)
+            .map_or("not reported", String::as_str)
+    };
+    let prompt = format!(
+        "\n╭─ PROCESS APPROVAL\n│ command     {}\n│ backend     {}\n│ network     {}\n│ filesystem  {}\n│ workspace   {}\n│ environment {}\n╰─ [o] allow once  [r] allow this exact request for this run  [d] deny\napproval ❯ ",
+        field("command"),
+        field("backend"),
+        field("network"),
+        field("filesystem"),
+        field("workspace"),
+        field("environment_names"),
+    );
+    if write_human_stdout(&prompt).is_err() {
+        return ApprovalDecision::Deny;
+    }
+    let mut response = String::new();
+    if std::io::stdin().read_line(&mut response).is_err() {
+        return ApprovalDecision::Deny;
+    }
+    match response.trim().to_ascii_lowercase().as_str() {
+        "o" | "once" | "y" | "yes" => ApprovalDecision::AllowOnce,
+        "r" | "run" => ApprovalDecision::AllowRun,
+        _ => ApprovalDecision::Deny,
+    }
 }
 
 impl Session {
@@ -829,7 +914,20 @@ impl Session {
             base_url: self.settings.effective_base_url(),
             api_key_env: self.settings.api_key_env.clone(),
             write_paths: vec![".".to_owned()],
-            allow_process: self.settings.allow_process,
+            process_backend: Some(self.settings.process_backend),
+            allow_process: false,
+            process_approval: Some(ProcessApprovalArg::Prompt),
+            sandbox_runtime: self.settings.sandbox_runtime,
+            sandbox_runtime_executable: self
+                .settings
+                .sandbox_runtime_executable
+                .as_deref()
+                .map(PathBuf::from),
+            sandbox_image: self.settings.sandbox_image.clone(),
+            sandbox_memory_mib: self.settings.sandbox_memory_mib,
+            sandbox_cpu_millis: self.settings.sandbox_cpu_millis,
+            sandbox_pids: self.settings.sandbox_pids,
+            sandbox_tmpfs_mib: self.settings.sandbox_tmpfs_mib,
             apply: false,
             max_turns: self.settings.max_turns,
             context_tokens: self.settings.context_tokens,
@@ -839,13 +937,30 @@ impl Session {
             output: OutputFormat::Human,
         };
 
-        let result = commands::execute_run_with_observer(
+        let cancellation = CancellationToken::new();
+        let mut execution = Box::pin(commands::execute_run_with_observer_and_cancellation(
             &self.workspace,
             Some(&self.state),
             args,
             &activity,
-        )
-        .await;
+            cancellation.clone(),
+        ));
+        let result = tokio::select! {
+            result = &mut execution => result,
+            signal = tokio::signal::ctrl_c() => {
+                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                activity.row(
+                    "!",
+                    "cancel",
+                    "cancellation requested · cleaning up active work",
+                    TimelineTone::Warning,
+                );
+                activity.set_message("cancelling safely");
+                cancellation.cancel();
+                (&mut execution).await
+            }
+        };
+        drop(execution);
         activity.finish();
 
         match result {
@@ -885,7 +1000,7 @@ impl Session {
             .settings
             .effective_model()
             .unwrap_or_else(|| "not configured".to_owned());
-        let process = banner_process(self.settings.allow_process);
+        let process = banner_process(self.settings.process_backend);
         let review = banner_review(self.pending_runs);
         let memory = banner_memory(self.memory_count);
         let mut lines = vec![format!(
@@ -1048,65 +1163,10 @@ impl Session {
             .unwrap_or_else(|| "not configured".to_owned());
         let endpoint =
             provider_base_url(&self.settings).unwrap_or_else(|| "not configured".to_owned());
-        let process = if self.settings.allow_process {
-            (
-                "trusted · host/network/secrets available".to_owned(),
-                TimelineTone::Warning,
-            )
-        } else {
-            ("blocked".to_owned(), TimelineTone::Success)
-        };
-        let key = if self.settings.provider == ProviderKind::Ollama {
-            ("not required for Ollama".to_owned(), TimelineTone::Muted)
-        } else if std::env::var(&self.settings.api_key_env).is_ok_and(|api_key| !api_key.is_empty())
-        {
-            (
-                format!("{} is set", self.settings.api_key_env),
-                TimelineTone::Success,
-            )
-        } else if self
-            .settings
-            .effective_base_url()
-            .as_deref()
-            .is_some_and(is_loopback_url)
-        {
-            (
-                format!(
-                    "{} is not set (optional for local endpoints)",
-                    self.settings.api_key_env
-                ),
-                TimelineTone::Muted,
-            )
-        } else {
-            (
-                format!("{} is not set", self.settings.api_key_env),
-                TimelineTone::Warning,
-            )
-        };
-        let review = if self.pending_runs == 0 {
-            ("none waiting".to_owned(), TimelineTone::Muted)
-        } else {
-            (
-                format!(
-                    "{} {} waiting",
-                    self.pending_runs,
-                    plural(self.pending_runs, "candidate", "candidates")
-                ),
-                TimelineTone::Warning,
-            )
-        };
-        let memory = if self.memory_count == 0 {
-            ("empty".to_owned(), TimelineTone::Muted)
-        } else {
-            (
-                format!(
-                    "{} active {}",
-                    self.memory_count,
-                    plural(self.memory_count, "entry", "entries")
-                ),
-                TimelineTone::Accent,
-            )
-        };
+        let process = self.process_status();
+        let key = self.credential_status();
+        let review = self.review_status();
+        let memory = self.memory_status();
         let fields = [
             (
                 "workspace",
@@ -1139,6 +1199,85 @@ impl Session {
             lines.extend(labelled_rows(&self.theme, columns, label, &value, tone));
         }
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
+    }
+
+    fn process_status(&self) -> (String, TimelineTone) {
+        match self.settings.process_backend {
+            ProcessBackendArg::Disabled => ("blocked".to_owned(), TimelineTone::Success),
+            ProcessBackendArg::Native => (
+                "native trusted · host/network/secrets available".to_owned(),
+                TimelineTone::Warning,
+            ),
+            ProcessBackendArg::Oci => (
+                format!(
+                    "OCI restricted · {} · network denied",
+                    self.settings
+                        .sandbox_image
+                        .as_deref()
+                        .unwrap_or("image not configured")
+                ),
+                TimelineTone::Success,
+            ),
+        }
+    }
+
+    fn credential_status(&self) -> (String, TimelineTone) {
+        if self.settings.provider == ProviderKind::Ollama {
+            ("not required for Ollama".to_owned(), TimelineTone::Muted)
+        } else if std::env::var(&self.settings.api_key_env).is_ok_and(|key| !key.is_empty()) {
+            (
+                format!("{} is set", self.settings.api_key_env),
+                TimelineTone::Success,
+            )
+        } else if self
+            .settings
+            .effective_base_url()
+            .as_deref()
+            .is_some_and(is_loopback_url)
+        {
+            (
+                format!(
+                    "{} is not set (optional for local endpoints)",
+                    self.settings.api_key_env
+                ),
+                TimelineTone::Muted,
+            )
+        } else {
+            (
+                format!("{} is not set", self.settings.api_key_env),
+                TimelineTone::Warning,
+            )
+        }
+    }
+
+    fn review_status(&self) -> (String, TimelineTone) {
+        if self.pending_runs == 0 {
+            ("none waiting".to_owned(), TimelineTone::Muted)
+        } else {
+            (
+                format!(
+                    "{} {} waiting",
+                    self.pending_runs,
+                    plural(self.pending_runs, "candidate", "candidates")
+                ),
+                TimelineTone::Warning,
+            )
+        }
+    }
+
+    fn memory_status(&self) -> (String, TimelineTone) {
+        if self.memory_count == 0 {
+            ("empty".to_owned(), TimelineTone::Muted)
+        } else {
+            (
+                format!(
+                    "{} active {}",
+                    self.memory_count,
+                    plural(self.memory_count, "entry", "entries")
+                ),
+                TimelineTone::Accent,
+            )
+        }
     }
 
     fn render_memories(&self, query: &str) -> Result<(), CliError> {
@@ -1475,25 +1614,53 @@ impl Session {
     }
 
     fn set_process_access(&mut self, argument: &str) -> Result<(), CliError> {
-        let enabled = match argument {
-            "on" => true,
-            "off" => false,
-            _ => return Err(CliError::Argument("usage: /process on|off".to_owned())),
-        };
+        let parts = argument.split_whitespace().collect::<Vec<_>>();
         let mut settings = self.settings.clone();
-        settings.allow_process = enabled;
-        self.persist(settings)?;
-        if enabled {
-            self.emit(&format!(
-                "{}\n{}\n",
-                self.theme.warning("Native process execution enabled."),
-                self.theme.muted("Commands can access the host filesystem, network, secrets, and external services.")
-            ))
-        } else {
-            self.emit(&format!(
-                "{}\n",
-                self.theme.success("Native process execution disabled.")
-            ))
+        match parts.as_slice() {
+            ["off"] => {
+                settings.process_backend = ProcessBackendArg::Disabled;
+                self.persist(settings)?;
+                self.emit(&format!(
+                    "{}\n",
+                    self.theme.success("Process execution disabled.")
+                ))
+            }
+            ["native" | "on"] => {
+                settings.process_backend = ProcessBackendArg::Native;
+                self.persist(settings)?;
+                self.emit(&format!(
+                    "{}\n{}\n",
+                    self.theme.warning("Trusted native process execution enabled."),
+                    self.theme.muted("Commands can access the host filesystem, network, secrets, and external services.")
+                ))
+            }
+            [mode, image] | [mode, image, "docker"] if matches!(*mode, "sandbox" | "oci") => {
+                settings.process_backend = ProcessBackendArg::Oci;
+                settings.sandbox_runtime = OciRuntimeArg::Docker;
+                settings.sandbox_image = Some((*image).to_owned());
+                self.persist(settings)?;
+                self.emit(&format!(
+                    "{} {}\n{}\n",
+                    self.theme.success("Restricted Docker execution configured with"),
+                    self.theme.accent(image),
+                    self.theme.muted("Candidate-only mount · network denied · bounded resources · local image only")
+                ))
+            }
+            [mode, image, "podman"] if matches!(*mode, "sandbox" | "oci") => {
+                settings.process_backend = ProcessBackendArg::Oci;
+                settings.sandbox_runtime = OciRuntimeArg::Podman;
+                settings.sandbox_image = Some((*image).to_owned());
+                self.persist(settings)?;
+                self.emit(&format!(
+                    "{} {}\n{}\n",
+                    self.theme.success("Restricted Podman execution configured with"),
+                    self.theme.accent(image),
+                    self.theme.muted("Candidate-only mount · network denied · bounded resources · local image only")
+                ))
+            }
+            _ => Err(CliError::Argument(
+                "usage: /process off|native|sandbox <local-image> [docker|podman]".to_owned(),
+            )),
         }
     }
 
@@ -1964,6 +2131,10 @@ fn render_tool_descriptor(theme: &Theme, columns: usize, tool: &ToolDescriptor) 
         ToolRisk::WorkspaceMutation => {
             (theme.accent("◆"), theme.accent(&format!("{:<11}", "edit")))
         }
+        ToolRisk::RestrictedExecution => (
+            theme.success("▣"),
+            theme.success(&format!("{:<11}", "sandbox")),
+        ),
         ToolRisk::HostExecution => (
             theme.warning("!"),
             theme.warning(&format!("{:<11}", "host")),
@@ -2058,6 +2229,28 @@ fn render_trace_event(
             "!",
             &format!("policy · {decision:?}"),
             TimelineTone::Warning,
+        ),
+        RunEvent::ApprovalDecided(approval) => trace_detail_rows(
+            theme,
+            columns,
+            &time,
+            &sequence,
+            match approval.decision {
+                ApprovalDecision::AllowOnce | ApprovalDecision::AllowRun => "✓",
+                ApprovalDecision::Deny => "×",
+            },
+            &format!(
+                "approval · {:?} · {} · {} · actor {} · profile {}",
+                approval.decision,
+                approval.binding.capability,
+                approval.binding.backend_kind,
+                short_digest(&approval.binding.actor_fingerprint),
+                short_digest(&approval.binding.profile_digest)
+            ),
+            match approval.decision {
+                ApprovalDecision::AllowOnce | ApprovalDecision::AllowRun => TimelineTone::Warning,
+                ApprovalDecision::Deny => TimelineTone::Danger,
+            },
         ),
         RunEvent::CheckpointCreated { checkpoint } => trace_detail_rows(
             theme,
@@ -2444,17 +2637,20 @@ fn content_width(columns: usize, prefix: usize, maximum: usize) -> usize {
     columns.saturating_sub(prefix).clamp(12, maximum)
 }
 
-fn banner_process(enabled: bool) -> (String, TimelineTone) {
-    if enabled {
-        (
-            "isolated edits · native processes trusted".to_owned(),
-            TimelineTone::Warning,
-        )
-    } else {
-        (
+fn banner_process(backend: ProcessBackendArg) -> (String, TimelineTone) {
+    match backend {
+        ProcessBackendArg::Disabled => (
             "isolated edits · native processes blocked".to_owned(),
             TimelineTone::Success,
-        )
+        ),
+        ProcessBackendArg::Native => (
+            "isolated edits · native processes trusted".to_owned(),
+            TimelineTone::Warning,
+        ),
+        ProcessBackendArg::Oci => (
+            "isolated edits · OCI-restricted processes".to_owned(),
+            TimelineTone::Success,
+        ),
     }
 }
 
@@ -2580,6 +2776,10 @@ fn format_count(value: u64) -> String {
 
 fn short_run_id(run_id: RunId) -> String {
     run_id.to_string().chars().take(13).collect()
+}
+
+fn short_digest(value: &str) -> &str {
+    value.get(..12).unwrap_or(value)
 }
 
 fn unique_id_prefix(value: &str, candidates: &[String]) -> String {
@@ -2829,6 +3029,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             evidence: vec![evidence],
+            approvals: Vec::new(),
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|error| unreachable!("receipt: {error}"))

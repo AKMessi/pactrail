@@ -16,7 +16,8 @@ TaskContract
     │                                                Tool Kernel
     │                                                   │
     ├── PolicyEngine <──────── capability check ────────┤
-    │                                                   ▼
+    │         │ exact ApprovalBinding                   ▼
+    │         └──> ProcessBackend (disabled/native/OCI)
     ├── EventStore <──── reconciled effects ── WorkspaceTransaction
     │      │                                            │
     │      └── hash-linked trace                        │ candidate diff
@@ -54,8 +55,18 @@ from the durable contract is an invalid configuration.
 
 The built-in capabilities distinguish file reads, file writes, memory reads,
 process execution, network, secret use, and external writes. Denial wins.
-Native processes require the complete effective authority to be recorded rather
-than representing process execution as a narrow filesystem permission.
+Undeclared process authority requires approval; it is never silently granted.
+Each approval is bound to the run, exact non-secret request, executable actor,
+backend identity, and resource-profile digest. Policy evaluation and human or
+automation decisions are distinct hash-linked events and durable receipt data.
+
+The process backend is selected before the run starts. `disabled` rejects every
+process. `native_trusted` executes directly on the host and records its complete
+effective authority. `oci_restricted` invokes a locally attested Docker or
+Podman runtime with a locally resolved immutable image, candidate-only mount,
+read-only root, private bounded temporary space, no network or capabilities, a
+numeric Unix UID/GID where supported, and CPU/memory/PID/time/output bounds.
+Initialization fails closed and never downgrades to native execution.
 
 ## Context compiler
 
@@ -224,11 +235,12 @@ overwritten.
 ## Verification and evidence
 
 Manifest discovery selects non-installing checks for Rust, Go, Python, and
-JavaScript projects. Execution is possible only when native process authority is
-granted. Authorized checks run from a disposable snapshot of the finished
-candidate, so compiler output, coverage data, bytecode, and test-runner caches
-cannot enter the reviewed change set. The trace labels this execution workspace
-explicitly. Retained output and wall time are bounded.
+JavaScript projects. Execution is possible only when process authority is
+granted and a non-disabled backend is selected. Authorized checks run from a
+disposable snapshot of the finished candidate, so compiler output, coverage
+data, bytecode, and test-runner caches cannot enter the reviewed change set. The
+trace labels this execution workspace explicitly. Retained output and wall time
+are bounded.
 
 Verification results become deterministic evidence. Model statements do not.
 Each required obligation receives a grade and status; missing process permission
@@ -251,8 +263,15 @@ decision records the candidate and diagnostics digests.
 Native processes start from a cleared environment. Pactrail inherits an
 explicit toolchain/operating-system allowlist rather than arbitrary variables;
 Windows Visual C++ and SDK discovery paths are included, while API keys,
-`CARGO_TARGET_DIR`, wrappers, and other undeclared variables are not. Explicit
-environment entries still require the already-trusted process capability.
+`CARGO_TARGET_DIR`, wrappers, and other undeclared variables are not. The OCI
+backend forwards no ambient host environment at all. Explicit environment
+entries are exact approval-bound request data in either mode.
+
+One cancellation token spans provider requests, tool scheduling, native child
+termination, OCI force-removal, verification, repair, and the CLI. Cancellation
+stops new work, waits for bounded cleanup, records a terminal `Cancelled` state,
+and preserves an integrity-checked candidate receipt when safe. Cleanup failure
+is a hard error rather than a successful cancellation claim.
 
 Model exploration is bounded independently of provider context size. A
 `read_file` call without an explicit range returns at most 300 lines and exposes

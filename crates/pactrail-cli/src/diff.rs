@@ -245,6 +245,7 @@ mod tests {
                 bytes_removed: 7,
             }],
             evidence: Vec::new(),
+            approvals: Vec::new(),
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|error| unreachable!("receipt: {error}"));
@@ -297,6 +298,7 @@ mod tests {
                 bytes_removed: 7,
             }],
             evidence: Vec::new(),
+            approvals: Vec::new(),
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|error| unreachable!("receipt: {error}"))

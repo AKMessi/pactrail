@@ -156,11 +156,7 @@ mod tests {
     async fn searches_the_current_candidate_graph() {
         let (_source, _control, transaction) = fixture();
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
 
         let initial = SearchCodeGraphTool
             .execute(&context, json!({"query":"Receipt"}))

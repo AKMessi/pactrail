@@ -3,13 +3,15 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use clap::CommandFactory;
 use clap_complete::{generate, shells};
 use pactrail_core::{
-    Capability, ChangeReceipt, EventEnvelope, ReceiptInput, ReceiptOutcome, RunEvent, RunId,
-    RunState, TaskContract,
+    ApprovalDecision, ApprovalRequest, Capability, ChangeReceipt, EventEnvelope, Evidence,
+    EvidenceGrade, EvidenceId, EvidenceKind, EvidenceStatus, ReceiptInput, ReceiptOutcome,
+    RunEvent, RunId, RunState, TaskContract,
 };
 use pactrail_engine::{EngineError, RunEngine, RunObserver};
 use pactrail_memory::{
@@ -19,19 +21,26 @@ use pactrail_models::{
     ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
 use pactrail_store::{EventStore, StoreError};
-use pactrail_tools::{PolicyEngine, ToolError, ToolRisk, builtin_registry};
+use pactrail_tools::{
+    ApprovalResolver, DisabledProcessBackend, NativeProcessBackend, OciProcessBackend,
+    OciProcessConfig, OciRuntimeKind, OciSandboxProfile, PolicyEngine, ProcessBackend,
+    RunProcessTool, ToolError, ToolRisk, builtin_registry_with_process,
+};
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
 use secrecy::SecretString;
 use serde_json::json;
 use tempfile::NamedTempFile;
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 
 use crate::cli::{
-    Cli, Command, CompletionShell, MemoryCommand, MemoryKindArg, OutputFormat, ProviderKind,
-    RunArgs, RunIdArgs,
+    Cli, Command, CompletionShell, MemoryCommand, MemoryKindArg, OciRuntimeArg, OutputFormat,
+    ProcessApprovalArg, ProcessBackendArg, ProviderKind, RunArgs, RunIdArgs,
 };
-use crate::output::{escape_json_terminal_controls, write_human_stdout, write_stdout};
+use crate::output::{
+    escape_json_terminal_controls, write_human_stdout, write_stderr, write_stdout,
+};
 
 pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
     match cli.command.ok_or_else(|| {
@@ -83,8 +92,32 @@ async fn run(
     state_override: Option<&Path>,
     args: RunArgs,
 ) -> Result<(), CliError> {
+    if args.allow_process {
+        write_stderr(
+            "warning: --allow-process is deprecated; use --process-backend native --process-approval allow-run\n",
+        )
+        .map_err(CliError::Output)?;
+    }
     let output = args.output;
-    let completed = execute_run(cli_workspace, state_override, args).await?;
+    let cancellation = CancellationToken::new();
+    let mut execution = Box::pin(execute_run_inner(
+        cli_workspace,
+        state_override,
+        args,
+        None,
+        cancellation.clone(),
+    ));
+    let completed = tokio::select! {
+        result = &mut execution => result?,
+        signal = tokio::signal::ctrl_c() => {
+            signal.map_err(|source| CliError::Io {
+                path: PathBuf::from("<ctrl-c>"),
+                source,
+            })?;
+            cancellation.cancel();
+            (&mut execution).await?
+        }
+    };
     render_run(
         &completed.run_root,
         &completed.model_summary,
@@ -94,21 +127,21 @@ async fn run(
     )
 }
 
-pub(crate) async fn execute_run(
-    cli_workspace: &Path,
-    state_override: Option<&Path>,
-    args: RunArgs,
-) -> Result<CompletedRun, CliError> {
-    execute_run_inner(cli_workspace, state_override, args, None).await
-}
-
-pub(crate) async fn execute_run_with_observer(
+pub(crate) async fn execute_run_with_observer_and_cancellation(
     cli_workspace: &Path,
     state_override: Option<&Path>,
     args: RunArgs,
     observer: &dyn RunObserver,
+    cancellation: CancellationToken,
 ) -> Result<CompletedRun, CliError> {
-    execute_run_inner(cli_workspace, state_override, args, Some(observer)).await
+    execute_run_inner(
+        cli_workspace,
+        state_override,
+        args,
+        Some(observer),
+        cancellation,
+    )
+    .await
 }
 
 async fn execute_run_inner(
@@ -116,8 +149,11 @@ async fn execute_run_inner(
     state_override: Option<&Path>,
     args: RunArgs,
     observer: Option<&dyn RunObserver>,
+    cancellation: CancellationToken,
 ) -> Result<CompletedRun, CliError> {
     validate_model_limits(&args)?;
+    let process_backend = effective_process_backend(&args)?;
+    let process_approval = effective_process_approval(&args)?;
     let (mut contract, workspace) = load_contract(cli_workspace, &args)?;
     contract.workspace_root = workspace.display().to_string();
     if args.task.is_none() {
@@ -129,7 +165,7 @@ async fn execute_run_inner(
         contract.permissions.deny.insert(Capability::SecretUse);
         contract.permissions.deny.insert(Capability::ExternalWrite);
     }
-    configure_native_process_permissions(&mut contract, args.allow_process)?;
+    configure_process_permissions(&mut contract, process_backend, args.task.is_some())?;
     contract.validate().map_err(CliError::Contract)?;
     for required in [Capability::FileRead, Capability::FileWrite] {
         if !contract.permissions.allow.contains(&required) {
@@ -138,6 +174,9 @@ async fn execute_run_inner(
             )));
         }
     }
+    // Resolve and attest the execution boundary before creating durable run state. Invalid
+    // sandbox configuration must fail without leaving an empty run behind for users to diagnose.
+    let process_backend = build_process_backend(process_backend, &args, &workspace).await?;
 
     let state = if let Some(override_path) = state_override {
         absolute_or_join(cli_workspace, override_path)?
@@ -154,28 +193,26 @@ async fn execute_run_inner(
         WorkspaceTransaction::create(&workspace, &run_root, &contract.allowed_write_paths)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
-    let registry = builtin_registry()?;
+    let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
+    let registry = builtin_registry_with_process(process_tool)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
-    let context_fragments = if contract.permissions.allow.contains(&Capability::MemoryRead) {
-        memory
-            .search(&contract.goal, 8)?
-            .into_iter()
-            .map(|item| pactrail_context::ContextFragment {
-                source: format!(
-                    "memory:{} [{}; {}] {}",
-                    item.memory.id, item.memory.kind, item.memory.source, item.memory.title
-                ),
-                content: item.memory.content,
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    let context_fragments = memory_context_fragments(&contract, &memory)?;
     let engine = RunEngine::new(&driver, &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
-        .with_max_turns(args.max_turns);
+        .with_max_turns(args.max_turns)
+        .with_cancellation(cancellation);
+    let fixed_approval = FixedApprovalResolver(match process_approval {
+        ProcessApprovalArg::Deny | ProcessApprovalArg::Prompt => ApprovalDecision::Deny,
+        ProcessApprovalArg::AllowRun => ApprovalDecision::AllowRun,
+    });
+    let engine = if process_approval == ProcessApprovalArg::Prompt {
+        engine
+    } else {
+        engine.with_approval_resolver(&fixed_approval)
+    };
+    let cancelled_contract = contract.clone();
     let engine_result = match observer {
         Some(observer) => {
             engine
@@ -190,6 +227,9 @@ async fn execute_run_inner(
     };
     let outcome = match engine_result {
         Ok(outcome) => outcome,
+        Err(EngineError::Cancelled) => {
+            return cancelled_run(&run_root, &transaction, &store, run_id, cancelled_contract);
+        }
         Err(source) => return Err(failed_run_error(&run_root, &state, &store, run_id, source)),
     };
     let mut receipt = outcome.receipt;
@@ -207,6 +247,80 @@ async fn execute_run_inner(
         model_summary: outcome.final_text,
         receipt,
         tokens: outcome.usage.total(),
+    })
+}
+
+fn memory_context_fragments(
+    contract: &TaskContract,
+    memory: &MemoryStore,
+) -> Result<Vec<pactrail_context::ContextFragment>, CliError> {
+    if !contract.permissions.allow.contains(&Capability::MemoryRead) {
+        return Ok(Vec::new());
+    }
+    Ok(memory
+        .search(&contract.goal, 8)?
+        .into_iter()
+        .map(|item| pactrail_context::ContextFragment {
+            source: format!(
+                "memory:{} [{}; {}] {}",
+                item.memory.id, item.memory.kind, item.memory.source, item.memory.title
+            ),
+            content: item.memory.content,
+        })
+        .collect())
+}
+
+fn cancelled_run(
+    run_root: &Path,
+    transaction: &WorkspaceTransaction,
+    store: &EventStore,
+    run_id: RunId,
+    contract: TaskContract,
+) -> Result<CompletedRun, CliError> {
+    let snapshot = store.snapshot(run_id)?;
+    let mut evidence = snapshot.evidence;
+    for obligation in &contract.obligations {
+        if !evidence
+            .iter()
+            .any(|record| record.obligation_id == obligation.id)
+        {
+            evidence.push(Evidence {
+                id: EvidenceId::new(),
+                obligation_id: obligation.id,
+                grade: EvidenceGrade::Unverified,
+                kind: EvidenceKind::Other,
+                status: EvidenceStatus::Inconclusive,
+                summary: "Run cancelled before this obligation could be verified".to_owned(),
+                artifact_digest: None,
+                reproduction: None,
+            });
+        }
+    }
+    let receipt = ChangeReceipt::build(ReceiptInput {
+        run_id,
+        contract,
+        outcome: ReceiptOutcome::Cancelled,
+        baseline_digest: transaction.baseline_digest().to_owned(),
+        final_event_hash: snapshot.last_hash.0,
+        changes: transaction.changes()?,
+        evidence,
+        approvals: snapshot.approvals,
+        unresolved_risks: vec![
+            "Run cancelled before completion; candidate completeness and verification are inconclusive"
+                .to_owned(),
+        ],
+    })?;
+    write_receipt(run_root, &receipt)?;
+    crate::diff::write_receipt_diff(run_root, &receipt)
+        .map_err(|error| CliError::Argument(format!("review artifact failed: {error}")))?;
+    write_trace_artifact(run_root, store, run_id)?;
+    Ok(CompletedRun {
+        run_root: run_root.to_path_buf(),
+        model_summary:
+            "Run cancelled cleanly. Any isolated candidate changes were preserved for review."
+                .to_owned(),
+        receipt,
+        tokens: 0,
     })
 }
 
@@ -364,9 +478,40 @@ fn api_key_from_env(name: &str) -> Result<SecretString, CliError> {
         })
 }
 
-fn configure_native_process_permissions(
+fn effective_process_backend(args: &RunArgs) -> Result<ProcessBackendArg, CliError> {
+    match (args.process_backend, args.allow_process) {
+        (Some(ProcessBackendArg::Native) | None, true) => Ok(ProcessBackendArg::Native),
+        (Some(mode), true) => Err(CliError::Argument(format!(
+            "--allow-process is a deprecated alias for --process-backend native and conflicts with --process-backend {mode:?}"
+        ))),
+        (Some(mode), false) => Ok(mode),
+        (None, false) => Ok(ProcessBackendArg::Disabled),
+    }
+}
+
+fn effective_process_approval(args: &RunArgs) -> Result<ProcessApprovalArg, CliError> {
+    match (args.process_approval, args.allow_process) {
+        (Some(ProcessApprovalArg::AllowRun) | None, true) => Ok(ProcessApprovalArg::AllowRun),
+        (Some(mode), true) => Err(CliError::Argument(format!(
+            "--allow-process includes run-scoped approval and conflicts with --process-approval {mode:?}"
+        ))),
+        (Some(mode), false) => Ok(mode),
+        (None, false) => Ok(ProcessApprovalArg::Deny),
+    }
+}
+
+struct FixedApprovalResolver(ApprovalDecision);
+
+impl ApprovalResolver for FixedApprovalResolver {
+    fn resolve(&self, _request: &ApprovalRequest) -> ApprovalDecision {
+        self.0
+    }
+}
+
+fn configure_process_permissions(
     contract: &mut TaskContract,
-    cli_opt_in: bool,
+    backend: ProcessBackendArg,
+    authoritative_permissions: bool,
 ) -> Result<(), CliError> {
     let effective = [
         Capability::ProcessSpawn,
@@ -374,30 +519,157 @@ fn configure_native_process_permissions(
         Capability::SecretUse,
         Capability::ExternalWrite,
     ];
-    if cli_opt_in {
-        for capability in &effective {
-            contract.permissions.deny.remove(capability);
-            contract.permissions.allow.insert(capability.clone());
+    match backend {
+        ProcessBackendArg::Disabled => {
+            if contract
+                .permissions
+                .allow
+                .contains(&Capability::ProcessSpawn)
+                || contract.permissions.ask.contains(&Capability::ProcessSpawn)
+            {
+                return Err(CliError::Argument(
+                    "the task contract permits process_spawn but the selected process backend is disabled; select --process-backend native or oci explicitly"
+                        .to_owned(),
+                ));
+            }
+            contract.permissions.deny.insert(Capability::ProcessSpawn);
+        }
+        ProcessBackendArg::Oci => {
+            if contract
+                .permissions
+                .deny
+                .contains(&Capability::ProcessSpawn)
+            {
+                return Err(CliError::Argument(
+                    "the task contract explicitly denies process_spawn; an OCI backend cannot override that denial"
+                        .to_owned(),
+                ));
+            }
+            contract.permissions.deny.remove(&Capability::ProcessSpawn);
+            if contract
+                .permissions
+                .allow
+                .contains(&Capability::ProcessSpawn)
+            {
+                contract.permissions.ask.remove(&Capability::ProcessSpawn);
+            } else {
+                contract.permissions.ask.insert(Capability::ProcessSpawn);
+            }
+            for capability in [
+                Capability::Network,
+                Capability::SecretUse,
+                Capability::ExternalWrite,
+            ] {
+                contract.permissions.allow.remove(&capability);
+                contract.permissions.ask.remove(&capability);
+                contract.permissions.deny.insert(capability);
+            }
+        }
+        ProcessBackendArg::Native => {
+            if authoritative_permissions
+                && let Some(capability) = effective
+                    .iter()
+                    .find(|capability| contract.permissions.deny.contains(*capability))
+            {
+                return Err(CliError::Argument(format!(
+                    "native execution retains {capability} authority and cannot override the task contract's explicit denial"
+                )));
+            }
+            for capability in &effective {
+                contract.permissions.deny.remove(capability);
+                if capability == &Capability::ProcessSpawn {
+                    if contract.permissions.allow.contains(capability) {
+                        contract.permissions.ask.remove(capability);
+                    } else {
+                        contract.permissions.ask.insert(capability.clone());
+                    }
+                } else {
+                    contract.permissions.ask.remove(capability);
+                    contract.permissions.allow.insert(capability.clone());
+                }
+            }
         }
     }
-    if contract
-        .permissions
-        .allow
-        .contains(&Capability::ProcessSpawn)
-    {
-        let missing = effective
-            .iter()
-            .filter(|capability| !contract.permissions.allow.contains(*capability))
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        if !missing.is_empty() {
-            return Err(CliError::Argument(format!(
-                "native process execution is unsandboxed; its contract must also allow: {}",
-                missing.join(", ")
-            )));
-        }
-    }
+    validate_native_authority(contract, backend, &effective)?;
     Ok(())
+}
+
+fn validate_native_authority(
+    contract: &TaskContract,
+    backend: ProcessBackendArg,
+    effective: &[Capability],
+) -> Result<(), CliError> {
+    let process_permitted = contract.permissions.ask.contains(&Capability::ProcessSpawn)
+        || contract
+            .permissions
+            .allow
+            .contains(&Capability::ProcessSpawn);
+    if backend != ProcessBackendArg::Native || !process_permitted {
+        return Ok(());
+    }
+    let missing = effective
+        .iter()
+        .filter(|capability| {
+            !(contract.permissions.allow.contains(*capability)
+                || *capability == &Capability::ProcessSpawn
+                    && contract.permissions.ask.contains(*capability))
+        })
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(CliError::Argument(format!(
+            "native process execution is unsandboxed; its contract must also allow: {}",
+            missing.join(", ")
+        )))
+    }
+}
+
+async fn build_process_backend(
+    backend: ProcessBackendArg,
+    args: &RunArgs,
+    source_workspace: &Path,
+) -> Result<Arc<dyn ProcessBackend>, CliError> {
+    let backend: Arc<dyn ProcessBackend> = match backend {
+        ProcessBackendArg::Disabled => Arc::new(DisabledProcessBackend),
+        ProcessBackendArg::Native => Arc::new(NativeProcessBackend),
+        ProcessBackendArg::Oci => {
+            let image = args.sandbox_image.clone().ok_or_else(|| {
+                CliError::Argument(
+                    "--process-backend oci requires --sandbox-image <local-image>".to_owned(),
+                )
+            })?;
+            let runtime = match args.sandbox_runtime {
+                OciRuntimeArg::Docker => OciRuntimeKind::Docker,
+                OciRuntimeArg::Podman => OciRuntimeKind::Podman,
+            };
+            let mut config = OciProcessConfig::for_runtime(runtime, image);
+            if let Some(executable) = &args.sandbox_runtime_executable {
+                config.runtime_executable = executable.as_os_str().to_owned();
+            }
+            let default_profile = OciSandboxProfile::default();
+            config.profile = OciSandboxProfile {
+                memory_bytes: mebibytes(args.sandbox_memory_mib, "sandbox memory")?,
+                milli_cpus: args.sandbox_cpu_millis,
+                pids_limit: args.sandbox_pids,
+                tmpfs_bytes: mebibytes(args.sandbox_tmpfs_mib, "sandbox temporary space")?,
+                user: default_profile.user,
+            };
+            Arc::new(
+                OciProcessBackend::initialize(config, &[source_workspace.to_path_buf()])
+                    .await
+                    .map_err(|error| CliError::Tool(ToolError::ProcessBackend(error)))?,
+            )
+        }
+    };
+    Ok(backend)
+}
+
+fn mebibytes(value: u64, label: &str) -> Result<u64, CliError> {
+    value
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| CliError::Argument(format!("{label} is too large to represent in bytes")))
 }
 
 pub(crate) fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
@@ -515,6 +787,18 @@ fn render_trace_text(run_id: RunId, events: &[EventEnvelope]) -> String {
             RunEvent::PolicyEvaluated(decision) => {
                 lines.push(format!("{prefix}  POLICY    {decision:?}"));
             }
+            RunEvent::ApprovalDecided(approval) => {
+                lines.push(format!(
+                    "{prefix}  APPROVAL  {:?}  {} via {}",
+                    approval.decision, approval.binding.capability, approval.binding.backend_kind
+                ));
+                lines.push(format!(
+                    "                    actor={}  profile={}  resource={}",
+                    short_digest(&approval.binding.actor_fingerprint),
+                    short_digest(&approval.binding.profile_digest),
+                    approval.binding.resource
+                ));
+            }
             RunEvent::CheckpointCreated { checkpoint } => {
                 lines.push(format!("{prefix}  CHECKPT   {checkpoint}"));
             }
@@ -549,6 +833,10 @@ fn format_trace_elapsed(milliseconds: i128) -> String {
             (milliseconds % 1_000) / 10
         )
     }
+}
+
+fn short_digest(value: &str) -> &str {
+    value.get(..12).unwrap_or(value)
 }
 
 pub(crate) fn apply(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
@@ -781,6 +1069,7 @@ fn rebuild_receipt(
         final_event_hash,
         changes: receipt.changes,
         evidence: receipt.evidence,
+        approvals: receipt.approvals,
         unresolved_risks: receipt.unresolved_risks,
     })
     .map_err(CliError::Receipt)
@@ -916,7 +1205,7 @@ pub(crate) fn completed_runs(state: &Path) -> Result<Vec<ChangeReceipt>, CliErro
 }
 
 fn tools(json_output: bool) -> Result<(), CliError> {
-    let descriptors = builtin_registry()?.descriptors();
+    let descriptors = builtin_registry_with_process(RunProcessTool::disabled())?.descriptors();
     if json_output {
         write_json(&descriptors)
     } else {
@@ -932,6 +1221,7 @@ fn tools(json_output: bool) -> Result<(), CliError> {
             let risk = match tool.annotations.risk {
                 ToolRisk::ReadOnly => "read",
                 ToolRisk::WorkspaceMutation => "edit",
+                ToolRisk::RestrictedExecution => "sandbox",
                 ToolRisk::HostExecution => "host",
             };
             let annotations = [
@@ -1179,19 +1469,77 @@ pub(crate) fn doctor(json_output: bool) -> Result<(), CliError> {
             json!({ "program": program, "available": available })
         })
         .collect::<Vec<_>>();
+    let command_available = |name: &str| {
+        checks
+            .iter()
+            .any(|check| check["program"] == name && check["available"].as_bool().unwrap_or(false))
+    };
+    let process_backends = json!([
+        {
+            "id": "disabled",
+            "available": true,
+            "trust": "no process execution",
+            "network": "denied",
+            "filesystem": "none"
+        },
+        {
+            "id": "native",
+            "available": true,
+            "trust": "explicitly trusted host execution",
+            "network": "host authority",
+            "filesystem": "candidate working directory plus host process authority"
+        },
+        {
+            "id": "oci-docker",
+            "available": command_available("docker"),
+            "trust": "restricted local OCI execution",
+            "network": "denied",
+            "filesystem": "candidate-only writable bind mount; read-only image"
+        },
+        {
+            "id": "oci-podman",
+            "available": command_available("podman"),
+            "trust": "restricted local OCI execution",
+            "network": "denied",
+            "filesystem": "candidate-only writable bind mount; read-only image"
+        }
+    ]);
     let report = json!({
         "native_process_isolation": "workspace transaction only; not a host-filesystem or network sandbox",
-        "recommended_hostile_repo_backend": "run Pactrail inside an externally managed OCI container",
+        "recommended_hostile_repo_backend": "--process-backend oci --sandbox-image <local-image>",
+        "process_backends": process_backends,
         "commands": checks,
     });
     if json_output {
         write_json(&report)
     } else {
         let mut lines = vec![
-            "Native execution protects the working tree but is not a host-filesystem/network sandbox."
+            "Process boundaries".to_owned(),
+            "  disabled    ready       no process execution".to_owned(),
+            "  native      ready       trusted host authority; candidate working directory"
                 .to_owned(),
-            "For hostile repositories, run Pactrail itself inside an externally managed Docker or Podman container."
+            format!(
+                "  oci/docker  {:<10} network denied; candidate-only writable mount",
+                if command_available("docker") {
+                    "detected"
+                } else {
+                    "not found"
+                }
+            ),
+            format!(
+                "  oci/podman  {:<10} network denied; candidate-only writable mount",
+                if command_available("podman") {
+                    "detected"
+                } else {
+                    "not found"
+                }
+            ),
+            String::new(),
+            "Native mode is not a host-filesystem or network sandbox.".to_owned(),
+            "Use --process-backend oci --sandbox-image <local-image> for untrusted commands."
                 .to_owned(),
+            String::new(),
+            "Toolchain discovery".to_owned(),
         ];
         for check in checks {
             lines.push(format!(
@@ -1222,6 +1570,7 @@ fn render_run(
             "summary": model_summary,
             "changes": receipt.changes,
             "verification": receipt.verification,
+            "approvals": receipt.approvals,
             "risks": receipt.unresolved_risks,
             "tokens": tokens,
             "receipt": run_root.join("receipt.json"),
@@ -1519,6 +1868,7 @@ mod tests {
                 .changes()
                 .unwrap_or_else(|error| unreachable!("changes: {error}")),
             evidence,
+            approvals: Vec::new(),
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|error| unreachable!("receipt: {error}"));
@@ -1624,6 +1974,42 @@ mod tests {
     }
 
     #[test]
+    fn cancellation_preserves_an_integrity_checked_candidate_receipt() {
+        let mut fixture = ready_fixture();
+        let run_id = fixture.receipt.run_id;
+        let contract = fixture.receipt.contract.clone();
+        let snapshot = fixture
+            .store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        fixture
+            .store
+            .append(
+                run_id,
+                snapshot.last_sequence.map_or(0, |value| value + 1),
+                RunEvent::StateChanged {
+                    from: RunState::AwaitingApply,
+                    to: RunState::Cancelled,
+                },
+            )
+            .unwrap_or_else(|error| unreachable!("cancel event: {error}"));
+
+        let completed = cancelled_run(
+            &fixture.run_root,
+            &fixture.transaction,
+            &fixture.store,
+            run_id,
+            contract,
+        )
+        .unwrap_or_else(|error| unreachable!("cancelled receipt: {error}"));
+        assert_eq!(completed.receipt.outcome, ReceiptOutcome::Cancelled);
+        assert_eq!(completed.receipt.changes.len(), 1);
+        assert_eq!(completed.receipt.verify_integrity().ok(), Some(true));
+        assert!(fixture.run_root.join("review.diff").is_file());
+        assert!(!fixture.source.path().join("README.md").exists());
+    }
+
+    #[test]
     fn native_process_opt_in_records_all_effective_capabilities() {
         let mut contract = TaskContract::new("run checks", ".");
         contract.permissions.deny.extend([
@@ -1631,10 +2017,16 @@ mod tests {
             Capability::SecretUse,
             Capability::ExternalWrite,
         ]);
-        configure_native_process_permissions(&mut contract, true)
+        configure_process_permissions(&mut contract, ProcessBackendArg::Native, false)
             .unwrap_or_else(|error| unreachable!("native opt-in: {error}"));
+        assert!(contract.permissions.ask.contains(&Capability::ProcessSpawn));
+        assert!(
+            !contract
+                .permissions
+                .allow
+                .contains(&Capability::ProcessSpawn)
+        );
         for capability in [
-            Capability::ProcessSpawn,
             Capability::Network,
             Capability::SecretUse,
             Capability::ExternalWrite,
@@ -1648,8 +2040,44 @@ mod tests {
     fn task_file_cannot_understate_native_process_access() {
         let mut contract = TaskContract::new("run checks", ".");
         contract.permissions.allow.insert(Capability::ProcessSpawn);
-        let result = configure_native_process_permissions(&mut contract, false);
+        let result =
+            configure_process_permissions(&mut contract, ProcessBackendArg::Disabled, true);
         assert!(matches!(result, Err(CliError::Argument(_))));
+    }
+
+    #[test]
+    fn oci_process_mode_records_restricted_authority() {
+        let mut contract = TaskContract::new("run checks", ".");
+        contract.permissions.allow.extend([
+            Capability::Network,
+            Capability::SecretUse,
+            Capability::ExternalWrite,
+        ]);
+        configure_process_permissions(&mut contract, ProcessBackendArg::Oci, false)
+            .unwrap_or_else(|error| unreachable!("OCI permissions: {error}"));
+        assert!(contract.permissions.ask.contains(&Capability::ProcessSpawn));
+        for capability in [
+            Capability::Network,
+            Capability::SecretUse,
+            Capability::ExternalWrite,
+        ] {
+            assert!(contract.permissions.deny.contains(&capability));
+            assert!(!contract.permissions.allow.contains(&capability));
+        }
+    }
+
+    #[test]
+    fn explicit_contract_denial_cannot_be_overridden_by_backend_selection() {
+        let mut contract = TaskContract::new("run checks", ".");
+        contract.permissions.deny.insert(Capability::ProcessSpawn);
+        let result = configure_process_permissions(&mut contract, ProcessBackendArg::Oci, true);
+        assert!(matches!(result, Err(CliError::Argument(_))));
+        assert!(
+            contract
+                .permissions
+                .deny
+                .contains(&Capability::ProcessSpawn)
+        );
     }
 
     #[test]

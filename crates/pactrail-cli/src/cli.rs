@@ -144,6 +144,40 @@ pub enum CompletionShell {
     Zsh,
 }
 
+/// Process trust boundary selected for a run.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum ProcessBackendArg {
+    #[default]
+    Disabled,
+    #[value(alias = "trusted", alias = "on")]
+    Native,
+    #[value(alias = "sandbox", alias = "container")]
+    Oci,
+}
+
+/// Local OCI runtime used for restricted processes.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum OciRuntimeArg {
+    #[default]
+    Docker,
+    Podman,
+}
+
+/// Resolution mode for process requests that reach the approval boundary.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum ProcessApprovalArg {
+    /// Deny unresolved process approvals (the non-interactive default).
+    #[default]
+    Deny,
+    /// Approve exact process requests for the duration of this run.
+    AllowRun,
+    /// Ask through the active interactive frontend.
+    #[value(skip)]
+    Prompt,
+}
+
 #[derive(Debug, Args)]
 pub struct RunArgs {
     /// Natural-language software task.
@@ -174,9 +208,47 @@ pub struct RunArgs {
     #[arg(long = "write-path", default_value = ".")]
     pub write_paths: Vec<String>,
 
+    /// Process execution boundary. The default is disabled.
+    #[arg(long, value_enum)]
+    pub process_backend: Option<ProcessBackendArg>,
+
     /// Trust unsandboxed processes with host, network, secret, and external access.
+    ///
+    /// Deprecated alias for `--process-backend native`.
     #[arg(long)]
     pub allow_process: bool,
+
+    /// How scoped process approval requests are resolved.
+    #[arg(long, value_enum)]
+    pub process_approval: Option<ProcessApprovalArg>,
+
+    /// OCI runtime for `--process-backend oci`.
+    #[arg(long, value_enum, default_value = "docker")]
+    pub sandbox_runtime: OciRuntimeArg,
+
+    /// Override the Docker or Podman executable used by the sandbox backend.
+    #[arg(long)]
+    pub sandbox_runtime_executable: Option<PathBuf>,
+
+    /// Locally available OCI image used by the sandbox backend.
+    #[arg(long)]
+    pub sandbox_image: Option<String>,
+
+    /// Sandbox memory ceiling in MiB.
+    #[arg(long, default_value_t = 2_048, value_parser = clap::value_parser!(u64).range(64..=1_048_576))]
+    pub sandbox_memory_mib: u64,
+
+    /// Sandbox CPU ceiling in thousandths of one CPU.
+    #[arg(long, default_value_t = 2_000, value_parser = clap::value_parser!(u32).range(100..=256_000))]
+    pub sandbox_cpu_millis: u32,
+
+    /// Sandbox process-count ceiling.
+    #[arg(long, default_value_t = 128, value_parser = clap::value_parser!(u32).range(16..=32_768))]
+    pub sandbox_pids: u32,
+
+    /// Sandbox writable temporary-space ceiling in MiB.
+    #[arg(long, default_value_t = 512, value_parser = clap::value_parser!(u64).range(1..=65_536))]
+    pub sandbox_tmpfs_mib: u64,
 
     /// Apply immediately only if the run reaches ready-to-apply state.
     #[arg(long)]
@@ -231,7 +303,7 @@ pub enum OutputFormat {
 
 #[cfg(test)]
 mod tests {
-    use super::{Cli, Command};
+    use super::{Cli, Command, OciRuntimeArg, ProcessBackendArg};
     use clap::Parser;
 
     #[test]
@@ -293,6 +365,71 @@ mod tests {
             unreachable!("run command")
         };
         assert!(args.disable_thinking);
+    }
+
+    #[test]
+    fn run_parses_restricted_process_profile() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--model",
+            "model",
+            "--process-backend",
+            "oci",
+            "--sandbox-runtime",
+            "podman",
+            "--sandbox-image",
+            "localhost/pactrail-ci@sha256:0123",
+            "--sandbox-memory-mib",
+            "1024",
+            "--sandbox-cpu-millis",
+            "1500",
+            "--sandbox-pids",
+            "64",
+            "--sandbox-tmpfs-mib",
+            "128",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Run(args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert_eq!(args.process_backend, Some(ProcessBackendArg::Oci));
+        assert_eq!(args.sandbox_runtime, OciRuntimeArg::Podman);
+        assert_eq!(
+            args.sandbox_image.as_deref(),
+            Some("localhost/pactrail-ci@sha256:0123")
+        );
+        assert_eq!(args.sandbox_memory_mib, 1024);
+        assert_eq!(args.sandbox_cpu_millis, 1500);
+        assert_eq!(args.sandbox_pids, 64);
+        assert_eq!(args.sandbox_tmpfs_mib, 128);
+    }
+
+    #[test]
+    fn run_rejects_unsafe_sandbox_resource_values() {
+        for arguments in [
+            ["--sandbox-memory-mib", "63"],
+            ["--sandbox-cpu-millis", "99"],
+            ["--sandbox-pids", "15"],
+            ["--sandbox-tmpfs-mib", "0"],
+        ] {
+            assert!(
+                Cli::try_parse_from([
+                    "pactrail",
+                    "run",
+                    "--model",
+                    "model",
+                    arguments[0],
+                    arguments[1],
+                    "task",
+                ])
+                .is_err(),
+                "{} accepted {}",
+                arguments[0],
+                arguments[1]
+            );
+        }
     }
 }
 

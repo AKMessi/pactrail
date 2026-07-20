@@ -1,122 +1,140 @@
 # Roadmap
 
-Pactrail's roadmap is organized by trust boundary, not by feature count. A
-feature is complete only when its policy, trace, recovery, tests, and user-facing
-failure mode are complete.
+Pactrail's roadmap is organized by trust boundary, not feature count. A feature
+is complete only when its policy, trace, recovery, tests, compatibility story,
+and user-facing failure mode are complete.
 
 This file distinguishes shipped behavior from planned work. It is not a release
 promise or a security claim.
 
-## Shipped foundation — 0.1
+## Shipped through 0.4
 
-- Contract-first run lifecycle and capability overgrant detection.
-- Isolated workspace transactions, receipt-bound review/apply, drift detection,
-  crash journal, rollback, and idempotent recovery.
+- Contract-first runs with explicit capability policy and overgrant detection.
+- Isolated workspace transactions, receipt-bound review/apply, source-drift
+  detection, synchronized crash journal, rollback, and idempotent recovery.
 - Provider-neutral model IR and bounded OpenAI-compatible transport.
-- Tool Kernel v2 with schemas, risk/behavior annotations, batch read, atomic
-  multi-edit, change inspection, recall, bounded results, and safe read batching.
-- Model-aware context budgets and correctly scoped `AGENTS.md` instructions.
-- Grounded broad-question context with anchor previews, deterministic project
-  profiles, first-class answered runs, and bounded weak-model loop recovery.
-- Provenance-aware workspace memory with human and applied-receipt write paths.
-- Hash-linked detailed execution traces and portable JSONL.
-- Bounded repository evidence graph with typed current-candidate symbol and
-  lexical-reference search.
-- Deterministic model-window management with provenance-preserving tool-result
-  compaction, recent-evidence retention, and trace-visible byte accounting.
-- Digest-bound post-mutation source feedback with changed-line localization,
-  bounded dual-edge previews, and explicit re-read guidance.
-- One trace-visible validation-repair cycle with model-aware diagnostic bounds,
-  untrusted-output labelling, candidate/diagnostic digests, and fresh final
-  verification authority.
-- Interactive review-focused CLI plus scriptable JSON interface.
-- Cross-platform CI, dependency policy, and attested GitHub release workflow.
+- Typed Tool Kernel with schema validation, behavior/risk annotations, bounded
+  results, deterministic parallel-safe reads, atomic edits, and candidate-aware
+  inspection.
+- Model-budgeted context, scoped repository instructions, provenance memory,
+  deterministic evidence-graph retrieval, and long-window compaction.
+- Hash-linked detailed events, portable trace JSONL, deterministic verification,
+  bounded validation repair, and integrity-checked answered/change receipts.
+- Interactive and scriptable CLI, model/provider configuration, run history,
+  review/apply/discard, trace inspection, doctor, completion, and JSON output.
+- Three explicit process modes: disabled, trusted native, and restricted OCI.
+- Locally pinned Docker/Podman execution with candidate-only bind, read-only
+  root, private bounded temporary storage, no network/capabilities/ambient
+  environment, numeric Unix identity, and CPU/memory/PID/time/output ceilings.
+- Exact request-bound approvals, distinct policy/decision trace events,
+  fail-closed non-interactive behavior, and end-to-end cancellation/cleanup.
+- Hostile-repository Docker CI, cross-platform gates, dependency policy, and an
+  attested GitHub release workflow.
 
-## 0.2 — containment and approvals
+## 0.5 — durable resume and recovery
 
-Highest priority is making untrusted-code execution a real enforceable boundary.
+- Provider-neutral conversation checkpoints whose integrity is bound to the
+  hash-linked run head and current candidate digest.
+- `pactrail resume` and `/resume` from event replay, with no serialized provider
+  client internals and no repetition of already committed tool effects.
+- Explicit suspended/interrupted lifecycle states and startup recovery hints.
+- Crash-point tests before and after every model, tool, verification, receipt,
+  apply, and cleanup persistence boundary.
+- Checkpoint retention, bounded size, schema migration, and corruption handling.
 
-- A `ProcessBackend` abstraction with an OCI runner on Linux/macOS/Windows hosts.
-- Explicit filesystem, network, environment, CPU, memory, PID, and wall-time
-  profiles surfaced in contract, status, trace, and receipt.
-- Fail-closed runtime detection and a visible sandbox-strength vocabulary; never
-  silently fall back from containerized to native execution.
-- Interactive approval objects with exact capability/resource/expiry scope,
-  durable decisions, and non-interactive denial by default.
-- Cancellation that propagates through model requests, tools, processes,
-  verification, and UI without corrupting the event lifecycle.
+Exit criterion: a killed process can restart every supported run phase without
+duplicating effects, losing reviewable work, or trusting unverified state.
 
-Exit criterion: hostile-repository fixtures demonstrate that forbidden host
-reads, writes, network, and process escape are blocked by the configured backend.
+## 0.6 — streaming and provider intelligence
 
-## 0.3 — open tool ecosystem
+- Bounded provider event streaming with live text/tool/token/latency updates and
+  cancellation-safe transcript assembly.
+- Native Anthropic and Gemini adapters where their protocols cannot be represented
+  faithfully by Chat Completions.
+- Capability probing plus explicit user-overridable profiles for tools,
+  parallel calls, context, output, reasoning, caching, and structured output.
+- Provider conformance fixtures for malformed streams, retry headers, partial
+  tool arguments, duplicated events, usage disagreement, and disconnects.
+- Credential-safe endpoint diagnostics and deterministic fallback rules that
+  never silently change a model or weaken tool semantics.
 
-- MCP client support behind the same `ToolDescriptor`, capability, risk,
-  output-bound, effect, and trace boundary as built-ins.
-- Server identity pinning, command/URL allowlists, environment redaction,
-  schema snapshots, timeouts, health state, and per-server enable/disable.
-- A stable Rust tool SDK and manifest format for out-of-tree tools.
-- Namespaced tool discovery and collision handling.
-- Resource and prompt ingestion as provenance-labelled context, never implicit
+Exit criterion: local and hosted adapters pass the same conversation/tool
+contract suite, with bounded memory and identical durable semantics.
+
+## 0.7 — open tool and embedding ecosystem
+
+- MCP client support behind the same descriptor, schema, capability, approval,
+  risk, output-bound, effect, trace, and cancellation boundary as built-ins.
+- Server identity pinning, command/URL allowlists, environment redaction, schema
+  snapshots, timeouts, health state, and per-server enable/disable.
+- Stable Rust provider/tool embedding APIs, a manifest format, examples, and
+  compatibility tests for out-of-tree integrations.
+- Namespaced discovery and deterministic collision handling.
+- MCP resources and prompts as provenance-labelled context, never implicit
   system authority.
 
-Exit criterion: disconnects, malformed schemas, oversized results, name
-collisions, poisoned descriptions, and unauthorized effects have deterministic
+Exit criterion: disconnects, poisoned descriptions, malformed schemas,
+oversized results, collisions, and unauthorized effects have deterministic
 tests and legible CLI diagnostics.
 
-## 0.4 — model and context intelligence
+## 0.8 — repository-scale intelligence and performance
 
-- Streaming provider responses and live token/latency display with bounded
-  transcript retention.
-- Native Anthropic and Gemini adapters where their protocols offer capabilities
-  that cannot be represented faithfully by Chat Completions.
-- Capability probing and user-overridable model profiles for tools, parallelism,
-  context, output, vision, caching, and structured output.
-- Incremental repository index invalidation; tree-sitter structure and optional
-  LSP references without making an LSP a hard dependency.
-- Tree-sitter/type-aware graph enrichment, incremental index invalidation, and
-  context usefulness telemetry. The shipped lexical evidence graph and
-  deterministic compaction controller remain bounded fallbacks.
+- Incremental repository-index invalidation with content-addressed cache entries.
+- Tree-sitter structure and optional LSP references without making an LSP a hard
+  dependency; the bounded lexical graph remains the deterministic fallback.
+- Change-impact retrieval, context usefulness telemetry, and explicit citation
+  coverage without model-authored relevance claims becoming authority.
+- First-class Git status/diff/history tools that are read-only by default;
+  commits, branches, remotes, and hosting actions require separate capabilities.
+- Large-monorepo latency, memory, descriptor-count, and context-budget suites.
 - Image input as an explicit artifact capability.
 
-Exit criterion: context-overflow and retrieval-relevance suites cover small
-local models through large hosted models, with no hidden prompt truncation.
+Exit criterion: cold/warm performance and retrieval-relevance suites cover tiny
+local models through hosted models without hidden prompt truncation.
 
-## 0.5 — long-running work and collaboration
+## 0.9 — stabilization and public evaluation
 
-- Durable resumable sessions built from event replay rather than serialized
-  model internals.
-- Checkpoints, branches, and task decomposition with isolated child contracts,
-  budgets, workspaces, and receipts.
-- Patch-stack and multi-candidate comparison without shared mutable tool state.
-- Agent Client Protocol support for editor/IDE surfaces.
-- Background verification with explicit lifecycle states and cancellation.
+- Compatibility fixtures and migrations for every durable contract, event,
+  receipt, memory, settings, transaction, checkpoint, tool, and provider format.
+- Fuzzing and property tests for path handling, schemas, event replay, apply,
+  provider framing, MCP framing, and terminal rendering.
+- Fault injection for storage exhaustion, permission loss, concurrent source
+  changes, abrupt process death, network loss, and runtime cleanup failure.
+- Public matched-harness evaluation measuring task correctness, regression rate,
+  tokens/cost, tool efficiency, context use, trace completeness, containment,
+  recovery, and human review burden—with raw artifacts and preregistration.
+- Performance budgets, release-candidate soak runs, security audit closure, and
+  deprecation/migration tooling.
 
-Exit criterion: crash/restart, branch conflict, partial completion, and nested
-budget cases replay identically on all supported platforms.
+Exit criterion: no open release-blocking correctness or security defect, all
+compatibility fixtures pass on supported platforms, and evaluation claims are
+reproducible from public artifacts.
 
-## 1.0 bar
+## 1.0 — stable public contract
 
-Pactrail will not label itself 1.0 solely because the CLI is polished. The bar is:
+- Stable documented CLI, task/receipt/trace formats, and Rust embedding APIs.
+- Published platform/provider support matrix, compatibility policy, support
+  windows, security response process, and upgrade guide.
+- At least one production sandbox backend with adversarial fixtures.
+- Deterministic interruption recovery at every source-mutation boundary.
+- Signed and attested reproducible artifacts plus checksum-verifying installers.
+- Independent review of path handling, apply, process, provider, MCP, memory,
+  persistence, and release boundaries, with all critical/high findings resolved.
+- A final v1 evaluation report that makes only protocol-bounded, reproducible
+  comparisons; benchmark execution begins only after maintainer approval.
 
-- documented and compatibility-tested contracts/events/receipts/memory formats;
-- a stable public tool/provider embedding API;
-- at least one production sandbox backend with adversarial fixtures;
-- deterministic recovery from interruption at every source-mutation boundary;
-- a public eval harness measuring task success, regression rate, tool
-  efficiency, context use, trace completeness, and human review burden;
-- signed/attested reproducible release artifacts and a published support policy;
-- independent security review of path handling, apply, process, provider, MCP,
-  and memory boundaries.
+Pactrail will not label itself 1.0 solely because the CLI is polished. The
+version means downstream users can rely on the public contracts and migration
+policy as well as the runtime behavior.
 
 ## Non-goals
 
 - Hiding uncertainty behind autonomous-agent theater.
-- Treating a model's confidence or prose as evidence.
+- Treating model confidence or prose as evidence.
 - A universal unrestricted shell masquerading as a safe tool.
 - Silent network, secret, deployment, or repository-hosting side effects.
 - Provider-specific logic in the deterministic core.
-- Multi-agent concurrency before single-run state and containment are trustworthy.
+- Multi-agent concurrency before single-run replay and containment are proven.
 
 ## Proposing work
 

@@ -530,6 +530,13 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
             .as_str()
             .is_some_and(|value| value.contains("not a host-filesystem or network sandbox"))
     );
+    let process_backends = doctor["process_backends"]
+        .as_array()
+        .unwrap_or_else(|| unreachable!("process backend diagnostics missing"));
+    assert_eq!(process_backends.len(), 4);
+    assert_eq!(process_backends[0]["id"], "disabled");
+    assert_eq!(process_backends[0]["available"], true);
+    assert_eq!(process_backends[1]["id"], "native");
 
     for shell in ["bash", "elvish", "fish", "powershell", "zsh"] {
         let completion = pactrail(workspace.path(), ["completion", shell]);
@@ -539,7 +546,12 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
             "{shell} completion was unexpectedly empty"
         );
     }
+    assert!(!workspace.path().join(".pactrail").exists());
+}
 
+#[test]
+fn memory_lifecycle_is_scriptable_with_an_external_state_directory() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
     let add = pactrail_with_state(
         workspace.path(),
         [
@@ -598,6 +610,151 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
             .is_file()
     );
     assert!(!workspace.path().join(".pactrail").exists());
+}
+
+#[test]
+fn incomplete_oci_configuration_fails_without_creating_run_state() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let output = pactrail(
+        workspace.path(),
+        [
+            "run",
+            "Execute the test suite",
+            "--provider",
+            "ollama",
+            "--model",
+            "local-model",
+            "--process-backend",
+            "oci",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("--process-backend oci requires --sandbox-image <local-image>")
+    );
+    assert!(!workspace.path().join(".pactrail").exists());
+}
+
+#[test]
+fn noninteractive_process_approval_is_explicit_and_durable() {
+    let allowed_workspace =
+        tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let allowed = run_process_approval_fixture(allowed_workspace.path(), true);
+    assert!(
+        allowed.status.success(),
+        "approved run failed: {}",
+        String::from_utf8_lossy(&allowed.stderr)
+    );
+    let allowed: Value = serde_json::from_slice(&allowed.stdout)
+        .unwrap_or_else(|error| unreachable!("approved run JSON: {error}"));
+    assert_eq!(allowed["approvals"][0]["decision"], "allow_run");
+    assert_eq!(
+        allowed["approvals"][0]["binding"]["capability"],
+        "process_spawn"
+    );
+    assert_eq!(
+        allowed["approvals"][0]["binding"]["backend_kind"],
+        "native_trusted"
+    );
+    let run_id = allowed["run_id"]
+        .as_str()
+        .unwrap_or_else(|| unreachable!("approved run id missing"));
+    let trace = pactrail(allowed_workspace.path(), ["trace", run_id, "--json"]);
+    assert!(trace.status.success());
+    let trace: Value = serde_json::from_slice(&trace.stdout)
+        .unwrap_or_else(|error| unreachable!("approval trace JSON: {error}"));
+    let event_types = trace
+        .as_array()
+        .unwrap_or_else(|| unreachable!("trace is not an array"))
+        .iter()
+        .filter_map(|event| event["event"]["type"].as_str())
+        .collect::<Vec<_>>();
+    let policy_index = event_types
+        .iter()
+        .position(|kind| *kind == "policy_evaluated")
+        .unwrap_or_else(|| unreachable!("policy event missing"));
+    let approval_index = event_types
+        .iter()
+        .position(|kind| *kind == "approval_decided")
+        .unwrap_or_else(|| unreachable!("approval event missing"));
+    assert!(policy_index < approval_index);
+
+    let denied_workspace =
+        tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let denied = run_process_approval_fixture(denied_workspace.path(), false);
+    assert!(
+        denied.status.success(),
+        "denied process should remain a model-visible tool result: {}",
+        String::from_utf8_lossy(&denied.stderr)
+    );
+    let denied: Value = serde_json::from_slice(&denied.stdout)
+        .unwrap_or_else(|error| unreachable!("denied run JSON: {error}"));
+    assert_eq!(denied["approvals"][0]["decision"], "deny");
+}
+
+fn run_process_approval_fixture(workspace: &Path, allow_run: bool) -> std::process::Output {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .unwrap_or_else(|error| unreachable!("mock provider: {error}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|error| unreachable!("provider address: {error}"));
+    let responses = [
+        json!({
+            "id": "process-turn",
+            "choices": [{
+                "message": {
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "process-1",
+                        "type": "function",
+                        "function": {
+                            "name": "run_process",
+                            "arguments": "{\"program\":\"cargo\",\"args\":[\"--version\"]}"
+                        }
+                    }]
+                },
+                "finish_reason": "tool_calls"
+            }],
+            "usage": {"prompt_tokens": 20, "completion_tokens": 8}
+        }),
+        json!({
+            "id": "process-summary",
+            "choices": [{
+                "message": {"content": "The process request was handled by Pactrail policy."},
+                "finish_reason": "stop"
+            }],
+            "usage": {"prompt_tokens": 24, "completion_tokens": 9}
+        }),
+    ];
+    let server = thread::spawn(move || serve_responses(&listener, &responses));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_pactrail"));
+    command.args([
+        "--workspace",
+        path_text(workspace),
+        "run",
+        "Report the Cargo version",
+        "--provider",
+        "open-ai-compatible",
+        "--base-url",
+        &format!("http://{address}/v1"),
+        "--model",
+        "mock-coder",
+        "--process-backend",
+        "native",
+        "--output",
+        "json",
+    ]);
+    if allow_run {
+        command.args(["--process-approval", "allow-run"]);
+    }
+    let output = command
+        .output()
+        .unwrap_or_else(|error| unreachable!("process approval run: {error}"));
+    server
+        .join()
+        .unwrap_or_else(|_| unreachable!("provider thread panicked"));
+    output
 }
 
 fn pactrail<const N: usize>(workspace: &Path, arguments: [&str; N]) -> std::process::Output {

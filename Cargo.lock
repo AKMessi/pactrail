@@ -1160,7 +1160,7 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "pactrail"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anstyle",
  "clap",
@@ -1187,6 +1187,7 @@ dependencies = [
  "terminal_size",
  "thiserror",
  "tokio",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-subscriber",
@@ -1194,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-context"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "blake3",
  "ignore",
@@ -1207,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "blake3",
  "schemars",
@@ -1220,7 +1221,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-engine"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "blake3",
@@ -1237,12 +1238,13 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 
 [[package]]
 name = "pactrail-memory"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "pactrail-core",
  "rusqlite",
@@ -1257,7 +1259,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-models"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -1276,7 +1278,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-store"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "blake3",
  "pactrail-core",
@@ -1290,7 +1292,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-tools"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "blake3",
@@ -1299,17 +1301,19 @@ dependencies = [
  "pactrail-core",
  "pactrail-memory",
  "pactrail-workspace",
+ "rustix",
  "schemars",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
 name = "pactrail-workspace"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "blake3",
  "ignore",
@@ -2036,6 +2040,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
  "pin-project-lite",
  "tokio",
 ]

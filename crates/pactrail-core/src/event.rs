@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use time::OffsetDateTime;
 
-use crate::{EVENT_SCHEMA_VERSION, Evidence, PolicyDecision, RunId, TaskContract};
+use crate::{ApprovalRecord, EVENT_SCHEMA_VERSION, Evidence, PolicyDecision, RunId, TaskContract};
 
 /// Integrity hash of an event envelope.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -97,6 +97,7 @@ pub enum RunEvent {
     ActionCompleted(ActionRecord),
     EvidenceRecorded(Evidence),
     PolicyEvaluated(PolicyDecision),
+    ApprovalDecided(ApprovalRecord),
     CheckpointCreated { checkpoint: String },
     NoteRecorded { message: String },
 }
@@ -185,6 +186,7 @@ pub struct RunSnapshot {
     pub contract: Option<TaskContract>,
     pub evidence: Vec<Evidence>,
     pub actions: Vec<ActionRecord>,
+    pub approvals: Vec<ApprovalRecord>,
     pub last_sequence: Option<u64>,
     pub last_hash: EventHash,
 }
@@ -199,6 +201,7 @@ impl RunSnapshot {
             contract: None,
             evidence: Vec::new(),
             actions: Vec::new(),
+            approvals: Vec::new(),
             last_sequence: None,
             last_hash: EventHash::genesis(),
         }
@@ -258,6 +261,7 @@ impl RunSnapshot {
             }
             RunEvent::ActionCompleted(action) => self.actions.push(action.clone()),
             RunEvent::EvidenceRecorded(evidence) => self.evidence.push(evidence.clone()),
+            RunEvent::ApprovalDecided(approval) => self.approvals.push(approval.clone()),
             RunEvent::PolicyEvaluated(_)
             | RunEvent::CheckpointCreated { .. }
             | RunEvent::NoteRecorded { .. } => {}
