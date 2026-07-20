@@ -39,6 +39,9 @@ pub struct PermissionSet {
     /// Capabilities approved without another interactive decision.
     #[serde(default)]
     pub allow: BTreeSet<Capability>,
+    /// Capabilities that require a binding-specific approval decision.
+    #[serde(default)]
+    pub ask: BTreeSet<Capability>,
     /// Capabilities that must always be denied.
     #[serde(default)]
     pub deny: BTreeSet<Capability>,
@@ -52,6 +55,12 @@ impl PermissionSet {
     /// Returns [`ContractError::ConflictingPermission`] for an ambiguous capability.
     pub fn validate(&self) -> Result<(), ContractError> {
         if let Some(capability) = self.allow.intersection(&self.deny).next() {
+            return Err(ContractError::ConflictingPermission(capability.clone()));
+        }
+        if let Some(capability) = self.allow.intersection(&self.ask).next() {
+            return Err(ContractError::ConflictingPermission(capability.clone()));
+        }
+        if let Some(capability) = self.ask.intersection(&self.deny).next() {
             return Err(ContractError::ConflictingPermission(capability.clone()));
         }
         Ok(())
@@ -277,6 +286,13 @@ mod tests {
         let mut contract = TaskContract::new("repair the parser", ".");
         contract.permissions.allow.insert(Capability::Network);
         contract.permissions.deny.insert(Capability::Network);
+        assert_eq!(
+            contract.validate(),
+            Err(ContractError::ConflictingPermission(Capability::Network))
+        );
+
+        contract.permissions.allow.remove(&Capability::Network);
+        contract.permissions.ask.insert(Capability::Network);
         assert_eq!(
             contract.validate(),
             Err(ContractError::ConflictingPermission(Capability::Network))

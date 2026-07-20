@@ -1,6 +1,7 @@
 //! Typed, policy-aware tools for Pactrail.
 
 mod advanced;
+mod approval;
 mod builtins;
 mod policy;
 mod process;
@@ -59,3 +60,4 @@ pub fn builtin_registry_with_process(
     Ok(registry)
 }
 pub use advanced::{EditFileTool, ReadManyFilesTool, RecallMemoryTool, WorkspaceChangesTool};
+pub use approval::{ApprovalResolver, PolicyAuditEntry, PolicyAuditLog};

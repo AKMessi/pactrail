@@ -1,13 +1,16 @@
 use std::borrow::Cow;
+use std::collections::BTreeSet;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU16, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use pactrail_core::{
-    ActionRecord, ChangeReceipt, EventEnvelope, FileChange, ReceiptOutcome, RunEvent, RunId,
-    RunState,
+    ActionRecord, ApprovalDecision, ApprovalRequest, ChangeReceipt, EventEnvelope, FileChange,
+    ReceiptOutcome, RunEvent, RunId, RunState,
 };
 use pactrail_engine::{RunObserver, RunProgress};
 use pactrail_memory::{MemoryDraft, MemoryKind};
@@ -19,8 +22,11 @@ use reedline::{
 use reqwest::{StatusCode, Url};
 use serde_json::Value;
 use terminal_size::{Width, terminal_size};
+use tokio_util::sync::CancellationToken;
 
-use crate::cli::{OciRuntimeArg, OutputFormat, ProcessBackendArg, ProviderKind, RunArgs};
+use crate::cli::{
+    OciRuntimeArg, OutputFormat, ProcessApprovalArg, ProcessBackendArg, ProviderKind, RunArgs,
+};
 use crate::commands::{self, CliError, CompletedRun};
 use crate::diff::render_receipt_diff;
 use crate::output::{sanitize_terminal_text, write_human_stdout, write_stdout};
@@ -292,6 +298,7 @@ struct RunActivity {
     model_tokens: AtomicU64,
     model_time_ms: AtomicU64,
     truncated_outputs: AtomicUsize,
+    run_approvals: Mutex<BTreeSet<String>>,
     started: Instant,
     columns: usize,
 }
@@ -316,6 +323,7 @@ impl RunActivity {
             model_tokens: AtomicU64::new(0),
             model_time_ms: AtomicU64::new(0),
             truncated_outputs: AtomicUsize::new(0),
+            run_approvals: Mutex::new(BTreeSet::new()),
             started: Instant::now(),
             columns: terminal_columns(),
         }
@@ -710,6 +718,83 @@ impl RunObserver for RunActivity {
             _ => {}
         }
     }
+
+    fn on_approval_request(&self, request: &ApprovalRequest) -> ApprovalDecision {
+        let cache_key = format!(
+            "{}:{}:{}:{}",
+            request.binding.capability,
+            request.binding.actor_fingerprint,
+            request.binding.backend_kind,
+            request.binding.profile_digest
+        );
+        if self
+            .run_approvals
+            .lock()
+            .is_ok_and(|approvals| approvals.contains(&cache_key))
+        {
+            return ApprovalDecision::AllowRun;
+        }
+        if !std::io::stdin().is_terminal() {
+            return ApprovalDecision::Deny;
+        }
+        let decision = self.progress.suspend(|| prompt_for_approval(request));
+        if decision == ApprovalDecision::AllowRun {
+            let inserted = self
+                .run_approvals
+                .lock()
+                .is_ok_and(|mut approvals| approvals.insert(cache_key));
+            if !inserted {
+                return ApprovalDecision::Deny;
+            }
+        }
+        self.row(
+            match decision {
+                ApprovalDecision::AllowOnce | ApprovalDecision::AllowRun => "✓",
+                ApprovalDecision::Deny => "×",
+            },
+            "approval",
+            match decision {
+                ApprovalDecision::AllowOnce => "allowed once",
+                ApprovalDecision::AllowRun => "allowed for this exact request during the run",
+                ApprovalDecision::Deny => "denied",
+            },
+            match decision {
+                ApprovalDecision::AllowOnce | ApprovalDecision::AllowRun => TimelineTone::Warning,
+                ApprovalDecision::Deny => TimelineTone::Danger,
+            },
+        );
+        decision
+    }
+}
+
+fn prompt_for_approval(request: &ApprovalRequest) -> ApprovalDecision {
+    let field = |name: &str| {
+        request
+            .presentation
+            .get(name)
+            .map_or("not reported", String::as_str)
+    };
+    let prompt = format!(
+        "\n╭─ PROCESS APPROVAL\n│ command     {}\n│ backend     {}\n│ network     {}\n│ filesystem  {}\n│ workspace   {}\n│ environment {}\n╰─ [o] allow once  [r] allow this exact request for this run  [d] deny\napproval ❯ ",
+        field("command"),
+        field("backend"),
+        field("network"),
+        field("filesystem"),
+        field("workspace"),
+        field("environment_names"),
+    );
+    if write_human_stdout(&prompt).is_err() {
+        return ApprovalDecision::Deny;
+    }
+    let mut response = String::new();
+    if std::io::stdin().read_line(&mut response).is_err() {
+        return ApprovalDecision::Deny;
+    }
+    match response.trim().to_ascii_lowercase().as_str() {
+        "o" | "once" | "y" | "yes" => ApprovalDecision::AllowOnce,
+        "r" | "run" => ApprovalDecision::AllowRun,
+        _ => ApprovalDecision::Deny,
+    }
 }
 
 impl Session {
@@ -831,6 +916,7 @@ impl Session {
             write_paths: vec![".".to_owned()],
             process_backend: Some(self.settings.process_backend),
             allow_process: false,
+            process_approval: Some(ProcessApprovalArg::Prompt),
             sandbox_runtime: self.settings.sandbox_runtime,
             sandbox_runtime_executable: self
                 .settings
@@ -851,13 +937,30 @@ impl Session {
             output: OutputFormat::Human,
         };
 
-        let result = commands::execute_run_with_observer(
+        let cancellation = CancellationToken::new();
+        let mut execution = Box::pin(commands::execute_run_with_observer_and_cancellation(
             &self.workspace,
             Some(&self.state),
             args,
             &activity,
-        )
-        .await;
+            cancellation.clone(),
+        ));
+        let result = tokio::select! {
+            result = &mut execution => result,
+            signal = tokio::signal::ctrl_c() => {
+                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                activity.row(
+                    "!",
+                    "cancel",
+                    "cancellation requested · cleaning up active work",
+                    TimelineTone::Warning,
+                );
+                activity.set_message("cancelling safely");
+                cancellation.cancel();
+                (&mut execution).await
+            }
+        };
+        drop(execution);
         activity.finish();
 
         match result {
@@ -2127,6 +2230,28 @@ fn render_trace_event(
             &format!("policy · {decision:?}"),
             TimelineTone::Warning,
         ),
+        RunEvent::ApprovalDecided(approval) => trace_detail_rows(
+            theme,
+            columns,
+            &time,
+            &sequence,
+            match approval.decision {
+                ApprovalDecision::AllowOnce | ApprovalDecision::AllowRun => "✓",
+                ApprovalDecision::Deny => "×",
+            },
+            &format!(
+                "approval · {:?} · {} · {} · actor {} · profile {}",
+                approval.decision,
+                approval.binding.capability,
+                approval.binding.backend_kind,
+                short_digest(&approval.binding.actor_fingerprint),
+                short_digest(&approval.binding.profile_digest)
+            ),
+            match approval.decision {
+                ApprovalDecision::AllowOnce | ApprovalDecision::AllowRun => TimelineTone::Warning,
+                ApprovalDecision::Deny => TimelineTone::Danger,
+            },
+        ),
         RunEvent::CheckpointCreated { checkpoint } => trace_detail_rows(
             theme,
             columns,
@@ -2653,6 +2778,10 @@ fn short_run_id(run_id: RunId) -> String {
     run_id.to_string().chars().take(13).collect()
 }
 
+fn short_digest(value: &str) -> &str {
+    value.get(..12).unwrap_or(value)
+}
+
 fn unique_id_prefix(value: &str, candidates: &[String]) -> String {
     for length in 8..=value.chars().count() {
         let prefix = value.chars().take(length).collect::<String>();
@@ -2900,6 +3029,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             evidence: vec![evidence],
+            approvals: Vec::new(),
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|error| unreachable!("receipt: {error}"))

@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use time::OffsetDateTime;
 
-use crate::{Evidence, EvidenceGrade, EvidenceStatus, ObligationId, RunId, TaskContract};
+use crate::{
+    ApprovalRecord, Evidence, EvidenceGrade, EvidenceStatus, ObligationId, RunId, TaskContract,
+};
 
 /// How one workspace path changed.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -58,6 +60,9 @@ pub struct ChangeReceipt {
     pub final_event_hash: String,
     pub changes: Vec<FileChange>,
     pub evidence: Vec<Evidence>,
+    /// Scoped decisions made while executing this run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub approvals: Vec<ApprovalRecord>,
     pub verification: VerificationSummary,
     pub unresolved_risks: Vec<String>,
     pub metadata: BTreeMap<String, String>,
@@ -74,6 +79,7 @@ pub struct ReceiptInput {
     pub final_event_hash: String,
     pub changes: Vec<FileChange>,
     pub evidence: Vec<Evidence>,
+    pub approvals: Vec<ApprovalRecord>,
     pub unresolved_risks: Vec<String>,
 }
 
@@ -126,6 +132,7 @@ impl ChangeReceipt {
             final_event_hash: input.final_event_hash,
             changes: input.changes,
             evidence: input.evidence,
+            approvals: input.approvals,
             verification,
             unresolved_risks: input.unresolved_risks,
             metadata: BTreeMap::new(),
@@ -204,6 +211,7 @@ mod tests {
             final_event_hash: "event".to_owned(),
             changes: Vec::new(),
             evidence: Vec::new(),
+            approvals: Vec::new(),
             unresolved_risks: Vec::new(),
         });
         assert!(matches!(result, Err(ReceiptError::MissingEvidence(_))));
@@ -230,11 +238,15 @@ mod tests {
                 artifact_digest: None,
                 reproduction: None,
             }],
+            approvals: Vec::new(),
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|error| unreachable!("receipt: {error}"));
 
         assert_eq!(receipt.outcome, ReceiptOutcome::Answered);
+        let serialized = serde_json::to_value(&receipt)
+            .unwrap_or_else(|error| unreachable!("receipt JSON: {error}"));
+        assert!(serialized.get("approvals").is_none());
         assert!(
             receipt
                 .verify_integrity()
@@ -258,6 +270,7 @@ mod tests {
             final_event_hash: "event".to_owned(),
             changes: Vec::new(),
             evidence,
+            approvals: Vec::new(),
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|error| unreachable!("valid receipt: {error}"));
@@ -282,6 +295,7 @@ mod tests {
             final_event_hash: "event".to_owned(),
             changes: Vec::new(),
             evidence,
+            approvals: Vec::new(),
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|error| unreachable!("valid receipt: {error}"));

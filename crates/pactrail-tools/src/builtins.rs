@@ -845,11 +845,7 @@ mod tests {
     async fn replace_requires_exact_count() {
         let (_source, _control, transaction) = fixture();
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
         let output = ReplaceTextTool
             .execute(
                 &context,
@@ -884,11 +880,7 @@ mod tests {
     async fn reads_line_ranges() {
         let (_source, _control, transaction) = fixture();
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
         let output = ReadFileTool
             .execute(
                 &context,
@@ -910,11 +902,7 @@ mod tests {
             .write_file("large.txt", lines_text.as_bytes())
             .unwrap_or_else(|error| unreachable!("large fixture: {error}"));
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
 
         let output = ReadFileTool
             .execute(&context, json!({"path":"large.txt"}))
@@ -937,11 +925,7 @@ mod tests {
     async fn search_accepts_a_specific_workspace_file() {
         let (_source, _control, transaction) = fixture();
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
 
         let output = SearchTool
             .execute(
@@ -965,11 +949,7 @@ mod tests {
                 .unwrap_or_else(|error| unreachable!("candidate file: {error}"));
         }
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
         let output = ListFilesTool
             .execute(&context, json!({"max_entries": 2}))
             .await
@@ -987,11 +967,7 @@ mod tests {
                 .unwrap_or_else(|error| unreachable!("candidate file: {error}"));
         }
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
 
         let output = ListFilesTool
             .execute(&context, json!({}))

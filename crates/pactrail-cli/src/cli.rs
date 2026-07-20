@@ -165,6 +165,19 @@ pub enum OciRuntimeArg {
     Podman,
 }
 
+/// Resolution mode for process requests that reach the approval boundary.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum ProcessApprovalArg {
+    /// Deny unresolved process approvals (the non-interactive default).
+    #[default]
+    Deny,
+    /// Approve exact process requests for the duration of this run.
+    AllowRun,
+    /// Ask through the active interactive frontend.
+    #[value(skip)]
+    Prompt,
+}
+
 #[derive(Debug, Args)]
 pub struct RunArgs {
     /// Natural-language software task.
@@ -204,6 +217,10 @@ pub struct RunArgs {
     /// Deprecated alias for `--process-backend native`.
     #[arg(long)]
     pub allow_process: bool,
+
+    /// How scoped process approval requests are resolved.
+    #[arg(long, value_enum)]
+    pub process_approval: Option<ProcessApprovalArg>,
 
     /// OCI runtime for `--process-backend oci`.
     #[arg(long, value_enum, default_value = "docker")]

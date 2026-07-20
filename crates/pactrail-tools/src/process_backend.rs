@@ -1095,4 +1095,41 @@ mod tests {
         };
         assert!(profile.validate().is_err());
     }
+
+    #[test]
+    fn native_cancellation_child() {
+        if std::env::var_os("PACTRAIL_CANCELLATION_CHILD").is_some() {
+            std::thread::sleep(Duration::from_mins(1));
+        }
+    }
+
+    #[tokio::test]
+    async fn native_backend_terminates_an_active_child_on_cancellation() {
+        let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let executable = std::env::current_exe()
+            .unwrap_or_else(|error| unreachable!("current test executable: {error}"));
+        let request = ProcessRequest {
+            program: executable.display().to_string(),
+            args: vec![
+                "--exact".to_owned(),
+                "process_backend::tests::native_cancellation_child".to_owned(),
+                "--nocapture".to_owned(),
+            ],
+            timeout: Duration::from_secs(30),
+            max_output_bytes: 16 * 1024,
+            environment: BTreeMap::from([(
+                "PACTRAIL_CANCELLATION_CHILD".to_owned(),
+                "1".to_owned(),
+            )]),
+        };
+        let cancellation = CancellationToken::new();
+        let (result, ()) = tokio::join!(
+            NativeProcessBackend.execute(workspace.path(), &request, &cancellation),
+            async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                cancellation.cancel();
+            }
+        );
+        assert!(matches!(result, Err(ProcessBackendError::Cancelled { .. })));
+    }
 }

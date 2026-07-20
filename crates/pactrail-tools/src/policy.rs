@@ -19,6 +19,7 @@ impl PolicyEngine {
         let mut permissions = PermissionSet::default();
         permissions.allow.insert(Capability::FileRead);
         permissions.allow.insert(Capability::FileWrite);
+        permissions.ask.insert(Capability::ProcessSpawn);
         permissions.deny.insert(Capability::Network);
         permissions.deny.insert(Capability::SecretUse);
         permissions.deny.insert(Capability::ExternalWrite);
@@ -49,9 +50,15 @@ impl PolicyEngine {
                 reason: format!("{capability} is allowed by the task contract"),
             };
         }
-        PolicyDecision::Ask {
-            scope,
-            reason: format!("{capability} requires a scoped approval"),
+        if self.permissions.ask.contains(capability) {
+            PolicyDecision::Ask {
+                scope,
+                reason: format!("{capability} requires a scoped approval"),
+            }
+        } else {
+            PolicyDecision::Deny {
+                reason: format!("{capability} was not declared by the task contract"),
+            }
         }
     }
 

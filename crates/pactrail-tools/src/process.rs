@@ -3,15 +3,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use pactrail_core::Capability;
+use pactrail_core::{ApprovalBinding, ApprovalRequest, Capability, RunId};
 use schemars::{JsonSchema, schema_for};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    DisabledProcessBackend, NativeProcessBackend, ProcessBackend, ProcessBackendKind,
-    ProcessRequest, Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput,
+    DisabledProcessBackend, NativeProcessBackend, ProcessBackend, ProcessBackendDescriptor,
+    ProcessBackendKind, ProcessRequest, Tool, ToolAnnotations, ToolContext, ToolDescriptor,
+    ToolError, ToolOutput,
 };
 
 const DEFAULT_TIMEOUT_SECONDS: u64 = 120;
@@ -164,11 +165,21 @@ impl Tool for RunProcessTool {
                 source,
             })?;
         validate_request(&request)?;
-        context.authorize(
-            &Capability::ProcessSpawn,
-            request.program.clone(),
-            "run_process",
-        )?;
+        let backend = self.backend.descriptor();
+        if let Some(run_id) = context.run_id {
+            context.authorize_request(process_approval_request(
+                run_id,
+                context.workspace.workspace_root(),
+                &request,
+                &backend,
+            ))?;
+        } else {
+            context.authorize(
+                &Capability::ProcessSpawn,
+                request.program.clone(),
+                "run_process",
+            )?;
+        }
 
         let execution = self
             .backend
@@ -217,6 +228,57 @@ impl Tool for RunProcessTool {
             succeeded,
             truncated: execution.stdout_truncated || execution.stderr_truncated,
         })
+    }
+}
+
+fn process_approval_request(
+    run_id: RunId,
+    workspace: &std::path::Path,
+    request: &RunProcessInput,
+    backend: &ProcessBackendDescriptor,
+) -> ApprovalRequest {
+    let environment_names = request.environment.keys().cloned().collect::<Vec<_>>();
+    let resource = json!({
+        "program": &request.program,
+        "args": &request.args,
+        "environment_names": &environment_names,
+        "timeout_seconds": request.timeout_seconds,
+        "max_output_bytes": request.max_output_bytes,
+    })
+    .to_string();
+    let backend_kind = serde_json::to_value(backend.kind)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "unknown".to_owned());
+    ApprovalRequest {
+        binding: ApprovalBinding {
+            run_id,
+            capability: Capability::ProcessSpawn,
+            actor_fingerprint: blake3::hash(resource.as_bytes()).to_hex().to_string(),
+            resource: resource.clone(),
+            backend_kind: backend_kind.clone(),
+            backend_identity: backend
+                .image_identity
+                .clone()
+                .or_else(|| backend.runtime_fingerprint.clone()),
+            profile_digest: backend.profile_digest.clone(),
+        },
+        reason: "the model requested execution of an exact process command".to_owned(),
+        presentation: BTreeMap::from([
+            ("command".to_owned(), resource),
+            ("workspace".to_owned(), workspace.display().to_string()),
+            ("backend".to_owned(), backend_kind),
+            ("network".to_owned(), backend.network.clone()),
+            ("filesystem".to_owned(), backend.filesystem.clone()),
+            (
+                "environment_names".to_owned(),
+                if environment_names.is_empty() {
+                    "none".to_owned()
+                } else {
+                    environment_names.join(", ")
+                },
+            ),
+        ]),
     }
 }
 
@@ -305,11 +367,7 @@ mod tests {
         )
         .unwrap_or_else(|error| unreachable!("transaction: {error}"));
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
         let result = RunProcessTool::native_trusted()
             .execute(&context, json!({"program":"cargo"}))
             .await;

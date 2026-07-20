@@ -334,11 +334,7 @@ mod tests {
     async fn multi_edit_validates_every_edit_before_writing() {
         let (_source, _control, transaction) = fixture();
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
         let failed = EditFileTool
             .execute(
                 &context,
@@ -390,11 +386,7 @@ mod tests {
     async fn batch_read_and_change_inspection_are_bounded_native_tools() {
         let (_source, _control, transaction) = fixture();
         let policy = PolicyEngine::local_default();
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: None,
-        };
+        let context = ToolContext::new(&transaction, &policy, None);
         let read = ReadManyFilesTool
             .execute(&context, json!({"paths": ["a.txt", "b.txt"]}))
             .await
@@ -425,11 +417,7 @@ mod tests {
             })
             .unwrap_or_else(|error| unreachable!("remember: {error}"));
         let policy = PolicyEngine::local_default().with_allowed(Capability::MemoryRead);
-        let context = ToolContext {
-            workspace: &transaction,
-            policy: &policy,
-            memory: Some(&memory),
-        };
+        let context = ToolContext::new(&transaction, &policy, Some(&memory));
         let output = RecallMemoryTool
             .execute(&context, json!({"query": "parser"}))
             .await
