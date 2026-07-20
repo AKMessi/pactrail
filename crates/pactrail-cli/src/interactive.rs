@@ -107,6 +107,11 @@ const COMMANDS: &[CommandHelp] = &[
         "override and inspect the effective model profile",
     ),
     CommandHelp::new(
+        "Model",
+        "/probe",
+        "spend one bounded turn to test tool and stream support",
+    ),
+    CommandHelp::new(
         "Kernel",
         "/tools",
         "inspect typed tools, capabilities, and risk classes",
@@ -960,6 +965,7 @@ impl Session {
             "/capability" | "/capabilities" | "/profile" => {
                 self.set_capability(arguments)?;
             }
+            "/probe" => self.probe_capabilities(arguments).await?,
             "/context" => self.set_context(arguments)?,
             "/output-tokens" => self.set_output_tokens(arguments)?,
             "/turns" => self.set_turns(arguments)?,
@@ -1000,43 +1006,7 @@ impl Session {
             return Ok(());
         };
         let activity = RunActivity::new(&model, self.theme.clone());
-        let args = RunArgs {
-            goal: Some(goal),
-            task: None,
-            provider: self.settings.provider,
-            model: Some(model),
-            base_url: self.settings.effective_base_url(),
-            api_key_env: self.settings.api_key_env.clone(),
-            write_paths: vec![".".to_owned()],
-            process_backend: Some(self.settings.process_backend),
-            allow_process: false,
-            process_approval: Some(ProcessApprovalArg::Prompt),
-            sandbox_runtime: self.settings.sandbox_runtime,
-            sandbox_runtime_executable: self
-                .settings
-                .sandbox_runtime_executable
-                .as_deref()
-                .map(PathBuf::from),
-            sandbox_image: self.settings.sandbox_image.clone(),
-            sandbox_memory_mib: self.settings.sandbox_memory_mib,
-            sandbox_cpu_millis: self.settings.sandbox_cpu_millis,
-            sandbox_pids: self.settings.sandbox_pids,
-            sandbox_tmpfs_mib: self.settings.sandbox_tmpfs_mib,
-            apply: false,
-            max_turns: self.settings.max_turns,
-            context_tokens: self.settings.context_tokens,
-            max_output_tokens: self.settings.max_output_tokens,
-            request_timeout_seconds: 300,
-            no_stream: !self.settings.streaming,
-            disable_thinking: false,
-            native_tools: self.settings.native_tools,
-            parallel_tools: self.settings.parallel_tools,
-            structured_output: self.settings.structured_output,
-            vision: self.settings.vision,
-            prompt_caching: self.settings.prompt_caching,
-            reasoning_controls: self.settings.reasoning_controls,
-            output: OutputFormat::Human,
-        };
+        let args = run_args_from_settings(&self.settings, Some(goal), model);
 
         let cancellation = CancellationToken::new();
         let mut execution = Box::pin(commands::execute_run_with_observer_and_cancellation(
@@ -1084,7 +1054,7 @@ impl Session {
                 activity.row(
                     "!",
                     "cancel",
-                    "cancellation requested Â· cleaning up active work",
+                    "cancellation requested · cleaning up active work",
                     TimelineTone::Warning,
                 );
                 activity.set_message("cancelling safely");
@@ -1803,6 +1773,85 @@ impl Session {
             self.theme.code(name),
             capability_setting_label(setting)
         ))
+    }
+
+    async fn probe_capabilities(&mut self, arguments: &str) -> Result<(), CliError> {
+        if !arguments.trim().is_empty() {
+            return Err(CliError::Argument(
+                "usage: /probe; this spends one bounded provider turn and executes no tool"
+                    .to_owned(),
+            ));
+        }
+        let model = self.settings.effective_model().ok_or_else(|| {
+            CliError::Argument(
+                "no model is configured; use /models and /model before /probe".to_owned(),
+            )
+        })?;
+        self.emit(&format!(
+            "{}\n",
+            self.theme
+                .muted("Probing with one bounded model turn; returned tools are never executed.")
+        ))?;
+        let args = run_args_from_settings(&self.settings, None, model);
+        let mut probe = Box::pin(commands::probe_model_capabilities(&args));
+        let report = tokio::select! {
+            result = &mut probe => result?,
+            signal = tokio::signal::ctrl_c() => {
+                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                return Err(CliError::Argument("capability probe cancelled".to_owned()));
+            }
+        };
+        let fields = [
+            ("adapter", report.adapter),
+            ("model", report.model),
+            (
+                "native tools",
+                observed_label(report.native_tools.is_observed()).to_owned(),
+            ),
+            (
+                "parallel tools",
+                observed_label(report.parallel_tools.is_observed()).to_owned(),
+            ),
+            (
+                "streaming",
+                observed_label(report.streaming.is_observed()).to_owned(),
+            ),
+            (
+                "prompt cache",
+                observed_label(report.prompt_cache.is_observed()).to_owned(),
+            ),
+            (
+                "turn",
+                format!(
+                    "{} valid calls · {} input · {} output · {:?}",
+                    report.valid_probe_calls,
+                    format_count(report.usage.input_tokens),
+                    format_count(report.usage.output_tokens),
+                    report.finish_reason
+                ),
+            ),
+        ];
+        let columns = terminal_columns();
+        let mut lines = vec![self.theme.heading("Capability probe")];
+        for (label, value) in fields {
+            lines.extend(labelled_rows(
+                &self.theme,
+                columns,
+                label,
+                &value,
+                if value == "observed" {
+                    TimelineTone::Success
+                } else {
+                    TimelineTone::Normal
+                },
+            ));
+        }
+        lines.push(
+            self.theme.muted(
+                "Not observed is inconclusive. Use /capability to make an explicit override.",
+            ),
+        );
+        self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn set_context(&mut self, argument: &str) -> Result<(), CliError> {
@@ -2549,9 +2598,9 @@ fn render_prepared_effect(
         columns,
         time,
         sequence,
-        "â†’",
+        "→",
         &format!(
-            "effect prepared Â· {} Â· {} Â· {} Â· candidate {}",
+            "effect prepared · {} · {} · {} · candidate {}",
             effect.tool,
             effect.call_id,
             effect.risk,
@@ -2573,9 +2622,9 @@ fn render_completed_effect(
         columns,
         time,
         sequence,
-        if effect.succeeded { "âœ“" } else { "Ã—" },
+        if effect.succeeded { "✓" } else { "×" },
         &format!(
-            "effect completed Â· {} Â· result {} Â· candidate {}",
+            "effect completed · {} · result {} · candidate {}",
             effect.call_id,
             short_digest(&effect.result_digest),
             short_digest(&effect.candidate_digest_after)
@@ -2992,6 +3041,10 @@ fn capability_setting_label(setting: CapabilitySetting) -> &'static str {
     }
 }
 
+fn observed_label(observed: bool) -> &'static str {
+    if observed { "observed" } else { "not observed" }
+}
+
 fn capability_summary(settings: &InteractiveSettings) -> String {
     let default_parallel = matches!(
         settings.provider,
@@ -3032,7 +3085,50 @@ fn capability_summary(settings: &InteractiveSettings) -> String {
             )
         })
         .collect::<Vec<_>>()
-        .join(" Â· ")
+        .join(" · ")
+}
+
+fn run_args_from_settings(
+    settings: &InteractiveSettings,
+    goal: Option<String>,
+    model: String,
+) -> RunArgs {
+    RunArgs {
+        goal,
+        task: None,
+        provider: settings.provider,
+        model: Some(model),
+        base_url: settings.effective_base_url(),
+        api_key_env: settings.api_key_env.clone(),
+        write_paths: vec![".".to_owned()],
+        process_backend: Some(settings.process_backend),
+        allow_process: false,
+        process_approval: Some(ProcessApprovalArg::Prompt),
+        sandbox_runtime: settings.sandbox_runtime,
+        sandbox_runtime_executable: settings
+            .sandbox_runtime_executable
+            .as_deref()
+            .map(PathBuf::from),
+        sandbox_image: settings.sandbox_image.clone(),
+        sandbox_memory_mib: settings.sandbox_memory_mib,
+        sandbox_cpu_millis: settings.sandbox_cpu_millis,
+        sandbox_pids: settings.sandbox_pids,
+        sandbox_tmpfs_mib: settings.sandbox_tmpfs_mib,
+        apply: false,
+        max_turns: settings.max_turns,
+        context_tokens: settings.context_tokens,
+        max_output_tokens: settings.max_output_tokens,
+        request_timeout_seconds: 300,
+        no_stream: !settings.streaming,
+        disable_thinking: false,
+        native_tools: settings.native_tools,
+        parallel_tools: settings.parallel_tools,
+        structured_output: settings.structured_output,
+        vision: settings.vision,
+        prompt_caching: settings.prompt_caching,
+        reasoning_controls: settings.reasoning_controls,
+        output: OutputFormat::Human,
+    }
 }
 
 fn split_command(line: &str) -> (&str, &str) {

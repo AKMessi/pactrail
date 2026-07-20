@@ -17,6 +17,7 @@ async-trait.workspace = true
 blake3.workspace = true
 futures-util.workspace = true
 httpdate.workspace = true
+pactrail-core = { version = "0.5.0", path = "../pactrail-core" }
 pactrail-tools = { version = "0.5.0", path = "../pactrail-tools" }
 reqwest.workspace = true
 schemars.workspace = true

@@ -18,8 +18,9 @@ use pactrail_memory::{
     MemoryDraft, MemoryError, MemoryId, MemoryKind, MemoryMatch, MemoryRecord, MemoryStore,
 };
 use pactrail_models::{
-    AnthropicConfig, AnthropicDriver, CapabilitySource, GeminiConfig, GeminiDriver,
-    ModelCapabilities, ModelDriver, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
+    AnthropicConfig, AnthropicDriver, CapabilityProbeReport, CapabilitySource, GeminiConfig,
+    GeminiDriver, ModelCapabilities, ModelDriver, ModelError, OpenAiCompatibleConfig,
+    OpenAiCompatibleDriver, probe_capabilities as run_capability_probe,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
@@ -38,7 +39,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::cli::{
     Cli, Command, CompletionShell, MemoryCommand, MemoryKindArg, OciRuntimeArg, OutputFormat,
-    ProcessApprovalArg, ProcessBackendArg, ProviderKind, ResumeArgs, RunArgs, RunIdArgs,
+    ProbeArgs, ProcessApprovalArg, ProcessBackendArg, ProviderKind, ResumeArgs, RunArgs, RunIdArgs,
 };
 use crate::output::{
     escape_json_terminal_controls, write_human_stdout, write_stderr, write_stdout,
@@ -50,6 +51,7 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
     })? {
         Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), args).await,
         Command::Resume(args) => resume(&cli.workspace, cli.state_dir.as_deref(), args).await,
+        Command::Probe(args) => probe(args).await,
         Command::Inspect(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
             inspect(&state, &args)
@@ -88,6 +90,78 @@ pub(crate) struct CompletedRun {
     pub model_summary: String,
     pub receipt: ChangeReceipt,
     pub tokens: u64,
+}
+
+pub(crate) async fn probe_model_capabilities(
+    args: &RunArgs,
+) -> Result<CapabilityProbeReport, CliError> {
+    validate_model_limits(args)?;
+    let contract = TaskContract::new("Probe configured model capabilities", ".");
+    let driver = build_driver(&contract, args)?;
+    run_capability_probe(driver.as_ref())
+        .await
+        .map_err(CliError::Model)
+}
+
+async fn probe(args: ProbeArgs) -> Result<(), CliError> {
+    let output = args.output;
+    let report = probe_model_capabilities(&probe_run_args(args)).await?;
+    if output == OutputFormat::Json {
+        return write_json(&report);
+    }
+    write_human_stdout(&format!(
+        "Capability probe\n  adapter         {}\n  model           {}\n  native tools    {}\n  parallel tools  {}\n  streaming       {}\n  prompt cache    {}\n  valid calls     {}\n  tokens          {} input · {} output\n\nNot observed is inconclusive; no returned tool was executed.\n",
+        report.adapter,
+        report.model,
+        probe_observation_label(report.native_tools.is_observed()),
+        probe_observation_label(report.parallel_tools.is_observed()),
+        probe_observation_label(report.streaming.is_observed()),
+        probe_observation_label(report.prompt_cache.is_observed()),
+        report.valid_probe_calls,
+        report.usage.input_tokens,
+        report.usage.output_tokens,
+    ))
+    .map_err(CliError::Output)
+}
+
+fn probe_observation_label(observed: bool) -> &'static str {
+    if observed { "observed" } else { "not observed" }
+}
+
+fn probe_run_args(args: ProbeArgs) -> RunArgs {
+    RunArgs {
+        goal: None,
+        task: None,
+        provider: args.provider,
+        model: Some(args.model),
+        base_url: args.base_url,
+        api_key_env: args.api_key_env,
+        write_paths: vec![".".to_owned()],
+        process_backend: Some(ProcessBackendArg::Disabled),
+        allow_process: false,
+        process_approval: Some(ProcessApprovalArg::Deny),
+        sandbox_runtime: OciRuntimeArg::Docker,
+        sandbox_runtime_executable: None,
+        sandbox_image: None,
+        sandbox_memory_mib: 2_048,
+        sandbox_cpu_millis: 2_000,
+        sandbox_pids: 128,
+        sandbox_tmpfs_mib: 512,
+        apply: false,
+        max_turns: 1,
+        context_tokens: args.context_tokens,
+        max_output_tokens: args.max_output_tokens,
+        request_timeout_seconds: args.request_timeout_seconds,
+        no_stream: args.no_stream,
+        disable_thinking: args.disable_thinking,
+        native_tools: args.native_tools,
+        parallel_tools: args.parallel_tools,
+        structured_output: args.structured_output,
+        vision: args.vision,
+        prompt_caching: args.prompt_caching,
+        reasoning_controls: args.reasoning_controls,
+        output: args.output,
+    }
 }
 
 const RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;

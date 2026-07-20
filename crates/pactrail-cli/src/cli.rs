@@ -34,6 +34,8 @@ pub enum Command {
     Run(RunArgs),
     /// Continue an interrupted run from its latest safe checkpoint.
     Resume(ResumeArgs),
+    /// Probe positive model capabilities without executing returned tools.
+    Probe(ProbeArgs),
     /// Inspect a durable run and its evidence receipt.
     Inspect(RunIdArgs),
     /// Render the integrity-checked execution trace for a run.
@@ -78,6 +80,59 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+}
+
+/// Side-effect-free provider capability probe options.
+#[derive(Clone, Debug, Args)]
+pub struct ProbeArgs {
+    /// Configured provider kind.
+    #[arg(long, value_enum, default_value = "ollama")]
+    pub provider: ProviderKind,
+    /// Model identifier, or `PACTRAIL_MODEL`.
+    #[arg(long, env = "PACTRAIL_MODEL")]
+    pub model: String,
+    /// Provider API base URL, or `PACTRAIL_BASE_URL`.
+    #[arg(long, env = "PACTRAIL_BASE_URL")]
+    pub base_url: Option<String>,
+    /// Name of the environment variable containing the API key.
+    #[arg(long, default_value = "OPENAI_API_KEY")]
+    pub api_key_env: String,
+    /// Declared model context capacity.
+    #[arg(long, default_value_t = 32_768)]
+    pub context_tokens: u64,
+    /// Maximum output capacity. The probe itself uses at most 256 tokens.
+    #[arg(long, default_value_t = 4_096)]
+    pub max_output_tokens: u64,
+    /// HTTP deadline for the probe, in seconds.
+    #[arg(long, default_value_t = 300, value_parser = clap::value_parser!(u64).range(1..=3_600))]
+    pub request_timeout_seconds: u64,
+    /// Use one buffered response instead of bounded SSE.
+    #[arg(long)]
+    pub no_stream: bool,
+    /// Send the compatible-provider extension `thinking.type=disabled`.
+    #[arg(long)]
+    pub disable_thinking: bool,
+    /// Override native tool-call support while constructing the request.
+    #[arg(long, value_enum, default_value = "auto")]
+    pub native_tools: CapabilitySetting,
+    /// Override parallel tool-call support while constructing the request.
+    #[arg(long, value_enum, default_value = "auto")]
+    pub parallel_tools: CapabilitySetting,
+    /// Override structured-output support.
+    #[arg(long, value_enum, default_value = "auto")]
+    pub structured_output: CapabilitySetting,
+    /// Override image-input support.
+    #[arg(long, value_enum, default_value = "auto")]
+    pub vision: CapabilitySetting,
+    /// Override prompt-cache support.
+    #[arg(long, value_enum, default_value = "auto")]
+    pub prompt_caching: CapabilitySetting,
+    /// Override reasoning-control support.
+    #[arg(long, value_enum, default_value = "auto")]
+    pub reasoning_controls: CapabilitySetting,
+    /// Result rendering format.
+    #[arg(long, value_enum, default_value = "human")]
+    pub output: OutputFormat,
 }
 
 #[derive(Debug, Subcommand)]
@@ -499,6 +554,29 @@ mod tests {
         assert_eq!(args.native_tools, CapabilitySetting::Off);
         assert_eq!(args.parallel_tools, CapabilitySetting::Auto);
         assert_eq!(args.vision, CapabilitySetting::On);
+    }
+
+    #[test]
+    fn probe_requires_a_model_and_parses_provider_transport() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "probe",
+            "--provider",
+            "gemini",
+            "--model",
+            "gemini-test",
+            "--no-stream",
+            "--output",
+            "json",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid probe CLI: {error}"));
+        let Some(Command::Probe(args)) = cli.command else {
+            unreachable!("probe command")
+        };
+        assert_eq!(args.provider, super::ProviderKind::Gemini);
+        assert!(args.no_stream);
+        assert_eq!(args.output, OutputFormat::Json);
+        assert!(Cli::try_parse_from(["pactrail", "probe"]).is_err());
     }
 
     #[test]
