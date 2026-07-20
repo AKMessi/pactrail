@@ -1,0 +1,32 @@
+[package]
+name = "pactrail-mcp"
+description = "Governed Model Context Protocol adapter for Pactrail"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+async-trait.workspace = true
+blake3.workspace = true
+jsonschema.workspace = true
+pactrail-context = { version = "0.6.0", path = "../pactrail-context" }
+pactrail-core = { version = "0.6.0", path = "../pactrail-core" }
+pactrail-tools = { version = "0.6.0", path = "../pactrail-tools" }
+reqwest.workspace = true
+rmcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

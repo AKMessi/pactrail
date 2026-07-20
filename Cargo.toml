@@ -6,6 +6,7 @@ members = [
     "crates/pactrail-core",
     "crates/pactrail-engine",
     "crates/pactrail-memory",
+    "crates/pactrail-mcp",
     "crates/pactrail-models",
     "crates/pactrail-store",
     "crates/pactrail-tools",
@@ -36,10 +37,12 @@ futures-util = "0.3"
 globset = "0.4"
 httpdate = "1"
 ignore = "0.4"
+jsonschema = { version = "0.48", default-features = false }
 indicatif = "0.18"
 miette = { version = "7", features = ["fancy"] }
 reedline = "0.49"
 reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls", "stream"] }
+rmcp = { version = "2.2", default-features = false, features = ["client", "transport-child-process", "transport-streamable-http-client-reqwest", "reqwest-native-tls"] }
 rustix = { version = "1", features = ["process"] }
 rusqlite = { version = "0.40", features = ["bundled", "uuid"] }
 schemars = { version = "1", features = ["uuid1"] }
@@ -58,6 +61,7 @@ toml = "1.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 uuid = { version = "1", features = ["serde", "v7"] }
+url = "2"
 walkdir = "2"
 zstd = "0.13"
 
