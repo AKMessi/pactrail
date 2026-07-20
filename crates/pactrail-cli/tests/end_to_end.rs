@@ -80,6 +80,12 @@ fn interrupted_process_resumes_the_same_hash_linked_run() {
     assert_eq!(run_ids.len(), 1);
     let run_id = &run_ids[0];
     assert!(runs_root.join(run_id).join("run.json").is_file());
+    let concurrent = pactrail(workspace.path(), ["resume", run_id, "--output", "json"]);
+    assert!(!concurrent.status.success());
+    assert!(
+        String::from_utf8_lossy(&concurrent.stderr)
+            .contains("already active in another Pactrail process")
+    );
     child
         .kill()
         .unwrap_or_else(|error| unreachable!("terminate interrupted run: {error}"));

@@ -1,4 +1,4 @@
-use std::fs;
+use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
@@ -20,7 +20,7 @@ use pactrail_memory::{
 use pactrail_models::{
     ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
-use pactrail_store::{EventStore, StoreError};
+use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
     ApprovalResolver, DisabledProcessBackend, NativeProcessBackend, OciProcessBackend,
     OciProcessConfig, OciRuntimeKind, OciSandboxProfile, PolicyEngine, ProcessBackend,
@@ -275,6 +275,7 @@ async fn execute_resume_inner(
         engine.with_approval_resolver(&fixed_approval)
     };
     let cancelled_contract = contract.clone();
+    let lease = acquire_execution_lease(&mut store, &run_root, run_id, &contract)?;
     let engine_result = match observer {
         Some(observer) => {
             engine
@@ -294,6 +295,7 @@ async fn execute_resume_inner(
                 .await
         }
     };
+    release_execution_lease(&mut store, lease)?;
     let outcome = match engine_result {
         Ok(outcome) => outcome,
         Err(EngineError::Cancelled) => {
@@ -416,6 +418,7 @@ async fn execute_run_inner(
         engine.with_approval_resolver(&fixed_approval)
     };
     let cancelled_contract = contract.clone();
+    let lease = acquire_execution_lease(&mut store, &run_root, run_id, &contract)?;
     let engine_result = match observer {
         Some(observer) => {
             engine
@@ -428,6 +431,7 @@ async fn execute_run_inner(
                 .await
         }
     };
+    release_execution_lease(&mut store, lease)?;
     let outcome = match engine_result {
         Ok(outcome) => outcome,
         Err(EngineError::Cancelled) => {
@@ -489,6 +493,71 @@ fn normalized_run_args(
     durable.allow_process = false;
     durable.process_approval = Some(process_approval);
     durable
+}
+
+struct ExecutionLease {
+    durable: RunLease,
+    _lock_file: fs::File,
+}
+
+fn acquire_execution_lease(
+    store: &mut EventStore,
+    run_root: &Path,
+    run_id: RunId,
+    contract: &TaskContract,
+) -> Result<ExecutionLease, CliError> {
+    const LEASE_GRACE_SECONDS: u64 = 5 * 60;
+    const MAX_LEASE_SECONDS: u64 = 30 * 24 * 60 * 60;
+    let ttl_seconds = contract
+        .budget
+        .wall_time_seconds
+        .checked_add(LEASE_GRACE_SECONDS)
+        .ok_or_else(|| CliError::Argument("task wall-time budget is too large".to_owned()))?;
+    if ttl_seconds > MAX_LEASE_SECONDS {
+        return Err(CliError::Argument(format!(
+            "task wall-time budget cannot exceed {} seconds when durable resume is enabled",
+            MAX_LEASE_SECONDS - LEASE_GRACE_SECONDS
+        )));
+    }
+    let lock_path = run_root.join("execution.lock");
+    let lock_file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)
+        .map_err(|source| CliError::Io {
+            path: lock_path,
+            source,
+        })?;
+    lock_file.try_lock().map_err(|error| match error {
+        fs::TryLockError::WouldBlock => CliError::Argument(format!(
+            "run {run_id} is already active in another Pactrail process"
+        )),
+        fs::TryLockError::Error(source) => CliError::Io {
+            path: run_root.join("execution.lock"),
+            source,
+        },
+    })?;
+    // The OS lock is the live-owner authority and is released by the kernel on
+    // process death. A stable logical owner lets the surviving process renew
+    // stale SQLite metadata immediately after acquiring that authority.
+    let owner = format!("local:{run_id}");
+    let durable = store
+        .acquire_run_lease(run_id, &owner, Duration::from_secs(ttl_seconds))
+        .map_err(CliError::Store)?;
+    Ok(ExecutionLease {
+        durable,
+        _lock_file: lock_file,
+    })
+}
+
+fn release_execution_lease(store: &mut EventStore, lease: ExecutionLease) -> Result<(), CliError> {
+    let result = store
+        .release_run_lease(&lease.durable)
+        .map_err(CliError::Store);
+    drop(lease);
+    result
 }
 
 fn finish_run(

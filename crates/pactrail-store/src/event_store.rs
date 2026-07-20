@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::Duration;
 
 use pactrail_core::{
     EVENT_SCHEMA_VERSION, EventEnvelope, EventHash, RunEvent, RunId, RunSnapshot, StateError,
@@ -43,7 +44,7 @@ impl EventStore {
         let database_version: i64 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(StoreError::Database)?;
-        if !matches!(database_version, 0 | 1) {
+        if !matches!(database_version, 0..=2) {
             return Err(StoreError::UnsupportedDatabaseSchema(database_version));
         }
         connection
@@ -62,15 +63,127 @@ impl EventStore {
                  ) STRICT;
                  CREATE INDEX IF NOT EXISTS events_by_run
                     ON events (run_id, sequence);
+                 CREATE TABLE IF NOT EXISTS run_leases (
+                    run_id TEXT PRIMARY KEY,
+                    owner TEXT NOT NULL,
+                    expires_unix_ms INTEGER NOT NULL CHECK (expires_unix_ms >= 0)
+                 ) STRICT;
                  COMMIT;",
             )
             .map_err(StoreError::Database)?;
-        if database_version == 0 {
+        if database_version < 2 {
             connection
-                .pragma_update(None, "user_version", 1)
+                .pragma_update(None, "user_version", 2)
                 .map_err(StoreError::Database)?;
         }
         Ok(Self { connection })
+    }
+
+    /// Acquires exclusive, expiring ownership of a run's active execution.
+    ///
+    /// A crashed owner leaves a bounded lease which can be replaced only after
+    /// expiry. Supplying the same owner renews its lease atomically.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError::LeaseHeld`] while another live owner exists, or a
+    /// validation/database error when the lease cannot be created.
+    pub fn acquire_run_lease(
+        &mut self,
+        run_id: RunId,
+        owner: &str,
+        ttl: Duration,
+    ) -> Result<RunLease, StoreError> {
+        let now = OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000;
+        let now = i64::try_from(now).map_err(|_| StoreError::LeaseClockRange)?;
+        self.acquire_run_lease_at(run_id, owner, ttl, now)
+    }
+
+    fn acquire_run_lease_at(
+        &mut self,
+        run_id: RunId,
+        owner: &str,
+        ttl: Duration,
+        now_unix_ms: i64,
+    ) -> Result<RunLease, StoreError> {
+        validate_lease_owner(owner)?;
+        let ttl_ms = i64::try_from(ttl.as_millis()).map_err(|_| StoreError::LeaseTtlRange)?;
+        if ttl_ms == 0 || ttl > Duration::from_hours(30 * 24) || now_unix_ms < 0 {
+            return Err(StoreError::LeaseTtlRange);
+        }
+        let expires_unix_ms = now_unix_ms
+            .checked_add(ttl_ms)
+            .ok_or(StoreError::LeaseTtlRange)?;
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(StoreError::Database)?;
+        let changed = transaction
+            .execute(
+                "INSERT INTO run_leases (run_id, owner, expires_unix_ms)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(run_id) DO UPDATE SET
+                    owner = excluded.owner,
+                    expires_unix_ms = excluded.expires_unix_ms
+                 WHERE run_leases.expires_unix_ms <= ?4 OR run_leases.owner = ?2",
+                params![run_id.to_string(), owner, expires_unix_ms, now_unix_ms],
+            )
+            .map_err(StoreError::Database)?;
+        if changed == 0 {
+            let (holder, expires_unix_ms) = transaction
+                .query_row(
+                    "SELECT owner, expires_unix_ms FROM run_leases WHERE run_id = ?1",
+                    [run_id.to_string()],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+                )
+                .map_err(StoreError::Database)?;
+            return Err(StoreError::LeaseHeld {
+                run_id,
+                owner: holder,
+                expires_unix_ms,
+            });
+        }
+        transaction.commit().map_err(StoreError::Database)?;
+        Ok(RunLease {
+            run_id,
+            owner: owner.to_owned(),
+            expires_unix_ms,
+        })
+    }
+
+    /// Releases a lease only when its exact owner still holds it.
+    ///
+    /// # Errors
+    ///
+    /// Returns a database error, or [`StoreError::LeaseOwnership`] if a
+    /// different owner replaced the lease after expiry.
+    pub fn release_run_lease(&mut self, lease: &RunLease) -> Result<(), StoreError> {
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(StoreError::Database)?;
+        let current = transaction
+            .query_row(
+                "SELECT owner FROM run_leases WHERE run_id = ?1",
+                [lease.run_id.to_string()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(StoreError::Database)?;
+        if current.as_deref().is_some_and(|owner| owner != lease.owner) {
+            return Err(StoreError::LeaseOwnership {
+                run_id: lease.run_id,
+            });
+        }
+        if current.is_some() {
+            transaction
+                .execute(
+                    "DELETE FROM run_leases WHERE run_id = ?1 AND owner = ?2",
+                    params![lease.run_id.to_string(), lease.owner],
+                )
+                .map_err(StoreError::Database)?;
+        }
+        transaction.commit().map_err(StoreError::Database)
     }
 
     /// Appends one event if `expected_sequence` still matches the durable head.
@@ -238,6 +351,27 @@ impl EventStore {
     }
 }
 
+/// Exact ownership token for a bounded local run lease.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RunLease {
+    pub run_id: RunId,
+    pub owner: String,
+    pub expires_unix_ms: i64,
+}
+
+fn validate_lease_owner(owner: &str) -> Result<(), StoreError> {
+    if owner.is_empty()
+        || owner.len() > 128
+        || owner
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+    {
+        Err(StoreError::InvalidLeaseOwner)
+    } else {
+        Ok(())
+    }
+}
+
 /// Durable event store failure.
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -253,6 +387,22 @@ pub enum StoreError {
     State(StateError),
     #[error("event append raced: expected sequence {expected}, durable head is {actual}")]
     Concurrency { expected: u64, actual: u64 },
+    #[error(
+        "run {run_id} is already active under owner {owner}; lease expires at Unix millisecond {expires_unix_ms}"
+    )]
+    LeaseHeld {
+        run_id: RunId,
+        owner: String,
+        expires_unix_ms: i64,
+    },
+    #[error("run {run_id} lease ownership changed before release")]
+    LeaseOwnership { run_id: RunId },
+    #[error("run lease owner must be 1-128 non-whitespace, non-control bytes")]
+    InvalidLeaseOwner,
+    #[error("run lease duration or clock value is outside the supported range")]
+    LeaseTtlRange,
+    #[error("system clock cannot be represented as a run-lease timestamp")]
+    LeaseClockRange,
     #[error("event sequence {0} exceeds SQLite's signed integer range")]
     SequenceOverflow(u64),
     #[error("negative event sequence {0} found in storage")]
@@ -329,6 +479,34 @@ mod tests {
                 actual: 1
             })
         ));
+    }
+
+    #[test]
+    fn live_lease_excludes_a_second_owner_and_stale_lease_is_replaceable() {
+        let mut store = EventStore::open_in_memory()
+            .unwrap_or_else(|error| unreachable!("event store: {error}"));
+        let run_id = RunId::new();
+        let first = store
+            .acquire_run_lease_at(run_id, "owner-a", Duration::from_millis(100), 1_000)
+            .unwrap_or_else(|error| unreachable!("first lease: {error}"));
+        assert!(matches!(
+            store.acquire_run_lease_at(run_id, "owner-b", Duration::from_millis(100), 1_099),
+            Err(StoreError::LeaseHeld { .. })
+        ));
+        let second = store
+            .acquire_run_lease_at(run_id, "owner-b", Duration::from_millis(100), 1_100)
+            .unwrap_or_else(|error| unreachable!("replacement lease: {error}"));
+        assert_ne!(first.owner, second.owner);
+        assert!(matches!(
+            store.release_run_lease(&first),
+            Err(StoreError::LeaseOwnership { .. })
+        ));
+        store
+            .release_run_lease(&second)
+            .unwrap_or_else(|error| unreachable!("release: {error}"));
+        store
+            .release_run_lease(&second)
+            .unwrap_or_else(|error| unreachable!("idempotent release: {error}"));
     }
 
     #[test]
