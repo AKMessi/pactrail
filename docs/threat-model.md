@@ -1,8 +1,8 @@
 # Threat model
 
-This document describes Pactrail 0.6 as shipped. It is not a claim that model
-execution, native processes, containers, or third-party providers are
-intrinsically safe.
+This document describes Pactrail 0.7 as shipped. It is not a claim that model
+execution, native processes, containers, MCP servers, or third-party providers
+are intrinsically safe.
 
 ## Assets and trust boundaries
 
@@ -14,7 +14,8 @@ The following inputs are untrusted:
 - model text, tool names, IDs, and arguments;
 - repository source, filenames, generated files, and instruction-like content;
 - historical memory content at retrieval time;
-- provider, tool, process, plugin, and future MCP output;
+- provider, tool, process, plugin, and MCP output, schemas, descriptions,
+  resources, prompts, and annotations;
 - terminal control sequences;
 - concurrent changes in the source workspace;
 - portable trace, receipt, or candidate files after external modification.
@@ -99,6 +100,37 @@ the model and user must still compare memory with current code.
 Operational logs and provider error messages can still contain data produced by
 third-party libraries or endpoints. Treat debug logs as potentially sensitive.
 
+## MCP boundary
+
+MCP configuration is workspace-local and explicit. Reading configuration or
+starting a normal agent run never performs discovery. An operator must invoke
+`mcp inspect` or `mcp snapshot` to connect; only an integrity-valid local
+snapshot can add tools or advisory context to a later run. The snapshot and
+executable/endpoint identity are resume-bound.
+
+Every exposed tool needs a local profile. Server annotations cannot grant
+read-only, idempotent, parallel-safe, process, network, secret, filesystem, or
+external-write authority. A dedicated `mcp_invoke` request gate prevents broad
+native-process permission from authorizing MCP by accident. The adapter also
+authorizes each underlying effect and enters the engine's write-ahead effect
+fence before connection or invocation. Non-interactive approval denies by
+default.
+
+Stdio MCP is native host code. Pactrail starts one absolute configured command
+without shell interpretation and passes no environment except explicitly
+allowlisted names, but it is not an OS sandbox. HTTP MCP requires HTTPS except
+for opt-in literal loopback HTTP; redirects, URL/query credentials, OAuth
+discovery, session reinitialization, and implicit call retry are disabled.
+Selected resource and prompt text is snapshot-pinned, byte-bounded, and labelled
+as untrusted advisory context.
+
+A remote tool granted `external_write` can change the named external service,
+and an approved stdio server can exercise all authority available to that host
+process. Effect fencing prevents uncertain calls from being replayed; it cannot
+roll back or prove the absence of a remote side effect. Use read-only,
+idempotent profiles where possible and treat write-capable servers as privileged
+integrations.
+
 ## Process execution boundaries
 
 Process execution has no automatic mode. It is disabled by default and selecting
@@ -148,7 +180,7 @@ does not claim successful cancellation until bounded cleanup completes. Safe
 candidate changes are retained in an integrity-checked receipt; cleanup failure
 is a hard error and remains diagnosable in durable state.
 
-## Out of scope in 0.6
+## Out of scope in 0.7
 
 - protection from a compromised user account, kernel, filesystem, or provider;
 - protection from a compromised container runtime, daemon, desktop VM, or a
@@ -156,8 +188,10 @@ is a hard error and remains diagnosable in durable state.
 - remote container daemons, privileged containers, arbitrary mounts, host
   networking, device forwarding, or model-selected images;
 - cryptographic identity/non-repudiation for local receipts;
-- automatic secret brokering or least-privilege remote credentials;
-- remote side effects such as pull requests, messages, or deployments;
+- automatic OAuth flows, credential minting, or proof that a forwarded secret
+  has least privilege;
+- rollback or transactional reconciliation of approved MCP side effects such as
+  pull requests, messages, or deployments;
 - semantic proof that a model-produced change is correct;
 - confidentiality of prompts sent to the configured provider.
 - automatic reconciliation or replay of a tool interrupted between effect

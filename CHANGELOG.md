@@ -6,6 +6,8 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-21
+
 ### Added
 
 - Governed MCP 2025-11-25 support over bounded stdio and Streamable HTTP, with
@@ -277,7 +279,8 @@ follow [Semantic Versioning](https://semver.org/).
 - Bounded run-goal and memory previews now end with a visible ellipsis instead
   of silently dropping continuation text.
 
-[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/AKMessi/pactrail/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/AKMessi/pactrail/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/AKMessi/pactrail/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AKMessi/pactrail/compare/v0.3.0...v0.4.0
