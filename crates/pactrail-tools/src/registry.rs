@@ -377,6 +377,13 @@ pub enum ToolError {
     },
     #[error("process {program:?} timed out after {seconds} seconds")]
     Timeout { program: String, seconds: u64 },
+    #[error("tool operation was cancelled: {operation}")]
+    Cancelled { operation: String },
+    #[error("{adapter} adapter failed: {message}")]
+    Adapter {
+        adapter: &'static str,
+        message: String,
+    },
     #[error("process output task failed: {0}")]
     Join(tokio::task::JoinError),
     #[error("process backend failed: {0}")]

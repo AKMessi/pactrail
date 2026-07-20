@@ -6,7 +6,9 @@ use pactrail_tools::{ToolAnnotations, ToolDescriptor, ToolRisk};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{McpError, McpServerConfig, McpToolProfile, validate_input_schema};
+use crate::{
+    McpError, McpServerConfig, McpToolProfile, validate_input_schema, validate_output_schema,
+};
 
 pub const MCP_SNAPSHOT_SCHEMA: u32 = 1;
 pub const MCP_PROTOCOL_VERSION: &str = "2025-11-25";
@@ -28,6 +30,8 @@ pub struct McpServerIdentity {
 #[serde(deny_unknown_fields)]
 pub struct McpDiscoveredCatalog {
     pub identity: McpServerIdentity,
+    /// Digest of the executable bytes for stdio or canonical transport for HTTP.
+    pub transport_runtime_digest: String,
     pub tools: Vec<McpDiscoveredTool>,
     #[serde(default)]
     pub context: Vec<McpContextCapture>,
@@ -94,7 +98,7 @@ impl McpSnapshotTool {
             name: self.public_name.clone(),
             description: self.description.clone(),
             input_schema: self.input_schema.clone(),
-            required_capability: self.profile.strongest_capability(&config.transport),
+            required_capability: config.strongest_capability(&self.profile),
             annotations: ToolAnnotations {
                 read_only: self.profile.read_only,
                 idempotent: self.profile.idempotent,
@@ -113,6 +117,7 @@ pub struct McpSnapshot {
     pub server: String,
     pub identity: McpServerIdentity,
     pub transport_digest: String,
+    pub transport_runtime_digest: String,
     pub tools: Vec<McpSnapshotTool>,
     #[serde(default)]
     pub context: Vec<McpContextCapture>,
@@ -132,6 +137,10 @@ impl McpSnapshot {
     ) -> Result<Self, McpError> {
         config.validate()?;
         validate_identity(&catalog.identity)?;
+        validate_digest(
+            "transport runtime digest",
+            &catalog.transport_runtime_digest,
+        )?;
         if catalog.identity.protocol_version != MCP_PROTOCOL_VERSION {
             return Err(McpError::InvalidSnapshot(format!(
                 "server negotiated protocol {}; expected {MCP_PROTOCOL_VERSION}",
@@ -199,6 +208,7 @@ impl McpSnapshot {
             server: config.name.clone(),
             identity: catalog.identity,
             transport_digest: config.transport_digest()?,
+            transport_runtime_digest: catalog.transport_runtime_digest,
             tools,
             context: catalog.context,
             digest: String::new(),
@@ -241,6 +251,7 @@ impl McpSnapshot {
             });
         }
         validate_identity(&self.identity)?;
+        validate_digest("transport runtime digest", &self.transport_runtime_digest)?;
         validate_context(&self.context)?;
         let mut public_names = BTreeSet::new();
         for tool in &self.tools {
@@ -290,6 +301,42 @@ impl McpSnapshot {
                 live.name,
                 live.version,
                 live.protocol_version
+            )));
+        }
+        Ok(())
+    }
+
+    /// Verifies the executable or endpoint identity immediately before connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an identity-change error when the runtime digest differs from discovery.
+    pub fn verify_transport_runtime(&self, live_digest: &str) -> Result<(), McpError> {
+        if live_digest != self.transport_runtime_digest {
+            return Err(McpError::IdentityChanged(
+                "the MCP executable or endpoint identity changed after snapshotting".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Verifies that the live catalog still exposes the pinned tool schema.
+    ///
+    /// # Errors
+    ///
+    /// Returns an identity-change error if the tool disappeared or either schema changed.
+    pub fn verify_live_tool(&self, live: &McpDiscoveredTool) -> Result<(), McpError> {
+        let Some(pinned) = self.tools.iter().find(|tool| tool.remote_name == live.name) else {
+            return Err(McpError::IdentityChanged(format!(
+                "live server exposed unpinned tool {:?}",
+                live.name
+            )));
+        };
+        let live_digest = schema_digest(&live.input_schema, live.output_schema.as_ref())?;
+        if live_digest != pinned.schema_digest {
+            return Err(McpError::IdentityChanged(format!(
+                "schema for MCP tool {:?} changed after snapshotting",
+                live.name
             )));
         }
         Ok(())
@@ -347,6 +394,15 @@ fn validate_identity(identity: &McpServerIdentity) -> Result<(), McpError> {
     Ok(())
 }
 
+fn validate_digest(label: &str, value: &str) -> Result<(), McpError> {
+    if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(McpError::InvalidSnapshot(format!(
+            "{label} must be a 64-character hexadecimal digest"
+        )));
+    }
+    Ok(())
+}
+
 fn sanitize_description(server: &str, tool: &str, description: &str) -> Result<String, McpError> {
     if description.len() > MAX_DESCRIPTION_BYTES || description.chars().any(char::is_control) {
         return Err(McpError::InvalidSnapshot(format!(
@@ -366,21 +422,6 @@ fn sanitize_description(server: &str, tool: &str, description: &str) -> Result<S
 fn schema_digest(input: &Value, output: Option<&Value>) -> Result<String, McpError> {
     let bytes = serde_json::to_vec(&(input, output))?;
     Ok(blake3::hash(&bytes).to_hex().to_string())
-}
-
-fn validate_output_schema(tool: &str, schema: &Value) -> Result<(), McpError> {
-    let bytes = serde_json::to_vec(schema)?;
-    if !schema.is_object() || bytes.len() > crate::MAX_MCP_SCHEMA_BYTES {
-        return Err(McpError::InvalidSchema {
-            tool: tool.to_owned(),
-            reason: "output schema must be a bounded JSON object".to_owned(),
-        });
-    }
-    jsonschema::validator_for(schema).map_err(|error| McpError::InvalidSchema {
-        tool: tool.to_owned(),
-        reason: format!("output schema compilation failed: {error}"),
-    })?;
-    Ok(())
 }
 
 fn validate_context(context: &[McpContextCapture]) -> Result<(), McpError> {
@@ -469,6 +510,7 @@ mod tests {
                 name: "demo-server".to_owned(),
                 version: "1.2.3".to_owned(),
             },
+            transport_runtime_digest: "a".repeat(64),
             tools: vec![McpDiscoveredTool {
                 name: "lookup".to_owned(),
                 description: "Looks up a record.".to_owned(),

@@ -2045,9 +2045,10 @@ impl RunEngine<'_> {
 fn is_cancelled_tool_result(result: &Result<ToolOutput, ToolError>) -> bool {
     matches!(
         result,
-        Err(ToolError::ProcessBackend(
-            pactrail_tools::ProcessBackendError::Cancelled { .. }
-        ))
+        Err(ToolError::Cancelled { .. })
+            | Err(ToolError::ProcessBackend(
+                pactrail_tools::ProcessBackendError::Cancelled { .. }
+            ))
     )
 }
 

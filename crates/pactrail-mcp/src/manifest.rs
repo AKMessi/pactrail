@@ -219,6 +219,26 @@ impl McpServerConfig {
         }
         Ok(name)
     }
+
+    /// Returns every capability that must be authorized before invoking a profile.
+    #[must_use]
+    pub fn required_capabilities(&self, profile: &McpToolProfile) -> BTreeSet<Capability> {
+        let mut capabilities = profile.capabilities.clone();
+        capabilities.insert(self.transport.primary_capability());
+        if !self.environment.is_empty() {
+            capabilities.insert(Capability::SecretUse);
+        }
+        capabilities
+    }
+
+    /// Returns the strongest capability for descriptor-level discovery and UX.
+    #[must_use]
+    pub fn strongest_capability(&self, profile: &McpToolProfile) -> Capability {
+        self.required_capabilities(profile)
+            .into_iter()
+            .max_by_key(capability_rank)
+            .unwrap_or_else(|| self.transport.primary_capability())
+    }
 }
 
 /// Protocol transport. Exactly one explicit boundary is selected per server.
@@ -317,16 +337,6 @@ impl McpToolProfile {
             )));
         }
         Ok(())
-    }
-
-    #[must_use]
-    pub fn strongest_capability(&self, transport: &McpTransportConfig) -> Capability {
-        self.capabilities
-            .iter()
-            .chain(std::iter::once(&transport.primary_capability()))
-            .max_by_key(|capability| capability_rank(capability))
-            .cloned()
-            .unwrap_or_else(|| transport.primary_capability())
     }
 }
 

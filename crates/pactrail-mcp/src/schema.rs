@@ -15,6 +15,20 @@ const MAX_SCHEMA_STRING_BYTES: usize = 16 * 1024;
 /// Returns an error when the schema is malformed, unsafe to resolve, or exceeds
 /// Pactrail's structural or serialized bounds.
 pub fn validate_input_schema(tool: &str, schema: &Value) -> Result<(), McpError> {
+    validate_schema(tool, schema, "input")
+}
+
+/// Validates a server-provided structured output schema under the same trust bounds.
+///
+/// # Errors
+///
+/// Returns an error when the schema is malformed, unsafe to resolve, or exceeds
+/// Pactrail's structural or serialized bounds.
+pub fn validate_output_schema(tool: &str, schema: &Value) -> Result<(), McpError> {
+    validate_schema(tool, schema, "output")
+}
+
+fn validate_schema(tool: &str, schema: &Value, kind: &str) -> Result<(), McpError> {
     let encoded = serde_json::to_vec(schema)?;
     if encoded.len() > MAX_MCP_SCHEMA_BYTES {
         return Err(invalid(
@@ -24,9 +38,12 @@ pub fn validate_input_schema(tool: &str, schema: &Value) -> Result<(), McpError>
     }
     let object = schema
         .as_object()
-        .ok_or_else(|| invalid(tool, "schema root must be an object"))?;
+        .ok_or_else(|| invalid(tool, format!("{kind} schema root must be an object")))?;
     if object.get("type").and_then(Value::as_str) != Some("object") {
-        return Err(invalid(tool, "schema root type must be object"));
+        return Err(invalid(
+            tool,
+            format!("{kind} schema root type must be object"),
+        ));
     }
     let mut nodes = 0_usize;
     inspect_node(tool, schema, 0, &mut nodes)?;

@@ -7,16 +7,22 @@
 mod manifest;
 mod schema;
 mod snapshot;
+mod tool;
+mod transport;
 
 pub use manifest::{
     MCP_MANIFEST_SCHEMA, McpManifest, McpPromptSelection, McpServerConfig, McpToolProfile,
     McpTransportConfig,
 };
-pub use schema::{MAX_MCP_SCHEMA_BYTES, validate_arguments, validate_input_schema};
+pub use schema::{
+    MAX_MCP_SCHEMA_BYTES, validate_arguments, validate_input_schema, validate_output_schema,
+};
 pub use snapshot::{
     MCP_PROTOCOL_VERSION, MCP_SNAPSHOT_SCHEMA, McpContextCapture, McpContextKind,
     McpDiscoveredCatalog, McpDiscoveredTool, McpServerIdentity, McpSnapshot, McpSnapshotTool,
 };
+pub use tool::{McpTool, register_snapshot};
+pub use transport::{discover, transport_runtime_digest};
 
 use thiserror::Error;
 
@@ -52,4 +58,6 @@ pub enum McpError {
         #[source]
         source: std::io::Error,
     },
+    #[error("MCP tool registration failed: {0}")]
+    Tool(#[from] pactrail_tools::ToolError),
 }

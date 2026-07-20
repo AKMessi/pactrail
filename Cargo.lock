@@ -1522,6 +1522,9 @@ version = "0.6.0"
 dependencies = [
  "async-trait",
  "blake3",
+ "bytes",
+ "futures-util",
+ "http",
  "jsonschema",
  "pactrail-context",
  "pactrail-core",
@@ -1530,9 +1533,11 @@ dependencies = [
  "rmcp",
  "serde",
  "serde_json",
+ "sse-stream",
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-util",
  "toml",
  "url",
 ]

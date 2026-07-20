@@ -12,6 +12,9 @@ publish = false
 [dependencies]
 async-trait.workspace = true
 blake3.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
+http.workspace = true
 jsonschema.workspace = true
 pactrail-context = { version = "0.6.0", path = "../pactrail-context" }
 pactrail-core = { version = "0.6.0", path = "../pactrail-core" }
@@ -20,8 +23,10 @@ reqwest.workspace = true
 rmcp.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sse-stream.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 toml.workspace = true
 url.workspace = true
 
