@@ -33,7 +33,7 @@ pactrail ❯ Fix the parser regression and add a test.
   ╭─ RUN 019f7a31  compatible/local-coder
   │ Fix the parser regression and add a test.
   │     0ms  ◇ state     contracting · validating task contract
-  │     4ms  ◆ context   186 files · 8 cited · 12.4 KiB · 4ms
+  │     4ms  ◆ context   186 indexed · 181 warm · 5 cold · 8 cited · 100.00% coverage · 3 graph · 4 impact · 4ms
   │   1.82s  ● model     turn 1 · 2 actions · 3,412 tokens · 1.8s
   │   1.84s  ● tool      read_many_files · 18.1 KiB · 12ms
   │   1.86s  ◆ tool      edit_file · changed src/parser.rs · 9ms
@@ -62,6 +62,10 @@ pactrail ❯ Fix the parser regression and add a test.
   lexical reference locations for navigation without pretending to be a runtime
   call graph. Authoritative context fails closed; optional entries are omitted
   whole and the omission is visible.
+- **Repository intelligence is incremental, not stale.** Every run hashes
+  current files, while unchanged bounded structure is reused by content digest.
+  The live timeline and durable trace report warm/cold reuse, rejected entries,
+  graph evidence, and kernel-derived citation coverage.
 - **Long runs stay evidence-dense.** Pactrail measures the serialized
   conversation and tool schemas against a model-derived high-water mark. Old
   tool results become deterministic, digest-bound navigation envelopes while
@@ -103,9 +107,9 @@ pactrail ❯ Fix the parser regression and add a test.
 ### Tool Kernel v2
 
 - Bounded file listing, single and batch reads, lexical search, exact replace,
-  repository-wide symbol/reference graph search, atomic multi-edit, write,
-  remove, candidate-change inspection, memory recall, and trusted native
-  verification.
+  repository-wide symbol/reference graph and one-hop change-impact search,
+  atomic multi-edit, write, remove, candidate-change inspection, memory recall,
+  and trusted native verification.
 - Per-tool read-only, idempotency, parallel-safety, capability, and risk metadata.
 - Consecutive parallel-safe reads overlap; mutations stay serial and durable
   results retain the model's call order.
@@ -421,8 +425,8 @@ TaskContract ──> model-budgeted ContextPack ──> ModelDriver
               Evidence + ChangeReceipt ──> apply / discard
 ```
 
-The nine crates keep the core domain, storage, memory, context, models, tools,
-workspace transactions, engine, and CLI independently testable. See
+The eleven crates keep the core domain, storage, memory, context, models, MCP,
+tools, workspace transactions, engine, SDK, and CLI independently testable. See
 [Architecture](docs/architecture.md), [Threat model](docs/threat-model.md),
 [Interactive CLI](docs/interactive-cli.md), [Providers](docs/providers.md), and
 [Roadmap](docs/roadmap.md). The primary-paper mechanisms behind recent
@@ -437,6 +441,7 @@ Pactrail keeps its state in `WORKSPACE/.pactrail` by default:
 ├── events.sqlite3        # authoritative hash-linked event journal
 ├── memory.sqlite3        # provenance-aware workspace memory
 ├── artifacts/checkpoints # content-addressed resumable session state
+├── artifacts/repository-index # content-addressed derived file analysis
 └── runs/<run-id>/
     ├── run.json          # bounded, secret-free runtime manifest
     ├── execution.lock    # kernel-released exclusive local owner lock
@@ -463,11 +468,11 @@ containment fixture against Docker. Start with
 
 ## Project status
 
-Pactrail 0.6 is a production-grade developer preview: its invariants and failure
+Pactrail 0.7 is a production-grade developer preview: its invariants and failure
 modes are tested, while Rust APIs and versioned local formats may still evolve
-before 1.0. MCP, stable embedding APIs, repository-index caching, optional
-structural/LSP retrieval, and public release-candidate evaluation remain roadmap
-work—not current claims.
+before 1.0. Governed MCP, the static embedding facade, and content-addressed
+repository analysis are implemented. Optional structural/LSP retrieval and
+public release-candidate evaluation remain roadmap work—not current claims.
 
 It is ready for public evaluation, contributions, demos, and social launch as a
 developer preview. The OCI backend is a production containment option with an

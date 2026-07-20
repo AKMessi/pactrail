@@ -80,6 +80,10 @@ validation.
 - Root instructions must fit the model-derived context budget in full. Nested
   instructions carry explicit directory scope and optional entries are never
   cut mid-document.
+- The repository-analysis cache is advisory and content-addressed. Every
+  current file is hashed before lookup; entries cannot provide raw source,
+  previews, or `AGENTS.md` contents. Strict bounds and payload validation reject
+  corruption, while cache failure degrades to current-byte analysis.
 
 These controls reduce durable prompt poisoning. They cannot determine whether a
 human-authored convention or a previously applied change contains bad advice;

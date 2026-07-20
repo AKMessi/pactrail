@@ -78,12 +78,19 @@ paths, BLAKE3 digests, sizes, coarse languages, imports, and symbol-like
 declarations. Oversized and non-UTF-8 files remain visible in topology without
 being retained for semantic scanning.
 
+Every build hashes current file bytes. Bounded per-file derived structure is
+reused from a content-addressed cache keyed by content digest, language, and
+analysis revision; source text, previews, and instructions are never supplied
+by that cache. A malformed or unavailable entry is measured and recomputed.
+This makes invalidation exact while keeping the cache outside durable authority.
+
 The index also derives a bounded repository evidence graph. Definition nodes
 come from project symbol declarations; edges point to exact file and line
 locations where the same project-defined identifier occurs. These edges are
 explicitly lexical evidence, not type-resolved calls. Construction is capped at
-200,000 definitions, 500,000 references, and 256 references per symbol. A
-second-pass digest check fails closed if a file changes during indexing.
+200,000 definitions, 500,000 references, and 256 references per symbol. Cached
+identifier locations also have a per-file bound. The graph is built from the
+same current-byte analysis, eliminating a second filesystem read.
 
 For each run, the compiler:
 
@@ -106,6 +113,11 @@ For each run, the compiler:
 9. Omits optional entries whole, records inclusion metadata, and shows the model
    a visible budget-exhaustion notice.
 
+The context action records bytes hashed, cache reuse/rejection, retrieval and
+graph counts, and kernel-derived citation coverage. Coverage measures how much
+of the selected file set fit in the bounded pack; it is not a model-authored
+relevance or correctness score.
+
 Memory is advisory. It includes an identifier, kind, source, title, and content;
 it never overrides the task contract, scoped instructions, or current files.
 
@@ -117,6 +129,7 @@ The production registry currently provides:
 
 - `list_files`, `read_file`, `read_many_files`, and `search`;
 - `search_code_graph` for project definitions and bounded lexical references;
+- `search_change_impact` for bounded one-hop definition/reference relationships;
 - `write_file`, `replace_text`, atomic `edit_file`, and `remove_file`;
 - `workspace_changes` and `recall_memory`;
 - capability-gated `run_process` for detected verification.
@@ -131,6 +144,12 @@ candidate on each call. This avoids serving a stale pre-edit graph and keeps
 cache invalidation outside the trust boundary. The output carries the current
 repository digest, explicit truncation state, definition provenance, and a
 warning to read cited source before editing.
+
+`search_change_impact` uses direct task matches as seeds, then identifies files
+that reference seed-defined symbols and files defining symbols referenced by a
+seed. Scores and reasons are deterministic and bounded. The result is lexical
+navigation evidence, not a type-resolved dependency or runtime-impact claim,
+and is rebuilt from the current candidate for the same freshness guarantee.
 
 Each tool result is normalized, output-bounded, and compared against transaction
 manifests before and after execution. The event record contains a digest of the

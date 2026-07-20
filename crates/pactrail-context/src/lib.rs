@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use ignore::WalkBuilder;
@@ -13,6 +13,8 @@ use thiserror::Error;
 const MAX_INDEX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_INSTRUCTION_BYTES: u64 = 256 * 1024;
 const MAX_SYMBOLS_PER_FILE: usize = 2_000;
+const MAX_IMPORTS_PER_FILE: usize = 4_096;
+const MAX_IDENTIFIER_OCCURRENCES_PER_FILE: usize = 100_000;
 const MAX_GRAPH_DEFINITIONS: usize = 200_000;
 const MAX_GRAPH_REFERENCES: usize = 500_000;
 const MAX_REFERENCES_PER_SYMBOL: usize = 256;
@@ -28,6 +30,8 @@ const ESTIMATED_BYTES_PER_TOKEN: u64 = 3;
 const CONTEXT_PACK_INPUT_SHARE: u64 = 4;
 const TRUNCATION_NOTICE: &str =
     "\n\n[Context pack reached its model-derived budget. Use tools to inspect omitted sources.]";
+const INDEX_CACHE_SCHEMA_VERSION: u32 = 1;
+const MAX_INDEX_CACHE_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Coarse language classification used by the context compiler.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -104,6 +108,28 @@ pub struct GraphQueryResult {
     pub query: String,
     pub symbols: Vec<GraphSymbolEvidence>,
     pub total_matching_symbols: usize,
+    pub result_truncated: bool,
+    pub graph_truncated: bool,
+}
+
+/// One bounded path related to task-matched seed files by lexical graph evidence.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ImpactPathEvidence {
+    pub path: String,
+    pub score: usize,
+    pub reasons: Vec<String>,
+}
+
+/// Deterministic one-hop change-impact query result.
+///
+/// This is navigation evidence. It does not claim that changing a seed will
+/// alter runtime behavior in every related file.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ImpactQueryResult {
+    pub query: String,
+    pub seeds: Vec<String>,
+    pub related: Vec<ImpactPathEvidence>,
+    pub total_related_files: usize,
     pub result_truncated: bool,
     pub graph_truncated: bool,
 }
@@ -198,6 +224,56 @@ pub struct ContextFragment {
     pub content: String,
 }
 
+/// Measured work performed while constructing a repository index.
+///
+/// Cache hits never bypass content hashing: `bytes_hashed` always describes
+/// current workspace bytes read during this build. The cache only reuses
+/// bounded, derived structure after its content digest has been established.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IndexBuildTelemetry {
+    pub files_hashed: usize,
+    pub bytes_hashed: u64,
+    pub cache_eligible_files: usize,
+    pub cache_hits: usize,
+    pub cache_misses: usize,
+    pub cache_writes: usize,
+    pub rejected_cache_entries: usize,
+}
+
+/// A repository index together with deterministic cache telemetry.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RepositoryIndexBuild {
+    pub index: RepositoryIndex,
+    pub telemetry: IndexBuildTelemetry,
+}
+
+/// Deterministic retrieval measurements derived by Pactrail, not by a model.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RetrievalTelemetry {
+    pub query_terms: usize,
+    pub retrieved_files: usize,
+    pub cited_files: usize,
+    pub graph_symbols: usize,
+    pub graph_locations: usize,
+    pub impact_files: usize,
+    /// Share of retrieved files that fit in the rendered pack, from 0 to 10,000.
+    pub citation_coverage_basis_points: u16,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct CachedFileAnalysis {
+    schema_version: u32,
+    content_digest: String,
+    payload_digest: String,
+    language: Language,
+    lines: usize,
+    symbols: Vec<Symbol>,
+    imports: Vec<String>,
+    identifier_lines: BTreeMap<String, Vec<usize>>,
+    identifiers_truncated: bool,
+}
+
 /// Stable repository topology and provenance index.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RepositoryIndex {
@@ -217,9 +293,35 @@ impl RepositoryIndex {
     /// Returns an error when traversal or required file access fails. Oversized
     /// and non-UTF-8 files remain in topology but are not semantically scanned.
     pub fn build(root: &Path) -> Result<Self, ContextError> {
-        let mut files = BTreeMap::new();
-        let mut instructions = Vec::new();
-        let mut languages = BTreeMap::new();
+        Self::build_internal(root, None).map(|build| build.index)
+    }
+
+    /// Builds an index while reusing content-addressed derived structure.
+    ///
+    /// Every current file is still read and hashed before a cache entry can be
+    /// used. Cache entries never supply instruction contents or source
+    /// previews. Cache I/O is best effort: an unavailable, malformed, or stale
+    /// entry is measured and recomputed instead of failing repository context.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when traversal or required workspace file access fails.
+    pub fn build_with_cache(
+        root: &Path,
+        cache_root: &Path,
+    ) -> Result<RepositoryIndexBuild, ContextError> {
+        Self::build_internal(root, Some(cache_root))
+    }
+
+    fn build_internal(
+        root: &Path,
+        cache_root: Option<&Path>,
+    ) -> Result<RepositoryIndexBuild, ContextError> {
+        let mut indexed_by_path = BTreeMap::new();
+        let mut directives = Vec::new();
+        let mut language_counts = BTreeMap::new();
+        let mut derived_by_path = BTreeMap::new();
+        let mut telemetry = IndexBuildTelemetry::default();
         for item in WalkBuilder::new(root)
             .hidden(false)
             .git_ignore(true)
@@ -234,56 +336,26 @@ impl RepositoryIndex {
             if !entry.file_type().is_some_and(|kind| kind.is_file()) {
                 continue;
             }
-            let path = entry.path();
-            let relative = portable_relative(root, path)?;
-            let (digest, size, retained) = fingerprint_and_retain(path)?;
-            let language = detect_language(path);
-            *languages.entry(language).or_insert(0) += 1;
-            let text = retained
-                .as_deref()
-                .and_then(|bytes| std::str::from_utf8(bytes).ok());
-            let (lines, symbols, imports) = text.map_or((0, Vec::new(), Vec::new()), |text| {
-                let lines = text.lines().count();
-                let (symbols, imports) = extract_structure(text, language);
-                (lines, symbols, imports)
-            });
-            let anchor_preview = text
-                .filter(|_| repository_anchor_rank(&relative).is_some())
-                .map(|text| utf8_prefix(text, MAX_ANCHOR_PREVIEW_BYTES).to_owned());
-            if path.file_name().is_some_and(|name| name == "AGENTS.md")
-                && size <= MAX_INSTRUCTION_BYTES
-                && let Some(content) = text
-            {
-                instructions.push(InstructionFile {
-                    path: relative.clone(),
-                    scope: instruction_scope(&relative),
-                    digest: digest.clone(),
-                    content: content.to_owned(),
-                });
+            let built = build_indexed_file(root, entry.path(), cache_root, &mut telemetry)?;
+            *language_counts.entry(built.indexed.language).or_insert(0) += 1;
+            if let Some(directive) = built.instruction {
+                directives.push(directive);
             }
-            files.insert(
-                relative.clone(),
-                IndexedFile {
-                    path: relative,
-                    digest,
-                    bytes: size,
-                    lines,
-                    language,
-                    symbols,
-                    imports,
-                    anchor_preview,
-                },
-            );
+            derived_by_path.insert(built.relative.clone(), built.derived);
+            indexed_by_path.insert(built.relative, built.indexed);
         }
-        instructions.sort_by(|left, right| left.path.cmp(&right.path));
-        let graph = build_repository_graph(root, &files)?;
-        let digest = index_digest(&files, &instructions);
-        Ok(Self {
-            files,
-            instructions,
-            languages,
-            graph,
-            digest,
+        directives.sort_by(|left, right| left.path.cmp(&right.path));
+        let graph = build_repository_graph(&indexed_by_path, &derived_by_path);
+        let digest = index_digest(&indexed_by_path, &directives);
+        Ok(RepositoryIndexBuild {
+            index: Self {
+                files: indexed_by_path,
+                instructions: directives,
+                languages: language_counts,
+                graph,
+                digest,
+            },
+            telemetry,
         })
     }
 
@@ -303,21 +375,8 @@ impl RepositoryIndex {
             .files
             .values()
             .map(|file| {
-                let path = file.path.to_lowercase();
-                let symbol_text = file
-                    .symbols
-                    .iter()
-                    .map(|symbol| symbol.name.to_lowercase())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let score = tokens
-                    .iter()
-                    .map(|token| {
-                        usize::from(path.contains(token)) * 4
-                            + usize::from(symbol_text.contains(token)) * 3
-                    })
-                    .sum::<usize>();
-                (score, file)
+                let direct_score = direct_file_score(file, &tokens);
+                (direct_score, file)
             })
             .collect::<Vec<_>>();
         let graph_evidence = self.graph.query(query, 16, 64);
@@ -366,6 +425,132 @@ impl RepositoryIndex {
             retrieved.extend(anchors.into_iter().take(limit.min(8)).map(|(_, file)| file));
         }
         retrieved
+    }
+
+    /// Finds files plausibly affected by task-matched seed files.
+    ///
+    /// Relationships come from bounded project-definition and lexical-reference
+    /// evidence. Scores and reasons are deterministic navigation hints, not
+    /// type-resolved dependency or runtime-impact claims.
+    #[must_use]
+    pub fn query_change_impact(
+        &self,
+        query: &str,
+        max_seeds: usize,
+        max_related: usize,
+    ) -> ImpactQueryResult {
+        let tokens = query_tokens(query);
+        let mut seed_candidates = self
+            .files
+            .values()
+            .filter_map(|file| {
+                let score = direct_file_score(file, &tokens);
+                (score > 0).then_some((score, file))
+            })
+            .collect::<Vec<_>>();
+        seed_candidates.sort_by(|(left_score, left), (right_score, right)| {
+            right_score
+                .cmp(left_score)
+                .then_with(|| left.path.cmp(&right.path))
+        });
+        let seeds = seed_candidates
+            .into_iter()
+            .take(max_seeds)
+            .map(|(_, file)| file.path.clone())
+            .collect::<BTreeSet<_>>();
+        let mut related = BTreeMap::<String, (usize, BTreeSet<String>)>::new();
+        for (symbol, definitions) in &self.graph.definitions {
+            let references = self
+                .graph
+                .references
+                .get(symbol)
+                .map_or(&[][..], Vec::as_slice);
+            let definition_is_seed = definitions
+                .iter()
+                .any(|location| seeds.contains(&location.path));
+            let reference_is_seed = references
+                .iter()
+                .any(|location| seeds.contains(&location.path));
+            if definition_is_seed {
+                for reference in references
+                    .iter()
+                    .filter(|location| !seeds.contains(&location.path))
+                {
+                    add_impact_reason(
+                        &mut related,
+                        &reference.path,
+                        3,
+                        format!("references {symbol} defined by a seed"),
+                    );
+                }
+            }
+            if reference_is_seed {
+                for definition in definitions
+                    .iter()
+                    .filter(|location| !seeds.contains(&location.path))
+                {
+                    add_impact_reason(
+                        &mut related,
+                        &definition.path,
+                        4,
+                        format!("defines {symbol} referenced by a seed"),
+                    );
+                }
+            }
+        }
+        let total_related_files = related.len();
+        let mut related = related
+            .into_iter()
+            .map(|(path, (score, reasons))| ImpactPathEvidence {
+                path,
+                score,
+                reasons: reasons.into_iter().take(8).collect(),
+            })
+            .collect::<Vec<_>>();
+        related.sort_by(|left, right| {
+            right
+                .score
+                .cmp(&left.score)
+                .then_with(|| left.path.cmp(&right.path))
+        });
+        related.truncate(max_related);
+        ImpactQueryResult {
+            query: query.to_owned(),
+            seeds: seeds.into_iter().collect(),
+            result_truncated: related.len() < total_related_files,
+            related,
+            total_related_files,
+            graph_truncated: self.graph.truncated,
+        }
+    }
+}
+
+fn direct_file_score(file: &IndexedFile, tokens: &BTreeSet<String>) -> usize {
+    let path = file.path.to_lowercase();
+    let symbol_text = file
+        .symbols
+        .iter()
+        .map(|symbol| symbol.name.to_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ");
+    tokens
+        .iter()
+        .map(|token| {
+            usize::from(path.contains(token)) * 4 + usize::from(symbol_text.contains(token)) * 3
+        })
+        .sum()
+}
+
+fn add_impact_reason(
+    impact: &mut BTreeMap<String, (usize, BTreeSet<String>)>,
+    path: &str,
+    weight: usize,
+    reason: String,
+) {
+    let entry = impact.entry(path.to_owned()).or_default();
+    entry.0 = entry.0.saturating_add(weight);
+    if entry.1.len() < 8 {
+        entry.1.insert(reason);
     }
 }
 
@@ -476,10 +661,336 @@ fn fingerprint_and_retain(path: &Path) -> Result<(String, u64, Option<Vec<u8>>),
     Ok((hasher.finalize().to_hex().to_string(), size, retained))
 }
 
-fn build_repository_graph(
+struct IndexedFileBuild {
+    relative: String,
+    indexed: IndexedFile,
+    instruction: Option<InstructionFile>,
+    derived: CachedFileAnalysis,
+}
+
+fn build_indexed_file(
     root: &Path,
+    path: &Path,
+    cache_root: Option<&Path>,
+    telemetry: &mut IndexBuildTelemetry,
+) -> Result<IndexedFileBuild, ContextError> {
+    let relative = portable_relative(root, path)?;
+    let (digest, size, retained) = fingerprint_and_retain(path)?;
+    telemetry.files_hashed = telemetry.files_hashed.saturating_add(1);
+    telemetry.bytes_hashed = telemetry.bytes_hashed.saturating_add(size);
+    let language = detect_language(path);
+    let text = retained
+        .as_deref()
+        .and_then(|bytes| std::str::from_utf8(bytes).ok());
+    let derived = text.map_or_else(
+        || empty_file_analysis(&digest, language),
+        |text| resolve_file_analysis(text, &digest, size, language, cache_root, telemetry),
+    );
+    let anchor_preview = text
+        .filter(|_| repository_anchor_rank(&relative).is_some())
+        .map(|text| utf8_prefix(text, MAX_ANCHOR_PREVIEW_BYTES).to_owned());
+    let instruction = if path.file_name().is_some_and(|name| name == "AGENTS.md")
+        && size <= MAX_INSTRUCTION_BYTES
+    {
+        text.map(|content| InstructionFile {
+            path: relative.clone(),
+            scope: instruction_scope(&relative),
+            digest: digest.clone(),
+            content: content.to_owned(),
+        })
+    } else {
+        None
+    };
+    let indexed = IndexedFile {
+        path: relative.clone(),
+        digest,
+        bytes: size,
+        lines: derived.lines,
+        language,
+        symbols: derived.symbols.clone(),
+        imports: derived.imports.clone(),
+        anchor_preview,
+    };
+    Ok(IndexedFileBuild {
+        relative,
+        indexed,
+        instruction,
+        derived,
+    })
+}
+
+fn empty_file_analysis(content_digest: &str, language: Language) -> CachedFileAnalysis {
+    CachedFileAnalysis {
+        schema_version: INDEX_CACHE_SCHEMA_VERSION,
+        content_digest: content_digest.to_owned(),
+        payload_digest: String::new(),
+        language,
+        lines: 0,
+        symbols: Vec::new(),
+        imports: Vec::new(),
+        identifier_lines: BTreeMap::new(),
+        identifiers_truncated: false,
+    }
+}
+
+fn resolve_file_analysis(
+    text: &str,
+    content_digest: &str,
+    file_bytes: u64,
+    language: Language,
+    cache_root: Option<&Path>,
+    telemetry: &mut IndexBuildTelemetry,
+) -> CachedFileAnalysis {
+    telemetry.cache_eligible_files = telemetry.cache_eligible_files.saturating_add(1);
+    let cached = cache_root.and_then(|root| {
+        match load_cached_analysis(root, content_digest, language, file_bytes) {
+            CacheLookup::Hit(entry) => {
+                telemetry.cache_hits = telemetry.cache_hits.saturating_add(1);
+                Some(entry)
+            }
+            CacheLookup::Miss => {
+                telemetry.cache_misses = telemetry.cache_misses.saturating_add(1);
+                None
+            }
+            CacheLookup::Rejected => {
+                telemetry.cache_misses = telemetry.cache_misses.saturating_add(1);
+                telemetry.rejected_cache_entries =
+                    telemetry.rejected_cache_entries.saturating_add(1);
+                None
+            }
+        }
+    });
+    if cache_root.is_none() {
+        telemetry.cache_misses = telemetry.cache_misses.saturating_add(1);
+    }
+    cached.unwrap_or_else(|| {
+        let entry = analyze_file(text, language, content_digest);
+        if let Some(root) = cache_root
+            && store_cached_analysis(root, &entry)
+        {
+            telemetry.cache_writes = telemetry.cache_writes.saturating_add(1);
+        }
+        entry
+    })
+}
+
+enum CacheLookup {
+    Hit(CachedFileAnalysis),
+    Miss,
+    Rejected,
+}
+
+fn analyze_file(text: &str, language: Language, content_digest: &str) -> CachedFileAnalysis {
+    let lines = text.lines().count();
+    let (symbols, imports) = extract_structure(text, language);
+    let mut identifier_lines = BTreeMap::<String, Vec<usize>>::new();
+    let mut occurrence_count = 0_usize;
+    let mut identifiers_truncated = false;
+    if is_code_language(language) {
+        'source: for (line_index, raw_line) in text.lines().enumerate() {
+            if is_comment_only(raw_line, language) {
+                continue;
+            }
+            let line = line_index.saturating_add(1);
+            for identifier in identifiers(raw_line) {
+                if occurrence_count == MAX_IDENTIFIER_OCCURRENCES_PER_FILE {
+                    identifiers_truncated = true;
+                    break 'source;
+                }
+                identifier_lines
+                    .entry(identifier.to_owned())
+                    .or_default()
+                    .push(line);
+                occurrence_count = occurrence_count.saturating_add(1);
+            }
+        }
+    }
+    let mut analysis = CachedFileAnalysis {
+        schema_version: INDEX_CACHE_SCHEMA_VERSION,
+        content_digest: content_digest.to_owned(),
+        payload_digest: String::new(),
+        language,
+        lines,
+        symbols,
+        imports,
+        identifier_lines,
+        identifiers_truncated,
+    };
+    analysis.payload_digest = analysis_payload_digest(&analysis);
+    analysis
+}
+
+fn analysis_payload_digest(analysis: &CachedFileAnalysis) -> String {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&analysis.schema_version.to_le_bytes());
+    hasher.update(analysis.content_digest.as_bytes());
+    hasher.update(format!("{:?}", analysis.language).as_bytes());
+    hasher.update(&analysis.lines.to_le_bytes());
+    for symbol in &analysis.symbols {
+        hasher.update(symbol.name.as_bytes());
+        hasher.update(symbol.kind.as_bytes());
+        hasher.update(&symbol.line.to_le_bytes());
+    }
+    for import in &analysis.imports {
+        hasher.update(import.as_bytes());
+    }
+    for (identifier, lines) in &analysis.identifier_lines {
+        hasher.update(identifier.as_bytes());
+        for line in lines {
+            hasher.update(&line.to_le_bytes());
+        }
+    }
+    hasher.update(&[u8::from(analysis.identifiers_truncated)]);
+    hasher.finalize().to_hex().to_string()
+}
+
+fn analysis_cache_path(cache_root: &Path, content_digest: &str, language: Language) -> PathBuf {
+    let key = blake3::hash(
+        format!("{INDEX_CACHE_SCHEMA_VERSION}\0{content_digest}\0{language:?}").as_bytes(),
+    )
+    .to_hex()
+    .to_string();
+    cache_root
+        .join(format!("v{INDEX_CACHE_SCHEMA_VERSION}"))
+        .join(&key[..2])
+        .join(format!("{key}.json"))
+}
+
+fn load_cached_analysis(
+    cache_root: &Path,
+    content_digest: &str,
+    language: Language,
+    file_bytes: u64,
+) -> CacheLookup {
+    let path = analysis_cache_path(cache_root, content_digest, language);
+    let file = match fs::File::open(&path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return CacheLookup::Miss,
+        Err(_) => return CacheLookup::Rejected,
+    };
+    let size = match file.metadata() {
+        Ok(metadata) => metadata.len(),
+        Err(_) => return CacheLookup::Rejected,
+    };
+    if size > MAX_INDEX_CACHE_ENTRY_BYTES {
+        return CacheLookup::Rejected;
+    }
+    let capacity = usize::try_from(size).unwrap_or_default();
+    let mut encoded = Vec::with_capacity(capacity);
+    if file
+        .take(MAX_INDEX_CACHE_ENTRY_BYTES.saturating_add(1))
+        .read_to_end(&mut encoded)
+        .is_err()
+        || u64::try_from(encoded.len()).unwrap_or(u64::MAX) > MAX_INDEX_CACHE_ENTRY_BYTES
+    {
+        return CacheLookup::Rejected;
+    }
+    let Ok(analysis) = serde_json::from_slice::<CachedFileAnalysis>(&encoded) else {
+        return CacheLookup::Rejected;
+    };
+    if validate_cached_analysis(&analysis, content_digest, language, file_bytes) {
+        CacheLookup::Hit(analysis)
+    } else {
+        CacheLookup::Rejected
+    }
+}
+
+fn validate_cached_analysis(
+    analysis: &CachedFileAnalysis,
+    content_digest: &str,
+    language: Language,
+    file_bytes: u64,
+) -> bool {
+    let max_lines = usize::try_from(file_bytes)
+        .unwrap_or(usize::MAX)
+        .saturating_add(1);
+    if analysis.schema_version != INDEX_CACHE_SCHEMA_VERSION
+        || analysis.content_digest != content_digest
+        || analysis.payload_digest != analysis_payload_digest(analysis)
+        || analysis.language != language
+        || analysis.lines > max_lines
+        || analysis.symbols.len() > MAX_SYMBOLS_PER_FILE
+        || analysis.imports.len() > MAX_IMPORTS_PER_FILE
+    {
+        return false;
+    }
+    if analysis.symbols.iter().any(|symbol| {
+        !valid_identifier(&symbol.name)
+            || !matches!(
+                symbol.kind.as_str(),
+                "function" | "struct" | "enum" | "trait" | "class" | "type" | "interface"
+            )
+            || symbol.line == 0
+            || symbol.line > analysis.lines
+    }) || analysis.imports.iter().any(|import| {
+        import.len() > 500
+            || import
+                .chars()
+                .any(|value| matches!(value, '\0' | '\r' | '\n'))
+    }) {
+        return false;
+    }
+    let mut occurrences = 0_usize;
+    for (identifier, lines) in &analysis.identifier_lines {
+        if !valid_identifier(identifier)
+            || lines
+                .windows(2)
+                .any(|window| window.first() >= window.get(1))
+            || lines
+                .iter()
+                .any(|line| *line == 0 || *line > analysis.lines)
+        {
+            return false;
+        }
+        occurrences = occurrences.saturating_add(lines.len());
+        if occurrences > MAX_IDENTIFIER_OCCURRENCES_PER_FILE {
+            return false;
+        }
+    }
+    true
+}
+
+fn valid_identifier(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_IDENTIFIER_BYTES
+        && value.bytes().enumerate().all(|(index, byte)| {
+            byte == b'_' || byte.is_ascii_alphabetic() || (index > 0 && byte.is_ascii_digit())
+        })
+}
+
+fn store_cached_analysis(cache_root: &Path, analysis: &CachedFileAnalysis) -> bool {
+    let path = analysis_cache_path(cache_root, &analysis.content_digest, analysis.language);
+    let Some(parent) = path.parent() else {
+        return false;
+    };
+    if fs::create_dir_all(parent).is_err() {
+        return false;
+    }
+    let Ok(canonical_root) = fs::canonicalize(cache_root) else {
+        return false;
+    };
+    let Ok(canonical_parent) = fs::canonicalize(parent) else {
+        return false;
+    };
+    if !canonical_parent.starts_with(&canonical_root) {
+        return false;
+    }
+    let Ok(mut temporary) = tempfile::NamedTempFile::new_in(parent) else {
+        return false;
+    };
+    if serde_json::to_writer(temporary.as_file_mut(), analysis).is_err()
+        || temporary.as_file_mut().flush().is_err()
+        || temporary.as_file().sync_all().is_err()
+    {
+        return false;
+    }
+    temporary.persist(&path).is_ok()
+}
+
+fn build_repository_graph(
     files: &BTreeMap<String, IndexedFile>,
-) -> Result<RepositoryGraph, ContextError> {
+    derived_by_path: &BTreeMap<String, CachedFileAnalysis>,
+) -> RepositoryGraph {
     let mut graph = RepositoryGraph::default();
     let mut definition_count = 0_usize;
     for file in files.values() {
@@ -510,30 +1021,19 @@ fn build_repository_graph(
         if !is_code_language(file.language) || file.bytes > MAX_INDEX_FILE_BYTES {
             continue;
         }
-        let path = root.join(Path::new(&file.path));
-        let (digest, _, retained) = fingerprint_and_retain(&path)?;
-        if digest != file.digest {
-            return Err(ContextError::ChangedDuringIndex(path));
-        }
-        let Some(text) = retained
-            .as_deref()
-            .and_then(|bytes| std::str::from_utf8(bytes).ok())
-        else {
+        let Some(derived) = derived_by_path.get(&file.path) else {
             continue;
         };
-        for (line_index, raw_line) in text.lines().enumerate() {
-            if is_comment_only(raw_line, file.language) {
+        graph.truncated |= derived.identifiers_truncated;
+        for (identifier, lines) in &derived.identifier_lines {
+            if !definition_names.contains(identifier) {
                 continue;
             }
-            let line = line_index.saturating_add(1);
-            for identifier in identifiers(raw_line) {
-                if !definition_names.contains(identifier) {
-                    continue;
-                }
+            for line in lines {
                 let is_definition = graph.definitions.get(identifier).is_some_and(|locations| {
                     locations
                         .iter()
-                        .any(|location| location.path == file.path && location.line == line)
+                        .any(|location| location.path == file.path && location.line == *line)
                 });
                 if is_definition {
                     continue;
@@ -545,7 +1045,7 @@ fn build_repository_graph(
                 }
                 references.push(SymbolReference {
                     path: file.path.clone(),
-                    line,
+                    line: *line,
                 });
                 reference_count = reference_count.saturating_add(1);
                 if reference_count == MAX_GRAPH_REFERENCES {
@@ -555,7 +1055,7 @@ fn build_repository_graph(
             }
         }
     }
-    Ok(graph)
+    graph
 }
 
 fn is_code_language(language: Language) -> bool {
@@ -660,6 +1160,7 @@ pub struct ContextPack {
     pub rendered_bytes: usize,
     pub budget_bytes: usize,
     pub truncated: bool,
+    pub retrieval: RetrievalTelemetry,
 }
 
 impl ContextPack {
@@ -710,6 +1211,7 @@ impl ContextPack {
             serde_json::to_string_pretty(&model_contract).map_err(ContextError::Serialization)?;
         let retrieved = index.retrieve(&contract.goal, 40);
         let graph_evidence = index.graph.query(&contract.goal, 8, 16);
+        let impact_evidence = index.query_change_impact(&contract.goal, 8, 16);
         let language_summary = index
             .languages
             .iter()
@@ -746,11 +1248,19 @@ impl ContextPack {
         append_fragments(&mut writer, fragments, &mut included_fragments);
         let mut cited_files = Vec::new();
         append_graph_evidence(&mut writer, &graph_evidence, &mut cited_files);
+        append_impact_evidence(&mut writer, &impact_evidence, &mut cited_files);
         append_topology(&mut writer, &retrieved, &mut cited_files);
         cited_files.sort();
         cited_files.dedup();
         let (rendered, truncated) = writer.finish();
         let rendered_bytes = rendered.len();
+        let retrieval = retrieval_telemetry(
+            &contract.goal,
+            &retrieved,
+            &cited_files,
+            &graph_evidence,
+            &impact_evidence,
+        );
         Ok(Self {
             repository_digest: index.digest.clone(),
             project_profile,
@@ -761,7 +1271,56 @@ impl ContextPack {
             rendered_bytes,
             budget_bytes: budget.max_bytes,
             truncated,
+            retrieval,
         })
+    }
+}
+
+fn retrieval_telemetry(
+    query: &str,
+    retrieved: &[&IndexedFile],
+    cited_files: &[String],
+    graph_evidence: &GraphQueryResult,
+    impact_evidence: &ImpactQueryResult,
+) -> RetrievalTelemetry {
+    let retrieved_paths = retrieved
+        .iter()
+        .map(|file| file.path.as_str())
+        .collect::<BTreeSet<_>>();
+    let cited_retrieved_files = cited_files
+        .iter()
+        .filter(|path| retrieved_paths.contains(path.as_str()))
+        .count();
+    let citation_coverage_basis_points = if retrieved.is_empty() {
+        10_000
+    } else {
+        u16::try_from(
+            cited_retrieved_files
+                .saturating_mul(10_000)
+                .checked_div(retrieved.len())
+                .unwrap_or_default()
+                .min(10_000),
+        )
+        .unwrap_or(10_000)
+    };
+    let graph_locations = graph_evidence
+        .symbols
+        .iter()
+        .map(|symbol| {
+            symbol
+                .definitions
+                .len()
+                .saturating_add(symbol.references.len())
+        })
+        .sum();
+    RetrievalTelemetry {
+        query_terms: query_tokens(query).len(),
+        retrieved_files: retrieved.len(),
+        cited_files: cited_files.len(),
+        graph_symbols: graph_evidence.symbols.len(),
+        graph_locations,
+        impact_files: impact_evidence.related.len(),
+        citation_coverage_basis_points,
     }
 }
 
@@ -1003,6 +1562,31 @@ fn append_graph_evidence(
     }
 }
 
+fn append_impact_evidence(
+    writer: &mut PackWriter,
+    result: &ImpactQueryResult,
+    cited: &mut Vec<String>,
+) {
+    let mut heading_pending = true;
+    for related in &result.related {
+        let heading = if heading_pending {
+            "\n# Change-impact evidence\nThese are one-hop lexical relationships from task-matched seed files. Use them to choose what to inspect; they are not proof of runtime impact.\n\n"
+        } else {
+            "\n"
+        };
+        let entry = format!(
+            "{heading}- {} [score {}]: {}",
+            related.path,
+            related.score,
+            related.reasons.join("; ")
+        );
+        if writer.push_optional(&entry) {
+            heading_pending = false;
+            cited.push(related.path.clone());
+        }
+    }
+}
+
 fn validate_fragments(fragments: &[ContextFragment]) -> Result<(), ContextError> {
     if fragments.len() > MAX_CONTEXT_FRAGMENTS {
         return Err(ContextError::InvalidFragment(format!(
@@ -1038,7 +1622,9 @@ fn extract_structure(text: &str, language: Language) -> (Vec<Symbol>, Vec<String
     let mut imports = Vec::new();
     for (index, raw_line) in text.lines().enumerate() {
         let line = raw_line.trim();
-        if let Some(import) = extract_import(line, language) {
+        if imports.len() < MAX_IMPORTS_PER_FILE
+            && let Some(import) = extract_import(line, language)
+        {
             imports.push(import);
         }
         if symbols.len() < MAX_SYMBOLS_PER_FILE
@@ -1246,6 +1832,64 @@ mod tests {
     }
 
     #[test]
+    fn content_addressed_cache_reuses_only_unchanged_file_analysis() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let cache = tempfile::tempdir().unwrap_or_else(|error| unreachable!("cache: {error}"));
+        fs::write(root.path().join("one.rs"), "pub fn one() {}\n")
+            .unwrap_or_else(|error| unreachable!("one: {error}"));
+        fs::write(root.path().join("two.rs"), "pub fn two() {}\n")
+            .unwrap_or_else(|error| unreachable!("two: {error}"));
+
+        let cold = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("cold index: {error}"));
+        assert_eq!(cold.telemetry.files_hashed, 2);
+        assert_eq!(cold.telemetry.cache_hits, 0);
+        assert_eq!(cold.telemetry.cache_misses, 2);
+        assert_eq!(cold.telemetry.cache_writes, 2);
+
+        let warm = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("warm index: {error}"));
+        assert_eq!(warm.index, cold.index);
+        assert_eq!(warm.telemetry.cache_hits, 2);
+        assert_eq!(warm.telemetry.cache_misses, 0);
+
+        fs::write(root.path().join("two.rs"), "pub fn changed() {}\n")
+            .unwrap_or_else(|error| unreachable!("changed: {error}"));
+        let incremental = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("incremental index: {error}"));
+        assert_eq!(incremental.telemetry.cache_hits, 1);
+        assert_eq!(incremental.telemetry.cache_misses, 1);
+        assert_eq!(incremental.index.files["two.rs"].symbols[0].name, "changed");
+    }
+
+    #[test]
+    fn malformed_cache_entry_is_rejected_and_repaired() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let cache = tempfile::tempdir().unwrap_or_else(|error| unreachable!("cache: {error}"));
+        let source = b"pub fn verified() {}\n";
+        fs::write(root.path().join("lib.rs"), source)
+            .unwrap_or_else(|error| unreachable!("source: {error}"));
+        let digest = blake3::hash(source).to_hex().to_string();
+        let cache_path = analysis_cache_path(cache.path(), &digest, Language::Rust);
+
+        let _cold = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("cold index: {error}"));
+        fs::write(&cache_path, b"{not-json")
+            .unwrap_or_else(|error| unreachable!("corrupt cache: {error}"));
+
+        let repaired = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("repair index: {error}"));
+        assert_eq!(repaired.telemetry.rejected_cache_entries, 1);
+        assert_eq!(repaired.telemetry.cache_writes, 1);
+        assert_eq!(repaired.index.files["lib.rs"].symbols[0].name, "verified");
+
+        let warm = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("warm index: {error}"));
+        assert_eq!(warm.telemetry.cache_hits, 1);
+        assert_eq!(warm.telemetry.rejected_cache_entries, 0);
+    }
+
+    #[test]
     fn repository_graph_links_definitions_to_bounded_lexical_references() {
         let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
         fs::create_dir(root.path().join("src"))
@@ -1279,6 +1923,35 @@ mod tests {
     }
 
     #[test]
+    fn change_impact_links_seed_definitions_and_seed_references() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::create_dir(root.path().join("src"))
+            .unwrap_or_else(|error| unreachable!("src: {error}"));
+        fs::write(
+            root.path().join("src/definition.rs"),
+            "pub struct Receipt;\n",
+        )
+        .unwrap_or_else(|error| unreachable!("definition: {error}"));
+        fs::write(
+            root.path().join("src/consumer.rs"),
+            "pub fn consume(value: Receipt) {}\n",
+        )
+        .unwrap_or_else(|error| unreachable!("consumer: {error}"));
+        let index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+
+        let downstream = index.query_change_impact("Receipt", 1, 8);
+        assert_eq!(downstream.seeds, vec!["src/definition.rs"]);
+        assert_eq!(downstream.related[0].path, "src/consumer.rs");
+        assert!(downstream.related[0].reasons[0].contains("references Receipt"));
+
+        let upstream = index.query_change_impact("consume", 1, 8);
+        assert_eq!(upstream.seeds, vec!["src/consumer.rs"]);
+        assert_eq!(upstream.related[0].path, "src/definition.rs");
+        assert!(upstream.related[0].reasons[0].contains("defines Receipt"));
+    }
+
+    #[test]
     fn graph_evidence_expands_initial_retrieval_and_context() {
         let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
         fs::create_dir(root.path().join("src"))
@@ -1302,8 +1975,10 @@ mod tests {
         let context = ContextPack::compile(&TaskContract::new("fix Receipt", "."), &index)
             .unwrap_or_else(|error| unreachable!("context: {error}"));
         assert!(context.rendered.contains("# Repository evidence graph"));
+        assert!(context.rendered.contains("# Change-impact evidence"));
         assert!(context.rendered.contains("src/consumer.rs:1"));
         assert!(context.cited_files.contains(&"src/consumer.rs".to_owned()));
+        assert_eq!(context.retrieval.impact_files, 1);
     }
 
     #[test]
