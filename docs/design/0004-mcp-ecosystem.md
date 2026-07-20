@@ -87,10 +87,9 @@ read-only or idempotent behavior from a server annotation. Parallel safety is
 off unless the local profile opts in and the tool is locally declared read-only
 and idempotent.
 
-For stdio, the child receives an empty environment plus the minimum platform
-variables needed to start the exact allowlisted executable and the explicitly
+For stdio, the child receives an empty environment plus only the explicitly
 brokered names. Shell interpretation is never used. The full command and all
-arguments are shown before snapshotting. Native stdio servers are labelled host
+arguments are fixed before snapshotting. Native stdio servers are labelled host
 execution; OCI-contained MCP is a later additive transport.
 
 For HTTP, the manifest URL must be canonical. Production endpoints require

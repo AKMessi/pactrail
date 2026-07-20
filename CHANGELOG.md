@@ -11,7 +11,8 @@ follow [Semantic Versioning](https://semver.org/).
 - Governed MCP 2025-11-25 support over bounded stdio and Streamable HTTP, with
   explicit inspect/snapshot lifecycle, atomic integrity-checked catalogs,
   local capability profiles, deterministic namespacing, selected
-  provenance-labelled context, lazy execution, and live identity/schema checks.
+  provenance-labelled context, lazy execution, shared run-local health state,
+  and live identity/schema checks.
 - `pactrail mcp init|check|list|inspect|snapshot|enable|disable`, interactive
   `/mcp`, MCP-aware `/tools` and `/status`, stable JSON diagnostics, and
   cancellation-aware administrative connections.

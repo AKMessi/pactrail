@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use async_trait::async_trait;
 use pactrail_core::{ApprovalBinding, ApprovalRequest, Capability};
 use pactrail_tools::{Tool, ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
@@ -17,6 +19,78 @@ pub struct McpTool {
     snapshot: Arc<McpSnapshot>,
     tool: McpSnapshotTool,
     cancellation: CancellationToken,
+    health: McpHealth,
+}
+
+/// Run-local health of one pinned MCP server.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[repr(u8)]
+#[serde(rename_all = "snake_case")]
+pub enum McpHealthState {
+    Ready = 0,
+    Connecting = 1,
+    Healthy = 2,
+    Stale = 3,
+    Failed = 4,
+}
+
+impl McpHealthState {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ready => "ready",
+            Self::Connecting => "connecting",
+            Self::Healthy => "healthy",
+            Self::Stale => "stale",
+            Self::Failed => "failed",
+        }
+    }
+
+    const fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::Connecting,
+            2 => Self::Healthy,
+            3 => Self::Stale,
+            4 => Self::Failed,
+            _ => Self::Ready,
+        }
+    }
+}
+
+/// Cloneable observation handle shared by all tools from one server snapshot.
+#[derive(Clone)]
+pub struct McpHealth {
+    server: Arc<str>,
+    state: Arc<AtomicU8>,
+}
+
+impl McpHealth {
+    fn new(server: &str) -> Self {
+        Self {
+            server: Arc::from(server),
+            state: Arc::new(AtomicU8::new(McpHealthState::Ready as u8)),
+        }
+    }
+
+    #[must_use]
+    pub fn server(&self) -> &str {
+        &self.server
+    }
+
+    #[must_use]
+    pub fn state(&self) -> McpHealthState {
+        McpHealthState::from_u8(self.state.load(Ordering::Acquire))
+    }
+
+    fn transition(&self, next: McpHealthState) -> McpHealthState {
+        McpHealthState::from_u8(self.state.swap(next as u8, Ordering::AcqRel))
+    }
+}
+
+/// Result of registering one pinned server catalog into a tool registry.
+pub struct McpRegistration {
+    pub tool_count: usize,
+    pub health: McpHealth,
 }
 
 impl McpTool {
@@ -31,6 +105,17 @@ impl McpTool {
         snapshot: Arc<McpSnapshot>,
         public_name: &str,
         cancellation: CancellationToken,
+    ) -> Result<Self, McpError> {
+        let health = McpHealth::new(&config.name);
+        Self::with_health(config, snapshot, public_name, cancellation, health)
+    }
+
+    fn with_health(
+        config: Arc<McpServerConfig>,
+        snapshot: Arc<McpSnapshot>,
+        public_name: &str,
+        cancellation: CancellationToken,
+        health: McpHealth,
     ) -> Result<Self, McpError> {
         config.validate()?;
         snapshot.validate(&config)?;
@@ -49,6 +134,7 @@ impl McpTool {
             snapshot,
             tool,
             cancellation,
+            health,
         })
     }
 
@@ -118,6 +204,7 @@ impl Tool for McpTool {
                 adapter: "mcp",
                 message: "validated MCP arguments unexpectedly lost their object shape".to_owned(),
             })?;
+        let previous_health = self.health.transition(McpHealthState::Connecting);
         let result = crate::transport::invoke(
             &self.config,
             &self.snapshot,
@@ -128,11 +215,32 @@ impl Tool for McpTool {
         )
         .await;
         if self.cancellation.is_cancelled() {
+            self.health.transition(McpHealthState::Failed);
             return Err(ToolError::Cancelled {
                 operation: self.tool.public_name.clone(),
             });
         }
-        let result = result.map_err(|error| adapter_error(&error))?;
+        let mut result = match result {
+            Ok(result) => {
+                self.health.transition(McpHealthState::Healthy);
+                result
+            }
+            Err(error) => {
+                let health = if matches!(error, McpError::IdentityChanged(_)) {
+                    McpHealthState::Stale
+                } else {
+                    McpHealthState::Failed
+                };
+                self.health.transition(health);
+                return Err(adapter_error_with_health(&error, health));
+            }
+        };
+        result.observed_effects.push(format!(
+            "mcp.health:{}:{}->{}",
+            self.health.server(),
+            previous_health.as_str(),
+            McpHealthState::Healthy.as_str()
+        ));
         Ok(ToolOutput {
             content: result.content,
             summary: result.summary,
@@ -154,8 +262,23 @@ pub fn register_snapshot(
     snapshot: &Arc<McpSnapshot>,
     cancellation: &CancellationToken,
 ) -> Result<usize, McpError> {
+    Ok(register_snapshot_with_health(registry, config, snapshot, cancellation)?.tool_count)
+}
+
+/// Registers a pinned server catalog and returns its shared run-local health handle.
+///
+/// # Errors
+///
+/// Returns an error for an invalid snapshot or any collision with an existing tool.
+pub fn register_snapshot_with_health(
+    registry: &mut ToolRegistry,
+    config: &Arc<McpServerConfig>,
+    snapshot: &Arc<McpSnapshot>,
+    cancellation: &CancellationToken,
+) -> Result<McpRegistration, McpError> {
     config.validate()?;
     snapshot.validate(config)?;
+    let health = McpHealth::new(&config.name);
     let mut names = snapshot
         .tools
         .iter()
@@ -163,14 +286,18 @@ pub fn register_snapshot(
         .collect::<Vec<_>>();
     names.sort();
     for name in &names {
-        registry.register(McpTool::new(
+        registry.register(McpTool::with_health(
             config.clone(),
             snapshot.clone(),
             name,
             cancellation.clone(),
+            health.clone(),
         )?)?;
     }
-    Ok(names.len())
+    Ok(McpRegistration {
+        tool_count: names.len(),
+        health,
+    })
 }
 
 fn approval_resource(
@@ -255,6 +382,14 @@ fn adapter_error(error: &McpError) -> ToolError {
     }
 }
 
+fn adapter_error_with_health(error: &McpError, health: McpHealthState) -> ToolError {
+    let message = format!("[health={}] {error}", health.as_str());
+    ToolError::Adapter {
+        adapter: "mcp",
+        message: bounded_message(&message, 2_048),
+    }
+}
+
 fn bounded_message(value: &str, max_bytes: usize) -> String {
     if value.len() <= max_bytes {
         return value.to_owned();
@@ -318,5 +453,20 @@ mod tests {
         );
         assert!(!resource.contains("do-not-log"));
         assert!(resource.contains("arguments_digest"));
+    }
+
+    #[test]
+    fn server_health_is_shared_and_transitions_are_observable() {
+        let health = super::McpHealth::new("demo");
+        let observer = health.clone();
+        assert_eq!(health.state(), super::McpHealthState::Ready);
+        assert_eq!(
+            health.transition(super::McpHealthState::Connecting),
+            super::McpHealthState::Ready
+        );
+        assert_eq!(observer.state(), super::McpHealthState::Connecting);
+        health.transition(super::McpHealthState::Stale);
+        assert_eq!(observer.state(), super::McpHealthState::Stale);
+        assert_eq!(observer.server(), "demo");
     }
 }

@@ -136,6 +136,9 @@ pactrail ❯ Fix the parser regression and add a test.
   servers require HTTPS except for explicit literal loopback HTTP; redirects,
   URL credentials/query secrets, OAuth discovery, implicit retries, and hidden
   replay are disabled.
+- A shared run-local health handle moves through ready, connecting, healthy,
+  stale, and failed states. Success traces retain the health transition;
+  identity/schema drift becomes stale and other failures remain explicit.
 - `/mcp`, `/tools`, and `/status` expose configured state and pinned tools in the
   interactive CLI. All lifecycle operations also have stable JSON-capable
   subcommands for automation.

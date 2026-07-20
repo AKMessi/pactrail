@@ -21,7 +21,10 @@ pub use snapshot::{
     MCP_PROTOCOL_VERSION, MCP_SNAPSHOT_SCHEMA, McpContextCapture, McpContextKind,
     McpDiscoveredCatalog, McpDiscoveredTool, McpServerIdentity, McpSnapshot, McpSnapshotTool,
 };
-pub use tool::{McpTool, register_snapshot};
+pub use tool::{
+    McpHealth, McpHealthState, McpRegistration, McpTool, register_snapshot,
+    register_snapshot_with_health,
+};
 pub use transport::{discover, transport_runtime_digest};
 
 use thiserror::Error;
