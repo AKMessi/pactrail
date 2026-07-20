@@ -7,7 +7,7 @@ so a repository cannot cause arbitrary extension code to load.
 
 The facade crate is `pactrail-sdk`. During the pre-1.0 series it is consumed
 from the repository or a pinned Git revision; crates.io publication and the
-SemVer stability window are v1 release work. `SDK_API_REVISION` is currently 1.
+SemVer stability window are v1 release work. `SDK_API_REVISION` is currently 2.
 
 ## Custom model provider
 
@@ -103,3 +103,18 @@ The compile-time compatibility fixture at
 `crates/pactrail-sdk/tests/embedding_api.rs` implements both extension types and
 assembles the real kernel. MCP extensions use the same `ToolRegistry` through
 `pactrail_sdk::mcp::register_snapshot`; they do not bypass policy or traces.
+
+## Optional language-server evidence
+
+The context module exposes `LspReferenceSnapshot` and
+`RepositoryIndex::apply_lsp_references`. An embedding host may operate its own
+language server boundary, normalize bounded reference locations, create a
+snapshot for the exact current repository digest, and explicitly merge it
+before compiling a `ContextPack`. Pactrail validates snapshot integrity, known
+symbols, current paths, and line bounds and retains lexical, language-server,
+or corroborated provenance.
+
+This API does not start or communicate with a language server. Process/network
+authority, protocol lifecycle, timeouts, cancellation, and executable trust
+remain the embedding host's responsibility. Invalid or stale snapshots fail
+before graph mutation.

@@ -84,6 +84,14 @@ validation.
   current file is hashed before lookup; entries cannot provide raw source,
   previews, or `AGENTS.md` contents. Strict bounds and payload validation reject
   corruption, while cache failure degrades to current-byte analysis.
+- Embedded parser work is capped by source bytes, progress callbacks, visited
+  nodes, symbols, and imports. Parse errors are observable; unsupported or
+  exhausted parses use the lexical fallback. Tree-sitter remains in-process
+  native code and is not treated as a sandbox.
+- Pactrail never starts a language server during context compilation. Optional
+  LSP references enter only through an exact-repository, integrity-bound,
+  bounded snapshot; unknown symbols, paths, lines, stale digests, and tampering
+  fail before graph mutation. They remain advisory navigation evidence.
 
 These controls reduce durable prompt poisoning. They cannot determine whether a
 human-authored convention or a previously applied change contains bad advice;

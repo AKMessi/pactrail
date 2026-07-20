@@ -15,9 +15,17 @@ const MAX_INSTRUCTION_BYTES: u64 = 256 * 1024;
 const MAX_SYMBOLS_PER_FILE: usize = 2_000;
 const MAX_IMPORTS_PER_FILE: usize = 4_096;
 const MAX_IDENTIFIER_OCCURRENCES_PER_FILE: usize = 100_000;
+#[cfg(feature = "tree-sitter")]
+const MAX_STRUCTURAL_PARSE_BYTES: usize = 1024 * 1024;
+#[cfg(feature = "tree-sitter")]
+const MAX_STRUCTURAL_NODES_PER_FILE: usize = 250_000;
+#[cfg(feature = "tree-sitter")]
+const MAX_PARSE_PROGRESS_CALLBACKS: usize = 1_000_000;
 const MAX_GRAPH_DEFINITIONS: usize = 200_000;
 const MAX_GRAPH_REFERENCES: usize = 500_000;
 const MAX_REFERENCES_PER_SYMBOL: usize = 256;
+const MAX_LSP_REFERENCES: usize = 200_000;
+const MAX_REFERENCE_PROVIDER_BYTES: usize = 128;
 const MAX_IDENTIFIER_BYTES: usize = 128;
 const MAX_ANCHOR_PREVIEW_BYTES: usize = 2 * 1024;
 const MAX_CONTEXT_FRAGMENTS: usize = 64;
@@ -30,8 +38,11 @@ const ESTIMATED_BYTES_PER_TOKEN: u64 = 3;
 const CONTEXT_PACK_INPUT_SHARE: u64 = 4;
 const TRUNCATION_NOTICE: &str =
     "\n\n[Context pack reached its model-derived budget. Use tools to inspect omitted sources.]";
-const INDEX_CACHE_SCHEMA_VERSION: u32 = 1;
+const INDEX_CACHE_SCHEMA_VERSION: u32 = 2;
 const MAX_INDEX_CACHE_ENTRY_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Current schema for optional language-server reference snapshots.
+pub const LSP_REFERENCE_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 
 /// Coarse language classification used by the context compiler.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -57,6 +68,15 @@ pub enum Language {
     Other,
 }
 
+/// Parser used to derive a file's bounded symbols and imports.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StructureMethod {
+    TreeSitter,
+    #[default]
+    Lexical,
+}
+
 /// One symbol-like declaration with source provenance.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Symbol {
@@ -73,18 +93,78 @@ pub struct SymbolLocation {
     pub kind: String,
 }
 
-/// One bounded lexical reference to a project-defined symbol.
+/// Provenance of one repository-graph reference location.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReferenceMethod {
+    #[default]
+    Lexical,
+    LanguageServer,
+    Corroborated,
+}
+
+impl ReferenceMethod {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Lexical => "lexical",
+            Self::LanguageServer => "language_server",
+            Self::Corroborated => "corroborated",
+        }
+    }
+}
+
+/// One bounded reference to a project-defined symbol with explicit provenance.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SymbolReference {
     pub path: String,
     pub line: usize,
+    #[serde(default)]
+    pub method: ReferenceMethod,
+}
+
+/// One reference exported by an explicitly operated language server adapter.
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LspReference {
+    pub symbol: String,
+    pub path: String,
+    pub line: usize,
+}
+
+/// Integrity-bound optional language-server evidence for one repository digest.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LspReferenceSnapshot {
+    pub schema_version: u32,
+    pub repository_digest: String,
+    pub provider: String,
+    pub references: Vec<LspReference>,
+    pub digest: String,
+}
+
+/// Provenance retained after an external reference snapshot is merged.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ReferenceOverlayProvenance {
+    pub provider: String,
+    pub snapshot_digest: String,
+    pub accepted_references: usize,
+    pub corroborated_references: usize,
+    pub truncated: bool,
+}
+
+/// Result of applying an explicit language-server reference snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LspReferenceMerge {
+    pub accepted_references: usize,
+    pub corroborated_references: usize,
+    pub truncated: bool,
 }
 
 /// Deterministic repository-wide symbol and reference index.
 ///
-/// References are deliberately labelled lexical evidence. They are navigation
-/// hints derived from identifier occurrences, not claims about runtime call
-/// flow or type resolution.
+/// References are navigation hints, not claims about runtime call flow.
+/// Lexical, optional language-server, and corroborated evidence remain distinct.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RepositoryGraph {
     pub definitions: BTreeMap<String, Vec<SymbolLocation>>,
@@ -112,7 +192,7 @@ pub struct GraphQueryResult {
     pub graph_truncated: bool,
 }
 
-/// One bounded path related to task-matched seed files by lexical graph evidence.
+/// One bounded path related to task-matched seed files by repository-graph evidence.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ImpactPathEvidence {
     pub path: String,
@@ -142,6 +222,10 @@ pub struct IndexedFile {
     pub bytes: u64,
     pub lines: usize,
     pub language: Language,
+    #[serde(default)]
+    pub structure_method: StructureMethod,
+    #[serde(default)]
+    pub syntax_errors: bool,
     pub symbols: Vec<Symbol>,
     pub imports: Vec<String>,
     /// Bounded current content for conventional project overview files.
@@ -238,6 +322,10 @@ pub struct IndexBuildTelemetry {
     pub cache_misses: usize,
     pub cache_writes: usize,
     pub rejected_cache_entries: usize,
+    pub tree_sitter_files: usize,
+    pub lexical_files: usize,
+    pub unscanned_files: usize,
+    pub syntax_error_files: usize,
 }
 
 /// A repository index together with deterministic cache telemetry.
@@ -264,9 +352,12 @@ pub struct RetrievalTelemetry {
 #[serde(deny_unknown_fields)]
 struct CachedFileAnalysis {
     schema_version: u32,
+    analysis_profile: String,
     content_digest: String,
     payload_digest: String,
     language: Language,
+    structure_method: StructureMethod,
+    syntax_errors: bool,
     lines: usize,
     symbols: Vec<Symbol>,
     imports: Vec<String>,
@@ -282,6 +373,8 @@ pub struct RepositoryIndex {
     pub languages: BTreeMap<Language, usize>,
     #[serde(default)]
     pub graph: RepositoryGraph,
+    #[serde(default)]
+    pub reference_overlays: Vec<ReferenceOverlayProvenance>,
     pub digest: String,
 }
 
@@ -322,13 +415,24 @@ impl RepositoryIndex {
         let mut language_counts = BTreeMap::new();
         let mut derived_by_path = BTreeMap::new();
         let mut telemetry = IndexBuildTelemetry::default();
+        let excluded_cache = cache_root.map(|path| {
+            if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                root.join(path)
+            }
+        });
         for item in WalkBuilder::new(root)
             .hidden(false)
             .git_ignore(true)
             .git_global(false)
-            .filter_entry(|entry| {
+            .filter_entry(move |entry| {
                 let name = entry.file_name().to_string_lossy();
-                name != ".git" && name != ".pactrail"
+                name != ".git"
+                    && name != ".pactrail"
+                    && excluded_cache
+                        .as_ref()
+                        .is_none_or(|cache| !entry.path().starts_with(cache))
             })
             .build()
         {
@@ -353,6 +457,7 @@ impl RepositoryIndex {
                 instructions: directives,
                 languages: language_counts,
                 graph,
+                reference_overlays: Vec::new(),
                 digest,
             },
             telemetry,
@@ -429,9 +534,10 @@ impl RepositoryIndex {
 
     /// Finds files plausibly affected by task-matched seed files.
     ///
-    /// Relationships come from bounded project-definition and lexical-reference
-    /// evidence. Scores and reasons are deterministic navigation hints, not
-    /// type-resolved dependency or runtime-impact claims.
+    /// Relationships come from bounded project-definition and reference
+    /// evidence. Reference reasons retain their lexical, language-server, or
+    /// corroborated provenance. Scores and reasons are deterministic navigation
+    /// hints, not type-resolved dependency or runtime-impact claims.
     #[must_use]
     pub fn query_change_impact(
         &self,
@@ -468,9 +574,11 @@ impl RepositoryIndex {
             let definition_is_seed = definitions
                 .iter()
                 .any(|location| seeds.contains(&location.path));
-            let reference_is_seed = references
+            let seed_reference_methods = references
                 .iter()
-                .any(|location| seeds.contains(&location.path));
+                .filter(|location| seeds.contains(&location.path))
+                .map(|location| location.method.as_str())
+                .collect::<BTreeSet<_>>();
             if definition_is_seed {
                 for reference in references
                     .iter()
@@ -480,11 +588,18 @@ impl RepositoryIndex {
                         &mut related,
                         &reference.path,
                         3,
-                        format!("references {symbol} defined by a seed"),
+                        format!(
+                            "references {symbol} defined by a seed ({} evidence)",
+                            reference.method.as_str()
+                        ),
                     );
                 }
             }
-            if reference_is_seed {
+            if !seed_reference_methods.is_empty() {
+                let provenance = seed_reference_methods
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .join("+");
                 for definition in definitions
                     .iter()
                     .filter(|location| !seeds.contains(&location.path))
@@ -493,7 +608,7 @@ impl RepositoryIndex {
                         &mut related,
                         &definition.path,
                         4,
-                        format!("defines {symbol} referenced by a seed"),
+                        format!("defines {symbol} referenced by a seed ({provenance} evidence)"),
                     );
                 }
             }
@@ -523,6 +638,221 @@ impl RepositoryIndex {
             graph_truncated: self.graph.truncated,
         }
     }
+
+    /// Merges one explicit, integrity-checked language-server reference snapshot.
+    ///
+    /// Pactrail never starts an LSP here. An operator or embedder must produce
+    /// the snapshot separately. Every reference is validated against the exact
+    /// current repository digest, known definitions, paths, and line bounds
+    /// before any graph mutation occurs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid integrity, stale repository identity,
+    /// unknown symbols or paths, invalid lines, or a second overlay.
+    pub fn apply_lsp_references(
+        &mut self,
+        snapshot: &LspReferenceSnapshot,
+    ) -> Result<LspReferenceMerge, ContextError> {
+        snapshot.validate()?;
+        if !self.reference_overlays.is_empty() {
+            return Err(ContextError::InvalidReferenceSnapshot(
+                "an index accepts at most one external reference snapshot".to_owned(),
+            ));
+        }
+        if snapshot.repository_digest != self.digest {
+            return Err(ContextError::InvalidReferenceSnapshot(
+                "language-server references target a different repository digest".to_owned(),
+            ));
+        }
+        for reference in &snapshot.references {
+            if !self.graph.definitions.contains_key(&reference.symbol) {
+                return Err(ContextError::InvalidReferenceSnapshot(format!(
+                    "reference names unknown project symbol {:?}",
+                    reference.symbol
+                )));
+            }
+            let Some(file) = self.files.get(&reference.path) else {
+                return Err(ContextError::InvalidReferenceSnapshot(format!(
+                    "reference names unknown repository path {:?}",
+                    reference.path
+                )));
+            };
+            if reference.line == 0 || reference.line > file.lines {
+                return Err(ContextError::InvalidReferenceSnapshot(format!(
+                    "reference line {} is outside {:?}",
+                    reference.line, reference.path
+                )));
+            }
+        }
+        let mut total_references = self.graph.references.values().map(Vec::len).sum::<usize>();
+        let mut accepted_references = 0_usize;
+        let mut corroborated_references = 0_usize;
+        let mut truncated = false;
+        for external in &snapshot.references {
+            let references = self
+                .graph
+                .references
+                .entry(external.symbol.clone())
+                .or_default();
+            if let Some(existing) = references.iter_mut().find(|reference| {
+                reference.path == external.path && reference.line == external.line
+            }) {
+                existing.method = ReferenceMethod::Corroborated;
+                accepted_references = accepted_references.saturating_add(1);
+                corroborated_references = corroborated_references.saturating_add(1);
+                continue;
+            }
+            if references.len() == MAX_REFERENCES_PER_SYMBOL
+                || total_references == MAX_GRAPH_REFERENCES
+            {
+                truncated = true;
+                continue;
+            }
+            references.push(SymbolReference {
+                path: external.path.clone(),
+                line: external.line,
+                method: ReferenceMethod::LanguageServer,
+            });
+            accepted_references = accepted_references.saturating_add(1);
+            total_references = total_references.saturating_add(1);
+        }
+        for references in self.graph.references.values_mut() {
+            references.sort_by(|left, right| {
+                left.path
+                    .cmp(&right.path)
+                    .then_with(|| left.line.cmp(&right.line))
+                    .then_with(|| left.method.cmp(&right.method))
+            });
+        }
+        self.graph.truncated |= truncated;
+        let mut digest = blake3::Hasher::new();
+        digest.update(b"pactrail-index-lsp-v1\0");
+        digest.update(self.digest.as_bytes());
+        digest.update(snapshot.digest.as_bytes());
+        self.digest = digest.finalize().to_hex().to_string();
+        self.reference_overlays.push(ReferenceOverlayProvenance {
+            provider: snapshot.provider.clone(),
+            snapshot_digest: snapshot.digest.clone(),
+            accepted_references,
+            corroborated_references,
+            truncated,
+        });
+        Ok(LspReferenceMerge {
+            accepted_references,
+            corroborated_references,
+            truncated,
+        })
+    }
+}
+
+impl LspReferenceSnapshot {
+    /// Creates a canonical integrity-bound snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid repository/provider fields or reference bounds.
+    pub fn new(
+        repository_digest: impl Into<String>,
+        provider: impl Into<String>,
+        mut references: Vec<LspReference>,
+    ) -> Result<Self, ContextError> {
+        references.sort();
+        references.dedup();
+        let mut snapshot = Self {
+            schema_version: LSP_REFERENCE_SNAPSHOT_SCHEMA_VERSION,
+            repository_digest: repository_digest.into(),
+            provider: provider.into(),
+            references,
+            digest: String::new(),
+        };
+        snapshot.digest = snapshot.computed_digest();
+        snapshot.validate()?;
+        Ok(snapshot)
+    }
+
+    /// Verifies schema, canonical ordering, field bounds, and integrity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the snapshot is malformed or has been modified.
+    pub fn validate(&self) -> Result<(), ContextError> {
+        if self.schema_version != LSP_REFERENCE_SNAPSHOT_SCHEMA_VERSION {
+            return Err(ContextError::InvalidReferenceSnapshot(format!(
+                "unsupported language-server snapshot schema {}",
+                self.schema_version
+            )));
+        }
+        if !valid_blake3_digest(&self.repository_digest) {
+            return Err(ContextError::InvalidReferenceSnapshot(
+                "repository digest must be 64 lowercase hexadecimal characters".to_owned(),
+            ));
+        }
+        if self.provider.trim().is_empty()
+            || self.provider.len() > MAX_REFERENCE_PROVIDER_BYTES
+            || self.provider.chars().any(char::is_control)
+        {
+            return Err(ContextError::InvalidReferenceSnapshot(format!(
+                "provider must contain 1 to {MAX_REFERENCE_PROVIDER_BYTES} bytes and no control characters"
+            )));
+        }
+        if self.references.len() > MAX_LSP_REFERENCES {
+            return Err(ContextError::InvalidReferenceSnapshot(format!(
+                "snapshot exceeds {MAX_LSP_REFERENCES} references"
+            )));
+        }
+        if self.references.windows(2).any(|pair| pair[0] >= pair[1]) {
+            return Err(ContextError::InvalidReferenceSnapshot(
+                "references must be strictly sorted and unique".to_owned(),
+            ));
+        }
+        if self.references.iter().any(|reference| {
+            !valid_identifier(&reference.symbol)
+                || reference.path.is_empty()
+                || reference.path.len() > 4_096
+                || reference.path.chars().any(char::is_control)
+                || reference.line == 0
+        }) {
+            return Err(ContextError::InvalidReferenceSnapshot(
+                "one or more references contain invalid symbol, path, or line fields".to_owned(),
+            ));
+        }
+        if self.digest != self.computed_digest() {
+            return Err(ContextError::InvalidReferenceSnapshot(
+                "language-server reference snapshot integrity check failed".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn computed_digest(&self) -> String {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"pactrail-lsp-reference-snapshot-v1\0");
+        hash_snapshot_field(&mut hasher, self.repository_digest.as_bytes());
+        hash_snapshot_field(&mut hasher, self.provider.as_bytes());
+        for reference in &self.references {
+            hash_snapshot_field(&mut hasher, reference.symbol.as_bytes());
+            hash_snapshot_field(&mut hasher, reference.path.as_bytes());
+            hasher.update(
+                &u64::try_from(reference.line)
+                    .unwrap_or(u64::MAX)
+                    .to_le_bytes(),
+            );
+        }
+        hasher.finalize().to_hex().to_string()
+    }
+}
+
+fn hash_snapshot_field(hasher: &mut blake3::Hasher, value: &[u8]) {
+    hasher.update(&u64::try_from(value.len()).unwrap_or(u64::MAX).to_le_bytes());
+    hasher.update(value);
+}
+
+fn valid_blake3_digest(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn direct_file_score(file: &IndexedFile, tokens: &BTreeSet<String>) -> usize {
@@ -555,7 +885,7 @@ fn add_impact_reason(
 }
 
 impl RepositoryGraph {
-    /// Finds project-defined symbols and their bounded lexical references.
+    /// Finds project-defined symbols and their bounded reference evidence.
     ///
     /// Results are ranked by exact or partial query-token overlap, then by a
     /// stable case-insensitive symbol name. Zero limits return an empty result.
@@ -686,6 +1016,21 @@ fn build_indexed_file(
         || empty_file_analysis(&digest, language),
         |text| resolve_file_analysis(text, &digest, size, language, cache_root, telemetry),
     );
+    if text.is_none() {
+        telemetry.unscanned_files = telemetry.unscanned_files.saturating_add(1);
+    } else {
+        match derived.structure_method {
+            StructureMethod::TreeSitter => {
+                telemetry.tree_sitter_files = telemetry.tree_sitter_files.saturating_add(1);
+            }
+            StructureMethod::Lexical => {
+                telemetry.lexical_files = telemetry.lexical_files.saturating_add(1);
+            }
+        }
+    }
+    if derived.syntax_errors {
+        telemetry.syntax_error_files = telemetry.syntax_error_files.saturating_add(1);
+    }
     let anchor_preview = text
         .filter(|_| repository_anchor_rank(&relative).is_some())
         .map(|text| utf8_prefix(text, MAX_ANCHOR_PREVIEW_BYTES).to_owned());
@@ -707,6 +1052,8 @@ fn build_indexed_file(
         bytes: size,
         lines: derived.lines,
         language,
+        structure_method: derived.structure_method,
+        syntax_errors: derived.syntax_errors,
         symbols: derived.symbols.clone(),
         imports: derived.imports.clone(),
         anchor_preview,
@@ -722,9 +1069,12 @@ fn build_indexed_file(
 fn empty_file_analysis(content_digest: &str, language: Language) -> CachedFileAnalysis {
     CachedFileAnalysis {
         schema_version: INDEX_CACHE_SCHEMA_VERSION,
+        analysis_profile: analysis_profile().to_owned(),
         content_digest: content_digest.to_owned(),
         payload_digest: String::new(),
         language,
+        structure_method: StructureMethod::Lexical,
+        syntax_errors: false,
         lines: 0,
         symbols: Vec::new(),
         imports: Vec::new(),
@@ -782,7 +1132,7 @@ enum CacheLookup {
 
 fn analyze_file(text: &str, language: Language, content_digest: &str) -> CachedFileAnalysis {
     let lines = text.lines().count();
-    let (symbols, imports) = extract_structure(text, language);
+    let structure = extract_best_structure(text, language);
     let mut identifier_lines = BTreeMap::<String, Vec<usize>>::new();
     let mut occurrence_count = 0_usize;
     let mut identifiers_truncated = false;
@@ -807,12 +1157,15 @@ fn analyze_file(text: &str, language: Language, content_digest: &str) -> CachedF
     }
     let mut analysis = CachedFileAnalysis {
         schema_version: INDEX_CACHE_SCHEMA_VERSION,
+        analysis_profile: analysis_profile().to_owned(),
         content_digest: content_digest.to_owned(),
         payload_digest: String::new(),
         language,
+        structure_method: structure.method,
+        syntax_errors: structure.syntax_errors,
         lines,
-        symbols,
-        imports,
+        symbols: structure.symbols,
+        imports: structure.imports,
         identifier_lines,
         identifiers_truncated,
     };
@@ -823,8 +1176,11 @@ fn analyze_file(text: &str, language: Language, content_digest: &str) -> CachedF
 fn analysis_payload_digest(analysis: &CachedFileAnalysis) -> String {
     let mut hasher = blake3::Hasher::new();
     hasher.update(&analysis.schema_version.to_le_bytes());
+    hasher.update(analysis.analysis_profile.as_bytes());
     hasher.update(analysis.content_digest.as_bytes());
     hasher.update(format!("{:?}", analysis.language).as_bytes());
+    hasher.update(format!("{:?}", analysis.structure_method).as_bytes());
+    hasher.update(&[u8::from(analysis.syntax_errors)]);
     hasher.update(&analysis.lines.to_le_bytes());
     for symbol in &analysis.symbols {
         hasher.update(symbol.name.as_bytes());
@@ -846,7 +1202,11 @@ fn analysis_payload_digest(analysis: &CachedFileAnalysis) -> String {
 
 fn analysis_cache_path(cache_root: &Path, content_digest: &str, language: Language) -> PathBuf {
     let key = blake3::hash(
-        format!("{INDEX_CACHE_SCHEMA_VERSION}\0{content_digest}\0{language:?}").as_bytes(),
+        format!(
+            "{INDEX_CACHE_SCHEMA_VERSION}\0{}\0{content_digest}\0{language:?}",
+            analysis_profile()
+        )
+        .as_bytes(),
     )
     .to_hex()
     .to_string();
@@ -905,6 +1265,7 @@ fn validate_cached_analysis(
         .unwrap_or(usize::MAX)
         .saturating_add(1);
     if analysis.schema_version != INDEX_CACHE_SCHEMA_VERSION
+        || analysis.analysis_profile != analysis_profile()
         || analysis.content_digest != content_digest
         || analysis.payload_digest != analysis_payload_digest(analysis)
         || analysis.language != language
@@ -948,6 +1309,14 @@ fn validate_cached_analysis(
         }
     }
     true
+}
+
+const fn analysis_profile() -> &'static str {
+    if cfg!(feature = "tree-sitter") {
+        "tree-sitter-v1"
+    } else {
+        "lexical-v1"
+    }
 }
 
 fn valid_identifier(value: &str) -> bool {
@@ -1046,6 +1415,7 @@ fn build_repository_graph(
                 references.push(SymbolReference {
                     path: file.path.clone(),
                     line: *line,
+                    method: ReferenceMethod::Lexical,
                 });
                 reference_count = reference_count.saturating_add(1);
                 if reference_count == MAX_GRAPH_REFERENCES {
@@ -1219,6 +1589,24 @@ impl ContextPack {
             .collect::<Vec<_>>()
             .join(", ");
         let project_profile = deterministic_project_profile(index);
+        let reference_summary = if index.reference_overlays.is_empty() {
+            "lexical only".to_owned()
+        } else {
+            index
+                .reference_overlays
+                .iter()
+                .map(|overlay| {
+                    format!(
+                        "language-server {} [{} accepted, {} corroborated, truncated={}]",
+                        overlay.provider,
+                        overlay.accepted_references,
+                        overlay.corroborated_references,
+                        overlay.truncated
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
         let root_instruction = index
             .instructions
             .iter()
@@ -1234,7 +1622,7 @@ impl ContextPack {
             },
         );
         let required = format!(
-            "# Task contract\n{contract_json}\n\nThe model-visible workspace root is `.`. Every tool path must be relative to it; host paths are unavailable.\n\n# Repository\nDigest: {}\nFiles: {}\nLanguages: {language_summary}\nDeterministic project profile: {project_profile}\n\n# Repository-wide instructions\n{global_instructions}\n\nNested AGENTS.md files apply only to files beneath their declared virtual directory scope.\n",
+            "# Task contract\n{contract_json}\n\nThe model-visible workspace root is `.`. Every tool path must be relative to it; host paths are unavailable.\n\n# Repository\nDigest: {}\nFiles: {}\nLanguages: {language_summary}\nReference evidence: {reference_summary}\nDeterministic project profile: {project_profile}\n\n# Repository-wide instructions\n{global_instructions}\n\nNested AGENTS.md files apply only to files beneath their declared virtual directory scope.\n",
             index.digest,
             index.files.len(),
         );
@@ -1524,7 +1912,7 @@ fn append_graph_evidence(
     let mut heading_pending = true;
     for symbol in &result.symbols {
         let heading = if heading_pending {
-            "\n# Repository evidence graph\nProject-defined symbols are linked to bounded lexical identifier references. Use these as navigation hints, not proof of runtime call flow; read current source before editing.\n\n"
+            "\n# Repository evidence graph\nProject-defined symbols are linked to bounded references with explicit lexical, language-server, or corroborated provenance. Use these as navigation hints, not proof of runtime call flow; read current source before editing.\n\n"
         } else {
             "\n"
         };
@@ -1537,11 +1925,18 @@ fn append_graph_evidence(
         let references = symbol
             .references
             .iter()
-            .map(|reference| format!("{}:{}", reference.path, reference.line))
+            .map(|reference| {
+                format!(
+                    "{}:{} [{}]",
+                    reference.path,
+                    reference.line,
+                    reference.method.as_str()
+                )
+            })
             .collect::<Vec<_>>()
             .join(", ");
         let entry = format!(
-            "{heading}- {}\n  definitions: {definitions}\n  lexical references: {references}",
+            "{heading}- {}\n  definitions: {definitions}\n  references: {references}",
             symbol.name
         );
         if writer.push_optional(&entry) {
@@ -1570,7 +1965,7 @@ fn append_impact_evidence(
     let mut heading_pending = true;
     for related in &result.related {
         let heading = if heading_pending {
-            "\n# Change-impact evidence\nThese are one-hop lexical relationships from task-matched seed files. Use them to choose what to inspect; they are not proof of runtime impact.\n\n"
+            "\n# Change-impact evidence\nThese are one-hop definition/reference relationships from task-matched seed files. Reference reasons preserve lexical, language-server, or corroborated provenance. Use them to choose what to inspect; they are not proof of runtime impact.\n\n"
         } else {
             "\n"
         };
@@ -1615,6 +2010,161 @@ fn validate_fragments(fragments: &[ContextFragment]) -> Result<(), ContextError>
         )));
     }
     Ok(())
+}
+
+struct StructuralAnalysis {
+    method: StructureMethod,
+    syntax_errors: bool,
+    symbols: Vec<Symbol>,
+    imports: Vec<String>,
+}
+
+fn extract_best_structure(text: &str, language: Language) -> StructuralAnalysis {
+    #[cfg(feature = "tree-sitter")]
+    if text.len() <= MAX_STRUCTURAL_PARSE_BYTES
+        && let Some(parsed) = extract_tree_sitter_structure(text, language)
+    {
+        return parsed;
+    }
+    let (symbols, imports) = extract_structure(text, language);
+    StructuralAnalysis {
+        method: StructureMethod::Lexical,
+        syntax_errors: false,
+        symbols,
+        imports,
+    }
+}
+
+#[cfg(feature = "tree-sitter")]
+fn extract_tree_sitter_structure(text: &str, language: Language) -> Option<StructuralAnalysis> {
+    let grammar = match language {
+        Language::Rust => tree_sitter_rust::LANGUAGE.into(),
+        Language::Python => tree_sitter_python::LANGUAGE.into(),
+        Language::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
+        Language::TypeScript => tree_sitter_typescript::LANGUAGE_TSX.into(),
+        _ => return None,
+    };
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&grammar).ok()?;
+    let bytes = text.as_bytes();
+    let mut input = |offset: usize, _| {
+        if offset < bytes.len() {
+            &bytes[offset..]
+        } else {
+            &[]
+        }
+    };
+    let mut progress_calls = 0_usize;
+    let mut progress = |_: &tree_sitter::ParseState| {
+        progress_calls = progress_calls.saturating_add(1);
+        if progress_calls > MAX_PARSE_PROGRESS_CALLBACKS {
+            std::ops::ControlFlow::Break(())
+        } else {
+            std::ops::ControlFlow::Continue(())
+        }
+    };
+    let options = tree_sitter::ParseOptions::new().progress_callback(&mut progress);
+    let tree = parser.parse_with_options(&mut input, None, Some(options))?;
+    let root = tree.root_node();
+    let syntax_errors = root.has_error();
+    let mut symbols = Vec::new();
+    let mut imports = Vec::new();
+    let mut stack = vec![root];
+    let mut visited = 0_usize;
+    while let Some(node) = stack.pop() {
+        visited = visited.saturating_add(1);
+        if visited > MAX_STRUCTURAL_NODES_PER_FILE {
+            return None;
+        }
+        if symbols.len() < MAX_SYMBOLS_PER_FILE
+            && let Some(kind) = structural_symbol_kind(node.kind(), language)
+            && let Some(name_node) = node.child_by_field_name("name")
+            && let Ok(name) = name_node.utf8_text(bytes)
+            && valid_identifier(name)
+        {
+            symbols.push(Symbol {
+                name: name.to_owned(),
+                kind: kind.to_owned(),
+                line: node.start_position().row.saturating_add(1),
+            });
+        }
+        if imports.len() < MAX_IMPORTS_PER_FILE
+            && is_structural_import(node.kind(), language)
+            && let Ok(source) = node.utf8_text(bytes)
+        {
+            imports.push(normalize_import(source));
+        }
+        let mut cursor = node.walk();
+        let mut children = node.named_children(&mut cursor).collect::<Vec<_>>();
+        children.reverse();
+        stack.extend(children);
+    }
+    symbols.sort_by(|left, right| {
+        left.line
+            .cmp(&right.line)
+            .then_with(|| left.name.cmp(&right.name))
+            .then_with(|| left.kind.cmp(&right.kind))
+    });
+    symbols.dedup();
+    imports.sort();
+    imports.dedup();
+    Some(StructuralAnalysis {
+        method: StructureMethod::TreeSitter,
+        syntax_errors,
+        symbols,
+        imports,
+    })
+}
+
+#[cfg(feature = "tree-sitter")]
+fn structural_symbol_kind(node_kind: &str, language: Language) -> Option<&'static str> {
+    match language {
+        Language::Rust => match node_kind {
+            "function_item" => Some("function"),
+            "struct_item" => Some("struct"),
+            "enum_item" => Some("enum"),
+            "trait_item" => Some("trait"),
+            "type_item" | "mod_item" => Some("type"),
+            _ => None,
+        },
+        Language::Python => match node_kind {
+            "function_definition" => Some("function"),
+            "class_definition" => Some("class"),
+            _ => None,
+        },
+        Language::JavaScript | Language::TypeScript => match node_kind {
+            "function_declaration" | "generator_function_declaration" | "method_definition" => {
+                Some("function")
+            }
+            "class_declaration" | "abstract_class_declaration" => Some("class"),
+            "interface_declaration" => Some("interface"),
+            "type_alias_declaration" => Some("type"),
+            "enum_declaration" => Some("enum"),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+#[cfg(feature = "tree-sitter")]
+fn is_structural_import(node_kind: &str, language: Language) -> bool {
+    match language {
+        Language::Rust => node_kind == "use_declaration",
+        Language::Python => matches!(node_kind, "import_statement" | "import_from_statement"),
+        Language::JavaScript | Language::TypeScript => node_kind == "import_statement",
+        _ => false,
+    }
+}
+
+#[cfg(feature = "tree-sitter")]
+fn normalize_import(source: &str) -> String {
+    source
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(500)
+        .collect()
 }
 
 fn extract_structure(text: &str, language: Language) -> (Vec<Symbol>, Vec<String>) {
@@ -1806,6 +2356,8 @@ pub enum ContextError {
     RequiredContextTooLarge { required: usize, budget: usize },
     #[error("supplemental context is invalid: {0}")]
     InvalidFragment(String),
+    #[error("language-server reference snapshot is invalid: {0}")]
+    InvalidReferenceSnapshot(String),
 }
 
 #[cfg(test)]
@@ -1829,6 +2381,227 @@ mod tests {
         assert_eq!(file.symbols[0].name, "Receipt");
         assert_eq!(file.symbols[1].name, "verify");
         assert_eq!(file.imports, vec!["use std::fmt;"]);
+        #[cfg(feature = "tree-sitter")]
+        assert_eq!(file.structure_method, StructureMethod::TreeSitter);
+        #[cfg(not(feature = "tree-sitter"))]
+        assert_eq!(file.structure_method, StructureMethod::Lexical);
+    }
+
+    #[cfg(feature = "tree-sitter")]
+    #[test]
+    fn tree_sitter_finds_structures_that_the_lexical_fallback_misses() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::write(
+            root.path().join("lib.rs"),
+            "pub(crate) async fn parsed() {}\nimpl Demo { pub async fn nested(&self) {} }\n",
+        )
+        .unwrap_or_else(|error| unreachable!("fixture: {error}"));
+
+        let build = RepositoryIndex::build_with_cache(root.path(), &root.path().join("cache"))
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let file = &build.index.files["lib.rs"];
+        assert_eq!(build.index.files.len(), 1);
+        assert_eq!(file.structure_method, StructureMethod::TreeSitter);
+        assert!(!file.syntax_errors);
+        assert!(file.symbols.iter().any(|symbol| symbol.name == "parsed"));
+        assert!(file.symbols.iter().any(|symbol| symbol.name == "nested"));
+        assert_eq!(build.telemetry.tree_sitter_files, 1);
+    }
+
+    #[cfg(feature = "tree-sitter")]
+    #[test]
+    fn tree_sitter_supported_language_fixtures_are_compatible() {
+        let fixtures = [
+            (
+                Language::Python,
+                "from pathlib import Path\n@decorator\nasync def load_value():\n    pass\nclass Store:\n    pass\n",
+                &["load_value", "Store"][..],
+            ),
+            (
+                Language::JavaScript,
+                "import value from './value.js';\nexport function loadValue() {}\nexport class Store {}\n",
+                &["loadValue", "Store"][..],
+            ),
+            (
+                Language::TypeScript,
+                "import type { Value } from './value';\nexport interface Store { load(): Value }\nexport type Result = Value | null;\n",
+                &["Store", "Result"][..],
+            ),
+        ];
+        for (language, source, expected) in fixtures {
+            let parsed = analyze_file(
+                source,
+                language,
+                blake3::hash(source.as_bytes()).to_hex().as_ref(),
+            );
+            assert_eq!(parsed.structure_method, StructureMethod::TreeSitter);
+            assert!(!parsed.syntax_errors, "unexpected error for {language:?}");
+            assert!(
+                !parsed.imports.is_empty(),
+                "missing import for {language:?}"
+            );
+            for name in expected {
+                assert!(
+                    parsed.symbols.iter().any(|symbol| symbol.name == *name),
+                    "missing {name} for {language:?}"
+                );
+            }
+        }
+    }
+
+    #[cfg(feature = "tree-sitter")]
+    #[test]
+    fn parser_errors_are_visible_and_large_files_fall_back_deterministically() {
+        let malformed = analyze_file(
+            "pub fn broken( {\n",
+            Language::Rust,
+            blake3::hash(b"pub fn broken( {\n").to_hex().as_ref(),
+        );
+        assert_eq!(malformed.structure_method, StructureMethod::TreeSitter);
+        assert!(malformed.syntax_errors);
+
+        let oversized = format!(
+            "pub fn lexical_fallback() {{}}\n// {}",
+            "x".repeat(MAX_STRUCTURAL_PARSE_BYTES)
+        );
+        let fallback = analyze_file(
+            &oversized,
+            Language::Rust,
+            blake3::hash(oversized.as_bytes()).to_hex().as_ref(),
+        );
+        assert_eq!(fallback.structure_method, StructureMethod::Lexical);
+        assert!(
+            fallback
+                .symbols
+                .iter()
+                .any(|symbol| symbol.name == "lexical_fallback")
+        );
+    }
+
+    #[test]
+    fn explicit_lsp_snapshot_is_integrity_bound_and_provenance_preserving() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::write(root.path().join("definition.rs"), "pub struct Receipt;\n")
+            .unwrap_or_else(|error| unreachable!("definition: {error}"));
+        fs::write(
+            root.path().join("consumer.rs"),
+            "pub fn consume(value: Receipt) {}\n",
+        )
+        .unwrap_or_else(|error| unreachable!("consumer: {error}"));
+        fs::write(root.path().join("dynamic.rs"), "pub fn dynamic() {}\n")
+            .unwrap_or_else(|error| unreachable!("dynamic: {error}"));
+        let mut index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let source_digest = index.digest.clone();
+        let snapshot = LspReferenceSnapshot::new(
+            source_digest.clone(),
+            "rust-analyzer",
+            vec![
+                LspReference {
+                    symbol: "Receipt".to_owned(),
+                    path: "dynamic.rs".to_owned(),
+                    line: 1,
+                },
+                LspReference {
+                    symbol: "Receipt".to_owned(),
+                    path: "consumer.rs".to_owned(),
+                    line: 1,
+                },
+            ],
+        )
+        .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+
+        let merged = index
+            .apply_lsp_references(&snapshot)
+            .unwrap_or_else(|error| unreachable!("merge: {error}"));
+        assert_eq!(merged.accepted_references, 2);
+        assert_eq!(merged.corroborated_references, 1);
+        assert_ne!(index.digest, source_digest);
+        let references = &index.graph.references["Receipt"];
+        assert!(references.iter().any(|reference| {
+            reference.path == "consumer.rs" && reference.method == ReferenceMethod::Corroborated
+        }));
+        assert!(references.iter().any(|reference| {
+            reference.path == "dynamic.rs" && reference.method == ReferenceMethod::LanguageServer
+        }));
+        let context = ContextPack::compile(&TaskContract::new("change Receipt", "."), &index)
+            .unwrap_or_else(|error| unreachable!("context: {error}"));
+        assert!(context.rendered.contains("language-server rust-analyzer"));
+        assert!(context.rendered.contains("[language_server]"));
+        assert!(index.apply_lsp_references(&snapshot).is_err());
+    }
+
+    #[test]
+    fn invalid_lsp_snapshot_fails_before_graph_mutation() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::write(root.path().join("lib.rs"), "pub struct Receipt;\n")
+            .unwrap_or_else(|error| unreachable!("fixture: {error}"));
+        let mut index = RepositoryIndex::build(root.path())
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        let before = index.clone();
+        let mut snapshot = LspReferenceSnapshot::new(
+            index.digest.clone(),
+            "rust-analyzer",
+            vec![LspReference {
+                symbol: "Receipt".to_owned(),
+                path: "lib.rs".to_owned(),
+                line: 1,
+            }],
+        )
+        .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        let replacement = if snapshot.digest.starts_with('0') {
+            "1"
+        } else {
+            "0"
+        };
+        snapshot.digest.replace_range(..1, replacement);
+
+        assert!(index.apply_lsp_references(&snapshot).is_err());
+        assert_eq!(index, before);
+
+        let unknown_path = LspReferenceSnapshot::new(
+            index.digest.clone(),
+            "rust-analyzer",
+            vec![LspReference {
+                symbol: "Receipt".to_owned(),
+                path: "missing.rs".to_owned(),
+                line: 1,
+            }],
+        )
+        .unwrap_or_else(|error| unreachable!("unknown path snapshot: {error}"));
+        assert!(index.apply_lsp_references(&unknown_path).is_err());
+        assert_eq!(index, before);
+    }
+
+    #[test]
+    fn cache_entries_are_bound_to_the_analyzer_profile() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let cache = tempfile::tempdir().unwrap_or_else(|error| unreachable!("cache: {error}"));
+        let source = b"pub fn cached() {}\n";
+        fs::write(root.path().join("lib.rs"), source)
+            .unwrap_or_else(|error| unreachable!("source: {error}"));
+        let digest = blake3::hash(source).to_hex().to_string();
+        let cache_path = analysis_cache_path(cache.path(), &digest, Language::Rust);
+        let _cold = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("cold index: {error}"));
+        let encoded =
+            fs::read(&cache_path).unwrap_or_else(|error| unreachable!("read cache: {error}"));
+        let mut entry: CachedFileAnalysis = serde_json::from_slice(&encoded)
+            .unwrap_or_else(|error| unreachable!("decode cache: {error}"));
+        entry.analysis_profile = "incompatible-profile".to_owned();
+        entry.payload_digest = analysis_payload_digest(&entry);
+        fs::write(
+            &cache_path,
+            serde_json::to_vec(&entry)
+                .unwrap_or_else(|error| unreachable!("encode cache: {error}")),
+        )
+        .unwrap_or_else(|error| unreachable!("replace cache: {error}"));
+
+        let rebuild = RepositoryIndex::build_with_cache(root.path(), cache.path())
+            .unwrap_or_else(|error| unreachable!("rebuild: {error}"));
+        assert_eq!(rebuild.telemetry.rejected_cache_entries, 1);
+        assert_eq!(rebuild.telemetry.cache_hits, 0);
+        assert_eq!(rebuild.telemetry.cache_writes, 1);
     }
 
     #[test]

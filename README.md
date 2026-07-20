@@ -33,7 +33,7 @@ pactrail ❯ Fix the parser regression and add a test.
   ╭─ RUN 019f7a31  compatible/local-coder
   │ Fix the parser regression and add a test.
   │     0ms  ◇ state     contracting · validating task contract
-  │     4ms  ◆ context   186 indexed · 181 warm · 5 cold · 8 cited · 100.00% coverage · 3 graph · 4 impact · 4ms
+  │     4ms  ◆ context   186 indexed · 181 warm · 5 cold · 140 parsed · 46 lexical · 8 cited · 100.00% coverage · 4ms
   │   1.82s  ● model     turn 1 · 2 actions · 3,412 tokens · 1.8s
   │   1.84s  ● tool      read_many_files · 18.1 KiB · 12ms
   │   1.86s  ◆ tool      edit_file · changed src/parser.rs · 9ms
@@ -66,6 +66,11 @@ pactrail ❯ Fix the parser regression and add a test.
   current files, while unchanged bounded structure is reused by content digest.
   The live timeline and durable trace report warm/cold reuse, rejected entries,
   graph evidence, and kernel-derived citation coverage.
+- **Structure has a real parser and a real fallback.** Bounded embedded
+  Tree-sitter grammars cover Rust, Python, JavaScript, and TypeScript/TSX;
+  unsupported or exhausted parses use the lexical index. Optional SDK-provided
+  LSP snapshots preserve lexical, language-server, and corroborated provenance
+  without Pactrail silently starting an external process.
 - **Long runs stay evidence-dense.** Pactrail measures the serialized
   conversation and tool schemas against a model-derived high-water mark. Old
   tool results become deterministic, digest-bound navigation envelopes while
@@ -470,9 +475,10 @@ containment fixture against Docker. Start with
 
 Pactrail 0.7 is a production-grade developer preview: its invariants and failure
 modes are tested, while Rust APIs and versioned local formats may still evolve
-before 1.0. Governed MCP, the static embedding facade, and content-addressed
-repository analysis are implemented. Optional structural/LSP retrieval and
-public release-candidate evaluation remain roadmap work—not current claims.
+before 1.0. Governed MCP, the static embedding facade, content-addressed
+repository analysis, bounded parser-backed structure, and explicit optional LSP
+reference ingestion are implemented. A built-in governed LSP process adapter
+and public release-candidate evaluation remain roadmap work—not current claims.
 
 It is ready for public evaluation, contributions, demos, and social launch as a
 developer preview. The OCI backend is a production containment option with an

@@ -9,11 +9,11 @@
 //!
 //! See `docs/embedding.md` in the repository for a complete composition guide.
 
-/// SDK surface revision used by Pactrail 0.7.
+/// SDK surface revision used by Pactrail 0.8.
 ///
 /// This revision tracks source-level extension compatibility independently of
 /// durable task, event, receipt, checkpoint, and MCP schema versions.
-pub const SDK_API_REVISION: u32 = 1;
+pub const SDK_API_REVISION: u32 = 2;
 
 /// Provider-neutral model extension contracts and built-in adapters.
 pub mod model {

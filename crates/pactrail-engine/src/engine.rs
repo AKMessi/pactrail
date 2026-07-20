@@ -74,6 +74,10 @@ pub enum RunProgress {
         cache_misses: usize,
         rejected_cache_entries: usize,
         bytes_hashed: u64,
+        tree_sitter_files: usize,
+        lexical_files: usize,
+        unscanned_files: usize,
+        syntax_error_files: usize,
         citation_coverage_basis_points: u16,
         graph_symbols: usize,
         impact_files: usize,
@@ -618,6 +622,10 @@ impl<'a> RunEngine<'a> {
                 cache_misses: telemetry.cache_misses,
                 rejected_cache_entries: telemetry.rejected_cache_entries,
                 bytes_hashed: telemetry.bytes_hashed,
+                tree_sitter_files: telemetry.tree_sitter_files,
+                lexical_files: telemetry.lexical_files,
+                unscanned_files: telemetry.unscanned_files,
+                syntax_error_files: telemetry.syntax_error_files,
                 citation_coverage_basis_points: context_pack
                     .retrieval
                     .citation_coverage_basis_points,
@@ -666,6 +674,22 @@ impl<'a> RunEngine<'a> {
                     (
                         "bytes_hashed".to_owned(),
                         telemetry.bytes_hashed.to_string(),
+                    ),
+                    (
+                        "tree_sitter_files".to_owned(),
+                        telemetry.tree_sitter_files.to_string(),
+                    ),
+                    (
+                        "lexical_files".to_owned(),
+                        telemetry.lexical_files.to_string(),
+                    ),
+                    (
+                        "unscanned_files".to_owned(),
+                        telemetry.unscanned_files.to_string(),
+                    ),
+                    (
+                        "syntax_error_files".to_owned(),
+                        telemetry.syntax_error_files.to_string(),
                     ),
                     (
                         "citation_coverage_bps".to_owned(),

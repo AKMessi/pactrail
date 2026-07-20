@@ -20,7 +20,7 @@ within the semantic scan ceiling are eligible for a cache entry keyed by:
 
 - the BLAKE3 digest of the current file bytes;
 - the coarse language classification; and
-- the analysis schema revision.
+- the analysis schema revision and active analyzer profile.
 
 The entry contains only bounded derived structure: line count, symbol-like
 declarations, imports, and identifier-to-line locations. It does not contain
@@ -39,7 +39,8 @@ The repository graph is assembled from these per-file analyses. This removes
 the previous second source-file read while retaining deterministic global caps.
 Changing one file creates a new content key and invalidates only that file's
 derived analysis; unchanged files remain reusable regardless of path traversal
-order.
+order. Parser-backed and lexical-only builds have distinct analyzer profiles,
+so they cannot cross-load incompatible derived structure.
 
 Each context action records current bytes hashed, eligible files, warm hits,
 cold misses, rejected entries, retrieved files, cited files, graph-symbol
