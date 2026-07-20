@@ -70,6 +70,19 @@ validation.
   parallel-safe. Mutations and host execution remain serial.
 - Repeated call IDs, impossible finish reasons, token/wall-time overruns, and
   persistent non-progress loops fail explicitly.
+- Git tools never start `git` or another process. They open only a repository
+  with a real `.git` directory rooted exactly at the authorized source
+  workspace; redirecting gitdir files and links are rejected. Object and
+  common-directory alternates are forbidden, and redirected critical metadata
+  is rejected. Pactrail enables no Gitoxide command, network-client,
+  credential, status/filter, or remote
+  operation feature, exposes no dependency types, and contains no call site for
+  those effects. HEAD/index and raw-worktree reads are bounded; unscanned files
+  and truncation remain visible.
+- Raw Git evidence intentionally does not reproduce clean filters, textconv,
+  submodule state, filesystem monitors, or platform-specific executable-bit
+  normalization. It is navigation evidence, not proof that command-line Git
+  would render identical porcelain output.
 
 ### Memory and prompt injection
 

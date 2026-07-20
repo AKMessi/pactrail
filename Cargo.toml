@@ -5,6 +5,7 @@ members = [
     "crates/pactrail-context",
     "crates/pactrail-core",
     "crates/pactrail-engine",
+    "crates/pactrail-git",
     "crates/pactrail-memory",
     "crates/pactrail-mcp",
     "crates/pactrail-models",
@@ -36,6 +37,7 @@ directories = "6"
 futures-core = "0.3"
 futures-util = "0.3"
 globset = "0.4"
+gix = { version = "0.85", default-features = false, features = ["index", "revision", "sha1", "sha256"] }
 http = "1"
 httpdate = "1"
 ignore = "0.4"

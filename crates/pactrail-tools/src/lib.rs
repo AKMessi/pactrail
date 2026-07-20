@@ -3,6 +3,7 @@
 mod advanced;
 mod approval;
 mod builtins;
+mod git;
 mod policy;
 mod process;
 mod process_backend;
@@ -12,6 +13,7 @@ mod structural;
 pub use builtins::{
     ListFilesTool, ReadFileTool, RemoveFileTool, ReplaceTextTool, SearchTool, WriteFileTool,
 };
+pub use git::{GitDiffTool, GitHistoryTool, GitStatusTool};
 pub use policy::PolicyEngine;
 pub use process::RunProcessTool;
 pub use process_backend::{
@@ -51,6 +53,9 @@ pub fn builtin_registry_with_process(
     registry.register(SearchTool)?;
     registry.register(SearchCodeGraphTool)?;
     registry.register(SearchChangeImpactTool)?;
+    registry.register(GitStatusTool)?;
+    registry.register(GitDiffTool)?;
+    registry.register(GitHistoryTool)?;
     registry.register(WriteFileTool)?;
     registry.register(ReplaceTextTool)?;
     registry.register(EditFileTool)?;

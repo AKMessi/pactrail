@@ -6,6 +6,32 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Content-addressed repository analysis with bounded embedded Tree-sitter
+  structure for Rust, Python, JavaScript, and TypeScript/TSX, deterministic
+  lexical fallback, and live cache/parser/citation telemetry.
+- A bounded repository evidence graph, one-hop change-impact retrieval, and an
+  integrity-bound optional LSP reference snapshot API with explicit lexical,
+  language-server, and corroborated provenance.
+- Process-free `git_status`, `git_diff`, and `git_history` tools backed by the
+  new `pactrail-git` crate, with typed SDK exports and source/candidate state
+  kept visibly separate.
+
+### Security
+
+- Git evidence opens only a real `.git` directory at the exact authorized
+  source root, rejects gitdir/common-directory/object-alternate redirection,
+  uses isolated strict trusted configuration, validates Git paths through the
+  workspace boundary, and applies independent traversal/hash/object/diff/history
+  limits. Commands, hooks, filters, credentials, remotes, and network clients
+  are not exposed or invoked.
+
+### Changed
+
+- The Rust embedding surface revision is 3 and now includes typed structural,
+  LSP-provenance, Git evidence, and Git tool contracts.
+
 ## [0.7.0] - 2026-07-21
 
 ### Added
