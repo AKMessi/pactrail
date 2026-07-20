@@ -661,6 +661,16 @@ impl AnthropicStreamAccumulator {
                 Ok(())
             }
             (StreamBlock::Tool(tool), Some("input_json_delta")) if !tool.stopped => {
+                if tool
+                    .initial_input
+                    .as_object()
+                    .is_some_and(|input| !input.is_empty())
+                {
+                    return Err(ModelError::MalformedResponse(
+                        "Anthropic tool input cannot combine non-empty initial input with partial JSON"
+                            .to_owned(),
+                    ));
+                }
                 let partial = delta
                     .get("partial_json")
                     .and_then(Value::as_str)
@@ -1028,6 +1038,8 @@ fn number(value: &Value, key: &str) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+    use std::net::TcpListener;
     use std::sync::Mutex;
 
     use pactrail_tools::builtin_registry;
@@ -1207,5 +1219,64 @@ mod tests {
             incomplete.finish(None, 0),
             Err(ModelError::MalformedResponse(message)) if message.contains("before a content block stopped")
         ));
+    }
+
+    #[tokio::test]
+    async fn native_stream_fixture_verifies_headers_framing_and_usage() {
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .unwrap_or_else(|error| unreachable!("test listener: {error}"));
+        let address = listener
+            .local_addr()
+            .unwrap_or_else(|error| unreachable!("listener address: {error}"));
+        let server = std::thread::spawn(move || -> std::io::Result<()> {
+            let (mut stream, _) = listener.accept()?;
+            stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+            let request = crate::test_support::read_http_request(&mut stream)?;
+            let request = String::from_utf8_lossy(&request);
+            let request_lower = request.to_ascii_lowercase();
+            assert!(request.starts_with("POST /v1/messages HTTP/1.1"));
+            assert!(request_lower.contains("x-api-key: test-key"));
+            assert!(request_lower.contains("anthropic-version: 2023-06-01"));
+            assert!(request.contains("\"stream\":true"));
+            let body = concat!(
+                "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg-1\",\"usage\":{\"input_tokens\":3,\"output_tokens\":0}}}\n\n",
+                "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+                "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n",
+                "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+                "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":1}}\n\n",
+                "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+            );
+            let headers = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nRequest-Id: request-1\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            stream.write_all(headers.as_bytes())?;
+            for chunk in body.as_bytes().chunks(3) {
+                stream.write_all(chunk)?;
+            }
+            Ok(())
+        });
+
+        let mut fixture = config();
+        fixture.base_url = format!("http://{address}");
+        let driver = AnthropicDriver::new(fixture)
+            .unwrap_or_else(|error| unreachable!("loopback config: {error}"));
+        let response = driver
+            .invoke_with_observer(
+                &ModelRequest {
+                    conversation: vec![ConversationItem::Message(Message::user("hello"))],
+                    tools: Vec::new(),
+                    max_output_tokens: 32,
+                    temperature: None,
+                },
+                &RecordingObserver::default(),
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("valid native stream: {error}"));
+
+        assert_eq!(response.text, "hello");
+        assert_eq!(response.usage.total(), 4);
+        assert_eq!(response.provider_request_id.as_deref(), Some("request-1"));
+        assert!(matches!(server.join(), Ok(Ok(()))));
     }
 }

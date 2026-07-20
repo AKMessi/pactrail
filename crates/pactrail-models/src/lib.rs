@@ -6,6 +6,8 @@ mod gemini;
 mod openai_compatible;
 mod probe;
 mod sse;
+#[cfg(test)]
+mod test_support;
 mod types;
 
 pub use anthropic::{AnthropicConfig, AnthropicDriver};
