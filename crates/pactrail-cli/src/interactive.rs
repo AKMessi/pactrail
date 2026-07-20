@@ -1964,6 +1964,10 @@ fn render_tool_descriptor(theme: &Theme, columns: usize, tool: &ToolDescriptor) 
         ToolRisk::WorkspaceMutation => {
             (theme.accent("◆"), theme.accent(&format!("{:<11}", "edit")))
         }
+        ToolRisk::RestrictedExecution => (
+            theme.success("▣"),
+            theme.success(&format!("{:<11}", "sandbox")),
+        ),
         ToolRisk::HostExecution => (
             theme.warning("!"),
             theme.warning(&format!("{:<11}", "host")),

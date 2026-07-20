@@ -94,6 +94,14 @@ impl ToolAnnotations {
         parallel_safe: false,
         risk: ToolRisk::HostExecution,
     };
+
+    /// Standard annotation set for a restricted external process boundary.
+    pub const RESTRICTED_EXECUTION: Self = Self {
+        read_only: false,
+        idempotent: false,
+        parallel_safe: false,
+        risk: ToolRisk::RestrictedExecution,
+    };
 }
 
 /// Human-readable tool risk class.
@@ -102,6 +110,7 @@ impl ToolAnnotations {
 pub enum ToolRisk {
     ReadOnly,
     WorkspaceMutation,
+    RestrictedExecution,
     HostExecution,
 }
 
@@ -270,6 +279,8 @@ pub enum ToolError {
     Timeout { program: String, seconds: u64 },
     #[error("process output task failed: {0}")]
     Join(tokio::task::JoinError),
+    #[error("process backend failed: {0}")]
+    ProcessBackend(#[from] crate::ProcessBackendError),
     #[error("file is not valid UTF-8: {0}")]
     NonUtf8(std::path::PathBuf),
     #[error("requested range is invalid: {0}")]

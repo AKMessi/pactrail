@@ -2281,8 +2281,10 @@ mod tests {
             &[".".to_owned()],
         )
         .unwrap_or_else(|error| unreachable!("transaction: {error}"));
-        let registry = pactrail_tools::builtin_registry()
-            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let registry = pactrail_tools::builtin_registry_with_process(
+            pactrail_tools::RunProcessTool::native_trusted(),
+        )
+        .unwrap_or_else(|error| unreachable!("tools: {error}"));
         let mut contract = TaskContract::new(
             "Explain this Rust project",
             source.path().display().to_string(),
@@ -2666,8 +2668,10 @@ mod tests {
             capabilities: ModelCapabilities::default(),
         };
         let (_source, _control, transaction) = rust_verification_fixture();
-        let registry = pactrail_tools::builtin_registry()
-            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let registry = pactrail_tools::builtin_registry_with_process(
+            pactrail_tools::RunProcessTool::native_trusted(),
+        )
+        .unwrap_or_else(|error| unreachable!("tools: {error}"));
         let mut contract = TaskContract::new("Fix answer and verify it", ".");
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);
@@ -2758,8 +2762,10 @@ mod tests {
             capabilities: ModelCapabilities::default(),
         };
         let (_source, _control, transaction) = rust_verification_fixture();
-        let registry = pactrail_tools::builtin_registry()
-            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let registry = pactrail_tools::builtin_registry_with_process(
+            pactrail_tools::RunProcessTool::native_trusted(),
+        )
+        .unwrap_or_else(|error| unreachable!("tools: {error}"));
         let mut contract = TaskContract::new("Set the verified answer", ".");
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);

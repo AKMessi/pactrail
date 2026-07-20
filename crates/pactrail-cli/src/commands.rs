@@ -19,7 +19,9 @@ use pactrail_models::{
     ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
 use pactrail_store::{EventStore, StoreError};
-use pactrail_tools::{PolicyEngine, ToolError, ToolRisk, builtin_registry};
+use pactrail_tools::{
+    PolicyEngine, RunProcessTool, ToolError, ToolRisk, builtin_registry_with_process,
+};
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
 use secrecy::SecretString;
@@ -154,7 +156,12 @@ async fn execute_run_inner(
         WorkspaceTransaction::create(&workspace, &run_root, &contract.allowed_write_paths)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
-    let registry = builtin_registry()?;
+    let process_tool = if args.allow_process {
+        RunProcessTool::native_trusted()
+    } else {
+        RunProcessTool::disabled()
+    };
+    let registry = builtin_registry_with_process(process_tool)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
     let context_fragments = if contract.permissions.allow.contains(&Capability::MemoryRead) {
@@ -916,7 +923,7 @@ pub(crate) fn completed_runs(state: &Path) -> Result<Vec<ChangeReceipt>, CliErro
 }
 
 fn tools(json_output: bool) -> Result<(), CliError> {
-    let descriptors = builtin_registry()?.descriptors();
+    let descriptors = builtin_registry_with_process(RunProcessTool::disabled())?.descriptors();
     if json_output {
         write_json(&descriptors)
     } else {
@@ -932,6 +939,7 @@ fn tools(json_output: bool) -> Result<(), CliError> {
             let risk = match tool.annotations.risk {
                 ToolRisk::ReadOnly => "read",
                 ToolRisk::WorkspaceMutation => "edit",
+                ToolRisk::RestrictedExecution => "sandbox",
                 ToolRisk::HostExecution => "host",
             };
             let annotations = [

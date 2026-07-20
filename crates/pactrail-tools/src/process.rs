@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -7,16 +7,25 @@ use pactrail_core::Capability;
 use schemars::{JsonSchema, schema_for};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio::io::{AsyncRead, AsyncReadExt};
-use tokio::process::Command;
+use tokio_util::sync::CancellationToken;
 
-use crate::{Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput};
+use crate::{
+    DisabledProcessBackend, NativeProcessBackend, ProcessBackend, ProcessBackendKind,
+    ProcessRequest, Tool, ToolAnnotations, ToolContext, ToolDescriptor, ToolError, ToolOutput,
+};
 
 const DEFAULT_TIMEOUT_SECONDS: u64 = 120;
 const MAX_TIMEOUT_SECONDS: u64 = 3_600;
 const DEFAULT_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
-const SAFE_ENVIRONMENT_NAMES: &[&str] = &[
+const MAX_PROGRAM_BYTES: usize = 4 * 1024;
+const MAX_ARGUMENTS: usize = 4_096;
+const MAX_ARGUMENT_BYTES: usize = 256 * 1024;
+const MAX_AGGREGATE_ARGUMENT_BYTES: usize = 2 * 1024 * 1024;
+const MAX_ENVIRONMENT_ENTRIES: usize = 256;
+const MAX_ENVIRONMENT_VALUE_BYTES: usize = 256 * 1024;
+const MAX_AGGREGATE_ENVIRONMENT_BYTES: usize = 2 * 1024 * 1024;
+pub(crate) const SAFE_ENVIRONMENT_NAMES: &[&str] = &[
     "PATH",
     "PATHEXT",
     "SystemRoot",
@@ -79,19 +88,68 @@ const fn default_output_limit() -> usize {
     DEFAULT_OUTPUT_BYTES
 }
 
-/// Executes a program directly without shell interpolation.
-pub struct RunProcessTool;
+/// Executes a program through the explicitly selected process backend.
+pub struct RunProcessTool {
+    backend: Arc<dyn ProcessBackend>,
+    cancellation: CancellationToken,
+}
+
+impl RunProcessTool {
+    /// Creates a process tool bound to one backend and run cancellation token.
+    #[must_use]
+    pub fn new(backend: Arc<dyn ProcessBackend>, cancellation: CancellationToken) -> Self {
+        Self {
+            backend,
+            cancellation,
+        }
+    }
+
+    /// Creates a fail-closed process tool.
+    #[must_use]
+    pub fn disabled() -> Self {
+        Self::new(Arc::new(DisabledProcessBackend), CancellationToken::new())
+    }
+
+    /// Creates an explicitly trusted native process tool.
+    #[must_use]
+    pub fn native_trusted() -> Self {
+        Self::new(Arc::new(NativeProcessBackend), CancellationToken::new())
+    }
+}
+
+impl Default for RunProcessTool {
+    fn default() -> Self {
+        Self::disabled()
+    }
+}
 
 #[async_trait]
 impl Tool for RunProcessTool {
     fn descriptor(&self) -> ToolDescriptor {
+        let backend = self.backend.descriptor();
+        let (description, annotations) = match backend.kind {
+            ProcessBackendKind::Disabled => (
+                "Process execution is disabled for this run.".to_owned(),
+                ToolAnnotations::RESTRICTED_EXECUTION,
+            ),
+            ProcessBackendKind::NativeTrusted => (
+                "Run a program directly in the isolated candidate. No shell interpolation is performed. This explicitly trusted backend retains host filesystem and network authority."
+                    .to_owned(),
+                ToolAnnotations::HOST_EXECUTION,
+            ),
+            ProcessBackendKind::OciRestricted => (
+                "Run a program without shell interpolation in a restricted OCI container with candidate-only bind access, no network, a read-only image, dropped capabilities, and bounded resources."
+                    .to_owned(),
+                ToolAnnotations::RESTRICTED_EXECUTION,
+            ),
+        };
         ToolDescriptor {
             name: "run_process".to_owned(),
-            description: "Run a program directly in the isolated workspace. No shell interpolation is performed. Native execution is not a network sandbox.".to_owned(),
+            description,
             input_schema: serde_json::to_value(schema_for!(RunProcessInput))
                 .unwrap_or_else(|_| json!({})),
             required_capability: Capability::ProcessSpawn,
-            annotations: ToolAnnotations::HOST_EXECUTION,
+            annotations,
         }
     }
 
@@ -112,88 +170,103 @@ impl Tool for RunProcessTool {
             "run_process",
         )?;
 
-        let mut command = Command::new(&request.program);
-        command
-            .args(&request.args)
-            .current_dir(context.workspace.workspace_root())
-            .kill_on_drop(true)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .env_clear();
-        copy_safe_environment(&mut command);
-        for (name, value) in &request.environment {
-            if !valid_environment_name(name) {
-                return Err(ToolError::InvalidRange(format!(
-                    "invalid environment variable name {name:?}"
-                )));
-            }
-            command.env(name, value);
-        }
-        let mut child = command.spawn().map_err(|source| ToolError::Spawn {
-            program: request.program.clone(),
-            source,
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| ToolError::Spawn {
-            program: request.program.clone(),
-            source: std::io::Error::other("stdout pipe was not created"),
-        })?;
-        let stderr = child.stderr.take().ok_or_else(|| ToolError::Spawn {
-            program: request.program.clone(),
-            source: std::io::Error::other("stderr pipe was not created"),
-        })?;
-        let stdout_task = tokio::spawn(read_bounded(stdout, request.max_output_bytes));
-        let stderr_task = tokio::spawn(read_bounded(stderr, request.max_output_bytes));
-
-        let status = if let Ok(result) =
-            tokio::time::timeout(Duration::from_secs(request.timeout_seconds), child.wait()).await
-        {
-            result.map_err(|source| ToolError::Spawn {
-                program: request.program.clone(),
-                source,
-            })?
-        } else {
-            let _kill_result = child.kill().await;
-            let _wait_result = child.wait().await;
-            stdout_task.abort();
-            stderr_task.abort();
-            return Err(ToolError::Timeout {
-                program: request.program,
-                seconds: request.timeout_seconds,
-            });
-        };
-        let (stdout, stdout_truncated) = stdout_task.await.map_err(ToolError::Join)??;
-        let (stderr, stderr_truncated) = stderr_task.await.map_err(ToolError::Join)??;
-        let succeeded = status.success();
+        let execution = self
+            .backend
+            .execute(
+                context.workspace.workspace_root(),
+                &ProcessRequest {
+                    program: request.program.clone(),
+                    args: request.args.clone(),
+                    timeout: Duration::from_secs(request.timeout_seconds),
+                    max_output_bytes: request.max_output_bytes,
+                    environment: request.environment.clone(),
+                },
+                &self.cancellation,
+            )
+            .await?;
+        let succeeded = execution.exit_code == Some(0);
+        let backend = serde_json::to_value(&execution.backend).map_err(ToolError::Serialization)?;
         Ok(ToolOutput {
             content: json!({
                 "program": request.program,
                 "args": request.args,
-                "exit_code": status.code(),
-                "stdout": String::from_utf8_lossy(&stdout),
-                "stderr": String::from_utf8_lossy(&stderr),
+                "exit_code": execution.exit_code,
+                "stdout": String::from_utf8_lossy(&execution.stdout),
+                "stderr": String::from_utf8_lossy(&execution.stderr),
+                "backend": backend,
             }),
             summary: format!(
                 "process exited {}",
-                status
-                    .code()
+                execution
+                    .exit_code
                     .map_or_else(|| "without a code".to_owned(), |code| code.to_string())
             ),
             observed_effects: vec![
                 "process.spawn".to_owned(),
-                "filesystem effects require post-call reconciliation".to_owned(),
+                format!("process.backend:{:?}", execution.backend.kind).to_lowercase(),
+                match execution.backend.kind {
+                    ProcessBackendKind::OciRestricted => {
+                        "filesystem.candidate-only;network.denied".to_owned()
+                    }
+                    ProcessBackendKind::NativeTrusted => {
+                        "host effects require post-call reconciliation".to_owned()
+                    }
+                    ProcessBackendKind::Disabled => "process.denied".to_owned(),
+                },
             ],
             succeeded,
-            truncated: stdout_truncated || stderr_truncated,
+            truncated: execution.stdout_truncated || execution.stderr_truncated,
         })
     }
 }
 
 fn validate_request(request: &RunProcessInput) -> Result<(), ToolError> {
-    if request.program.trim().is_empty() {
-        return Err(ToolError::InvalidRange(
-            "program cannot be empty".to_owned(),
-        ));
+    if request.program.trim().is_empty()
+        || request.program.len() > MAX_PROGRAM_BYTES
+        || request.program.chars().any(char::is_control)
+    {
+        return Err(ToolError::InvalidRange(format!(
+            "program must be non-empty, at most {MAX_PROGRAM_BYTES} bytes, and contain no control characters"
+        )));
+    }
+    if request.args.len() > MAX_ARGUMENTS {
+        return Err(ToolError::InvalidRange(format!(
+            "args cannot contain more than {MAX_ARGUMENTS} values"
+        )));
+    }
+    let aggregate_argument_bytes = request.args.iter().try_fold(0_usize, |total, argument| {
+        if argument.len() > MAX_ARGUMENT_BYTES || argument.contains('\0') {
+            return None;
+        }
+        total.checked_add(argument.len())
+    });
+    if aggregate_argument_bytes.is_none_or(|total| total > MAX_AGGREGATE_ARGUMENT_BYTES) {
+        return Err(ToolError::InvalidRange(format!(
+            "each argument must be at most {MAX_ARGUMENT_BYTES} bytes, contain no NUL byte, and aggregate arguments must not exceed {MAX_AGGREGATE_ARGUMENT_BYTES} bytes"
+        )));
+    }
+    if request.environment.len() > MAX_ENVIRONMENT_ENTRIES {
+        return Err(ToolError::InvalidRange(format!(
+            "environment cannot contain more than {MAX_ENVIRONMENT_ENTRIES} entries"
+        )));
+    }
+    let aggregate_environment_bytes =
+        request
+            .environment
+            .iter()
+            .try_fold(0_usize, |total, (name, value)| {
+                if !valid_environment_name(name)
+                    || value.len() > MAX_ENVIRONMENT_VALUE_BYTES
+                    || value.contains('\0')
+                {
+                    return None;
+                }
+                total.checked_add(name.len())?.checked_add(value.len())
+            });
+    if aggregate_environment_bytes.is_none_or(|total| total > MAX_AGGREGATE_ENVIRONMENT_BYTES) {
+        return Err(ToolError::InvalidRange(format!(
+            "environment names must be valid, each value must be at most {MAX_ENVIRONMENT_VALUE_BYTES} bytes with no NUL byte, and aggregate environment data must not exceed {MAX_AGGREGATE_ENVIRONMENT_BYTES} bytes"
+        )));
     }
     if request.timeout_seconds == 0 || request.timeout_seconds > MAX_TIMEOUT_SECONDS {
         return Err(ToolError::InvalidRange(format!(
@@ -206,40 +279,6 @@ fn validate_request(request: &RunProcessInput) -> Result<(), ToolError> {
         )));
     }
     Ok(())
-}
-
-async fn read_bounded<R: AsyncRead + Unpin>(
-    mut reader: R,
-    limit: usize,
-) -> Result<(Vec<u8>, bool), ToolError> {
-    let mut retained = Vec::with_capacity(limit.min(64 * 1024));
-    let mut buffer = vec![0_u8; 16 * 1024].into_boxed_slice();
-    let mut truncated = false;
-    loop {
-        let count = reader
-            .read(&mut buffer)
-            .await
-            .map_err(|source| ToolError::Io {
-                path: "<process-output>".into(),
-                source,
-            })?;
-        if count == 0 {
-            break;
-        }
-        let remaining = limit.saturating_sub(retained.len());
-        let keep = remaining.min(count);
-        retained.extend_from_slice(&buffer[..keep]);
-        truncated |= keep < count;
-    }
-    Ok((retained, truncated))
-}
-
-fn copy_safe_environment(command: &mut Command) {
-    for name in SAFE_ENVIRONMENT_NAMES {
-        if let Some(value) = std::env::var_os(name) {
-            command.env(name, value);
-        }
-    }
 }
 
 fn valid_environment_name(name: &str) -> bool {
@@ -271,7 +310,7 @@ mod tests {
             policy: &policy,
             memory: None,
         };
-        let result = RunProcessTool
+        let result = RunProcessTool::native_trusted()
             .execute(&context, json!({"program":"cargo"}))
             .await;
         assert!(matches!(result, Err(ToolError::ApprovalRequired { .. })));
@@ -285,5 +324,13 @@ mod tests {
         assert!(!SAFE_ENVIRONMENT_NAMES.contains(&"OPENROUTER_API_KEY"));
         assert!(!SAFE_ENVIRONMENT_NAMES.contains(&"CARGO_TARGET_DIR"));
         assert!(!SAFE_ENVIRONMENT_NAMES.contains(&"RUSTC_WRAPPER"));
+    }
+
+    #[test]
+    fn default_process_tool_fails_closed() {
+        assert_eq!(
+            RunProcessTool::default().backend.descriptor().kind,
+            ProcessBackendKind::Disabled
+        );
     }
 }
