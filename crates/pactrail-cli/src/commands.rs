@@ -18,7 +18,9 @@ use pactrail_memory::{
     MemoryDraft, MemoryError, MemoryId, MemoryKind, MemoryMatch, MemoryRecord, MemoryStore,
 };
 use pactrail_models::{
-    ModelCapabilities, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
+    AnthropicConfig, AnthropicDriver, CapabilityProbeReport, CapabilitySource, GeminiConfig,
+    GeminiDriver, ModelCapabilities, ModelDriver, ModelError, OpenAiCompatibleConfig,
+    OpenAiCompatibleDriver, probe_capabilities as run_capability_probe,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
@@ -37,7 +39,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::cli::{
     Cli, Command, CompletionShell, MemoryCommand, MemoryKindArg, OciRuntimeArg, OutputFormat,
-    ProcessApprovalArg, ProcessBackendArg, ProviderKind, ResumeArgs, RunArgs, RunIdArgs,
+    ProbeArgs, ProcessApprovalArg, ProcessBackendArg, ProviderKind, ResumeArgs, RunArgs, RunIdArgs,
 };
 use crate::output::{
     escape_json_terminal_controls, write_human_stdout, write_stderr, write_stdout,
@@ -49,6 +51,7 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
     })? {
         Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), args).await,
         Command::Resume(args) => resume(&cli.workspace, cli.state_dir.as_deref(), args).await,
+        Command::Probe(args) => probe(args).await,
         Command::Inspect(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
             inspect(&state, &args)
@@ -87,6 +90,78 @@ pub(crate) struct CompletedRun {
     pub model_summary: String,
     pub receipt: ChangeReceipt,
     pub tokens: u64,
+}
+
+pub(crate) async fn probe_model_capabilities(
+    args: &RunArgs,
+) -> Result<CapabilityProbeReport, CliError> {
+    validate_model_limits(args)?;
+    let contract = TaskContract::new("Probe configured model capabilities", ".");
+    let driver = build_driver(&contract, args)?;
+    run_capability_probe(driver.as_ref())
+        .await
+        .map_err(CliError::Model)
+}
+
+async fn probe(args: ProbeArgs) -> Result<(), CliError> {
+    let output = args.output;
+    let report = probe_model_capabilities(&probe_run_args(args)).await?;
+    if output == OutputFormat::Json {
+        return write_json(&report);
+    }
+    write_human_stdout(&format!(
+        "Capability probe\n  adapter         {}\n  model           {}\n  native tools    {}\n  parallel tools  {}\n  streaming       {}\n  prompt cache    {}\n  valid calls     {}\n  tokens          {} input · {} output\n\nNot observed is inconclusive; no returned tool was executed.\n",
+        report.adapter,
+        report.model,
+        probe_observation_label(report.native_tools.is_observed()),
+        probe_observation_label(report.parallel_tools.is_observed()),
+        probe_observation_label(report.streaming.is_observed()),
+        probe_observation_label(report.prompt_cache.is_observed()),
+        report.valid_probe_calls,
+        report.usage.input_tokens,
+        report.usage.output_tokens,
+    ))
+    .map_err(CliError::Output)
+}
+
+fn probe_observation_label(observed: bool) -> &'static str {
+    if observed { "observed" } else { "not observed" }
+}
+
+fn probe_run_args(args: ProbeArgs) -> RunArgs {
+    RunArgs {
+        goal: None,
+        task: None,
+        provider: args.provider,
+        model: Some(args.model),
+        base_url: args.base_url,
+        api_key_env: args.api_key_env,
+        write_paths: vec![".".to_owned()],
+        process_backend: Some(ProcessBackendArg::Disabled),
+        allow_process: false,
+        process_approval: Some(ProcessApprovalArg::Deny),
+        sandbox_runtime: OciRuntimeArg::Docker,
+        sandbox_runtime_executable: None,
+        sandbox_image: None,
+        sandbox_memory_mib: 2_048,
+        sandbox_cpu_millis: 2_000,
+        sandbox_pids: 128,
+        sandbox_tmpfs_mib: 512,
+        apply: false,
+        max_turns: 1,
+        context_tokens: args.context_tokens,
+        max_output_tokens: args.max_output_tokens,
+        request_timeout_seconds: args.request_timeout_seconds,
+        no_stream: args.no_stream,
+        disable_thinking: args.disable_thinking,
+        native_tools: args.native_tools,
+        parallel_tools: args.parallel_tools,
+        structured_output: args.structured_output,
+        vision: args.vision,
+        prompt_caching: args.prompt_caching,
+        reasoning_controls: args.reasoning_controls,
+        output: args.output,
+    }
 }
 
 const RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;
@@ -259,7 +334,7 @@ async fn execute_resume_inner(
     let registry = builtin_registry_with_process(process_tool)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
-    let engine = RunEngine::new(&driver, &registry, &policy)
+    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_checkpoint_store(&checkpoints)
         .with_runtime_identity(runtime_identity)
@@ -401,7 +476,7 @@ async fn execute_run_inner(
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
     let context_fragments = memory_context_fragments(&contract, &memory)?;
-    let engine = RunEngine::new(&driver, &registry, &policy)
+    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
         .with_checkpoint_store(&checkpoints)
@@ -742,63 +817,165 @@ fn generated_model_token_budget(context_tokens: u64, output_tokens: u64, max_tur
         .saturating_mul(u64::from(max_turns))
 }
 
-fn build_driver(
-    contract: &TaskContract,
+fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn ModelDriver>, CliError> {
+    let model = configured_model(contract, args)?;
+    validate_model_options(args)?;
+    let capabilities = configured_capabilities(args);
+    build_driver_for_provider(model, capabilities, args)
+}
+
+fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
+    if args.native_tools == crate::cli::CapabilitySetting::Off
+        && args.parallel_tools == crate::cli::CapabilitySetting::On
+    {
+        return Err(CliError::Argument(
+            "--parallel-tools on conflicts with --native-tools off".to_owned(),
+        ));
+    }
+    if args.disable_thinking && args.reasoning_controls == crate::cli::CapabilitySetting::Off {
+        return Err(CliError::Argument(
+            "--disable-thinking conflicts with --reasoning-controls off".to_owned(),
+        ));
+    }
+    if args.disable_thinking
+        && matches!(
+            args.provider,
+            ProviderKind::Anthropic | ProviderKind::Gemini
+        )
+    {
+        return Err(CliError::Argument(
+            "--disable-thinking is an OpenAI-compatible extension and is not valid for native Anthropic or Gemini adapters"
+                .to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn build_driver_for_provider(
+    model: String,
+    capabilities: ModelCapabilities,
     args: &RunArgs,
-) -> Result<OpenAiCompatibleDriver, CliError> {
-    let model = args
-        .model
+) -> Result<Box<dyn ModelDriver>, CliError> {
+    let driver: Box<dyn ModelDriver> = match args.provider {
+        ProviderKind::Ollama => Box::new(
+            OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
+                name: "ollama".to_owned(),
+                base_url: args
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "http://127.0.0.1:11434/v1".to_owned()),
+                model,
+                api_key: None,
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+                disable_thinking: args.disable_thinking,
+            })
+            .map_err(CliError::Model)?,
+        ),
+        ProviderKind::OpenAi => Box::new(
+            OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
+                name: "openai".to_owned(),
+                base_url: args
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://api.openai.com/v1".to_owned()),
+                model,
+                api_key: Some(api_key_from_env(&args.api_key_env)?),
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+                disable_thinking: args.disable_thinking,
+            })
+            .map_err(CliError::Model)?,
+        ),
+        ProviderKind::OpenAiCompatible => Box::new(
+            OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
+                name: "openai-compatible".to_owned(),
+                base_url: args.base_url.clone().ok_or_else(|| {
+                    CliError::Argument("--base-url is required for open-ai-compatible".to_owned())
+                })?,
+                model,
+                api_key: std::env::var(&args.api_key_env)
+                    .ok()
+                    .filter(|api_key| !api_key.is_empty())
+                    .map(SecretString::from),
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+                disable_thinking: args.disable_thinking,
+            })
+            .map_err(CliError::Model)?,
+        ),
+        ProviderKind::Anthropic => Box::new(
+            AnthropicDriver::new(AnthropicConfig {
+                name: "anthropic".to_owned(),
+                base_url: args
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://api.anthropic.com".to_owned()),
+                model,
+                api_key: api_key_from_env(provider_key_env(args.provider, &args.api_key_env))?,
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+            })
+            .map_err(CliError::Model)?,
+        ),
+        ProviderKind::Gemini => Box::new(
+            GeminiDriver::new(GeminiConfig {
+                name: "gemini".to_owned(),
+                base_url: args
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://generativelanguage.googleapis.com".to_owned()),
+                model,
+                api_key: api_key_from_env(provider_key_env(args.provider, &args.api_key_env))?,
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+            })
+            .map_err(CliError::Model)?,
+        ),
+    };
+    Ok(driver)
+}
+
+fn configured_model(contract: &TaskContract, args: &RunArgs) -> Result<String, CliError> {
+    args.model
         .clone()
         .or_else(|| contract.model.clone())
         .ok_or_else(|| {
             CliError::Argument("a model is required; pass --model or set PACTRAIL_MODEL".to_owned())
-        })?;
-    let capabilities = ModelCapabilities {
+        })
+}
+
+fn configured_capabilities(args: &RunArgs) -> ModelCapabilities {
+    let native_tools = args.native_tools.resolve(true);
+    let provider_parallel = matches!(
+        args.provider,
+        ProviderKind::Anthropic | ProviderKind::Gemini
+    );
+    ModelCapabilities {
+        native_tools,
+        parallel_tools: native_tools && args.parallel_tools.resolve(provider_parallel),
+        structured_output: args.structured_output.resolve(false),
+        vision: args.vision.resolve(false),
+        prompt_caching: args.prompt_caching.resolve(false),
+        streaming: !args.no_stream,
+        reasoning_controls: args.reasoning_controls.resolve(args.disable_thinking),
         context_tokens: args.context_tokens,
         max_output_tokens: args.max_output_tokens,
-        ..ModelCapabilities::default()
-    };
-    let config = match args.provider {
-        ProviderKind::Ollama => OpenAiCompatibleConfig {
-            name: "ollama".to_owned(),
-            base_url: args
-                .base_url
-                .clone()
-                .unwrap_or_else(|| "http://127.0.0.1:11434/v1".to_owned()),
-            model,
-            api_key: None,
-            timeout: Duration::from_secs(args.request_timeout_seconds),
-            capabilities,
-            disable_thinking: args.disable_thinking,
-        },
-        ProviderKind::OpenAi => OpenAiCompatibleConfig {
-            name: "openai".to_owned(),
-            base_url: args
-                .base_url
-                .clone()
-                .unwrap_or_else(|| "https://api.openai.com/v1".to_owned()),
-            model,
-            api_key: Some(api_key_from_env(&args.api_key_env)?),
-            timeout: Duration::from_secs(args.request_timeout_seconds),
-            capabilities,
-            disable_thinking: args.disable_thinking,
-        },
-        ProviderKind::OpenAiCompatible => OpenAiCompatibleConfig {
-            name: "openai-compatible".to_owned(),
-            base_url: args.base_url.clone().ok_or_else(|| {
-                CliError::Argument("--base-url is required for open-ai-compatible".to_owned())
-            })?,
-            model,
-            api_key: std::env::var(&args.api_key_env)
-                .ok()
-                .filter(|api_key| !api_key.is_empty())
-                .map(SecretString::from),
-            timeout: Duration::from_secs(args.request_timeout_seconds),
-            capabilities,
-            disable_thinking: args.disable_thinking,
-        },
-    };
-    OpenAiCompatibleDriver::new(config).map_err(CliError::Model)
+        source: CapabilitySource::UserDeclared,
+    }
+}
+
+fn provider_key_env(provider: ProviderKind, configured: &str) -> &str {
+    match (provider, configured) {
+        (ProviderKind::Anthropic, "OPENAI_API_KEY") => "ANTHROPIC_API_KEY",
+        (ProviderKind::Gemini, "OPENAI_API_KEY") => "GEMINI_API_KEY",
+        _ => configured,
+    }
 }
 
 fn api_key_from_env(name: &str) -> Result<SecretString, CliError> {

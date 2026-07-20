@@ -16,7 +16,7 @@ use pactrail_core::{
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
     ConversationItem, FinishReason, Message, ModelDriver, ModelError, ModelRequest, ModelResponse,
-    ToolCall, ToolResult, Usage,
+    ModelStreamEvent, ModelStreamObserver, ToolCall, ToolResult, Usage,
 };
 use pactrail_store::{EventStore, StoreError};
 use pactrail_tools::{
@@ -25,7 +25,7 @@ use pactrail_tools::{
 };
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{Value, json};
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
@@ -42,6 +42,7 @@ const MAX_AUTOMATIC_REPAIR_CYCLES: u16 = 1;
 const MAX_MODEL_TOOL_RESULT_BYTES: usize = 256 * 1024;
 const MAX_REPAIR_DIAGNOSTIC_BYTES: usize = 24 * 1024;
 const MAX_VERIFICATION_STREAM_BYTES: usize = 12 * 1024;
+const MAX_TRACE_METADATA_CHARS: usize = 256;
 const CANCELLATION_CLEANUP_GRACE: std::time::Duration = std::time::Duration::from_secs(30);
 const READ_ONLY_STEERING_PROMPT: &str = r"Pactrail loop controller: the immediately preceding successful read-only call was identical to an earlier call and returned no new evidence. Do not repeat it. Read a relevant file, use another evidence-producing tool, or answer the original question from the evidence already available.";
 const READ_ONLY_RECOVERY_PROMPT: &str = r"Pactrail recovery controller: you repeated an identical successful read-only tool request and it cannot produce new evidence. Tool access is now intentionally disabled for this final recovery turn. Answer the user's original informational question using only the repository context and tool results already present in this conversation. Cite concrete workspace-relative file names when possible. Clearly distinguish observed facts from inference, say when the available evidence is insufficient, and do not emit tool-call JSON.";
@@ -81,6 +82,19 @@ pub enum RunProgress {
     },
     /// A model request is about to begin.
     ModelTurnStarted { turn: u16, max_turns: u16 },
+    /// A provider response stream produced its first bytes.
+    ModelStreamStarted {
+        provider_request_id: Option<String>,
+        time_to_first_byte_ms: u64,
+    },
+    /// A transient assistant-text fragment arrived. It is not durable authority.
+    ModelTextDelta { text: String },
+    /// A streamed tool call began, but is not executable until the turn completes.
+    ModelToolCallStarted { index: usize, name: String },
+    /// Partial argument bytes arrived for a non-executable streamed tool call.
+    ModelToolArgumentsDelta { index: usize, bytes: usize },
+    /// The provider reported cumulative usage during the response stream.
+    ModelUsageUpdate { usage: Usage },
     /// A model request completed and returned control to the engine.
     ModelTurnCompleted {
         turn: u16,
@@ -148,6 +162,42 @@ impl RunObserver for SilentRunObserver {
 }
 
 struct ObserverApprovalResolver<'a>(&'a dyn RunObserver);
+
+struct ObserverModelStream<'a>(&'a dyn RunObserver);
+
+impl ModelStreamObserver for ObserverModelStream<'_> {
+    fn on_event(&self, event: &ModelStreamEvent) {
+        let progress = match event {
+            ModelStreamEvent::ResponseStarted {
+                provider_request_id,
+                time_to_first_byte_ms,
+            } => RunProgress::ModelStreamStarted {
+                provider_request_id: provider_request_id.clone(),
+                time_to_first_byte_ms: *time_to_first_byte_ms,
+            },
+            ModelStreamEvent::TextDelta { text } => {
+                RunProgress::ModelTextDelta { text: text.clone() }
+            }
+            ModelStreamEvent::ToolCallStarted { index, name, .. } => {
+                RunProgress::ModelToolCallStarted {
+                    index: *index,
+                    name: name.clone(),
+                }
+            }
+            ModelStreamEvent::ToolArgumentsDelta { index, bytes } => {
+                RunProgress::ModelToolArgumentsDelta {
+                    index: *index,
+                    bytes: *bytes,
+                }
+            }
+            ModelStreamEvent::UsageUpdate { usage } => {
+                RunProgress::ModelUsageUpdate { usage: *usage }
+            }
+            _ => return,
+        };
+        self.0.on_progress(&progress);
+    }
+}
 
 impl ApprovalResolver for ObserverApprovalResolver<'_> {
     fn resolve(&self, request: &ApprovalRequest) -> ApprovalDecision {
@@ -442,7 +492,11 @@ impl<'a> RunEngine<'a> {
         );
         let max_turns = self.max_turns.min(contract.budget.max_model_attempts);
         let goal_intent = classify_goal(&contract.goal);
-        let tool_descriptors = self.tools.descriptors();
+        let tool_descriptors = if model_capabilities.native_tools {
+            self.tools.descriptors()
+        } else {
+            Vec::new()
+        };
         let (
             mut journal,
             mut state,
@@ -665,7 +719,7 @@ impl<'a> RunEngine<'a> {
                 temperature: Some(0.0),
             };
             let model_started = Instant::now();
-            let response = match self.invoke_model(&request).await {
+            let response = match self.invoke_model(&request, observer).await {
                 Ok(response) => response,
                 Err(EngineError::Cancelled) => return Err(EngineError::Cancelled),
                 Err(error) => {
@@ -692,6 +746,16 @@ impl<'a> RunEngine<'a> {
                 });
             }
             let mut model_attributes = BTreeMap::from([
+                ("adapter".to_owned(), bounded_trace_value(self.model.name())),
+                (
+                    "stream_mode".to_owned(),
+                    if self.model.capabilities().streaming {
+                        "streaming"
+                    } else {
+                        "buffered"
+                    }
+                    .to_owned(),
+                ),
                 ("turn".to_owned(), (turn + 1).to_string()),
                 (
                     "finish_reason".to_owned(),
@@ -716,8 +780,12 @@ impl<'a> RunEngine<'a> {
                 ),
             ]);
             if let Some(request_id) = &response.provider_request_id {
-                model_attributes.insert("provider_request_id".to_owned(), request_id.clone());
+                model_attributes.insert(
+                    "provider_request_id".to_owned(),
+                    bounded_trace_value(request_id),
+                );
             }
+            extend_provider_trace_attributes(&mut model_attributes, &response.extensions);
             journal.append(RunEvent::ActionCompleted(ActionRecord {
                 actor: format!("model:{}/{}", self.model.name(), self.model.model()),
                 action: "invoke".to_owned(),
@@ -733,6 +801,20 @@ impl<'a> RunEngine<'a> {
                 duration_ms: model_duration_ms,
                 attributes: model_attributes,
             }))?;
+
+            if response.finish_reason == FinishReason::ContentFilter {
+                transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                return Err(EngineError::Protocol(
+                    "provider safety policy blocked the model response".to_owned(),
+                ));
+            }
+            if !model_capabilities.native_tools && !response.tool_calls.is_empty() {
+                transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                return Err(EngineError::Protocol(
+                    "model returned tool calls while native tools are disabled in its capability profile"
+                        .to_owned(),
+                ));
+            }
 
             if response.tool_calls.is_empty() {
                 if response.finish_reason == FinishReason::ToolCalls {
@@ -1230,7 +1312,7 @@ impl<'a> RunEngine<'a> {
             temperature: Some(0.0),
         };
         let model_started = Instant::now();
-        let response = self.invoke_model(&request).await?;
+        let response = self.invoke_model(&request, observer).await?;
         let duration_ms = elapsed_millis(model_started);
         observer.on_progress(&RunProgress::ModelTurnCompleted {
             turn,
@@ -1253,6 +1335,11 @@ impl<'a> RunEngine<'a> {
             turn,
             duration_ms,
         )))?;
+        if response.finish_reason == FinishReason::ContentFilter {
+            return Err(EngineError::Protocol(
+                "provider safety policy blocked the recovery response".to_owned(),
+            ));
+        }
         if !response.tool_calls.is_empty() || response.finish_reason == FinishReason::ToolCalls {
             return Err(EngineError::Protocol(
                 "model attempted a tool call while tools were disabled for recovery".to_owned(),
@@ -1286,6 +1373,16 @@ impl<'a> RunEngine<'a> {
         duration_ms: u64,
     ) -> ActionRecord {
         let mut attributes = BTreeMap::from([
+            ("adapter".to_owned(), bounded_trace_value(self.model.name())),
+            (
+                "stream_mode".to_owned(),
+                if self.model.capabilities().streaming {
+                    "streaming"
+                } else {
+                    "buffered"
+                }
+                .to_owned(),
+            ),
             ("turn".to_owned(), turn.to_string()),
             ("recovery".to_owned(), "read_only_synthesis".to_owned()),
             (
@@ -1311,8 +1408,12 @@ impl<'a> RunEngine<'a> {
             ),
         ]);
         if let Some(request_id) = &response.provider_request_id {
-            attributes.insert("provider_request_id".to_owned(), request_id.clone());
+            attributes.insert(
+                "provider_request_id".to_owned(),
+                bounded_trace_value(request_id),
+            );
         }
+        extend_provider_trace_attributes(&mut attributes, &response.extensions);
         ActionRecord {
             actor: format!("model:{}/{}", self.model.name(), self.model.model()),
             action: "recover_read_only_answer".to_owned(),
@@ -1714,7 +1815,7 @@ impl<'a> RunEngine<'a> {
         transaction: &WorkspaceTransaction,
         journal: &mut Journal<'_>,
         observer: &dyn RunObserver,
-        input: serde_json::Value,
+        input: Value,
     ) -> Result<Result<ToolOutput, ToolError>, EngineError> {
         let policy_audit = PolicyAuditLog::default();
         let observer_resolver = ObserverApprovalResolver(observer);
@@ -1917,11 +2018,18 @@ impl RunEngine<'_> {
         })
     }
 
-    async fn invoke_model(&self, request: &ModelRequest) -> Result<ModelResponse, EngineError> {
+    async fn invoke_model(
+        &self,
+        request: &ModelRequest,
+        observer: &dyn RunObserver,
+    ) -> Result<ModelResponse, EngineError> {
+        let stream_observer = ObserverModelStream(observer);
         tokio::select! {
             biased;
             () = self.cancellation.cancelled() => Err(EngineError::Cancelled),
-            result = self.model.invoke(request) => result.map_err(EngineError::Model),
+            result = self.model.invoke_with_observer(request, &stream_observer) => {
+                result.map_err(EngineError::Model)
+            },
         }
     }
 
@@ -2001,7 +2109,7 @@ impl VerificationPhase {
 
 struct VerificationCommandOutcome {
     succeeded: bool,
-    diagnostic: serde_json::Value,
+    diagnostic: Value,
     backend_kind: Option<String>,
 }
 
@@ -2197,7 +2305,7 @@ fn verification_attributes(
     attributes
 }
 
-fn process_backend_attributes(content: &serde_json::Value) -> BTreeMap<String, String> {
+fn process_backend_attributes(content: &Value) -> BTreeMap<String, String> {
     [
         "kind",
         "strength",
@@ -2217,7 +2325,7 @@ fn process_backend_attributes(content: &serde_json::Value) -> BTreeMap<String, S
     .collect()
 }
 
-fn process_backend_attribute(content: &serde_json::Value, field: &str) -> Option<String> {
+fn process_backend_attribute(content: &Value, field: &str) -> Option<String> {
     content
         .get("backend")?
         .get(field)?
@@ -2228,7 +2336,7 @@ fn process_backend_attribute(content: &serde_json::Value, field: &str) -> Option
 struct VerificationResult {
     evidence: Vec<Evidence>,
     risks: Vec<String>,
-    diagnostics: Vec<serde_json::Value>,
+    diagnostics: Vec<Value>,
 }
 
 impl VerificationResult {
@@ -2688,7 +2796,49 @@ fn elapsed_millis(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-fn bound_tool_content(content: serde_json::Value) -> (serde_json::Value, usize, bool) {
+fn extend_provider_trace_attributes(
+    attributes: &mut BTreeMap<String, String>,
+    extensions: &serde_json::Map<String, Value>,
+) {
+    const SAFE_KEYS: [&str; 7] = [
+        "created",
+        "model",
+        "modelVersion",
+        "responseId",
+        "streaming",
+        "system_fingerprint",
+        "time_to_first_byte_ms",
+    ];
+    for key in SAFE_KEYS {
+        let Some(value) = extensions.get(key) else {
+            continue;
+        };
+        let rendered = match value {
+            Value::Bool(value) => value.to_string(),
+            Value::Number(value) => value.to_string(),
+            Value::String(value) => bounded_trace_value(value),
+            Value::Null | Value::Array(_) | Value::Object(_) => continue,
+        };
+        attributes.insert(format!("provider.{key}"), rendered);
+    }
+}
+
+fn bounded_trace_value(value: &str) -> String {
+    let mut rendered = String::new();
+    for character in value.chars().take(MAX_TRACE_METADATA_CHARS) {
+        if character.is_control() {
+            rendered.extend(character.escape_default());
+        } else {
+            rendered.push(character);
+        }
+    }
+    if value.chars().count() > MAX_TRACE_METADATA_CHARS {
+        rendered.push('\u{2026}');
+    }
+    rendered
+}
+
+fn bound_tool_content(content: Value) -> (Value, usize, bool) {
     let serialized = content.to_string();
     let original_bytes = serialized.len();
     if original_bytes <= MAX_MODEL_TOOL_RESULT_BYTES {
@@ -2811,7 +2961,7 @@ mod tests {
         async fn execute(
             &self,
             context: &ToolContext<'_>,
-            _input: serde_json::Value,
+            _input: Value,
         ) -> Result<ToolOutput, ToolError> {
             context.authorize(&Capability::FileRead, ".", "barrier_read")?;
             self.barrier.wait().await;
@@ -2893,13 +3043,14 @@ mod tests {
         }
     }
 
-    fn tool_response(id: &str, name: &str, arguments: serde_json::Value) -> ModelResponse {
+    fn tool_response(id: &str, name: &str, arguments: Value) -> ModelResponse {
         ModelResponse {
             text: String::new(),
             tool_calls: vec![ToolCall {
                 id: id.to_owned(),
                 name: name.to_owned(),
                 arguments,
+                extensions: serde_json::Map::new(),
             }],
             finish_reason: FinishReason::ToolCalls,
             usage: Usage::default(),
@@ -3423,11 +3574,13 @@ mod tests {
                         id: "parallel-1".to_owned(),
                         name: "barrier_read".to_owned(),
                         arguments: json!({}),
+                        extensions: serde_json::Map::new(),
                     },
                     ToolCall {
                         id: "parallel-2".to_owned(),
                         name: "barrier_read".to_owned(),
                         arguments: json!({}),
+                        extensions: serde_json::Map::new(),
                     },
                 ],
                 finish_reason: FinishReason::ToolCalls,
@@ -3513,6 +3666,7 @@ mod tests {
                     id: "call-1".to_owned(),
                     name: "write_file".to_owned(),
                     arguments: json!({"path":"README.md","content":"# Built by Pactrail\n"}),
+                    extensions: serde_json::Map::new(),
                 }],
                 finish_reason: FinishReason::ToolCalls,
                 usage: Usage {
@@ -4165,5 +4319,88 @@ mod tests {
                 .map(String::as_str),
             Some("profile-digest")
         );
+    }
+
+    #[test]
+    fn provider_trace_metadata_is_scalar_bounded_and_terminal_safe() {
+        let mut extensions = serde_json::Map::new();
+        extensions.insert("streaming".to_owned(), Value::Bool(true));
+        extensions.insert(
+            "modelVersion".to_owned(),
+            Value::String(format!("bad\u{001b}[2J{}", "x".repeat(300))),
+        );
+        extensions.insert(
+            "block_reason".to_owned(),
+            Value::String("secret".to_owned()),
+        );
+        extensions.insert("nested".to_owned(), json!({"ignored": true}));
+        let mut attributes = BTreeMap::new();
+
+        extend_provider_trace_attributes(&mut attributes, &extensions);
+
+        assert_eq!(
+            attributes.get("provider.streaming").map(String::as_str),
+            Some("true")
+        );
+        let version = attributes
+            .get("provider.modelVersion")
+            .unwrap_or_else(|| unreachable!("model version"));
+        assert!(version.contains(r"\u{1b}"));
+        assert!(!version.contains('\u{001b}'));
+        assert!(version.ends_with('\u{2026}'));
+        assert!(!attributes.contains_key("provider.block_reason"));
+        assert!(!attributes.contains_key("provider.nested"));
+    }
+
+    #[tokio::test]
+    async fn content_filtered_response_fails_without_becoming_an_answer() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "filtered".to_owned(),
+            responses: Mutex::new(VecDeque::from([ModelResponse {
+                text: String::new(),
+                tool_calls: Vec::new(),
+                finish_reason: FinishReason::ContentFilter,
+                usage: Usage::default(),
+                provider_request_id: Some("request-1".to_owned()),
+                extensions: serde_json::Map::new(),
+            }])),
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let engine = RunEngine::new(&model, &registry, &policy).with_max_turns(1);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let run_id = RunId::new();
+        let mut contract = TaskContract::new("Explain the workspace", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+
+        let result = engine
+            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .await;
+
+        assert!(
+            matches!(
+                &result,
+                Err(EngineError::Protocol(message))
+                    if message == "provider safety policy blocked the model response"
+            ),
+            "unexpected result: {result:?}"
+        );
+        let snapshot = store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        assert_eq!(snapshot.state, RunState::Failed);
     }
 }

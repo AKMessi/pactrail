@@ -1,4 +1,5 @@
-use std::time::{Duration, SystemTime};
+use std::collections::BTreeMap;
+use std::time::{Duration, Instant, SystemTime};
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -7,12 +8,16 @@ use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Value, json};
 use tracing::warn;
 
+use crate::sse::{SseDecoder, SseEvent};
 use crate::{
     ConversationItem, FinishReason, Message, ModelCapabilities, ModelDriver, ModelError,
-    ModelRequest, ModelResponse, Role, ToolCall, Usage,
+    ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, Usage,
 };
 
 const MAX_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+const MAX_STREAM_TEXT_BYTES: usize = 8 * 1024 * 1024;
+const MAX_TOOL_ARGUMENT_BYTES: usize = 1024 * 1024;
+const MAX_TOOL_CALLS: usize = 128;
 const MAX_RETRIES: u32 = 3;
 const MIN_RETRY_DELAY: Duration = Duration::from_millis(250);
 const MAX_RETRY_DELAY: Duration = Duration::from_mins(1);
@@ -27,6 +32,8 @@ pub struct OpenAiCompatibleConfig {
     pub api_key: Option<SecretString>,
     pub timeout: Duration,
     pub capabilities: ModelCapabilities,
+    /// Use Chat Completions SSE instead of a buffered JSON response.
+    pub stream: bool,
     /// Request the provider's non-thinking mode using the OpenAI-compatible
     /// `thinking.type=disabled` extension. This is opt-in because the field is
     /// not part of the core `OpenAI` Chat Completions schema.
@@ -44,6 +51,7 @@ impl OpenAiCompatibleConfig {
             api_key: None,
             timeout: Duration::from_mins(5),
             capabilities: ModelCapabilities::default(),
+            stream: true,
             disable_thinking: false,
         }
     }
@@ -152,6 +160,67 @@ impl OpenAiCompatibleDriver {
             });
         }
     }
+
+    async fn send_stream(
+        &self,
+        body: &Value,
+        observer: &dyn ModelStreamObserver,
+    ) -> Result<ModelResponse, ModelError> {
+        let request_started = Instant::now();
+        let mut attempt = 0_u32;
+        loop {
+            let mut request = self.client.post(self.endpoint()).json(body);
+            if let Some(api_key) = &self.config.api_key {
+                request = request.bearer_auth(api_key.expose_secret());
+            }
+            let response = request.send().await.map_err(ModelError::Transport)?;
+            let status = response.status();
+            let request_id = response
+                .headers()
+                .get("x-request-id")
+                .and_then(|header| header.to_str().ok())
+                .map(str::to_owned);
+            let server_retry_after = parse_retry_after(response.headers(), SystemTime::now());
+            if status.is_success() {
+                let event_stream = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|value| value.to_str().ok())
+                    .is_some_and(|value| {
+                        value.split(';').next().is_some_and(|media| {
+                            media.trim().eq_ignore_ascii_case("text/event-stream")
+                        })
+                    });
+                if !event_stream {
+                    return Err(ModelError::MalformedResponse(
+                        "provider did not honor streaming with a text/event-stream response; select buffered mode explicitly"
+                            .to_owned(),
+                    ));
+                }
+                return accumulate_openai_stream(response, request_id, request_started, observer)
+                    .await;
+            }
+            let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+            let bytes = read_bounded(response, MAX_RESPONSE_BYTES).await?;
+            let message = provider_message(&bytes);
+            if retryable && attempt < MAX_RETRIES {
+                attempt += 1;
+                let delay = retry_delay(status, attempt, server_retry_after);
+                warn!(
+                    attempt,
+                    status = status.as_u16(),
+                    delay_ms = delay.as_millis(),
+                    "retrying model stream request before response acceptance"
+                );
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+            return Err(ModelError::Provider {
+                status: status.as_u16(),
+                message,
+            });
+        }
+    }
 }
 
 fn parse_retry_after(headers: &HeaderMap, now: SystemTime) -> Option<Duration> {
@@ -191,15 +260,370 @@ impl ModelDriver for OpenAiCompatibleDriver {
     }
 
     async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
-        let body = request_body(&self.config, request)?;
+        let body = request_body(&self.config, request, false)?;
         let (response, request_id) = self.send(&body).await?;
         parse_response(&response, request_id)
+    }
+
+    async fn invoke_with_observer(
+        &self,
+        request: &ModelRequest,
+        observer: &dyn ModelStreamObserver,
+    ) -> Result<ModelResponse, ModelError> {
+        if !self.config.stream {
+            let response = self.invoke(request).await?;
+            emit_complete_response(observer, &response);
+            return Ok(response);
+        }
+        let body = request_body(&self.config, request, true)?;
+        self.send_stream(&body, observer).await
+    }
+}
+
+fn emit_complete_response(observer: &dyn ModelStreamObserver, response: &ModelResponse) {
+    observer.on_event(&ModelStreamEvent::ResponseStarted {
+        provider_request_id: response.provider_request_id.clone(),
+        time_to_first_byte_ms: 0,
+    });
+    if !response.text.is_empty() {
+        observer.on_event(&ModelStreamEvent::TextDelta {
+            text: response.text.clone(),
+        });
+    }
+    for (index, call) in response.tool_calls.iter().enumerate() {
+        observer.on_event(&ModelStreamEvent::ToolCallStarted {
+            index,
+            id: call.id.clone(),
+            name: call.name.clone(),
+        });
+    }
+    observer.on_event(&ModelStreamEvent::UsageUpdate {
+        usage: response.usage,
+    });
+}
+
+#[derive(Default)]
+struct PartialToolCall {
+    id: Option<String>,
+    name: Option<String>,
+    arguments: String,
+    announced: bool,
+}
+
+#[derive(Default)]
+struct OpenAiStreamAccumulator {
+    response_id: Option<String>,
+    text: String,
+    tool_calls: BTreeMap<usize, PartialToolCall>,
+    finish_reason: Option<FinishReason>,
+    usage: Usage,
+    usage_seen: bool,
+    done: bool,
+}
+
+impl OpenAiStreamAccumulator {
+    fn apply(
+        &mut self,
+        event: &SseEvent,
+        observer: &dyn ModelStreamObserver,
+    ) -> Result<(), ModelError> {
+        if self.done {
+            return Err(ModelError::MalformedResponse(
+                "OpenAI stream emitted data after [DONE]".to_owned(),
+            ));
+        }
+        if event.data == "[DONE]" {
+            self.done = true;
+            return Ok(());
+        }
+        if event.event.as_deref() == Some("error") {
+            return Err(ModelError::Provider {
+                status: 200,
+                message: provider_message(event.data.as_bytes()),
+            });
+        }
+        let value: Value = serde_json::from_str(&event.data).map_err(ModelError::Json)?;
+        if value.get("error").is_some() {
+            return Err(ModelError::Provider {
+                status: 200,
+                message: provider_message(event.data.as_bytes()),
+            });
+        }
+        if let Some(id) = value.get("id").and_then(Value::as_str) {
+            merge_stable_string(&mut self.response_id, id, "response id")?;
+        }
+        if let Some(usage) = value.get("usage").filter(|usage| !usage.is_null()) {
+            let next = Usage {
+                input_tokens: number(usage, "prompt_tokens"),
+                output_tokens: number(usage, "completion_tokens"),
+                cached_input_tokens: cached_input_tokens(usage),
+            };
+            if self.usage_seen
+                && (next.input_tokens < self.usage.input_tokens
+                    || next.output_tokens < self.usage.output_tokens
+                    || next.cached_input_tokens < self.usage.cached_input_tokens)
+            {
+                return Err(ModelError::MalformedResponse(
+                    "OpenAI stream usage counters regressed".to_owned(),
+                ));
+            }
+            self.usage = next;
+            self.usage_seen = true;
+            observer.on_event(&ModelStreamEvent::UsageUpdate { usage: next });
+        }
+        let choices = value
+            .get("choices")
+            .and_then(Value::as_array)
+            .ok_or_else(|| {
+                ModelError::MalformedResponse("OpenAI stream chunk is missing choices".to_owned())
+            })?;
+        if choices.len() > 1 {
+            return Err(ModelError::MalformedResponse(
+                "OpenAI stream returned more than one choice".to_owned(),
+            ));
+        }
+        let Some(choice) = choices.first() else {
+            return Ok(());
+        };
+        if choice.get("index").and_then(Value::as_u64).unwrap_or(0) != 0 {
+            return Err(ModelError::MalformedResponse(
+                "OpenAI stream returned a non-zero choice index".to_owned(),
+            ));
+        }
+        if let Some(reason) = choice.get("finish_reason").and_then(Value::as_str) {
+            let reason = openai_finish_reason(Some(reason));
+            if self.finish_reason.replace(reason).is_some() {
+                return Err(ModelError::MalformedResponse(
+                    "OpenAI stream emitted more than one finish reason".to_owned(),
+                ));
+            }
+        }
+        let Some(delta) = choice.get("delta") else {
+            return Ok(());
+        };
+        if let Some(text) = delta.get("content").and_then(Value::as_str) {
+            if self.text.len().saturating_add(text.len()) > MAX_STREAM_TEXT_BYTES {
+                return Err(ModelError::ResponseTooLarge {
+                    limit: MAX_STREAM_TEXT_BYTES,
+                });
+            }
+            self.text.push_str(text);
+            if !text.is_empty() {
+                observer.on_event(&ModelStreamEvent::TextDelta {
+                    text: text.to_owned(),
+                });
+            }
+        }
+        let Some(calls) = delta.get("tool_calls").and_then(Value::as_array) else {
+            return Ok(());
+        };
+        for call in calls {
+            self.apply_tool_delta(call, observer)?;
+        }
+        Ok(())
+    }
+
+    fn apply_tool_delta(
+        &mut self,
+        value: &Value,
+        observer: &dyn ModelStreamObserver,
+    ) -> Result<(), ModelError> {
+        let index_u64 = value.get("index").and_then(Value::as_u64).ok_or_else(|| {
+            ModelError::MalformedResponse("streamed tool call is missing its index".to_owned())
+        })?;
+        let index = usize::try_from(index_u64).map_err(|_| {
+            ModelError::MalformedResponse("streamed tool call index is too large".to_owned())
+        })?;
+        if index >= MAX_TOOL_CALLS {
+            return Err(ModelError::MalformedResponse(format!(
+                "streamed tool call index exceeds the {MAX_TOOL_CALLS}-call limit"
+            )));
+        }
+        let partial = self.tool_calls.entry(index).or_default();
+        if let Some(id) = value.get("id").and_then(Value::as_str) {
+            merge_stable_string(&mut partial.id, id, "tool call id")?;
+        }
+        if let Some(function) = value.get("function") {
+            if let Some(name) = function.get("name").and_then(Value::as_str) {
+                merge_stable_string(&mut partial.name, name, "tool call name")?;
+            }
+            if let Some(arguments) = function.get("arguments").and_then(Value::as_str) {
+                if partial.arguments.len().saturating_add(arguments.len()) > MAX_TOOL_ARGUMENT_BYTES
+                {
+                    return Err(ModelError::ResponseTooLarge {
+                        limit: MAX_TOOL_ARGUMENT_BYTES,
+                    });
+                }
+                partial.arguments.push_str(arguments);
+                observer.on_event(&ModelStreamEvent::ToolArgumentsDelta {
+                    index,
+                    bytes: partial.arguments.len(),
+                });
+            }
+        }
+        if !partial.announced
+            && let (Some(id), Some(name)) = (&partial.id, &partial.name)
+        {
+            observer.on_event(&ModelStreamEvent::ToolCallStarted {
+                index,
+                id: id.clone(),
+                name: name.clone(),
+            });
+            partial.announced = true;
+        }
+        Ok(())
+    }
+
+    fn finish(
+        self,
+        request_id: Option<String>,
+        first_byte_ms: u64,
+    ) -> Result<ModelResponse, ModelError> {
+        if !self.done {
+            return Err(ModelError::MalformedResponse(
+                "OpenAI stream disconnected before [DONE]".to_owned(),
+            ));
+        }
+        let finish_reason = self.finish_reason.ok_or_else(|| {
+            ModelError::MalformedResponse("OpenAI stream is missing a finish reason".to_owned())
+        })?;
+        let mut tool_calls = Vec::with_capacity(self.tool_calls.len());
+        for (expected, (index, call)) in self.tool_calls.into_iter().enumerate() {
+            if index != expected {
+                return Err(ModelError::MalformedResponse(
+                    "OpenAI stream tool call indexes are not contiguous".to_owned(),
+                ));
+            }
+            let id = call.id.ok_or_else(|| {
+                ModelError::MalformedResponse("streamed tool call is missing its id".to_owned())
+            })?;
+            let name = call.name.ok_or_else(|| {
+                ModelError::MalformedResponse("streamed tool call is missing its name".to_owned())
+            })?;
+            let arguments: Value =
+                serde_json::from_str(&call.arguments).map_err(ModelError::Json)?;
+            if !arguments.is_object() {
+                return Err(ModelError::MalformedResponse(
+                    "streamed tool call arguments must be a JSON object".to_owned(),
+                ));
+            }
+            tool_calls.push(ToolCall {
+                id,
+                name,
+                arguments,
+                extensions: serde_json::Map::new(),
+            });
+        }
+        if finish_reason == FinishReason::ToolCalls && tool_calls.is_empty() {
+            return Err(ModelError::MalformedResponse(
+                "OpenAI stream stopped for tool calls but returned none".to_owned(),
+            ));
+        }
+        let mut extensions = serde_json::Map::from_iter([
+            ("streaming".to_owned(), Value::Bool(true)),
+            (
+                "time_to_first_byte_ms".to_owned(),
+                Value::from(first_byte_ms),
+            ),
+        ]);
+        if let Some(id) = self.response_id {
+            extensions.insert("id".to_owned(), Value::String(id));
+        }
+        Ok(ModelResponse {
+            text: self.text,
+            tool_calls,
+            finish_reason,
+            usage: self.usage,
+            provider_request_id: request_id,
+            extensions,
+        })
+    }
+}
+
+fn merge_stable_string(
+    target: &mut Option<String>,
+    value: &str,
+    field: &str,
+) -> Result<(), ModelError> {
+    if value.is_empty() || value.len() > 512 || value.chars().any(char::is_control) {
+        return Err(ModelError::MalformedResponse(format!(
+            "streamed {field} is empty, oversized, or contains control characters"
+        )));
+    }
+    match target {
+        Some(existing) if existing != value => Err(ModelError::MalformedResponse(format!(
+            "streamed {field} changed during the response"
+        ))),
+        Some(_) => Ok(()),
+        None => {
+            *target = Some(value.to_owned());
+            Ok(())
+        }
+    }
+}
+
+async fn accumulate_openai_stream(
+    response: reqwest::Response,
+    request_id: Option<String>,
+    request_started: Instant,
+    observer: &dyn ModelStreamObserver,
+) -> Result<ModelResponse, ModelError> {
+    if response.content_length().is_some_and(|length| {
+        usize::try_from(length).map_or(true, |length| length > MAX_RESPONSE_BYTES)
+    }) {
+        return Err(ModelError::ResponseTooLarge {
+            limit: MAX_RESPONSE_BYTES,
+        });
+    }
+    let mut decoder = SseDecoder::new();
+    let mut accumulator = OpenAiStreamAccumulator::default();
+    let mut wire_bytes = 0_usize;
+    let mut first_byte_ms = None;
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(ModelError::Transport)?;
+        wire_bytes = wire_bytes.saturating_add(chunk.len());
+        if wire_bytes > MAX_RESPONSE_BYTES {
+            return Err(ModelError::ResponseTooLarge {
+                limit: MAX_RESPONSE_BYTES,
+            });
+        }
+        let elapsed = first_byte_ms.get_or_insert_with(|| {
+            u64::try_from(request_started.elapsed().as_millis()).unwrap_or(u64::MAX)
+        });
+        if wire_bytes == chunk.len() {
+            observer.on_event(&ModelStreamEvent::ResponseStarted {
+                provider_request_id: request_id.clone(),
+                time_to_first_byte_ms: *elapsed,
+            });
+        }
+        for event in decoder
+            .push(&chunk)
+            .map_err(|error| ModelError::MalformedResponse(error.to_string()))?
+        {
+            accumulator.apply(&event, observer)?;
+        }
+    }
+    decoder
+        .finish()
+        .map_err(|error| ModelError::MalformedResponse(error.to_string()))?;
+    accumulator.finish(request_id, first_byte_ms.unwrap_or_default())
+}
+
+fn openai_finish_reason(reason: Option<&str>) -> FinishReason {
+    match reason {
+        Some("stop") => FinishReason::Complete,
+        Some("tool_calls" | "function_call") => FinishReason::ToolCalls,
+        Some("length") => FinishReason::Length,
+        Some("content_filter") => FinishReason::ContentFilter,
+        _ => FinishReason::Unknown,
     }
 }
 
 fn request_body(
     config: &OpenAiCompatibleConfig,
     request: &ModelRequest,
+    stream: bool,
 ) -> Result<Value, ModelError> {
     if request.conversation.is_empty() {
         return Err(ModelError::InvalidRequest(
@@ -233,8 +657,11 @@ fn request_body(
         "model": config.model,
         "messages": messages,
         "max_tokens": request.max_output_tokens,
-        "stream": false,
+        "stream": stream,
     });
+    if stream {
+        body["stream_options"] = json!({ "include_usage": true });
+    }
     if config.disable_thinking {
         body["thinking"] = json!({ "type": "disabled" });
     }
@@ -343,13 +770,7 @@ fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResp
         .map(|calls| calls.iter().map(parse_tool_call).collect())
         .transpose()?
         .unwrap_or_default();
-    let finish_reason = match choice.get("finish_reason").and_then(Value::as_str) {
-        Some("stop") => FinishReason::Complete,
-        Some("tool_calls" | "function_call") => FinishReason::ToolCalls,
-        Some("length") => FinishReason::Length,
-        Some("content_filter") => FinishReason::ContentFilter,
-        _ => FinishReason::Unknown,
-    };
+    let finish_reason = openai_finish_reason(choice.get("finish_reason").and_then(Value::as_str));
     let usage = value
         .get("usage")
         .map_or_else(Usage::default, |usage| Usage {
@@ -404,6 +825,7 @@ fn parse_tool_call(value: &Value) -> Result<ToolCall, ModelError> {
         id: id.to_owned(),
         name: name.to_owned(),
         arguments,
+        extensions: serde_json::Map::new(),
     })
 }
 
@@ -447,7 +869,63 @@ fn provider_message(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
     use super::*;
+
+    #[derive(Default)]
+    struct RecordingObserver(Mutex<Vec<ModelStreamEvent>>);
+
+    impl ModelStreamObserver for RecordingObserver {
+        fn on_event(&self, event: &ModelStreamEvent) {
+            if let Ok(mut events) = self.0.lock() {
+                events.push(event.clone());
+            }
+        }
+    }
+
+    fn sse(data: &Value) -> SseEvent {
+        SseEvent {
+            event: None,
+            data: serde_json::to_string(data)
+                .unwrap_or_else(|error| unreachable!("fixture JSON: {error}")),
+        }
+    }
+
+    fn read_http_request(stream: &mut std::net::TcpStream) -> std::io::Result<Vec<u8>> {
+        use std::io::{Error, ErrorKind, Read};
+
+        const LIMIT: usize = 64 * 1024;
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 4_096];
+        loop {
+            let read = stream.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+            if request.len().saturating_add(read) > LIMIT {
+                return Err(Error::new(ErrorKind::InvalidData, "request too large"));
+            }
+            request.extend_from_slice(&buffer[..read]);
+            let Some(header_end) = request.windows(4).position(|window| window == b"\r\n\r\n")
+            else {
+                continue;
+            };
+            let header_bytes = header_end.saturating_add(4);
+            let headers = std::str::from_utf8(&request[..header_end])
+                .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid request headers"))?;
+            let content_length = headers.lines().find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                name.eq_ignore_ascii_case("content-length")
+                    .then(|| value.trim().parse::<usize>().ok())
+                    .flatten()
+            });
+            if content_length.is_none_or(|length| request.len() >= header_bytes + length) {
+                return Ok(request);
+            }
+        }
+        Ok(request)
+    }
 
     fn config(base_url: &str) -> OpenAiCompatibleConfig {
         OpenAiCompatibleConfig {
@@ -457,6 +935,7 @@ mod tests {
             api_key: None,
             timeout: Duration::from_secs(1),
             capabilities: ModelCapabilities::default(),
+            stream: false,
             disable_thinking: false,
         }
     }
@@ -554,15 +1033,131 @@ mod tests {
             max_output_tokens: 128,
             temperature: Some(0.0),
         };
-        let default_body = request_body(&config("https://api.example.com/v1"), &request)
+        let default_body = request_body(&config("https://api.example.com/v1"), &request, false)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
         assert!(default_body.get("thinking").is_none());
 
         let mut non_thinking = config("https://api.example.com/v1");
         non_thinking.disable_thinking = true;
-        let body = request_body(&non_thinking, &request)
+        let body = request_body(&non_thinking, &request, false)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
         assert_eq!(body["thinking"]["type"], "disabled");
+    }
+
+    #[test]
+    fn streaming_request_explicitly_asks_for_usage() {
+        let request = ModelRequest {
+            conversation: vec![ConversationItem::Message(Message::user("task"))],
+            tools: Vec::new(),
+            max_output_tokens: 128,
+            temperature: None,
+        };
+        let mut streaming = config("https://api.example.com/v1");
+        streaming.stream = true;
+        let body = request_body(&streaming, &request, true)
+            .unwrap_or_else(|error| unreachable!("valid request: {error}"));
+        assert_eq!(body["stream"], true);
+        assert_eq!(body["stream_options"]["include_usage"], true);
+    }
+
+    #[test]
+    fn accumulates_parallel_text_tool_arguments_and_cumulative_usage() {
+        let observer = RecordingObserver::default();
+        let mut accumulator = OpenAiStreamAccumulator::default();
+        for event in [
+            sse(&json!({
+                "id": "response-1",
+                "choices": [{"index": 0, "delta": {"content": "Inspecting "}}]
+            })),
+            sse(&json!({
+                "id": "response-1",
+                "choices": [{"index": 0, "delta": {"tool_calls": [{
+                    "index": 0,
+                    "id": "call-1",
+                    "function": {"name": "read_file", "arguments": "{\"path\":"}
+                }]}}]
+            })),
+            sse(&json!({
+                "id": "response-1",
+                "choices": [{"index": 0, "delta": {"tool_calls": [{
+                    "index": 0,
+                    "function": {"arguments": "\"src/lib.rs\"}"}
+                }]}}]
+            })),
+            sse(&json!({
+                "id": "response-1",
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]
+            })),
+            sse(&json!({
+                "id": "response-1",
+                "choices": [],
+                "usage": {
+                    "prompt_tokens": 20,
+                    "completion_tokens": 8,
+                    "prompt_tokens_details": {"cached_tokens": 5}
+                }
+            })),
+            SseEvent {
+                event: None,
+                data: "[DONE]".to_owned(),
+            },
+        ] {
+            accumulator
+                .apply(&event, &observer)
+                .unwrap_or_else(|error| unreachable!("valid chunk: {error}"));
+        }
+        let response = accumulator
+            .finish(Some("request-1".to_owned()), 12)
+            .unwrap_or_else(|error| unreachable!("complete stream: {error}"));
+        assert_eq!(response.text, "Inspecting ");
+        assert_eq!(response.finish_reason, FinishReason::ToolCalls);
+        assert_eq!(response.tool_calls.len(), 1);
+        assert_eq!(response.tool_calls[0].name, "read_file");
+        assert_eq!(response.tool_calls[0].arguments["path"], "src/lib.rs");
+        assert_eq!(response.usage.total(), 28);
+        assert_eq!(response.usage.cached_input_tokens, 5);
+        assert_eq!(response.extensions["time_to_first_byte_ms"], 12);
+        let events = observer
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            ModelStreamEvent::ToolCallStarted { name, .. } if name == "read_file"
+        )));
+        assert!(events.iter().any(|event| matches!(
+            event,
+            ModelStreamEvent::ToolArgumentsDelta { bytes, .. } if *bytes > 0
+        )));
+    }
+
+    #[test]
+    fn stream_rejects_usage_regression_and_disconnect_without_done() {
+        let observer = RecordingObserver::default();
+        let mut accumulator = OpenAiStreamAccumulator::default();
+        accumulator
+            .apply(
+                &sse(&json!({
+                    "choices": [],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 4}
+                })),
+                &observer,
+            )
+            .unwrap_or_else(|error| unreachable!("first usage: {error}"));
+        assert!(matches!(
+            accumulator.apply(
+                &sse(&json!({
+                    "choices": [],
+                    "usage": {"prompt_tokens": 9, "completion_tokens": 4}
+                })),
+                &observer
+            ),
+            Err(ModelError::MalformedResponse(message)) if message.contains("regressed")
+        ));
+        assert!(matches!(
+            OpenAiStreamAccumulator::default().finish(None, 0),
+            Err(ModelError::MalformedResponse(message)) if message.contains("disconnected")
+        ));
     }
 
     #[test]
@@ -670,6 +1265,61 @@ mod tests {
             result,
             Err(ModelError::Provider { status: 302, .. })
         ));
+        assert!(matches!(server.join(), Ok(Ok(()))));
+    }
+
+    #[tokio::test]
+    async fn streamed_http_response_is_normalized_without_buffered_fallback() {
+        use std::{io::Write, net::TcpListener};
+
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .unwrap_or_else(|error| unreachable!("test listener must bind: {error}"));
+        let address = listener
+            .local_addr()
+            .unwrap_or_else(|error| unreachable!("test listener needs an address: {error}"));
+        let server = std::thread::spawn(move || -> std::io::Result<()> {
+            let (mut stream, _) = listener.accept()?;
+            stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+            let request = read_http_request(&mut stream)?;
+            let request = String::from_utf8_lossy(&request);
+            assert!(request.contains("\"stream\":true"));
+            let body = concat!(
+                "data: {\"id\":\"response-1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"}}]}\n\n",
+                "data: {\"id\":\"response-1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+                "data: {\"id\":\"response-1\",\"choices\":[],\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":1}}\n\n",
+                "data: [DONE]\n\n"
+            );
+            let headers = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream; charset=utf-8\r\nContent-Length: {}\r\nX-Request-Id: request-1\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            stream.write_all(headers.as_bytes())?;
+            for byte in body.as_bytes() {
+                stream.write_all(std::slice::from_ref(byte))?;
+            }
+            Ok(())
+        });
+
+        let mut stream_config = config(&format!("http://{address}/v1"));
+        stream_config.stream = true;
+        let driver = OpenAiCompatibleDriver::new(stream_config)
+            .unwrap_or_else(|error| unreachable!("loopback endpoint: {error}"));
+        let observer = RecordingObserver::default();
+        let response = driver
+            .invoke_with_observer(
+                &ModelRequest {
+                    conversation: vec![ConversationItem::Message(Message::user("hello"))],
+                    tools: Vec::new(),
+                    max_output_tokens: 32,
+                    temperature: None,
+                },
+                &observer,
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("valid stream: {error}"));
+        assert_eq!(response.text, "hello");
+        assert_eq!(response.usage.total(), 4);
+        assert_eq!(response.provider_request_id.as_deref(), Some("request-1"));
         assert!(matches!(server.join(), Ok(Ok(()))));
     }
 }

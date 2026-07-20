@@ -57,6 +57,7 @@ fn interrupted_process_resumes_the_same_hash_linked_run() {
             &format!("http://{address}/v1"),
             "--model",
             "mock-coder",
+            "--no-stream",
             "--output",
             "json",
         ])
@@ -152,6 +153,7 @@ fn complete_run_is_isolated_then_applies() {
             &format!("http://{address}/v1"),
             "--model",
             "mock-coder",
+            "--no-stream",
             "--output",
             "json",
         ])
@@ -264,6 +266,7 @@ fn failed_run_exports_trace_and_remains_discoverable() {
             &format!("http://{address}/v1"),
             "--model",
             "broken-mock",
+            "--no-stream",
         ])
         .output()
         .unwrap_or_else(|error| unreachable!("run command: {error}"));
@@ -346,6 +349,7 @@ fn answered_run_is_inspectable_and_has_no_apply_boundary() {
             &format!("http://{address}/v1"),
             "--model",
             "mock-coder",
+            "--no-stream",
             "--output",
             "json",
         ])
@@ -407,6 +411,7 @@ fn ready_run_can_be_discarded_idempotently() {
             &format!("http://{address}/v1"),
             "--model",
             "mock-coder",
+            "--no-stream",
             "--output",
             "json",
         ])
@@ -482,6 +487,7 @@ fn task_contract_can_apply_immediately() {
             &format!("http://{address}/v1"),
             "--model",
             "mock-coder",
+            "--no-stream",
             "--apply",
             "--output",
             "json",
@@ -864,6 +870,7 @@ fn run_process_approval_fixture(workspace: &Path, allow_run: bool) -> std::proce
         &format!("http://{address}/v1"),
         "--model",
         "mock-coder",
+        "--no-stream",
         "--process-backend",
         "native",
         "--output",

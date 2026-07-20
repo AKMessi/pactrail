@@ -1,6 +1,6 @@
 # Threat model
 
-This document describes Pactrail 0.5 as shipped. It is not a claim that model
+This document describes Pactrail 0.6 as shipped. It is not a claim that model
 execution, native processes, containers, or third-party providers are
 intrinsically safe.
 
@@ -148,7 +148,7 @@ does not claim successful cancellation until bounded cleanup completes. Safe
 candidate changes are retained in an integrity-checked receipt; cleanup failure
 is a hard error and remains diagnosable in durable state.
 
-## Out of scope in 0.5
+## Out of scope in 0.6
 
 - protection from a compromised user account, kernel, filesystem, or provider;
 - protection from a compromised container runtime, daemon, desktop VM, or a

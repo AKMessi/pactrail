@@ -6,9 +6,9 @@ use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 
-use crate::cli::{OciRuntimeArg, ProcessBackendArg, ProviderKind};
+use crate::cli::{CapabilitySetting, OciRuntimeArg, ProcessBackendArg, ProviderKind};
 
-const SETTINGS_SCHEMA: u16 = 2;
+const SETTINGS_SCHEMA: u16 = 4;
 const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
 const MAX_MODEL_BYTES: usize = 512;
 const MAX_BASE_URL_BYTES: usize = 2_048;
@@ -25,6 +25,13 @@ pub(crate) struct InteractiveSettings {
     pub context_tokens: u64,
     pub max_output_tokens: u64,
     pub max_turns: u16,
+    pub streaming: bool,
+    pub native_tools: CapabilitySetting,
+    pub parallel_tools: CapabilitySetting,
+    pub structured_output: CapabilitySetting,
+    pub vision: CapabilitySetting,
+    pub prompt_caching: CapabilitySetting,
+    pub reasoning_controls: CapabilitySetting,
     pub process_backend: ProcessBackendArg,
     pub sandbox_runtime: OciRuntimeArg,
     pub sandbox_runtime_executable: Option<String>,
@@ -54,6 +61,49 @@ struct InteractiveSettingsV1 {
     allow_process: bool,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InteractiveSettingsV2 {
+    schema: u16,
+    provider: ProviderKind,
+    model: Option<String>,
+    base_url: Option<String>,
+    api_key_env: String,
+    context_tokens: u64,
+    max_output_tokens: u64,
+    max_turns: u16,
+    process_backend: ProcessBackendArg,
+    sandbox_runtime: OciRuntimeArg,
+    sandbox_runtime_executable: Option<String>,
+    sandbox_image: Option<String>,
+    sandbox_memory_mib: u64,
+    sandbox_cpu_millis: u32,
+    sandbox_pids: u32,
+    sandbox_tmpfs_mib: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InteractiveSettingsV3 {
+    schema: u16,
+    provider: ProviderKind,
+    model: Option<String>,
+    base_url: Option<String>,
+    api_key_env: String,
+    context_tokens: u64,
+    max_output_tokens: u64,
+    max_turns: u16,
+    streaming: bool,
+    process_backend: ProcessBackendArg,
+    sandbox_runtime: OciRuntimeArg,
+    sandbox_runtime_executable: Option<String>,
+    sandbox_image: Option<String>,
+    sandbox_memory_mib: u64,
+    sandbox_cpu_millis: u32,
+    sandbox_pids: u32,
+    sandbox_tmpfs_mib: u64,
+}
+
 impl From<InteractiveSettingsV1> for InteractiveSettings {
     fn from(legacy: InteractiveSettingsV1) -> Self {
         debug_assert_eq!(legacy.schema, 1);
@@ -66,6 +116,13 @@ impl From<InteractiveSettingsV1> for InteractiveSettings {
             context_tokens: legacy.context_tokens,
             max_output_tokens: legacy.max_output_tokens,
             max_turns: legacy.max_turns,
+            streaming: false,
+            native_tools: CapabilitySetting::Auto,
+            parallel_tools: CapabilitySetting::Auto,
+            structured_output: CapabilitySetting::Auto,
+            vision: CapabilitySetting::Auto,
+            prompt_caching: CapabilitySetting::Auto,
+            reasoning_controls: CapabilitySetting::Auto,
             process_backend: if legacy.allow_process {
                 ProcessBackendArg::Native
             } else {
@@ -82,6 +139,68 @@ impl From<InteractiveSettingsV1> for InteractiveSettings {
     }
 }
 
+impl From<InteractiveSettingsV2> for InteractiveSettings {
+    fn from(legacy: InteractiveSettingsV2) -> Self {
+        debug_assert_eq!(legacy.schema, 2);
+        Self {
+            schema: SETTINGS_SCHEMA,
+            provider: legacy.provider,
+            model: legacy.model,
+            base_url: legacy.base_url,
+            api_key_env: legacy.api_key_env,
+            context_tokens: legacy.context_tokens,
+            max_output_tokens: legacy.max_output_tokens,
+            max_turns: legacy.max_turns,
+            streaming: false,
+            native_tools: CapabilitySetting::Auto,
+            parallel_tools: CapabilitySetting::Auto,
+            structured_output: CapabilitySetting::Auto,
+            vision: CapabilitySetting::Auto,
+            prompt_caching: CapabilitySetting::Auto,
+            reasoning_controls: CapabilitySetting::Auto,
+            process_backend: legacy.process_backend,
+            sandbox_runtime: legacy.sandbox_runtime,
+            sandbox_runtime_executable: legacy.sandbox_runtime_executable,
+            sandbox_image: legacy.sandbox_image,
+            sandbox_memory_mib: legacy.sandbox_memory_mib,
+            sandbox_cpu_millis: legacy.sandbox_cpu_millis,
+            sandbox_pids: legacy.sandbox_pids,
+            sandbox_tmpfs_mib: legacy.sandbox_tmpfs_mib,
+        }
+    }
+}
+
+impl From<InteractiveSettingsV3> for InteractiveSettings {
+    fn from(legacy: InteractiveSettingsV3) -> Self {
+        debug_assert_eq!(legacy.schema, 3);
+        Self {
+            schema: SETTINGS_SCHEMA,
+            provider: legacy.provider,
+            model: legacy.model,
+            base_url: legacy.base_url,
+            api_key_env: legacy.api_key_env,
+            context_tokens: legacy.context_tokens,
+            max_output_tokens: legacy.max_output_tokens,
+            max_turns: legacy.max_turns,
+            streaming: legacy.streaming,
+            native_tools: CapabilitySetting::Auto,
+            parallel_tools: CapabilitySetting::Auto,
+            structured_output: CapabilitySetting::Auto,
+            vision: CapabilitySetting::Auto,
+            prompt_caching: CapabilitySetting::Auto,
+            reasoning_controls: CapabilitySetting::Auto,
+            process_backend: legacy.process_backend,
+            sandbox_runtime: legacy.sandbox_runtime,
+            sandbox_runtime_executable: legacy.sandbox_runtime_executable,
+            sandbox_image: legacy.sandbox_image,
+            sandbox_memory_mib: legacy.sandbox_memory_mib,
+            sandbox_cpu_millis: legacy.sandbox_cpu_millis,
+            sandbox_pids: legacy.sandbox_pids,
+            sandbox_tmpfs_mib: legacy.sandbox_tmpfs_mib,
+        }
+    }
+}
+
 impl Default for InteractiveSettings {
     fn default() -> Self {
         Self {
@@ -93,6 +212,13 @@ impl Default for InteractiveSettings {
             context_tokens: 32_768,
             max_output_tokens: 4_096,
             max_turns: 24,
+            streaming: true,
+            native_tools: CapabilitySetting::Auto,
+            parallel_tools: CapabilitySetting::Auto,
+            structured_output: CapabilitySetting::Auto,
+            vision: CapabilitySetting::Auto,
+            prompt_caching: CapabilitySetting::Auto,
+            reasoning_controls: CapabilitySetting::Auto,
             process_backend: ProcessBackendArg::Disabled,
             sandbox_runtime: OciRuntimeArg::Docker,
             sandbox_runtime_executable: None,
@@ -298,6 +424,22 @@ impl SettingsStore {
                 self.save(&settings)?;
                 Ok(settings)
             }
+            2 => {
+                let legacy: InteractiveSettingsV2 =
+                    toml::from_str(&text).map_err(SettingsError::Toml)?;
+                let settings = InteractiveSettings::from(legacy);
+                settings.validate()?;
+                self.save(&settings)?;
+                Ok(settings)
+            }
+            3 => {
+                let legacy: InteractiveSettingsV3 =
+                    toml::from_str(&text).map_err(SettingsError::Toml)?;
+                let settings = InteractiveSettings::from(legacy);
+                settings.validate()?;
+                self.save(&settings)?;
+                Ok(settings)
+            }
             schema => Err(SettingsError::Invalid(format!(
                 "unsupported settings schema {schema}; expected {SETTINGS_SCHEMA}"
             ))),
@@ -446,9 +588,55 @@ mod tests {
         assert_eq!(loaded.process_backend, ProcessBackendArg::Native);
         let persisted = fs::read_to_string(store.settings_path())
             .unwrap_or_else(|error| unreachable!("persisted: {error}"));
-        assert!(persisted.contains("schema = 2"));
+        assert!(persisted.contains("schema = 4"));
+        assert!(persisted.contains("streaming = false"));
         assert!(persisted.contains("process_backend = \"native\""));
         assert!(!persisted.contains("allow_process"));
+    }
+
+    #[test]
+    fn schema_two_configuration_migrates_without_silently_enabling_streaming() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("tempdir: {error}"));
+        let store = SettingsStore::at(root.path().to_path_buf());
+        fs::write(
+            store.settings_path(),
+            "schema = 2\nprovider = \"ollama\"\napi_key_env = \"KEY\"\ncontext_tokens = 4096\nmax_output_tokens = 512\nmax_turns = 4\nprocess_backend = \"disabled\"\nsandbox_runtime = \"docker\"\nsandbox_memory_mib = 2048\nsandbox_cpu_millis = 2000\nsandbox_pids = 128\nsandbox_tmpfs_mib = 512\n",
+        )
+        .unwrap_or_else(|error| unreachable!("fixture: {error}"));
+
+        let loaded = store
+            .load()
+            .unwrap_or_else(|error| unreachable!("migration: {error}"));
+        assert_eq!(loaded.schema, SETTINGS_SCHEMA);
+        assert!(!loaded.streaming);
+        let persisted = fs::read_to_string(store.settings_path())
+            .unwrap_or_else(|error| unreachable!("persisted: {error}"));
+        assert!(persisted.contains("schema = 4"));
+        assert!(persisted.contains("streaming = false"));
+    }
+
+    #[test]
+    fn schema_three_configuration_migrates_to_explicit_auto_capabilities() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("tempdir: {error}"));
+        let store = SettingsStore::at(root.path().to_path_buf());
+        fs::write(
+            store.settings_path(),
+            "schema = 3\nprovider = \"gemini\"\napi_key_env = \"GEMINI_API_KEY\"\ncontext_tokens = 32768\nmax_output_tokens = 4096\nmax_turns = 24\nstreaming = true\nprocess_backend = \"disabled\"\nsandbox_runtime = \"docker\"\nsandbox_memory_mib = 2048\nsandbox_cpu_millis = 2000\nsandbox_pids = 128\nsandbox_tmpfs_mib = 512\n",
+        )
+        .unwrap_or_else(|error| unreachable!("fixture: {error}"));
+
+        let loaded = store
+            .load()
+            .unwrap_or_else(|error| unreachable!("migration: {error}"));
+        assert_eq!(loaded.schema, SETTINGS_SCHEMA);
+        assert_eq!(loaded.native_tools, CapabilitySetting::Auto);
+        assert_eq!(loaded.parallel_tools, CapabilitySetting::Auto);
+        assert!(loaded.streaming);
+        let persisted = fs::read_to_string(store.settings_path())
+            .unwrap_or_else(|error| unreachable!("persisted: {error}"));
+        assert!(persisted.contains("schema = 4"));
+        assert!(persisted.contains("native_tools = \"auto\""));
+        assert!(persisted.contains("parallel_tools = \"auto\""));
     }
 
     #[test]

@@ -193,6 +193,9 @@ serially.
 | Model | `/provider <kind> [url]` | Switch provider adapter. |
 | Model | `/endpoint <url>` | Change only the endpoint. |
 | Model | `/key-env <name>` | Select the key environment variable. |
+| Model | `/stream on\|off` | Select bounded streaming or complete buffered responses. |
+| Model | `/capability <name> <auto\|on\|off>` | Inspect or override one effective model capability. |
+| Model | `/probe` | Spend one bounded turn on a no-execution capability probe. |
 | Kernel | `/tools` | Inspect typed tools, capabilities, and risk. |
 | Safety | `/process off` | Disable all process execution. |
 | Safety | `/process native` | Select trusted, unsandboxed host execution. |

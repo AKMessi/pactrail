@@ -323,6 +323,7 @@ mod tests {
                     id: id.to_owned(),
                     name: "read_file".to_owned(),
                     arguments: json!({"path": format!("src/{id}.rs")}),
+                    extensions: serde_json::Map::new(),
                 }],
             },
             ConversationItem::ToolResult(ToolResult {

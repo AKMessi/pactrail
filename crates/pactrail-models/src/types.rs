@@ -54,6 +54,10 @@ pub struct ToolCall {
     pub id: String,
     pub name: String,
     pub arguments: Value,
+    /// Non-sensitive provider continuation metadata, such as a signed
+    /// function-call thought token that must be echoed on the next turn.
+    #[serde(default)]
+    pub extensions: serde_json::Map<String, Value>,
 }
 
 /// Tool result returned to a model on the next turn.
@@ -79,14 +83,28 @@ pub enum ConversationItem {
 // mutually exclusive states.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(default)]
 pub struct ModelCapabilities {
     pub native_tools: bool,
     pub parallel_tools: bool,
     pub structured_output: bool,
     pub vision: bool,
     pub prompt_caching: bool,
+    pub streaming: bool,
+    pub reasoning_controls: bool,
     pub context_tokens: u64,
     pub max_output_tokens: u64,
+    pub source: CapabilitySource,
+}
+
+/// Provenance of the effective model capability profile.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CapabilitySource {
+    #[default]
+    ConservativeDefault,
+    UserDeclared,
+    Probed,
 }
 
 impl Default for ModelCapabilities {
@@ -97,8 +115,11 @@ impl Default for ModelCapabilities {
             structured_output: false,
             vision: false,
             prompt_caching: false,
+            streaming: false,
+            reasoning_controls: false,
             context_tokens: 32_768,
             max_output_tokens: 4_096,
+            source: CapabilitySource::ConservativeDefault,
         }
     }
 }
@@ -161,4 +182,31 @@ pub struct ModelResponse {
     pub provider_request_id: Option<String>,
     /// Non-sensitive provider metadata preserved for diagnostics.
     pub extensions: serde_json::Map<String, Value>,
+}
+
+/// Transient, non-authoritative progress from one model response stream.
+///
+/// These events are suitable for live user interfaces. Pactrail does not
+/// persist them or allow partial tool arguments to reach the tool kernel.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum ModelStreamEvent {
+    /// The provider accepted the request and response bytes began arriving.
+    ResponseStarted {
+        provider_request_id: Option<String>,
+        time_to_first_byte_ms: u64,
+    },
+    /// A validated UTF-8 assistant-text fragment.
+    TextDelta { text: String },
+    /// A typed tool call began. Arguments are not yet executable.
+    ToolCallStarted {
+        index: usize,
+        id: String,
+        name: String,
+    },
+    /// Additional JSON argument bytes arrived for an in-progress tool call.
+    ToolArgumentsDelta { index: usize, bytes: usize },
+    /// Provider-reported cumulative usage became available.
+    UsageUpdate { usage: Usage },
 }

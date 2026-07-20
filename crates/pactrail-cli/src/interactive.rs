@@ -25,7 +25,8 @@ use terminal_size::{Width, terminal_size};
 use tokio_util::sync::CancellationToken;
 
 use crate::cli::{
-    OciRuntimeArg, OutputFormat, ProcessApprovalArg, ProcessBackendArg, ProviderKind, RunArgs,
+    CapabilitySetting, OciRuntimeArg, OutputFormat, ProcessApprovalArg, ProcessBackendArg,
+    ProviderKind, RunArgs,
 };
 use crate::commands::{self, CliError, CompletedRun};
 use crate::diff::render_receipt_diff;
@@ -94,6 +95,21 @@ const COMMANDS: &[CommandHelp] = &[
         "Model",
         "/key-env <name>",
         "select the API-key environment variable",
+    ),
+    CommandHelp::new(
+        "Model",
+        "/stream on|off",
+        "select live SSE or buffered provider responses",
+    ),
+    CommandHelp::new(
+        "Model",
+        "/capability <name> <auto|on|off>",
+        "override and inspect the effective model profile",
+    ),
+    CommandHelp::new(
+        "Model",
+        "/probe",
+        "spend one bounded turn to test tool and stream support",
     ),
     CommandHelp::new(
         "Kernel",
@@ -302,6 +318,7 @@ struct RunActivity {
     tool_calls: AtomicUsize,
     model_tokens: AtomicU64,
     model_time_ms: AtomicU64,
+    stream_bytes: AtomicUsize,
     truncated_outputs: AtomicUsize,
     run_approvals: Mutex<BTreeSet<String>>,
     started: Instant,
@@ -327,6 +344,7 @@ impl RunActivity {
             tool_calls: AtomicUsize::new(0),
             model_tokens: AtomicU64::new(0),
             model_time_ms: AtomicU64::new(0),
+            stream_bytes: AtomicUsize::new(0),
             truncated_outputs: AtomicUsize::new(0),
             run_approvals: Mutex::new(BTreeSet::new()),
             started: Instant::now(),
@@ -508,7 +526,69 @@ impl RunActivity {
         match progress {
             RunProgress::ModelTurnStarted { turn, max_turns } => {
                 self.turn.store(*turn, Ordering::Relaxed);
+                self.stream_bytes.store(0, Ordering::Relaxed);
                 self.set_message(format!("turn {turn}/{max_turns} · asking {}", self.model));
+            }
+            RunProgress::ModelStreamStarted {
+                provider_request_id,
+                time_to_first_byte_ms,
+            } => {
+                let request = provider_request_id
+                    .as_deref()
+                    .map(|id| format!(" · request {}", truncate(id, 18)))
+                    .unwrap_or_default();
+                self.row(
+                    "◉",
+                    "stream",
+                    &format!("first byte · {time_to_first_byte_ms}ms{request}"),
+                    TimelineTone::Accent,
+                );
+                self.set_message(format!(
+                    "turn {} · receiving {}",
+                    self.turn.load(Ordering::Relaxed),
+                    self.model
+                ));
+            }
+            RunProgress::ModelTextDelta { text } => {
+                let received = self
+                    .stream_bytes
+                    .fetch_add(text.len(), Ordering::Relaxed)
+                    .saturating_add(text.len());
+                let safe_text = sanitize_terminal_text(text);
+                let preview = safe_text
+                    .lines()
+                    .rev()
+                    .find(|line| !line.trim().is_empty())
+                    .map_or("generating", str::trim);
+                self.set_message(format!(
+                    "turn {} · {} · {}",
+                    self.turn.load(Ordering::Relaxed),
+                    truncate(preview, 46),
+                    format_bytes(u64::try_from(received).unwrap_or(u64::MAX))
+                ));
+            }
+            RunProgress::ModelToolCallStarted { index, name } => {
+                self.set_message(format!(
+                    "turn {} · preparing #{} {}",
+                    self.turn.load(Ordering::Relaxed),
+                    index.saturating_add(1),
+                    sanitize_terminal_text(name)
+                ));
+            }
+            RunProgress::ModelToolArgumentsDelta { index, bytes } => {
+                self.set_message(format!(
+                    "turn {} · assembling #{} · {} arguments",
+                    self.turn.load(Ordering::Relaxed),
+                    index.saturating_add(1),
+                    format_bytes(u64::try_from(*bytes).unwrap_or(u64::MAX))
+                ));
+            }
+            RunProgress::ModelUsageUpdate { usage } => {
+                self.set_message(format!(
+                    "turn {} · {} tokens reported",
+                    self.turn.load(Ordering::Relaxed),
+                    format_count(usage.total())
+                ));
             }
             RunProgress::ModelTurnCompleted {
                 turn,
@@ -705,7 +785,13 @@ impl RunObserver for RunActivity {
             RunProgress::StateChanged { .. } => self.on_state_progress(progress),
             RunProgress::ContextBuilt { .. } => self.on_context_progress(progress),
             RunProgress::ContextCompacted { .. } => self.on_compaction_progress(progress),
-            RunProgress::ModelTurnStarted { .. } | RunProgress::ModelTurnCompleted { .. } => {
+            RunProgress::ModelTurnStarted { .. }
+            | RunProgress::ModelStreamStarted { .. }
+            | RunProgress::ModelTextDelta { .. }
+            | RunProgress::ModelToolCallStarted { .. }
+            | RunProgress::ModelToolArgumentsDelta { .. }
+            | RunProgress::ModelUsageUpdate { .. }
+            | RunProgress::ModelTurnCompleted { .. } => {
                 self.on_model_progress(progress);
             }
             RunProgress::ToolStarted { .. } | RunProgress::ToolCompleted { .. } => {
@@ -875,6 +961,11 @@ impl Session {
             "/provider" => self.set_provider(arguments)?,
             "/endpoint" => self.set_endpoint(arguments)?,
             "/key-env" => self.set_api_key_env(arguments)?,
+            "/stream" => self.set_streaming(arguments)?,
+            "/capability" | "/capabilities" | "/profile" => {
+                self.set_capability(arguments)?;
+            }
+            "/probe" => self.probe_capabilities(arguments).await?,
             "/context" => self.set_context(arguments)?,
             "/output-tokens" => self.set_output_tokens(arguments)?,
             "/turns" => self.set_turns(arguments)?,
@@ -915,36 +1006,7 @@ impl Session {
             return Ok(());
         };
         let activity = RunActivity::new(&model, self.theme.clone());
-        let args = RunArgs {
-            goal: Some(goal),
-            task: None,
-            provider: self.settings.provider,
-            model: Some(model),
-            base_url: self.settings.effective_base_url(),
-            api_key_env: self.settings.api_key_env.clone(),
-            write_paths: vec![".".to_owned()],
-            process_backend: Some(self.settings.process_backend),
-            allow_process: false,
-            process_approval: Some(ProcessApprovalArg::Prompt),
-            sandbox_runtime: self.settings.sandbox_runtime,
-            sandbox_runtime_executable: self
-                .settings
-                .sandbox_runtime_executable
-                .as_deref()
-                .map(PathBuf::from),
-            sandbox_image: self.settings.sandbox_image.clone(),
-            sandbox_memory_mib: self.settings.sandbox_memory_mib,
-            sandbox_cpu_millis: self.settings.sandbox_cpu_millis,
-            sandbox_pids: self.settings.sandbox_pids,
-            sandbox_tmpfs_mib: self.settings.sandbox_tmpfs_mib,
-            apply: false,
-            max_turns: self.settings.max_turns,
-            context_tokens: self.settings.context_tokens,
-            max_output_tokens: self.settings.max_output_tokens,
-            request_timeout_seconds: 300,
-            disable_thinking: false,
-            output: OutputFormat::Human,
-        };
+        let args = run_args_from_settings(&self.settings, Some(goal), model);
 
         let cancellation = CancellationToken::new();
         let mut execution = Box::pin(commands::execute_run_with_observer_and_cancellation(
@@ -992,7 +1054,7 @@ impl Session {
                 activity.row(
                     "!",
                     "cancel",
-                    "cancellation requested Â· cleaning up active work",
+                    "cancellation requested · cleaning up active work",
                     TimelineTone::Warning,
                 );
                 activity.set_message("cancelling safely");
@@ -1226,7 +1288,25 @@ impl Session {
                 TimelineTone::Accent,
             ),
             ("endpoint", endpoint, TimelineTone::Normal),
+            (
+                "transport",
+                if self.settings.streaming {
+                    "streaming · bounded SSE".to_owned()
+                } else {
+                    "buffered · complete JSON".to_owned()
+                },
+                if self.settings.streaming {
+                    TimelineTone::Accent
+                } else {
+                    TimelineTone::Muted
+                },
+            ),
             ("credential", key.0, key.1),
+            (
+                "capabilities",
+                capability_summary(&self.settings),
+                TimelineTone::Normal,
+            ),
             (
                 "limits",
                 format!(
@@ -1269,13 +1349,15 @@ impl Session {
     }
 
     fn credential_status(&self) -> (String, TimelineTone) {
+        let key_env = match (self.settings.provider, self.settings.api_key_env.as_str()) {
+            (ProviderKind::Anthropic, "OPENAI_API_KEY") => "ANTHROPIC_API_KEY",
+            (ProviderKind::Gemini, "OPENAI_API_KEY") => "GEMINI_API_KEY",
+            _ => &self.settings.api_key_env,
+        };
         if self.settings.provider == ProviderKind::Ollama {
             ("not required for Ollama".to_owned(), TimelineTone::Muted)
-        } else if std::env::var(&self.settings.api_key_env).is_ok_and(|key| !key.is_empty()) {
-            (
-                format!("{} is set", self.settings.api_key_env),
-                TimelineTone::Success,
-            )
+        } else if std::env::var(key_env).is_ok_and(|key| !key.is_empty()) {
+            (format!("{key_env} is set"), TimelineTone::Success)
         } else if self
             .settings
             .effective_base_url()
@@ -1283,17 +1365,11 @@ impl Session {
             .is_some_and(is_loopback_url)
         {
             (
-                format!(
-                    "{} is not set (optional for local endpoints)",
-                    self.settings.api_key_env
-                ),
+                format!("{key_env} is not set (optional for local endpoints)"),
                 TimelineTone::Muted,
             )
         } else {
-            (
-                format!("{} is not set", self.settings.api_key_env),
-                TimelineTone::Warning,
-            )
+            (format!("{key_env} is not set"), TimelineTone::Warning)
         }
     }
 
@@ -1559,7 +1635,8 @@ impl Session {
         let mut values = arguments.split_whitespace();
         let provider = values.next().and_then(parse_provider).ok_or_else(|| {
             CliError::Argument(
-                "usage: /provider <ollama|open-ai|open-ai-compatible> [base-url]".to_owned(),
+                "usage: /provider <ollama|open-ai|anthropic|gemini|open-ai-compatible> [base-url]"
+                    .to_owned(),
             )
         })?;
         let base_url = values.next().map(str::to_owned);
@@ -1571,6 +1648,11 @@ impl Session {
         }
         let mut settings = self.settings.clone();
         settings.provider = provider;
+        if provider == ProviderKind::Anthropic && settings.api_key_env == "OPENAI_API_KEY" {
+            "ANTHROPIC_API_KEY".clone_into(&mut settings.api_key_env);
+        } else if provider == ProviderKind::Gemini && settings.api_key_env == "OPENAI_API_KEY" {
+            "GEMINI_API_KEY".clone_into(&mut settings.api_key_env);
+        }
         settings.base_url = base_url.or_else(|| {
             (provider == ProviderKind::OpenAiCompatible)
                 .then(|| self.settings.base_url.clone())
@@ -1621,6 +1703,155 @@ impl Session {
             self.theme.success("API key environment variable saved:"),
             self.theme.code(argument)
         ))
+    }
+
+    fn set_streaming(&mut self, argument: &str) -> Result<(), CliError> {
+        let streaming = match argument.trim().to_ascii_lowercase().as_str() {
+            "on" | "true" | "stream" | "streaming" => true,
+            "off" | "false" | "buffered" => false,
+            _ => {
+                return Err(CliError::Argument(
+                    "usage: /stream <on|off>; no protocol fallback is automatic".to_owned(),
+                ));
+            }
+        };
+        let mut settings = self.settings.clone();
+        settings.streaming = streaming;
+        self.persist(settings)?;
+        self.emit(&format!(
+            "{} {}\n",
+            self.theme.success("Model transport selected:"),
+            if streaming {
+                self.theme.accent("streaming · bounded SSE")
+            } else {
+                self.theme.text("buffered · complete JSON")
+            }
+        ))
+    }
+
+    fn set_capability(&mut self, arguments: &str) -> Result<(), CliError> {
+        let mut values = arguments.split_whitespace();
+        let Some(name) = values.next() else {
+            return self.emit(&format!(
+                "{} {}\n",
+                self.theme.heading("Effective model capabilities"),
+                self.theme.text(&capability_summary(&self.settings))
+            ));
+        };
+        let setting = values
+            .next()
+            .and_then(parse_capability_setting)
+            .ok_or_else(|| {
+                CliError::Argument(
+                    "usage: /capability <native-tools|parallel-tools|structured-output|vision|prompt-caching|reasoning-controls> <auto|on|off>"
+                        .to_owned(),
+                )
+            })?;
+        if values.next().is_some() {
+            return Err(CliError::Argument(
+                "too many capability arguments".to_owned(),
+            ));
+        }
+        let mut settings = self.settings.clone();
+        match name.trim().to_ascii_lowercase().as_str() {
+            "native-tools" | "tools" => settings.native_tools = setting,
+            "parallel-tools" | "parallel" => settings.parallel_tools = setting,
+            "structured-output" | "structured" => settings.structured_output = setting,
+            "vision" | "images" => settings.vision = setting,
+            "prompt-caching" | "caching" | "cache" => settings.prompt_caching = setting,
+            "reasoning-controls" | "reasoning" => settings.reasoning_controls = setting,
+            _ => {
+                return Err(CliError::Argument(
+                    "unknown capability; use /capability for the effective profile".to_owned(),
+                ));
+            }
+        }
+        self.persist(settings)?;
+        self.emit(&format!(
+            "{} {} = {}\n",
+            self.theme.success("Capability override saved:"),
+            self.theme.code(name),
+            capability_setting_label(setting)
+        ))
+    }
+
+    async fn probe_capabilities(&mut self, arguments: &str) -> Result<(), CliError> {
+        if !arguments.trim().is_empty() {
+            return Err(CliError::Argument(
+                "usage: /probe; this spends one bounded provider turn and executes no tool"
+                    .to_owned(),
+            ));
+        }
+        let model = self.settings.effective_model().ok_or_else(|| {
+            CliError::Argument(
+                "no model is configured; use /models and /model before /probe".to_owned(),
+            )
+        })?;
+        self.emit(&format!(
+            "{}\n",
+            self.theme
+                .muted("Probing with one bounded model turn; returned tools are never executed.")
+        ))?;
+        let args = run_args_from_settings(&self.settings, None, model);
+        let mut probe = Box::pin(commands::probe_model_capabilities(&args));
+        let report = tokio::select! {
+            result = &mut probe => result?,
+            signal = tokio::signal::ctrl_c() => {
+                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                return Err(CliError::Argument("capability probe cancelled".to_owned()));
+            }
+        };
+        let fields = [
+            ("adapter", report.adapter),
+            ("model", report.model),
+            (
+                "native tools",
+                observed_label(report.native_tools.is_observed()).to_owned(),
+            ),
+            (
+                "parallel tools",
+                observed_label(report.parallel_tools.is_observed()).to_owned(),
+            ),
+            (
+                "streaming",
+                observed_label(report.streaming.is_observed()).to_owned(),
+            ),
+            (
+                "prompt cache",
+                observed_label(report.prompt_cache.is_observed()).to_owned(),
+            ),
+            (
+                "turn",
+                format!(
+                    "{} valid calls · {} input · {} output · {:?}",
+                    report.valid_probe_calls,
+                    format_count(report.usage.input_tokens),
+                    format_count(report.usage.output_tokens),
+                    report.finish_reason
+                ),
+            ),
+        ];
+        let columns = terminal_columns();
+        let mut lines = vec![self.theme.heading("Capability probe")];
+        for (label, value) in fields {
+            lines.extend(labelled_rows(
+                &self.theme,
+                columns,
+                label,
+                &value,
+                if value == "observed" {
+                    TimelineTone::Success
+                } else {
+                    TimelineTone::Normal
+                },
+            ));
+        }
+        lines.push(
+            self.theme.muted(
+                "Not observed is inconclusive. Use /capability to make an explicit override.",
+            ),
+        );
+        self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn set_context(&mut self, argument: &str) -> Result<(), CliError> {
@@ -2367,9 +2598,9 @@ fn render_prepared_effect(
         columns,
         time,
         sequence,
-        "â†’",
+        "→",
         &format!(
-            "effect prepared Â· {} Â· {} Â· {} Â· candidate {}",
+            "effect prepared · {} · {} · {} · candidate {}",
             effect.tool,
             effect.call_id,
             effect.risk,
@@ -2391,9 +2622,9 @@ fn render_completed_effect(
         columns,
         time,
         sequence,
-        if effect.succeeded { "âœ“" } else { "Ã—" },
+        if effect.succeeded { "✓" } else { "×" },
         &format!(
-            "effect completed Â· {} Â· result {} Â· candidate {}",
+            "effect completed · {} · result {} · candidate {}",
             effect.call_id,
             short_digest(&effect.result_digest),
             short_digest(&effect.candidate_digest_after)
@@ -2569,18 +2800,29 @@ impl Prompt for SessionPrompt {
 
 async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>, ModelListError> {
     let base_url = provider_base_url(settings).ok_or(ModelListError::MissingEndpoint)?;
-    let endpoint = models_endpoint(&base_url)?;
+    let endpoint = models_endpoint(&base_url, settings.provider)?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
         .redirect(reqwest::redirect::Policy::none())
         .user_agent(concat!("pactrail/", env!("CARGO_PKG_VERSION")))
         .build()?;
     let mut request = client.get(endpoint);
-    if settings.provider != ProviderKind::Ollama
-        && let Ok(api_key) = std::env::var(&settings.api_key_env)
+    let key_env = match (settings.provider, settings.api_key_env.as_str()) {
+        (ProviderKind::Anthropic, "OPENAI_API_KEY") => "ANTHROPIC_API_KEY",
+        (ProviderKind::Gemini, "OPENAI_API_KEY") => "GEMINI_API_KEY",
+        _ => &settings.api_key_env,
+    };
+    if let Ok(api_key) = std::env::var(key_env)
         && !api_key.is_empty()
     {
-        request = request.bearer_auth(api_key);
+        request = match settings.provider {
+            ProviderKind::Ollama => request,
+            ProviderKind::Anthropic => request
+                .header("x-api-key", api_key)
+                .header("anthropic-version", "2023-06-01"),
+            ProviderKind::Gemini => request.header("x-goog-api-key", api_key),
+            ProviderKind::OpenAi | ProviderKind::OpenAiCompatible => request.bearer_auth(api_key),
+        };
     }
     let response = request.send().await?;
     let status = response.status();
@@ -2589,12 +2831,16 @@ async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>,
         let message = String::from_utf8_lossy(&bytes).chars().take(500).collect();
         return Err(ModelListError::Provider(status.as_u16(), message));
     }
-    parse_model_list(&serde_json::from_slice(&bytes)?)
+    parse_model_list(&serde_json::from_slice(&bytes)?, settings.provider)
 }
 
-fn parse_model_list(value: &Value) -> Result<Vec<String>, ModelListError> {
+fn parse_model_list(value: &Value, provider: ProviderKind) -> Result<Vec<String>, ModelListError> {
     let entries = value
-        .get("data")
+        .get(if provider == ProviderKind::Gemini {
+            "models"
+        } else {
+            "data"
+        })
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or_default();
@@ -2602,10 +2848,30 @@ fn parse_model_list(value: &Value) -> Result<Vec<String>, ModelListError> {
         return Err(ModelListError::TooManyModels);
     }
     let mut models = Vec::with_capacity(entries.len());
-    for model in entries
-        .iter()
-        .filter_map(|entry| entry.get("id").and_then(Value::as_str))
-    {
+    for entry in entries {
+        if provider == ProviderKind::Gemini
+            && entry
+                .get("supportedGenerationMethods")
+                .and_then(Value::as_array)
+                .is_some_and(|methods| {
+                    !methods
+                        .iter()
+                        .any(|method| method.as_str() == Some("generateContent"))
+                })
+        {
+            continue;
+        }
+        let Some(model) = entry
+            .get(if provider == ProviderKind::Gemini {
+                "name"
+            } else {
+                "id"
+            })
+            .and_then(Value::as_str)
+            .map(|model| model.strip_prefix("models/").unwrap_or(model))
+        else {
+            continue;
+        };
         if model.trim().is_empty()
             || model.len() > MAX_DISCOVERED_MODEL_BYTES
             || model.chars().any(char::is_control)
@@ -2638,10 +2904,15 @@ async fn read_bounded(response: reqwest::Response) -> Result<Vec<u8>, ModelListE
     Ok(bytes)
 }
 
-fn models_endpoint(base_url: &str) -> Result<Url, ModelListError> {
+fn models_endpoint(base_url: &str, provider: ProviderKind) -> Result<Url, ModelListError> {
     validate_base_url(base_url)
         .map_err(|error| ModelListError::InvalidEndpoint(error.to_string()))?;
-    Url::parse(&format!("{}/models", base_url.trim_end_matches('/')))
+    let suffix = match provider {
+        ProviderKind::Anthropic => "/v1/models",
+        ProviderKind::Gemini => "/v1beta/models",
+        ProviderKind::Ollama | ProviderKind::OpenAi | ProviderKind::OpenAiCompatible => "/models",
+    };
+    Url::parse(&format!("{}{suffix}", base_url.trim_end_matches('/')))
         .map_err(|error| ModelListError::InvalidEndpoint(error.to_string()))
 }
 
@@ -2678,6 +2949,8 @@ fn provider_base_url(settings: &InteractiveSettings) -> Option<String> {
             ProviderKind::Ollama => Some("http://127.0.0.1:11434/v1".to_owned()),
             ProviderKind::OpenAi => Some("https://api.openai.com/v1".to_owned()),
             ProviderKind::OpenAiCompatible => None,
+            ProviderKind::Anthropic => Some("https://api.anthropic.com".to_owned()),
+            ProviderKind::Gemini => Some("https://generativelanguage.googleapis.com".to_owned()),
         })
 }
 
@@ -2712,6 +2985,8 @@ fn parse_provider(value: &str) -> Option<ProviderKind> {
         "compatible" | "openai-compatible" | "open-ai-compatible" => {
             Some(ProviderKind::OpenAiCompatible)
         }
+        "anthropic" | "claude" => Some(ProviderKind::Anthropic),
+        "gemini" | "google" => Some(ProviderKind::Gemini),
         _ => None,
     }
 }
@@ -2721,6 +2996,8 @@ fn provider_label(provider: ProviderKind) -> &'static str {
         ProviderKind::Ollama => "ollama",
         ProviderKind::OpenAi => "open-ai",
         ProviderKind::OpenAiCompatible => "open-ai-compatible",
+        ProviderKind::Anthropic => "anthropic",
+        ProviderKind::Gemini => "gemini",
     }
 }
 
@@ -2744,6 +3021,113 @@ fn run_state_text(theme: &Theme, state: RunState) -> String {
         RunState::Completed => theme.success("ANSWERED"),
         RunState::AwaitingApply => theme.success("READY TO APPLY"),
         _ => theme.muted(&format!("{state:?}").to_uppercase()),
+    }
+}
+
+fn parse_capability_setting(value: &str) -> Option<CapabilitySetting> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "auto" | "default" => Some(CapabilitySetting::Auto),
+        "on" | "true" | "enabled" => Some(CapabilitySetting::On),
+        "off" | "false" | "disabled" => Some(CapabilitySetting::Off),
+        _ => None,
+    }
+}
+
+fn capability_setting_label(setting: CapabilitySetting) -> &'static str {
+    match setting {
+        CapabilitySetting::Auto => "auto",
+        CapabilitySetting::On => "on",
+        CapabilitySetting::Off => "off",
+    }
+}
+
+fn observed_label(observed: bool) -> &'static str {
+    if observed { "observed" } else { "not observed" }
+}
+
+fn capability_summary(settings: &InteractiveSettings) -> String {
+    let default_parallel = matches!(
+        settings.provider,
+        ProviderKind::Anthropic | ProviderKind::Gemini
+    );
+    let native_tools = settings.native_tools.resolve(true);
+    let entries = [
+        ("tools", native_tools, settings.native_tools),
+        (
+            "parallel",
+            native_tools && settings.parallel_tools.resolve(default_parallel),
+            settings.parallel_tools,
+        ),
+        (
+            "structured",
+            settings.structured_output.resolve(false),
+            settings.structured_output,
+        ),
+        ("vision", settings.vision.resolve(false), settings.vision),
+        (
+            "cache",
+            settings.prompt_caching.resolve(false),
+            settings.prompt_caching,
+        ),
+        (
+            "reasoning",
+            settings.reasoning_controls.resolve(false),
+            settings.reasoning_controls,
+        ),
+    ];
+    entries
+        .into_iter()
+        .map(|(name, enabled, setting)| {
+            format!(
+                "{name} {} ({})",
+                if enabled { "on" } else { "off" },
+                capability_setting_label(setting)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+fn run_args_from_settings(
+    settings: &InteractiveSettings,
+    goal: Option<String>,
+    model: String,
+) -> RunArgs {
+    RunArgs {
+        goal,
+        task: None,
+        provider: settings.provider,
+        model: Some(model),
+        base_url: settings.effective_base_url(),
+        api_key_env: settings.api_key_env.clone(),
+        write_paths: vec![".".to_owned()],
+        process_backend: Some(settings.process_backend),
+        allow_process: false,
+        process_approval: Some(ProcessApprovalArg::Prompt),
+        sandbox_runtime: settings.sandbox_runtime,
+        sandbox_runtime_executable: settings
+            .sandbox_runtime_executable
+            .as_deref()
+            .map(PathBuf::from),
+        sandbox_image: settings.sandbox_image.clone(),
+        sandbox_memory_mib: settings.sandbox_memory_mib,
+        sandbox_cpu_millis: settings.sandbox_cpu_millis,
+        sandbox_pids: settings.sandbox_pids,
+        sandbox_tmpfs_mib: settings.sandbox_tmpfs_mib,
+        apply: false,
+        max_turns: settings.max_turns,
+        context_tokens: settings.context_tokens,
+        max_output_tokens: settings.max_output_tokens,
+        request_timeout_seconds: 300,
+        no_stream: !settings.streaming,
+        disable_thinking: false,
+        native_tools: settings.native_tools,
+        parallel_tools: settings.parallel_tools,
+        structured_output: settings.structured_output,
+        vision: settings.vision,
+        prompt_caching: settings.prompt_caching,
+        reasoning_controls: settings.reasoning_controls,
+        output: OutputFormat::Human,
     }
 }
 
@@ -3179,18 +3563,24 @@ mod tests {
 
     #[test]
     fn model_discovery_is_bounded_and_rejects_unsafe_identifiers() {
-        let models = parse_model_list(&serde_json::json!({
-            "data": [
-                {"id": "coder-b"},
-                {"id": "coder-a"},
-                {"id": "coder-b"},
-                {"not_an_id": true}
-            ]
-        }))
+        let models = parse_model_list(
+            &serde_json::json!({
+                "data": [
+                    {"id": "coder-b"},
+                    {"id": "coder-a"},
+                    {"id": "coder-b"},
+                    {"not_an_id": true}
+                ]
+            }),
+            ProviderKind::OpenAiCompatible,
+        )
         .unwrap_or_else(|error| unreachable!("model list: {error}"));
         assert_eq!(models, ["coder-a", "coder-b"]);
         assert!(matches!(
-            parse_model_list(&serde_json::json!({"data": [{"id": "bad\u{001b}[2J"}]})),
+            parse_model_list(
+                &serde_json::json!({"data": [{"id": "bad\u{001b}[2J"}]}),
+                ProviderKind::OpenAiCompatible,
+            ),
             Err(ModelListError::InvalidModelIdentifier)
         ));
 
@@ -3198,9 +3588,36 @@ mod tests {
             .map(|index| serde_json::json!({"id": format!("model-{index}")}))
             .collect::<Vec<_>>();
         assert!(matches!(
-            parse_model_list(&serde_json::json!({"data": entries})),
+            parse_model_list(
+                &serde_json::json!({"data": entries}),
+                ProviderKind::OpenAiCompatible,
+            ),
             Err(ModelListError::TooManyModels)
         ));
+    }
+
+    #[test]
+    fn capability_profile_resolves_provider_defaults_and_overrides() {
+        let mut settings = InteractiveSettings {
+            provider: ProviderKind::Anthropic,
+            ..InteractiveSettings::default()
+        };
+        let defaults = capability_summary(&settings);
+        assert!(defaults.contains("tools on (auto)"));
+        assert!(defaults.contains("parallel on (auto)"));
+        assert!(defaults.contains("vision off (auto)"));
+
+        settings.native_tools = CapabilitySetting::Off;
+        settings.parallel_tools = CapabilitySetting::On;
+        settings.vision = CapabilitySetting::On;
+        let overridden = capability_summary(&settings);
+        assert!(overridden.contains("tools off (off)"));
+        assert!(overridden.contains("parallel off (on)"));
+        assert!(overridden.contains("vision on (on)"));
+        assert_eq!(
+            parse_capability_setting("enabled"),
+            Some(CapabilitySetting::On)
+        );
     }
 
     #[test]
