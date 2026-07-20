@@ -49,12 +49,28 @@ only view intentionally allowed to use the terminal's native wrapping.
 terminal state, duration, event/action/evidence counts, and verified hash-chain
 status. Every event has an explicit sequence number. Context, model, tool,
 verification, policy, evidence, checkpoint, note, and lifecycle events have
-distinct markers and colors. Action attributes and observed effects are shown
+distinct markers and colors. Tool-effect preparation and completion are
+separate rows, so an interrupted effect is visible rather than inferred from a
+missing summary. Action attributes and observed effects are shown
 without persisting raw prompts, keys, or raw tool arguments.
 
 Failure does not erase observability: Pactrail reports the run ID, exports the
 portable trace, keeps that run focused for `/trace`, and lists it in `/runs`
 even when no receipt could be issued.
+
+If the process or machine stops during a safe model boundary, restart Pactrail
+and continue the same durable trajectory:
+
+```text
+/runs
+/resume 019f...
+```
+
+`/resume` without an ID selects the newest non-terminal executing run. It
+rechecks the checkpoint, candidate, contract, provider/tool/runtime identities,
+and remaining budgets before any model request. Two live Pactrail processes
+cannot own one run. If the trace ends inside an effect fence, Pactrail names the
+uncertain tool/risk and refuses automatic replay; use `/trace` to inspect it.
 
 Informational prompts are first-class runs. They terminate as `ANSWERED`, issue
 an integrity-checked receipt with no candidate changes, and never ask for
@@ -160,6 +176,7 @@ serially.
 
 | Group | Command | Purpose |
 |---|---|---|
+| Work | `/resume [run]` | Continue an interrupted run from a proven safe checkpoint. |
 | Work | `/review [run]` | Show receipt and immutable diff. |
 | Work | `/diff [run]` | Show candidate changes. |
 | Work | `/trace [run]` | Show the verified execution timeline. |

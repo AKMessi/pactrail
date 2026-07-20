@@ -17,7 +17,7 @@ The central abstraction is not a chat wrapper or an agent persona. It is a
 durable, inspectable software change transaction.
 
 ```text
-  ╭─ P A C T R A I L  v0.3.0
+  ╭─ P A C T R A I L  v0.5.0
   │  verification-native coding · every change carries evidence
   ├─
   │ workspace  C:\work\project
@@ -49,6 +49,10 @@ pactrail ❯ Fix the parser regression and add a test.
 - **Review is a hard boundary.** Candidate edits live under `.pactrail/runs`.
   `/diff` reads an immutable review artifact; `/apply` rechecks the receipt,
   candidate bytes, file modes, and source baseline before landing anything.
+- **Crashes are explicit state, not lost work.** Provider-neutral checkpoints
+  bind the conversation and controller to the event head, candidate, runtime,
+  tools, and budgets. `pactrail resume` continues only at a proven safe point;
+  an uncertain tool effect is named in the trace and never guessed or replayed.
 - **Memory has provenance.** Explicit conventions, decisions, and warnings live
   in a durable SQLite store. Applied receipts can create integrity-checked
   historical records. The model can recall memory but cannot write it.
@@ -84,7 +88,7 @@ pactrail ❯ Fix the parser regression and add a test.
 - Width-aware rendering keeps dashboards, receipts, tools, help, history, and
   complete trace continuations legible in narrow or wide terminals.
 - `/tools` risk/capability inspector, `/trace` execution timeline, `/memory`
-  browser, `/runs`, `/review`, immutable `/diff`, explicit `/apply` and
+  browser, `/runs`, `/resume`, `/review`, immutable `/diff`, explicit `/apply` and
   `/discard`, `/doctor`, model discovery, and persistent provider settings.
 - Human-readable output by default and stable JSON for scripts.
 - Informational prompts finish as `ANSWERED` with no fake apply step. Kernel
@@ -120,6 +124,9 @@ pactrail ❯ Fix the parser regression and add a test.
   schema versions.
 - BLAKE3 hash-linked events, integrity-protected receipts, and a tested
   compressed content-addressed artifact-store primitive.
+- Content-addressed session checkpoints, secret-free runtime manifests,
+  immediate crash recovery, exclusive OS/SQLite run leases, and write-ahead
+  effect fences visible in both human and JSON traces.
 - Automatic Rust, Go, Python, and JavaScript verification discovery.
 - One bounded validation-repair cycle when an authorized deterministic check
   rejects a candidate and a model turn remains. Diagnostics are byte-budgeted
@@ -245,6 +252,7 @@ No-subcommand mode intentionally requires a terminal. Use subcommands in scripts
 ```console
 pactrail run "Fix the parser" --model qwen3-coder --output json
 pactrail run "Fix the parser" --model qwen3-coder --output json --process-backend oci --sandbox-image pactrail-rust:local --process-approval allow-run
+pactrail resume <RUN_ID> --output json
 pactrail trace <RUN_ID> --json
 pactrail inspect <RUN_ID> --json
 pactrail apply <RUN_ID> --json
@@ -329,7 +337,10 @@ Pactrail keeps its state in `WORKSPACE/.pactrail` by default:
 .pactrail/
 ├── events.sqlite3        # authoritative hash-linked event journal
 ├── memory.sqlite3        # provenance-aware workspace memory
+├── artifacts/checkpoints # content-addressed resumable session state
 └── runs/<run-id>/
+    ├── run.json          # bounded, secret-free runtime manifest
+    ├── execution.lock    # kernel-released exclusive local owner lock
     ├── transaction.json  # isolated workspace metadata
     ├── workspace/        # model-visible candidate tree
     ├── receipt.json      # integrity-protected change receipt

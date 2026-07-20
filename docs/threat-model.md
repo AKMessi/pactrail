@@ -1,6 +1,6 @@
 # Threat model
 
-This document describes Pactrail 0.4 as shipped. It is not a claim that model
+This document describes Pactrail 0.5 as shipped. It is not a claim that model
 execution, native processes, containers, or third-party providers are
 intrinsically safe.
 
@@ -44,6 +44,13 @@ validation.
   and final event hash.
 - Transaction, settings, event, memory, contract, and receipt schemas reject
   unknown future versions.
+- Resume requires a content-addressed checkpoint named by the current event
+  head and recomputes contract, candidate, context, model, tool, runtime, and
+  budget identity before appending. The run manifest contains environment
+  variable names but no credential values.
+- Kernel file locking and SQLite lease metadata prevent concurrent local owners.
+  Model-requested tool effects have write-ahead/completion fences; uncertain
+  effects and stale post-checkpoint event heads are never replayed automatically.
 - Portable trace JSONL is regenerated atomically from the verified SQLite event
   chain and is not treated as authoritative input.
 
@@ -141,7 +148,7 @@ does not claim successful cancellation until bounded cleanup completes. Safe
 candidate changes are retained in an integrity-checked receipt; cleanup failure
 is a hard error and remains diagnosable in durable state.
 
-## Out of scope in 0.4
+## Out of scope in 0.5
 
 - protection from a compromised user account, kernel, filesystem, or provider;
 - protection from a compromised container runtime, daemon, desktop VM, or a
@@ -153,6 +160,9 @@ is a hard error and remains diagnosable in durable state.
 - remote side effects such as pull requests, messages, or deployments;
 - semantic proof that a model-produced change is correct;
 - confidentiality of prompts sent to the configured provider.
+- automatic reconciliation or replay of a tool interrupted between effect
+  preparation and its next complete conversation checkpoint;
+- cross-machine resume, distributed leases, or remote durable state.
 
 ## Reporting
 

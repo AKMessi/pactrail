@@ -1,6 +1,6 @@
 # Design 0002: durable checkpoints and effect-safe resume
 
-Status: accepted for implementation on `feat/v05-resume`
+Status: implemented in v0.5
 Target: v0.5
 
 ## Problem
@@ -30,9 +30,9 @@ which were not durably written. Loading rechecks the artifact address, schema,
 run ID, event head, contract digest, candidate digest, and model/tool profile.
 
 The checkpoint contains no API key, raw provider client object, runtime handle,
-or host path. It contains the provider-neutral conversation, token usage,
-controller counters, seen tool-call IDs, accepted verification-gate metadata,
-and the next safe phase.
+or source-workspace path. It contains the provider-neutral conversation, token
+usage, controller counters, seen tool-call IDs, the pending final response, and
+the next safe phase.
 
 ## Safe points and effect fencing
 
@@ -42,42 +42,37 @@ Automatic checkpoints are written:
 - after a model response is normalized but before requested tools begin;
 - after every complete tool batch and its results are journaled;
 - after a repair prompt is assembled;
-- before deterministic final verification; and
-- after a terminal receipt is sealed.
+- before deterministic final verification.
 
 Every effectful tool call receives a write-ahead `EffectPrepared` event bound to
 its call ID, tool name, argument digest, candidate digest, risk class, and
 backend profile. `EffectCompleted` records the reconciled action/result digest.
 
-On restart:
-
-- a call with no prepared event was never admitted and may be executed;
-- a completed call is reconstructed from its checkpoint/result and is never
-  executed again;
-- an incomplete read-only call may be re-executed;
-- an incomplete candidate mutation is not re-executed. Pactrail captures the
-  current candidate, reports an uncertain result to the model, and requires
-  inspection before another mutation;
-- an incomplete process or external effect suspends automatic resume. The
-  candidate remains reviewable, and a user must explicitly abandon the effect
-  or the run. Pactrail does not pretend it can infer an external side effect.
+Automatic continuation is allowed only when the current event head names a
+checkpoint at a pre-model or pre-verification safe point. A pre-tool checkpoint
+is retained for exact diagnosis but is not automatically executed. Any event
+after the last checkpoint makes it stale. In particular, an unmatched
+`EffectPrepared` event produces a specific uncertain-effect error naming the
+tool and risk. Pactrail does not replay read-only calls, candidate mutations, or
+processes from an incomplete effect interval in v0.5.
 
 This favors a possible skipped action over a duplicated action.
 
 ## Lifecycle
 
-`Interrupted` is a resumable non-terminal state. A normally running process does
-not eagerly write it; startup recovery projects any non-terminal run without an
-active owner as interrupted. Acquiring a resume lease appends
-`Interrupted -> Executing` only after the checkpoint and transaction validate.
+Interrupted work remains in the non-terminal `Executing` state; `/runs` makes
+that state discoverable even without a receipt. Resume appends a note and a new
+head-bound checkpoint only after all restart identities validate.
 
 Terminal `Failed`, `Cancelled`, `Completed`, `Applied`, and `Discarded` runs do
 not resume. `AwaitingApply` is already recoverable through review/apply and does
 not enter the model loop again.
 
-Only one local owner may resume a run. The event store uses an atomic lease with
-an owner nonce and bounded expiry; stale leases can be replaced, while a live
-lease produces an actionable conflict instead of two model/tool loops.
+Only one local owner may run or resume a run. A kernel file lock is the live
+authority and is released immediately when the process dies. SQLite schema 2
+retains bounded ownership metadata; after acquiring the kernel lock, a new
+process can replace the killed owner's stale metadata immediately. A second
+live process receives an actionable conflict.
 
 ## Compatibility and retention
 
@@ -98,10 +93,10 @@ must be explicit and must match the checkpointed capability/profile digests.
 - two owners cannot acquire the same live lease;
 - a stale lease can be recovered without racing an append;
 - crash before model I/O repeats no effect;
-- crash after normalized model output retains the same tool calls;
-- crash before/after each read-only tool can resume safely;
-- crash around candidate mutation never repeats the mutation;
-- crash around process execution never repeats an uncertain process;
+- crash after normalized model output retains a diagnostic pre-tool checkpoint;
+- prepared/completed effect ordering projects deterministically;
+- any incomplete tool effect is reported and never replayed;
+- a real killed CLI process resumes the same run while a concurrent live CLI is rejected;
 - cancellation and wall-time cleanup still produce terminal, non-resumable runs;
 - older event/checkpoint-free runs remain inspectable;
 - Windows, Linux, and macOS use identical portable checkpoint bytes.

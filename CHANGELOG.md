@@ -6,6 +6,39 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-20
+
+### Added
+
+- Provider-neutral, content-addressed session checkpoints bound to the exact
+  hash-linked event head, task contract, isolated candidate, context,
+  model/tool profiles, process-runtime attestation, token use, turn counters,
+  and active wall-time budget.
+- `pactrail resume <RUN_ID>` and interactive `/resume [run]`, backed by a
+  bounded secret-free run manifest. Resume reconstructs the existing
+  transaction and rejects contract, endpoint, model, tool, containment,
+  candidate, checkpoint, or budget drift before appending another event.
+- Write-ahead `effect_prepared` and reconciled `effect_completed` events for
+  model-requested tools. Traces show call, risk, argument, candidate, result,
+  and runtime digests; an interrupted effect is reported as uncertain and is
+  never replayed automatically.
+- Exclusive local execution leases combining kernel-released file locking with
+  SQLite ownership metadata. A second live process is rejected, while an
+  abruptly killed process can be resumed immediately.
+- Real-binary crash recovery coverage that kills Pactrail during provider I/O,
+  rejects a concurrent owner, resumes the same run, preserves one contract and
+  one event chain, and retains cumulative token accounting.
+
+### Changed
+
+- New event envelopes use schema 2 for effect-fence events while schema 1
+  histories remain hash-verifiable and projectable.
+- The event-store database migrates atomically to schema 2 for run-lease
+  metadata. Existing event, receipt, transaction, memory, and settings data
+  remain readable.
+- CLI and interactive trace views render effect admission and completion as
+  first-class rows instead of burying effect safety inside generic tool output.
+
 ## [0.4.0] - 2026-07-20
 
 ### Added
@@ -179,7 +212,8 @@ follow [Semantic Versioning](https://semver.org/).
 - Bounded run-goal and memory previews now end with a visible ellipsis instead
   of silently dropping continuation text.
 
-[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/AKMessi/pactrail/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AKMessi/pactrail/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/AKMessi/pactrail/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/AKMessi/pactrail/compare/v0.1.0...v0.2.0

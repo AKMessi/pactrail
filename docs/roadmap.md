@@ -7,7 +7,7 @@ and user-facing failure mode are complete.
 This file distinguishes shipped behavior from planned work. It is not a release
 promise or a security claim.
 
-## Shipped through 0.4
+## Shipped through 0.5
 
 - Contract-first runs with explicit capability policy and overgrant detection.
 - Isolated workspace transactions, receipt-bound review/apply, source-drift
@@ -30,20 +30,12 @@ promise or a security claim.
   fail-closed non-interactive behavior, and end-to-end cancellation/cleanup.
 - Hostile-repository Docker CI, cross-platform gates, dependency policy, and an
   attested GitHub release workflow.
-
-## 0.5 — durable resume and recovery
-
-- Provider-neutral conversation checkpoints whose integrity is bound to the
-  hash-linked run head and current candidate digest.
-- `pactrail resume` and `/resume` from event replay, with no serialized provider
-  client internals and no repetition of already committed tool effects.
-- Explicit suspended/interrupted lifecycle states and startup recovery hints.
-- Crash-point tests before and after every model, tool, verification, receipt,
-  apply, and cleanup persistence boundary.
-- Checkpoint retention, bounded size, schema migration, and corruption handling.
-
-Exit criterion: a killed process can restart every supported run phase without
-duplicating effects, losing reviewable work, or trusting unverified state.
+- Head-bound provider-neutral checkpoints, secret-free runtime manifests,
+  exclusive local run ownership, `pactrail resume`/`/resume`, and real-process
+  crash/restart coverage at safe model boundaries.
+- Write-ahead and completed tool-effect fences with explicit uncertain-effect
+  refusal. Candidate mutations and process effects are never replayed from an
+  ambiguous crash boundary.
 
 ## 0.6 — streaming and provider intelligence
 
