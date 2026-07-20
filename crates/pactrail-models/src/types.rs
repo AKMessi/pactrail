@@ -54,6 +54,10 @@ pub struct ToolCall {
     pub id: String,
     pub name: String,
     pub arguments: Value,
+    /// Non-sensitive provider continuation metadata, such as a signed
+    /// function-call thought token that must be echoed on the next turn.
+    #[serde(default)]
+    pub extensions: serde_json::Map<String, Value>,
 }
 
 /// Tool result returned to a model on the next turn.

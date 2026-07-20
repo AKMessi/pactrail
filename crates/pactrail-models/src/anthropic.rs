@@ -423,6 +423,7 @@ fn parse_tool_use(block: &Value) -> Result<ToolCall, ModelError> {
         id,
         name,
         arguments,
+        extensions: serde_json::Map::new(),
     })
 }
 
@@ -799,6 +800,7 @@ impl AnthropicStreamAccumulator {
                         id: tool.id,
                         name: tool.name,
                         arguments,
+                        extensions: serde_json::Map::new(),
                     });
                 }
                 _ => {
@@ -1083,6 +1085,7 @@ mod tests {
                         id: "call-1".to_owned(),
                         name: "read_file".to_owned(),
                         arguments: json!({"path": "src/lib.rs"}),
+                        extensions: serde_json::Map::new(),
                     }],
                 },
                 ConversationItem::ToolResult(crate::ToolResult {

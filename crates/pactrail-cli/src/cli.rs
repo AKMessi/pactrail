@@ -304,6 +304,7 @@ pub enum ProviderKind {
     OpenAi,
     OpenAiCompatible,
     Anthropic,
+    Gemini,
 }
 
 const fn legacy_buffered_transport() -> bool {

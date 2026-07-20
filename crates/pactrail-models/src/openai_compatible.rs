@@ -260,7 +260,7 @@ impl ModelDriver for OpenAiCompatibleDriver {
     }
 
     async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
-        let body = request_body(&self.config, request)?;
+        let body = request_body(&self.config, request, false)?;
         let (response, request_id) = self.send(&body).await?;
         parse_response(&response, request_id)
     }
@@ -275,7 +275,7 @@ impl ModelDriver for OpenAiCompatibleDriver {
             emit_complete_response(observer, &response);
             return Ok(response);
         }
-        let body = request_body(&self.config, request)?;
+        let body = request_body(&self.config, request, true)?;
         self.send_stream(&body, observer).await
     }
 }
@@ -511,6 +511,7 @@ impl OpenAiStreamAccumulator {
                 id,
                 name,
                 arguments,
+                extensions: serde_json::Map::new(),
             });
         }
         if finish_reason == FinishReason::ToolCalls && tool_calls.is_empty() {
@@ -622,6 +623,7 @@ fn openai_finish_reason(reason: Option<&str>) -> FinishReason {
 fn request_body(
     config: &OpenAiCompatibleConfig,
     request: &ModelRequest,
+    stream: bool,
 ) -> Result<Value, ModelError> {
     if request.conversation.is_empty() {
         return Err(ModelError::InvalidRequest(
@@ -655,9 +657,9 @@ fn request_body(
         "model": config.model,
         "messages": messages,
         "max_tokens": request.max_output_tokens,
-        "stream": config.stream,
+        "stream": stream,
     });
-    if config.stream {
+    if stream {
         body["stream_options"] = json!({ "include_usage": true });
     }
     if config.disable_thinking {
@@ -823,6 +825,7 @@ fn parse_tool_call(value: &Value) -> Result<ToolCall, ModelError> {
         id: id.to_owned(),
         name: name.to_owned(),
         arguments,
+        extensions: serde_json::Map::new(),
     })
 }
 
@@ -1030,13 +1033,13 @@ mod tests {
             max_output_tokens: 128,
             temperature: Some(0.0),
         };
-        let default_body = request_body(&config("https://api.example.com/v1"), &request)
+        let default_body = request_body(&config("https://api.example.com/v1"), &request, false)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
         assert!(default_body.get("thinking").is_none());
 
         let mut non_thinking = config("https://api.example.com/v1");
         non_thinking.disable_thinking = true;
-        let body = request_body(&non_thinking, &request)
+        let body = request_body(&non_thinking, &request, false)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
         assert_eq!(body["thinking"]["type"], "disabled");
     }
@@ -1051,7 +1054,7 @@ mod tests {
         };
         let mut streaming = config("https://api.example.com/v1");
         streaming.stream = true;
-        let body = request_body(&streaming, &request)
+        let body = request_body(&streaming, &request, true)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
         assert_eq!(body["stream"], true);
         assert_eq!(body["stream_options"]["include_usage"], true);

@@ -1359,12 +1359,10 @@ impl Session {
     }
 
     fn credential_status(&self) -> (String, TimelineTone) {
-        let key_env = if self.settings.provider == ProviderKind::Anthropic
-            && self.settings.api_key_env == "OPENAI_API_KEY"
-        {
-            "ANTHROPIC_API_KEY"
-        } else {
-            &self.settings.api_key_env
+        let key_env = match (self.settings.provider, self.settings.api_key_env.as_str()) {
+            (ProviderKind::Anthropic, "OPENAI_API_KEY") => "ANTHROPIC_API_KEY",
+            (ProviderKind::Gemini, "OPENAI_API_KEY") => "GEMINI_API_KEY",
+            _ => &self.settings.api_key_env,
         };
         if self.settings.provider == ProviderKind::Ollama {
             ("not required for Ollama".to_owned(), TimelineTone::Muted)
@@ -1647,7 +1645,7 @@ impl Session {
         let mut values = arguments.split_whitespace();
         let provider = values.next().and_then(parse_provider).ok_or_else(|| {
             CliError::Argument(
-                "usage: /provider <ollama|open-ai|anthropic|open-ai-compatible> [base-url]"
+                "usage: /provider <ollama|open-ai|anthropic|gemini|open-ai-compatible> [base-url]"
                     .to_owned(),
             )
         })?;
@@ -1662,6 +1660,8 @@ impl Session {
         settings.provider = provider;
         if provider == ProviderKind::Anthropic && settings.api_key_env == "OPENAI_API_KEY" {
             "ANTHROPIC_API_KEY".clone_into(&mut settings.api_key_env);
+        } else if provider == ProviderKind::Gemini && settings.api_key_env == "OPENAI_API_KEY" {
+            "GEMINI_API_KEY".clone_into(&mut settings.api_key_env);
         }
         settings.base_url = base_url.or_else(|| {
             (provider == ProviderKind::OpenAiCompatible)
@@ -2692,12 +2692,10 @@ async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>,
         .user_agent(concat!("pactrail/", env!("CARGO_PKG_VERSION")))
         .build()?;
     let mut request = client.get(endpoint);
-    let key_env = if settings.provider == ProviderKind::Anthropic
-        && settings.api_key_env == "OPENAI_API_KEY"
-    {
-        "ANTHROPIC_API_KEY"
-    } else {
-        &settings.api_key_env
+    let key_env = match (settings.provider, settings.api_key_env.as_str()) {
+        (ProviderKind::Anthropic, "OPENAI_API_KEY") => "ANTHROPIC_API_KEY",
+        (ProviderKind::Gemini, "OPENAI_API_KEY") => "GEMINI_API_KEY",
+        _ => &settings.api_key_env,
     };
     if let Ok(api_key) = std::env::var(key_env)
         && !api_key.is_empty()
@@ -2707,6 +2705,7 @@ async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>,
             ProviderKind::Anthropic => request
                 .header("x-api-key", api_key)
                 .header("anthropic-version", "2023-06-01"),
+            ProviderKind::Gemini => request.header("x-goog-api-key", api_key),
             ProviderKind::OpenAi | ProviderKind::OpenAiCompatible => request.bearer_auth(api_key),
         };
     }
@@ -2717,12 +2716,16 @@ async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>,
         let message = String::from_utf8_lossy(&bytes).chars().take(500).collect();
         return Err(ModelListError::Provider(status.as_u16(), message));
     }
-    parse_model_list(&serde_json::from_slice(&bytes)?)
+    parse_model_list(&serde_json::from_slice(&bytes)?, settings.provider)
 }
 
-fn parse_model_list(value: &Value) -> Result<Vec<String>, ModelListError> {
+fn parse_model_list(value: &Value, provider: ProviderKind) -> Result<Vec<String>, ModelListError> {
     let entries = value
-        .get("data")
+        .get(if provider == ProviderKind::Gemini {
+            "models"
+        } else {
+            "data"
+        })
         .and_then(Value::as_array)
         .map(Vec::as_slice)
         .unwrap_or_default();
@@ -2730,10 +2733,30 @@ fn parse_model_list(value: &Value) -> Result<Vec<String>, ModelListError> {
         return Err(ModelListError::TooManyModels);
     }
     let mut models = Vec::with_capacity(entries.len());
-    for model in entries
-        .iter()
-        .filter_map(|entry| entry.get("id").and_then(Value::as_str))
-    {
+    for entry in entries {
+        if provider == ProviderKind::Gemini
+            && entry
+                .get("supportedGenerationMethods")
+                .and_then(Value::as_array)
+                .is_some_and(|methods| {
+                    !methods
+                        .iter()
+                        .any(|method| method.as_str() == Some("generateContent"))
+                })
+        {
+            continue;
+        }
+        let Some(model) = entry
+            .get(if provider == ProviderKind::Gemini {
+                "name"
+            } else {
+                "id"
+            })
+            .and_then(Value::as_str)
+            .map(|model| model.strip_prefix("models/").unwrap_or(model))
+        else {
+            continue;
+        };
         if model.trim().is_empty()
             || model.len() > MAX_DISCOVERED_MODEL_BYTES
             || model.chars().any(char::is_control)
@@ -2769,10 +2792,10 @@ async fn read_bounded(response: reqwest::Response) -> Result<Vec<u8>, ModelListE
 fn models_endpoint(base_url: &str, provider: ProviderKind) -> Result<Url, ModelListError> {
     validate_base_url(base_url)
         .map_err(|error| ModelListError::InvalidEndpoint(error.to_string()))?;
-    let suffix = if provider == ProviderKind::Anthropic {
-        "/v1/models"
-    } else {
-        "/models"
+    let suffix = match provider {
+        ProviderKind::Anthropic => "/v1/models",
+        ProviderKind::Gemini => "/v1beta/models",
+        ProviderKind::Ollama | ProviderKind::OpenAi | ProviderKind::OpenAiCompatible => "/models",
     };
     Url::parse(&format!("{}{suffix}", base_url.trim_end_matches('/')))
         .map_err(|error| ModelListError::InvalidEndpoint(error.to_string()))
@@ -2812,6 +2835,7 @@ fn provider_base_url(settings: &InteractiveSettings) -> Option<String> {
             ProviderKind::OpenAi => Some("https://api.openai.com/v1".to_owned()),
             ProviderKind::OpenAiCompatible => None,
             ProviderKind::Anthropic => Some("https://api.anthropic.com".to_owned()),
+            ProviderKind::Gemini => Some("https://generativelanguage.googleapis.com".to_owned()),
         })
 }
 
@@ -2847,6 +2871,7 @@ fn parse_provider(value: &str) -> Option<ProviderKind> {
             Some(ProviderKind::OpenAiCompatible)
         }
         "anthropic" | "claude" => Some(ProviderKind::Anthropic),
+        "gemini" | "google" => Some(ProviderKind::Gemini),
         _ => None,
     }
 }
@@ -2857,6 +2882,7 @@ fn provider_label(provider: ProviderKind) -> &'static str {
         ProviderKind::OpenAi => "open-ai",
         ProviderKind::OpenAiCompatible => "open-ai-compatible",
         ProviderKind::Anthropic => "anthropic",
+        ProviderKind::Gemini => "gemini",
     }
 }
 
@@ -3315,18 +3341,24 @@ mod tests {
 
     #[test]
     fn model_discovery_is_bounded_and_rejects_unsafe_identifiers() {
-        let models = parse_model_list(&serde_json::json!({
-            "data": [
-                {"id": "coder-b"},
-                {"id": "coder-a"},
-                {"id": "coder-b"},
-                {"not_an_id": true}
-            ]
-        }))
+        let models = parse_model_list(
+            &serde_json::json!({
+                "data": [
+                    {"id": "coder-b"},
+                    {"id": "coder-a"},
+                    {"id": "coder-b"},
+                    {"not_an_id": true}
+                ]
+            }),
+            ProviderKind::OpenAiCompatible,
+        )
         .unwrap_or_else(|error| unreachable!("model list: {error}"));
         assert_eq!(models, ["coder-a", "coder-b"]);
         assert!(matches!(
-            parse_model_list(&serde_json::json!({"data": [{"id": "bad\u{001b}[2J"}]})),
+            parse_model_list(
+                &serde_json::json!({"data": [{"id": "bad\u{001b}[2J"}]}),
+                ProviderKind::OpenAiCompatible,
+            ),
             Err(ModelListError::InvalidModelIdentifier)
         ));
 
@@ -3334,7 +3366,10 @@ mod tests {
             .map(|index| serde_json::json!({"id": format!("model-{index}")}))
             .collect::<Vec<_>>();
         assert!(matches!(
-            parse_model_list(&serde_json::json!({"data": entries})),
+            parse_model_list(
+                &serde_json::json!({"data": entries}),
+                ProviderKind::OpenAiCompatible,
+            ),
             Err(ModelListError::TooManyModels)
         ));
     }

@@ -18,8 +18,8 @@ use pactrail_memory::{
     MemoryDraft, MemoryError, MemoryId, MemoryKind, MemoryMatch, MemoryRecord, MemoryStore,
 };
 use pactrail_models::{
-    AnthropicConfig, AnthropicDriver, CapabilitySource, ModelCapabilities, ModelDriver, ModelError,
-    OpenAiCompatibleConfig, OpenAiCompatibleDriver,
+    AnthropicConfig, AnthropicDriver, CapabilitySource, GeminiConfig, GeminiDriver,
+    ModelCapabilities, ModelDriver, ModelError, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
@@ -744,21 +744,19 @@ fn generated_model_token_budget(context_tokens: u64, output_tokens: u64, max_tur
 }
 
 fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn ModelDriver>, CliError> {
-    let model = args
-        .model
-        .clone()
-        .or_else(|| contract.model.clone())
-        .ok_or_else(|| {
-            CliError::Argument("a model is required; pass --model or set PACTRAIL_MODEL".to_owned())
-        })?;
-    let capabilities = ModelCapabilities {
-        streaming: !args.no_stream,
-        reasoning_controls: args.disable_thinking,
-        context_tokens: args.context_tokens,
-        max_output_tokens: args.max_output_tokens,
-        source: CapabilitySource::UserDeclared,
-        ..ModelCapabilities::default()
-    };
+    let model = configured_model(contract, args)?;
+    if args.disable_thinking
+        && matches!(
+            args.provider,
+            ProviderKind::Anthropic | ProviderKind::Gemini
+        )
+    {
+        return Err(CliError::Argument(
+            "--disable-thinking is an OpenAI-compatible extension and is not valid for native Anthropic or Gemini adapters"
+                .to_owned(),
+        ));
+    }
+    let capabilities = configured_capabilities(args);
     let driver: Box<dyn ModelDriver> = match args.provider {
         ProviderKind::Ollama => Box::new(
             OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
@@ -825,15 +823,54 @@ fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn Model
             })
             .map_err(CliError::Model)?,
         ),
+        ProviderKind::Gemini => Box::new(
+            GeminiDriver::new(GeminiConfig {
+                name: "gemini".to_owned(),
+                base_url: args
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| "https://generativelanguage.googleapis.com".to_owned()),
+                model,
+                api_key: api_key_from_env(provider_key_env(args.provider, &args.api_key_env))?,
+                timeout: Duration::from_secs(args.request_timeout_seconds),
+                capabilities,
+                stream: !args.no_stream,
+            })
+            .map_err(CliError::Model)?,
+        ),
     };
     Ok(driver)
 }
 
+fn configured_model(contract: &TaskContract, args: &RunArgs) -> Result<String, CliError> {
+    args.model
+        .clone()
+        .or_else(|| contract.model.clone())
+        .ok_or_else(|| {
+            CliError::Argument("a model is required; pass --model or set PACTRAIL_MODEL".to_owned())
+        })
+}
+
+fn configured_capabilities(args: &RunArgs) -> ModelCapabilities {
+    ModelCapabilities {
+        parallel_tools: matches!(
+            args.provider,
+            ProviderKind::Anthropic | ProviderKind::Gemini
+        ),
+        streaming: !args.no_stream,
+        reasoning_controls: args.disable_thinking,
+        context_tokens: args.context_tokens,
+        max_output_tokens: args.max_output_tokens,
+        source: CapabilitySource::UserDeclared,
+        ..ModelCapabilities::default()
+    }
+}
+
 fn provider_key_env(provider: ProviderKind, configured: &str) -> &str {
-    if provider == ProviderKind::Anthropic && configured == "OPENAI_API_KEY" {
-        "ANTHROPIC_API_KEY"
-    } else {
-        configured
+    match (provider, configured) {
+        (ProviderKind::Anthropic, "OPENAI_API_KEY") => "ANTHROPIC_API_KEY",
+        (ProviderKind::Gemini, "OPENAI_API_KEY") => "GEMINI_API_KEY",
+        _ => configured,
     }
 }
 
