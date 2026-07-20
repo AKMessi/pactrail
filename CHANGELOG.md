@@ -17,6 +17,10 @@ follow [Semantic Versioning](https://semver.org/).
 - Process-free `git_status`, `git_diff`, and `git_history` tools backed by the
   new `pactrail-git` crate, with typed SDK exports and source/candidate state
   kept visibly separate.
+- A deterministic polyglot repository-scale runner and CI workflow covering
+  cold/warm/one-file incremental indexing, targeted context, release latency,
+  Linux peak RSS, and retained schema-versioned raw reports. Built-in tool
+  descriptors now have count, aggregate/per-tool byte, and schema-depth gates.
 
 ### Security
 

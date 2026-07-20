@@ -384,6 +384,12 @@ Other discovery commands include `pactrail tools --json`, `pactrail schema`,
 
 ## Reproducible evaluation
 
+The model-free [repository-scale suite](benchmarks/repository-scale/README.md)
+separately gates cold/warm/incremental cache behavior, targeted context bytes,
+tool descriptor count/weight/depth, release-mode latency, and Linux peak RSS.
+Its schema-versioned raw reports are CI artifacts; shared-runner timing is used
+as a regression ceiling, not a marketing benchmark.
+
 The public [Pactrail MVB v1](benchmarks/mvb-v1/README.md) runner performs seven
 one-shot, model-in-the-loop tasks with exact artifact grading—no LLM judge and
 no favorable-sample selection. Its first Windows ARM64 local baseline recorded:

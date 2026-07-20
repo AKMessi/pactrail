@@ -89,10 +89,12 @@ tests and legible CLI diagnostics.
 - First-class `git_status`, `git_diff`, and `git_history` tools backed by a
   dedicated bounded, process-free crate. Source Git state and Pactrail candidate
   state remain separate; write/remote/hosting authority is absent.
+- Reproducible repository-scale cold/warm/incremental, targeted-context, tool
+  descriptor, release-latency, and Linux peak-RSS budgets with retained raw CI
+  artifacts.
 
 ## 0.8 — repository-scale intelligence and performance
 
-- Large-monorepo latency, memory, descriptor-count, and context-budget suites.
 - Image input as an explicit artifact capability.
 
 Exit criterion: cold/warm performance and retrieval-relevance suites cover tiny
