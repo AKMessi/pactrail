@@ -126,8 +126,9 @@ local models through hosted models without hidden prompt truncation.
 - Public matched-harness evaluation measuring task correctness, regression rate,
   tokens/cost, tool efficiency, context use, trace completeness, containment,
   recovery, and human review burden—with raw artifacts and preregistration.
-- Performance budgets, release-candidate soak runs, security audit closure, and
-  deprecation/migration tooling.
+- Performance ceilings and deterministic release-candidate soak runs now gate
+  publishing and retain attested raw evidence. Security audit closure and
+  deprecation/migration tooling remain release work.
 
 Exit criterion: no open release-blocking correctness or security defect, all
 compatibility fixtures pass on supported platforms, and evaluation claims are

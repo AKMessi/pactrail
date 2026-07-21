@@ -127,12 +127,15 @@ relevance or correctness score.
 
 A deterministic repository-scale runner exercises cold, warm, and one-file
 incremental builds over a generated polyglot monorepo, then compiles targeted
-context under an explicit byte budget. It emits versioned JSON rather than a
-human-only benchmark line. A separate descriptor gate caps built-in tool count,
-aggregate/single JSON weight, and schema depth. Dedicated Linux CI builds the
-runner before measurement, records release-mode phase latency and maximum RSS,
-retains raw artifacts, and applies generous regression ceilings rather than
-presenting shared-runner timing as a universal benchmark.
+context under an explicit byte budget. Fresh lifecycle iterations must retain
+identical repository, incremental, and normalized-context digests. The runner
+emits versioned JSON rather than a human-only benchmark line. A separate
+descriptor gate caps built-in tool count, aggregate/single JSON weight, and
+schema depth. Dedicated Linux CI builds the runner before measurement, records
+release-mode phase latency and maximum RSS, retains raw artifacts, and applies
+generous regression ceilings rather than presenting shared-runner timing as a
+universal benchmark. Release tags cannot publish until a three-iteration soak
+passes; its report and resource log are attested release assets.
 
 Tree-sitter file count, lexical-fallback count, and syntax-error file count are
 also live and durable telemetry. Optional LSP evidence never starts a server:

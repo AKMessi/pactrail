@@ -49,6 +49,11 @@ follow [Semantic Versioning](https://semver.org/).
   cross-platform matrix injects permission-denied and storage-full errors at
   every journal, backup, apply, rollback, and cleanup boundary and proves exact
   rollback or idempotent recovery.
+- The repository-scale gate now supports bounded fresh lifecycle soaks, seals
+  repository/incremental/context identities, and fails on cross-iteration
+  nondeterminism. Pull requests run one iteration, `main` runs three, weekly CI
+  runs five, and release publishing is blocked on an attested three-iteration
+  schema-v2 report plus latency, descriptor, and peak-RSS ceilings.
 
 ### Security
 
