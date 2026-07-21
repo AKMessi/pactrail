@@ -55,6 +55,8 @@ pub(crate) fn sanitize_terminal_text(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
 
     #[test]
@@ -75,5 +77,36 @@ mod tests {
             serde_json::from_str::<String>(&escaped).ok().as_deref(),
             Some("before\u{9b}after")
         );
+    }
+
+    proptest! {
+        #[test]
+        fn human_output_never_retains_terminal_control_characters(
+            input in prop::collection::vec(any::<char>(), 0..4096)
+        ) {
+            let input: String = input.into_iter().collect();
+            let sanitized = sanitize_terminal_text(&input);
+            let controls_are_safe = sanitized.chars().all(|character| {
+                character == '\n' || character == '\t' || !character.is_control()
+            });
+            prop_assert!(controls_are_safe);
+        }
+
+        #[test]
+        fn json_terminal_escaping_is_value_preserving(
+            input in prop::collection::vec(any::<char>(), 0..2048)
+        ) {
+            let input: String = input.into_iter().collect();
+            let encoded = serde_json::to_string(&input)
+                .unwrap_or_else(|error| unreachable!("string serializes: {error}"));
+            let escaped = escape_json_terminal_controls(&encoded);
+            let decoded = serde_json::from_str::<String>(&escaped)
+                .unwrap_or_else(|error| unreachable!("escaped string decodes: {error}"));
+            prop_assert_eq!(decoded, input);
+            let has_literal_c1 = escaped
+                .chars()
+                .any(|character| ('\u{7f}'..='\u{9f}').contains(&character));
+            prop_assert!(!has_literal_c1);
+        }
     }
 }

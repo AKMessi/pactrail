@@ -112,10 +112,14 @@ local models through hosted models without hidden prompt truncation.
   migration command verify event/receipt/checkpoint/MCP bindings and atomically
   upgrade every historical schema currently supported by runtime readers.
   Historical per-format fixture expansion remains in progress.
-- Fuzzing and property tests for path handling, schemas, event replay, apply,
-  provider framing, MCP framing, and terminal rendering.
-- Fault injection for storage exhaustion, permission loss, concurrent source
-  changes, abrupt process death, network loss, and runtime cleanup failure.
+- Generated-input property suites cover path handling, event replay/tamper,
+  exact transaction apply, provider SSE fragmentation, MCP schema enforcement,
+  and terminal rendering. Dedicated libFuzzer targets cover the public path,
+  event-envelope, and MCP-schema trust boundaries on a bounded weekly schedule.
+- Deterministic journal fault injection now covers partial apply, rollback
+  failure, and post-apply cleanup recovery. Existing integration tests cover
+  concurrent source changes, abrupt process death, and provider network loss;
+  platform permission/storage-exhaustion matrices remain in progress.
 - Public matched-harness evaluation measuring task correctness, regression rate,
   tokens/cost, tool efficiency, context use, trace completeness, containment,
   recovery, and human review burden—with raw artifacts and preregistration.

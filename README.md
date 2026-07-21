@@ -509,7 +509,9 @@ cargo doc --workspace --all-features --no-deps --locked
 
 CI runs those gates plus release builds on Linux, macOS, and Windows, applies
 the dependency/license policy in `deny.toml`, and runs a hostile-repository
-containment fixture against Docker. Start with
+containment fixture against Docker. Generated-input property suites run inside
+the normal test gate, while bounded libFuzzer jobs exercise paths, event replay,
+and MCP schemas weekly. Start with
 [CONTRIBUTING.md](CONTRIBUTING.md) and [Development](docs/development.md).
 
 ## Project status

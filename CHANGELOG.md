@@ -33,6 +33,13 @@ follow [Semantic Versioning](https://semver.org/).
   mode with full compatibility preflight, active-run exclusion, atomic known
   settings/database upgrades, and post-migration event/receipt/checkpoint/MCP
   integrity validation. `PACTRAIL_CONFIG_DIR` enables hermetic settings tests.
+- Property suites now exercise path containment, event replay and tamper
+  detection, provider stream fragmentation, MCP schemas, exact transaction
+  landing, and terminal-safe rendering over generated inputs. Three libFuzzer
+  targets run on a bounded weekly GitHub Actions schedule.
+- Deterministic transaction fault points test partial apply, rollback failure,
+  and post-apply cleanup failure through the same journal recovery path used in
+  production.
 
 ### Security
 
@@ -49,6 +56,10 @@ follow [Semantic Versioning](https://semver.org/).
 - Run manifests, receipts, settings, and database schema probes reject symlink
   files; receipt reads are bounded, and migration refuses orphaned run state or
   integrity bindings that do not match the authoritative event journal.
+- Transaction metadata is size-bounded, strict-schema, non-symlink state whose
+  paths and baseline digest are revalidated on open. Apply now rejects even an
+  integrity-valid receipt unless it matches the transaction's exact source and
+  baseline.
 
 ### Changed
 

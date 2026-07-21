@@ -1,0 +1,40 @@
+[package]
+name = "pactrail-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+pactrail-core = { path = "../crates/pactrail-core" }
+pactrail-mcp = { path = "../crates/pactrail-mcp" }
+pactrail-workspace = { path = "../crates/pactrail-workspace" }
+serde_json = "1"
+time = "0.3"
+
+[[bin]]
+name = "workspace_path"
+path = "fuzz_targets/workspace_path.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "event_envelope"
+path = "fuzz_targets/event_envelope.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mcp_schema"
+path = "fuzz_targets/mcp_schema.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

@@ -124,7 +124,7 @@ pub(crate) fn portable(path: &Path) -> Result<String, TransactionError> {
     Ok(components.join("/"))
 }
 
-fn manifest_digest(files: &BTreeMap<String, FileFingerprint>) -> String {
+pub(crate) fn manifest_digest(files: &BTreeMap<String, FileFingerprint>) -> String {
     let mut hasher = blake3::Hasher::new();
     for (path, fingerprint) in files {
         hasher.update(path.as_bytes());

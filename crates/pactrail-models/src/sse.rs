@@ -138,7 +138,28 @@ pub(crate) enum SseError {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
+
+    fn decode_with_chunks(input: &[u8], chunks: &[usize]) -> Result<Vec<SseEvent>, SseError> {
+        let mut decoder = SseDecoder::new();
+        let mut events = Vec::new();
+        let mut offset = 0_usize;
+        for requested in chunks {
+            if offset == input.len() {
+                break;
+            }
+            let end = offset.saturating_add((*requested).max(1)).min(input.len());
+            events.extend(decoder.push(&input[offset..end])?);
+            offset = end;
+        }
+        if offset < input.len() {
+            events.extend(decoder.push(&input[offset..])?);
+        }
+        decoder.finish()?;
+        Ok(events)
+    }
 
     #[test]
     fn decodes_fragmented_crlf_multiline_events_and_ignores_comments() {
@@ -204,5 +225,26 @@ mod tests {
         decoder
             .finish()
             .unwrap_or_else(|error| unreachable!("complete stream: {error}"));
+    }
+
+    proptest! {
+        #[test]
+        fn arbitrary_network_fragmentation_preserves_sse_events(
+            event_name in "[A-Za-z0-9_-]{0,32}",
+            lines in prop::collection::vec("[ -~]{0,64}", 1..16),
+            chunks in prop::collection::vec(1_usize..32, 0..128)
+        ) {
+            let mut input = format!("event: {event_name}\r\n");
+            for line in &lines {
+                input.push_str("data: ");
+                input.push_str(line);
+                input.push_str("\r\n");
+            }
+            input.push_str("\r\n");
+            let expected = decode_with_chunks(input.as_bytes(), &[input.len()]);
+            let fragmented = decode_with_chunks(input.as_bytes(), &chunks);
+            prop_assert!(expected.is_ok());
+            prop_assert_eq!(fragmented.ok(), expected.ok());
+        }
     }
 }
