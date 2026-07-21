@@ -1197,7 +1197,15 @@ mod tests {
         )?;
         let merge = Command::new("git")
             .current_dir(root.path())
-            .args(["merge", "--no-edit", "conflicting"])
+            .args([
+                "-c",
+                "user.name=Pactrail Fixture",
+                "-c",
+                "user.email=pactrail-fixture@example.invalid",
+                "merge",
+                "--no-edit",
+                "conflicting",
+            ])
             .output()?;
         assert!(!merge.status.success());
 
