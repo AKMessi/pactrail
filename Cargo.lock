@@ -2393,6 +2393,7 @@ dependencies = [
  "pactrail-workspace",
  "reedline",
  "reqwest",
+ "rusqlite",
  "schemars",
  "secrecy",
  "serde",

@@ -300,6 +300,12 @@ separates authoritative durable state from rebuildable caches and makes each
 reader's exact-version, historical-read, atomic-migration, or safe-rebuild policy
 visible before an upgrade. See [Compatibility contracts](compatibility.md).
 
+`pactrail migrate` is the operational gate over that inventory. Its default is
+a non-creating schema/integrity audit. Explicit apply mode first rejects every
+unknown component, holds all inactive run-file locks, applies each known local
+format through its atomic persistence primitive, and repeats the audit before
+reporting success.
+
 Action events cover context compilation and compaction, model requests, tools,
 and verifier commands. Policy decisions, evidence, checkpoints, notes, and state
 transitions share the same journal. The CLI exports the verified stream to run-local

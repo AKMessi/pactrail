@@ -6,6 +6,7 @@ mod compatibility;
 mod diff;
 mod interactive;
 mod mcp;
+mod migration;
 mod output;
 mod settings;
 mod theme;

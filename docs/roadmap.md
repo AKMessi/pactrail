@@ -106,8 +106,12 @@ local models through hosted models without hidden prompt truncation.
 
 ## 0.9 — stabilization and public evaluation
 
-- Compatibility fixtures and migrations for every durable contract, event,
-  receipt, memory, settings, transaction, checkpoint, tool, and provider format.
+- Compatibility inventory and a current-format fixture now cover durable core,
+  event database, memory, settings, transaction, checkpoint, MCP, tool, model,
+  provider-report, and derived-cache boundaries. A read-only audit and explicit
+  migration command verify event/receipt/checkpoint/MCP bindings and atomically
+  upgrade every historical schema currently supported by runtime readers.
+  Historical per-format fixture expansion remains in progress.
 - Fuzzing and property tests for path handling, schemas, event replay, apply,
   provider framing, MCP framing, and terminal rendering.
 - Fault injection for storage exhaustion, permission loss, concurrent source
