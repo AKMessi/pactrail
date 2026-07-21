@@ -1,0 +1,7 @@
+schema = 1
+provider = "ollama"
+api_key_env = "KEY"
+context_tokens = 4096
+max_output_tokens = 512
+max_turns = 4
+allow_process = true

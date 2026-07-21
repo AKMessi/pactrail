@@ -1,0 +1,12 @@
+schema = 2
+provider = "ollama"
+api_key_env = "KEY"
+context_tokens = 4096
+max_output_tokens = 512
+max_turns = 4
+process_backend = "disabled"
+sandbox_runtime = "docker"
+sandbox_memory_mib = 2048
+sandbox_cpu_millis = 2000
+sandbox_pids = 128
+sandbox_tmpfs_mib = 512

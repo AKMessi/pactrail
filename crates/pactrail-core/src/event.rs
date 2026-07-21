@@ -631,27 +631,26 @@ mod tests {
     }
 
     #[test]
-    fn schema_one_envelopes_remain_hash_verifiable_and_projectable() {
-        let run_id = RunId::new();
-        let timestamp = OffsetDateTime::UNIX_EPOCH;
-        let previous_hash = EventHash::genesis();
-        let event = RunEvent::NoteRecorded {
-            message: "written by v0.4".to_owned(),
-        };
-        let hash = EventEnvelope::compute_hash(1, run_id, 0, timestamp, &previous_hash, &event)
-            .unwrap_or_else(|error| unreachable!("legacy event hashes: {error}"));
-        let envelope = EventEnvelope {
-            schema_version: 1,
-            run_id,
-            sequence: 0,
-            timestamp,
-            previous_hash,
-            event,
-            hash,
-        };
+    fn event_envelope_schema_one_compatibility_fixture_is_verified_and_projected() {
+        let envelope: EventEnvelope = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/compatibility/historical/event-envelope-v1.json"
+        )))
+        .unwrap_or_else(|error| unreachable!("legacy event fixture: {error}"));
+        let expected_hash = EventEnvelope::compute_hash(
+            envelope.schema_version,
+            envelope.run_id,
+            envelope.sequence,
+            envelope.timestamp,
+            &envelope.previous_hash,
+            &envelope.event,
+        )
+        .unwrap_or_else(|error| unreachable!("legacy event hashes: {error}"));
+
+        assert_eq!(envelope.hash, expected_hash);
 
         assert!(envelope.verify().unwrap_or(false));
-        let mut snapshot = RunSnapshot::new(run_id);
+        let mut snapshot = RunSnapshot::new(envelope.run_id);
         snapshot
             .apply(&envelope)
             .unwrap_or_else(|error| unreachable!("legacy event projects: {error}"));

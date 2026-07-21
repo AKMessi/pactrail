@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "run_id": "01900000-0000-7000-8000-000000000001",
+  "sequence": 0,
+  "timestamp": "1970-01-01T00:00:00Z",
+  "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "event": {
+    "type": "note_recorded",
+    "data": {
+      "message": "written by Pactrail 0.4"
+    }
+  },
+  "hash": "586d2e4144c93912e3d8b55dc02b4651574b497b09cc3fee43509880db8bf04e"
+}

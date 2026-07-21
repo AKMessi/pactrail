@@ -17,6 +17,22 @@ whether the data is authoritative durable state or safe-to-rebuild derived
 state. The inventory is generated from the same constants used by runtime
 readers and is pinned by a checked-in compatibility fixture.
 
+Every historical schema in a declared readable range has an immutable fixture
+under `tests/fixtures/compatibility/historical`. Run the complete historical
+reader and migration suite with one command:
+
+```console
+cargo test --workspace compatibility_fixture
+```
+
+The fixture manifest is checked against the compile-time inventory, so adding
+a readable schema without a corresponding artifact fails the suite. Each
+artifact is then exercised by its owning production reader: event envelopes
+are hash-verified and projected, event databases are opened read-only and
+atomically migrated, and settings are migrated through the normal crash-safe
+persistence path. A manifest-only placeholder therefore cannot satisfy the
+compatibility gate.
+
 Audit the actual workspace state and interactive settings before an upgrade:
 
 ```console
@@ -65,7 +81,8 @@ Until the stable 1.0 contract is declared, a minor release may introduce a new
 schema. Such a change must include:
 
 1. an updated entry in `pactrail compatibility --json`;
-2. a checked-in current or legacy fixture;
+2. a checked-in current or historical fixture exercised by its production
+   reader;
 3. tests for the oldest supported reader and an unknown-future rejection;
 4. documented atomicity, rollback, and authority behavior; and
 5. a release-note migration section.
