@@ -54,11 +54,15 @@ messages only after fixture construction where failure cannot be recovered.
   second process.
 - Proptest suites generate path, event, transaction, schema, stream-fragment,
   and terminal-control cases. Transaction fault tests deterministically cover
-  partial apply, rollback failure, and cleanup recovery.
+  partial apply, rollback failure, and cleanup recovery. The `io_failure_matrix`
+  tests inject permission-denied and storage-full errors before and after every
+  journal, backup, source-write, rollback, and cleanup boundary, then prove an
+  exact source state and idempotent recovery.
 - `fuzz/` contains libFuzzer targets for workspace paths, event envelopes, and
   untrusted MCP schemas. The `Fuzz` workflow runs each target on a bounded weekly
   schedule; see [the fuzzing guide](../fuzz/README.md) for local commands.
-- CI repeats the complete suite on current Linux, macOS, and Windows runners.
+- CI repeats the complete suite on current Linux, macOS, and Windows runners
+  and exposes the I/O recovery matrix as a named release gate.
 
 Tests must not contact public providers or rely on a locally installed model.
 

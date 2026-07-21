@@ -36,7 +36,10 @@ validation.
   process escapes the candidate directory.
 - Apply binds the receipt to the exact candidate change set and refuses a source
   path whose baseline bytes or mode changed concurrently.
-- Landing uses a synchronized backup journal, rollback, and idempotent recovery.
+- Landing uses synchronized same-directory temporary files, atomic replacement,
+  a backup journal, rollback, and idempotent recovery. Permission-denied and
+  storage-full failures are injected around every mutation boundary in the
+  cross-platform test matrix.
 
 ### Durable integrity
 

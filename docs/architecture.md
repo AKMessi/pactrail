@@ -373,7 +373,8 @@ Apply performs the following sequence:
 2. Verify receipt integrity and evidence coverage.
 3. Verify every touched source path still matches its baseline bytes and mode.
 4. Back up touched paths into a synchronized run-local apply journal.
-5. Revalidate candidate bytes/modes, land them, and synchronize writes.
+5. Revalidate candidate bytes/modes, fully write and synchronize same-directory
+   temporary files, then atomically replace the touched source paths.
 6. Roll back from the journal on failure.
 7. Record `Applied`, reissue the receipt, export the trace, and ingest the
    integrity-checked applied-run memory.
@@ -381,7 +382,10 @@ Apply performs the following sequence:
 Apply is idempotent. If files landed but event persistence was interrupted, a
 retry recognizes candidate-equivalent source files and completes the state
 transition without blindly rewriting them. Foreign changes are never
-overwritten.
+overwritten. Permission and storage failures are tested on both sides of every
+journal/apply/rollback boundary; the resulting source is either exact baseline,
+exact candidate, or a journal-recognizable partial state that a clean retry can
+recover.
 
 ## Verification and evidence
 

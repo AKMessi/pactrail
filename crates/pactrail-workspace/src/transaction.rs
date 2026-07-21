@@ -1,5 +1,5 @@
 use std::collections::BTreeSet;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -407,11 +407,12 @@ impl WorkspaceTransaction {
                 ));
             }
         }
+        faults.check(ApplyFaultPoint::JournalCreate)?;
         fs::create_dir_all(&journal_root).map_err(|source| TransactionError::Io {
             path: journal_root.clone(),
             source,
         })?;
-        backup_changed_files(&self.metadata.source_root, &journal_root, changes)?;
+        backup_changed_files(&self.metadata.source_root, &journal_root, changes, faults)?;
 
         if let Err(apply_error) = self.apply_changes(changes, faults) {
             if let Err(rollback_error) = rollback(
@@ -572,6 +573,7 @@ impl WorkspaceTransaction {
                     source: error,
                 })?,
             }
+            faults.check(ApplyFaultPoint::ApplyChangeWritten(index))?;
         }
         Ok(())
     }
@@ -579,8 +581,13 @@ impl WorkspaceTransaction {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ApplyFaultPoint {
+    JournalCreate,
+    BackupChange(usize),
+    BackupChangeWritten(usize),
     ApplyChange(usize),
+    ApplyChangeWritten(usize),
     RollbackChange(usize),
+    RollbackChangeWritten(usize),
     JournalCleanup,
 }
 
@@ -682,11 +689,13 @@ fn backup_changed_files(
     source: &Path,
     journal: &Path,
     changes: &[FileChange],
+    faults: &impl ApplyFaultInjector,
 ) -> Result<(), TransactionError> {
-    for change in changes {
+    for (index, change) in changes.iter().enumerate() {
         if change.before_digest.is_none() {
             continue;
         }
+        faults.check(ApplyFaultPoint::BackupChange(index))?;
         let from = source.join(&change.path);
         let to = journal.join(&change.path);
         let parent = to
@@ -700,6 +709,7 @@ fn backup_changed_files(
             path: from,
             source: error,
         })?;
+        faults.check(ApplyFaultPoint::BackupChangeWritten(index))?;
     }
     Ok(())
 }
@@ -734,6 +744,7 @@ fn rollback(
                 source: error,
             })?;
         }
+        faults.check(ApplyFaultPoint::RollbackChangeWritten(index))?;
     }
     Ok(())
 }
@@ -872,25 +883,6 @@ fn write_atomic(
         })?;
     apply_mode(temporary.path(), mode)?;
 
-    if destination.exists() {
-        let mut output = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(destination)
-            .map_err(|source| TransactionError::Io {
-                path: destination.to_path_buf(),
-                source,
-            })?;
-        output
-            .write_all(content)
-            .and_then(|()| output.sync_all())
-            .map_err(|source| TransactionError::Io {
-                path: destination.to_path_buf(),
-                source,
-            })?;
-        apply_mode(destination, mode)?;
-        return Ok(());
-    }
     temporary
         .persist(destination)
         .map_err(|error| TransactionError::Io {
@@ -976,32 +968,82 @@ pub enum TransactionError {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::OpenOptions;
+    use std::io::ErrorKind;
+
     use proptest::prelude::*;
 
     use super::*;
 
     #[derive(Default)]
     struct TestFaults {
-        apply_change: Option<usize>,
-        rollback_change: Option<usize>,
-        journal_cleanup: bool,
+        points: Vec<ApplyFaultPoint>,
+        io_kind: Option<ErrorKind>,
+    }
+
+    impl TestFaults {
+        fn invariant(point: ApplyFaultPoint) -> Self {
+            Self {
+                points: vec![point],
+                io_kind: None,
+            }
+        }
+
+        fn invariants(points: Vec<ApplyFaultPoint>) -> Self {
+            Self {
+                points,
+                io_kind: None,
+            }
+        }
+
+        fn io(points: Vec<ApplyFaultPoint>, kind: ErrorKind) -> Self {
+            Self {
+                points,
+                io_kind: Some(kind),
+            }
+        }
     }
 
     impl ApplyFaultInjector for TestFaults {
         fn check(&self, point: ApplyFaultPoint) -> Result<(), TransactionError> {
-            let injected = match point {
-                ApplyFaultPoint::ApplyChange(index) => self.apply_change == Some(index),
-                ApplyFaultPoint::RollbackChange(index) => self.rollback_change == Some(index),
-                ApplyFaultPoint::JournalCleanup => self.journal_cleanup,
-            };
-            if injected {
-                Err(TransactionError::Invariant(format!(
-                    "injected transaction fault at {point:?}"
-                )))
-            } else {
-                Ok(())
+            if !self.points.contains(&point) {
+                return Ok(());
             }
+            self.io_kind.map_or_else(
+                || {
+                    Err(TransactionError::Invariant(format!(
+                        "injected transaction fault at {point:?}"
+                    )))
+                },
+                |kind| {
+                    Err(TransactionError::Io {
+                        path: PathBuf::from(format!("injected-{point:?}")),
+                        source: std::io::Error::from(kind),
+                    })
+                },
+            )
         }
+    }
+
+    fn contains_io_kind(error: &TransactionError, expected: ErrorKind) -> bool {
+        match error {
+            TransactionError::Io { source, .. } => source.kind() == expected,
+            TransactionError::RollbackFailed { apply, rollback } => {
+                contains_io_kind(apply, expected) || contains_io_kind(rollback, expected)
+            }
+            _ => false,
+        }
+    }
+
+    fn assert_two_file_source(source: &Path, first: &str, second: &str) {
+        assert_eq!(
+            fs::read_to_string(source.join("src/first.rs")).ok(),
+            Some(first.to_owned())
+        );
+        assert_eq!(
+            fs::read_to_string(source.join("src/second.rs")).ok(),
+            Some(second.to_owned())
+        );
     }
 
     fn fixture() -> (tempfile::TempDir, tempfile::TempDir, WorkspaceTransaction) {
@@ -1113,10 +1155,7 @@ mod tests {
         let changes = transaction
             .changes()
             .unwrap_or_else(|error| unreachable!("changes: {error}"));
-        let faults = TestFaults {
-            apply_change: Some(1),
-            ..TestFaults::default()
-        };
+        let faults = TestFaults::invariant(ApplyFaultPoint::ApplyChange(1));
         assert!(matches!(
             transaction.apply_change_set_with_faults(&changes, &faults),
             Err(TransactionError::Invariant(message)) if message.contains("ApplyChange(1)")
@@ -1161,11 +1200,10 @@ mod tests {
         let changes = transaction
             .changes()
             .unwrap_or_else(|error| unreachable!("changes: {error}"));
-        let faults = TestFaults {
-            apply_change: Some(1),
-            rollback_change: Some(0),
-            journal_cleanup: false,
-        };
+        let faults = TestFaults::invariants(vec![
+            ApplyFaultPoint::ApplyChange(1),
+            ApplyFaultPoint::RollbackChange(0),
+        ]);
         assert!(matches!(
             transaction.apply_change_set_with_faults(&changes, &faults),
             Err(TransactionError::RollbackFailed { .. })
@@ -1198,10 +1236,7 @@ mod tests {
         let changes = transaction
             .changes()
             .unwrap_or_else(|error| unreachable!("changes: {error}"));
-        let faults = TestFaults {
-            journal_cleanup: true,
-            ..TestFaults::default()
-        };
+        let faults = TestFaults::invariant(ApplyFaultPoint::JournalCleanup);
         assert!(matches!(
             transaction.apply_change_set_with_faults(&changes, &faults),
             Err(TransactionError::Invariant(message)) if message.contains("JournalCleanup")
@@ -1227,6 +1262,108 @@ mod tests {
                 .join(APPLY_JOURNAL_DIRECTORY)
                 .exists()
         );
+    }
+
+    #[test]
+    fn platform_io_failure_matrix_preserves_or_recovers_every_apply_boundary() {
+        let failure_kinds = [ErrorKind::PermissionDenied, ErrorKind::StorageFull];
+        let points = [
+            ApplyFaultPoint::JournalCreate,
+            ApplyFaultPoint::BackupChange(0),
+            ApplyFaultPoint::BackupChangeWritten(0),
+            ApplyFaultPoint::BackupChange(1),
+            ApplyFaultPoint::BackupChangeWritten(1),
+            ApplyFaultPoint::ApplyChange(0),
+            ApplyFaultPoint::ApplyChangeWritten(0),
+            ApplyFaultPoint::ApplyChange(1),
+            ApplyFaultPoint::ApplyChangeWritten(1),
+            ApplyFaultPoint::JournalCleanup,
+        ];
+
+        for kind in failure_kinds {
+            for point in points {
+                let (source, _control, transaction) = two_file_fixture();
+                let changes = transaction
+                    .changes()
+                    .unwrap_or_else(|error| unreachable!("changes: {error}"));
+                let faults = TestFaults::io(vec![point], kind);
+                let Err(error) = transaction.apply_change_set_with_faults(&changes, &faults) else {
+                    unreachable!("fault {point:?} with {kind:?} unexpectedly succeeded")
+                };
+                assert!(
+                    contains_io_kind(&error, kind),
+                    "fault {point:?} did not preserve {kind:?}: {error}"
+                );
+
+                if point == ApplyFaultPoint::JournalCleanup {
+                    assert_two_file_source(source.path(), "new first\n", "new second\n");
+                } else {
+                    assert_two_file_source(source.path(), "old first\n", "old second\n");
+                }
+
+                transaction
+                    .apply_expected(&changes)
+                    .unwrap_or_else(|error| {
+                        unreachable!("recovery after {point:?} with {kind:?}: {error}")
+                    });
+                assert_two_file_source(source.path(), "new first\n", "new second\n");
+                assert!(
+                    !transaction
+                        .control_root
+                        .join(APPLY_JOURNAL_DIRECTORY)
+                        .exists()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn rollback_io_failure_matrix_remains_diagnosable_and_retryable() {
+        let failure_kinds = [ErrorKind::PermissionDenied, ErrorKind::StorageFull];
+        let rollback_points = [
+            ApplyFaultPoint::RollbackChange(0),
+            ApplyFaultPoint::RollbackChangeWritten(0),
+            ApplyFaultPoint::RollbackChange(1),
+            ApplyFaultPoint::RollbackChangeWritten(1),
+        ];
+
+        for kind in failure_kinds {
+            for rollback_point in rollback_points {
+                let (source, _control, transaction) = two_file_fixture();
+                let changes = transaction
+                    .changes()
+                    .unwrap_or_else(|error| unreachable!("changes: {error}"));
+                let faults =
+                    TestFaults::io(vec![ApplyFaultPoint::ApplyChange(1), rollback_point], kind);
+                let Err(error) = transaction.apply_change_set_with_faults(&changes, &faults) else {
+                    unreachable!(
+                        "rollback fault {rollback_point:?} with {kind:?} unexpectedly succeeded"
+                    )
+                };
+                assert!(matches!(error, TransactionError::RollbackFailed { .. }));
+                assert!(contains_io_kind(&error, kind));
+                if rollback_point == ApplyFaultPoint::RollbackChange(0) {
+                    assert_two_file_source(source.path(), "new first\n", "old second\n");
+                } else {
+                    assert_two_file_source(source.path(), "old first\n", "old second\n");
+                }
+
+                transaction
+                    .apply_expected(&changes)
+                    .unwrap_or_else(|error| {
+                        unreachable!(
+                            "recovery after rollback {rollback_point:?} with {kind:?}: {error}"
+                        )
+                    });
+                assert_two_file_source(source.path(), "new first\n", "new second\n");
+                assert!(
+                    !transaction
+                        .control_root
+                        .join(APPLY_JOURNAL_DIRECTORY)
+                        .exists()
+                );
+            }
+        }
     }
 
     #[test]
