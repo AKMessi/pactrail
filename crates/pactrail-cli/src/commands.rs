@@ -1699,6 +1699,14 @@ fn apply_ready_receipt(
     store: &mut EventStore,
 ) -> Result<ChangeReceipt, CliError> {
     require_receipt_integrity(&receipt)?;
+    if receipt.baseline_digest != transaction.baseline_digest()
+        || receipt.contract.workspace_root != transaction.source_root().display().to_string()
+    {
+        return Err(CliError::Argument(
+            "receipt is not bound to the isolated transaction baseline and source workspace"
+                .to_owned(),
+        ));
+    }
     let snapshot = store.snapshot(receipt.run_id)?;
     if snapshot.state == RunState::Applied {
         transaction.apply_expected(&receipt.changes)?;
@@ -2139,9 +2147,14 @@ pub(crate) fn validate_run_artifacts(state: &Path, store: &EventStore) -> Result
         let receipt_path = root.join("receipt.json");
         if optional_regular_file(&receipt_path, "receipt")? {
             let receipt = read_receipt_exact(&root)?;
-            if receipt.run_id != *run_id || !receipt.verify_integrity()? {
+            if receipt.run_id != *run_id
+                || !receipt.verify_integrity()?
+                || receipt.baseline_digest != transaction.baseline_digest()
+                || receipt.contract.workspace_root
+                    != transaction.source_root().display().to_string()
+            {
                 return Err(CliError::Argument(format!(
-                    "run {run_id} receipt identity or integrity is invalid"
+                    "run {run_id} receipt identity, integrity, or transaction binding is invalid"
                 )));
             }
         }
@@ -2952,7 +2965,10 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("candidate write: {error}"));
 
         let run_id = RunId::new();
-        let contract = TaskContract::new("Create a README", source.path().display().to_string());
+        let contract = TaskContract::new(
+            "Create a README",
+            transaction.source_root().display().to_string(),
+        );
         let evidence = vec![Evidence::deterministic_pass(
             contract.obligations[0].id,
             EvidenceKind::Test,
@@ -3095,6 +3111,36 @@ mod tests {
         assert!(matches!(
             result,
             Err(CliError::Transaction(TransactionError::CandidateSetDrift))
+        ));
+        assert!(!fixture.source.path().join("README.md").exists());
+    }
+
+    #[test]
+    fn apply_rejects_an_integrity_valid_receipt_for_a_different_baseline() {
+        let mut fixture = ready_fixture();
+        let receipt = ChangeReceipt::build(ReceiptInput {
+            run_id: fixture.receipt.run_id,
+            contract: fixture.receipt.contract.clone(),
+            outcome: fixture.receipt.outcome,
+            baseline_digest: "0".repeat(64),
+            final_event_hash: fixture.receipt.final_event_hash.clone(),
+            changes: fixture.receipt.changes.clone(),
+            evidence: fixture.receipt.evidence.clone(),
+            approvals: fixture.receipt.approvals.clone(),
+            unresolved_risks: fixture.receipt.unresolved_risks.clone(),
+        })
+        .unwrap_or_else(|error| unreachable!("alternate receipt: {error}"));
+        assert!(receipt.verify_integrity().is_ok_and(|valid| valid));
+
+        let result = apply_ready_receipt(
+            &fixture.run_root,
+            receipt,
+            &fixture.transaction,
+            &mut fixture.store,
+        );
+        assert!(matches!(
+            result,
+            Err(CliError::Argument(message)) if message.contains("not bound")
         ));
         assert!(!fixture.source.path().join("README.md").exists());
     }

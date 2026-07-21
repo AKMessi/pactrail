@@ -502,7 +502,7 @@ impl RunActivity {
             "â—ˆ",
             "images",
             &format!(
-                "{} sealed Â· {} Â· ~{} input tokens Â· {}",
+                "{} sealed · {} · ~{} input tokens · {}",
                 count,
                 format_bytes(*total_bytes),
                 format_count(*estimated_input_tokens),
@@ -1382,7 +1382,7 @@ impl Session {
                 let mut lines = vec![self.theme.heading("Next-task images")];
                 for (index, artifact) in artifacts.iter().enumerate() {
                     lines.push(format!(
-                        "  {}  {}  {}x{} Â· {} Â· {}",
+                        "  {}  {}  {}x{} · {} · {}",
                         self.theme.accent(&(index + 1).to_string()),
                         self.theme.text(artifact.name()),
                         artifact.width(),
@@ -1412,7 +1412,7 @@ impl Session {
                     )
                 })?;
                 let detail = format!(
-                    "queued {} Â· {}x{} Â· {} Â· {}",
+                    "queued {} · {}x{} · {} · {}",
                     artifact.name(),
                     artifact.width(),
                     artifact.height(),
@@ -1566,7 +1566,7 @@ impl Session {
             (
                 "images",
                 if self.pending_images.is_empty() {
-                    "none queued Â· /image add <path>".to_owned()
+                    "none queued · /image add <path>".to_owned()
                 } else {
                     format!("{} queued for next task", self.pending_images.len())
                 },

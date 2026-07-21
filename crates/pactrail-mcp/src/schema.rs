@@ -155,6 +155,7 @@ fn invalid(tool: &str, reason: impl Into<String>) -> McpError {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
     use serde_json::json;
 
     use super::{validate_arguments, validate_input_schema};
@@ -191,5 +192,39 @@ mod tests {
     #[test]
     fn non_object_root_fails_closed() {
         assert!(validate_input_schema("array", &json!({"type": "array"})).is_err());
+    }
+
+    proptest! {
+        #[test]
+        fn generated_exact_integer_contracts_accept_only_matching_objects(
+            property in "[A-Za-z][A-Za-z0-9_]{0,31}",
+            value in any::<i64>()
+        ) {
+            let schema = json!({
+                "type": "object",
+                "properties": { (property.clone()): { "type": "integer" } },
+                "required": [property.clone()],
+                "additionalProperties": false
+            });
+            prop_assert!(validate_input_schema("generated", &schema).is_ok());
+            let valid = validate_arguments(
+                "generated",
+                &schema,
+                &json!({(property.clone()): value}),
+            );
+            let wrong_type = validate_arguments(
+                "generated",
+                &schema,
+                &json!({(property.clone()): "wrong"}),
+            );
+            let extra_property = validate_arguments(
+                "generated",
+                &schema,
+                &json!({(property): value, "undeclared": true}),
+            );
+            prop_assert!(valid.is_ok());
+            prop_assert!(wrong_type.is_err());
+            prop_assert!(extra_property.is_err());
+        }
     }
 }

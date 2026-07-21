@@ -376,6 +376,8 @@ pub enum StateError {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
 
     fn event(run_id: RunId, sequence: u64, previous: EventHash, event: RunEvent) -> EventEnvelope {
@@ -387,6 +389,61 @@ mod tests {
             event,
         )
         .unwrap_or_else(|error| unreachable!("test event serializes: {error}"))
+    }
+
+    proptest! {
+        #[test]
+        fn arbitrary_note_chains_replay_identically_after_serialization(
+            notes in prop::collection::vec(prop::collection::vec(any::<char>(), 0..64), 0..64)
+        ) {
+            let run_id = RunId::new();
+            let mut previous = EventHash::genesis();
+            let mut envelopes = Vec::with_capacity(notes.len());
+            for (sequence, note) in notes.into_iter().enumerate() {
+                let envelope = event(
+                    run_id,
+                    u64::try_from(sequence).unwrap_or_default(),
+                    previous,
+                    RunEvent::NoteRecorded { message: note.into_iter().collect() },
+                );
+                previous = envelope.hash.clone();
+                envelopes.push(envelope);
+            }
+
+            let encoded = serde_json::to_vec(&envelopes)
+                .unwrap_or_else(|error| unreachable!("event chain serializes: {error}"));
+            let decoded: Vec<EventEnvelope> = serde_json::from_slice(&encoded)
+                .unwrap_or_else(|error| unreachable!("event chain decodes: {error}"));
+            let mut original = RunSnapshot::new(run_id);
+            let mut replayed = RunSnapshot::new(run_id);
+            for (left, right) in envelopes.iter().zip(&decoded) {
+                prop_assert!(left.verify().is_ok_and(|valid| valid));
+                prop_assert!(right.verify().is_ok_and(|valid| valid));
+                prop_assert!(original.apply(left).is_ok());
+                prop_assert!(replayed.apply(right).is_ok());
+            }
+            prop_assert_eq!(original, replayed);
+        }
+
+        #[test]
+        fn changing_any_hashed_note_is_detected(message in prop::collection::vec(any::<char>(), 0..256)) {
+            let run_id = RunId::new();
+            let original: String = message.into_iter().collect();
+            let mut envelope = event(
+                run_id,
+                0,
+                EventHash::genesis(),
+                RunEvent::NoteRecorded { message: original.clone() },
+            );
+            envelope.event = RunEvent::NoteRecorded {
+                message: format!("{original}\0tampered"),
+            };
+            prop_assert!(envelope.verify().is_ok_and(|valid| !valid));
+            prop_assert!(matches!(
+                RunSnapshot::new(run_id).apply(&envelope),
+                Err(StateError::InvalidHash)
+            ));
+        }
     }
 
     #[test]

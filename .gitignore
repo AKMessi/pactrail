@@ -1,4 +1,7 @@
 /target/
+/fuzz/artifacts/
+/fuzz/corpus/
+/fuzz/target/
 /.pactrail/
 benchmark-results/
 *.pactrail-run

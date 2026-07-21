@@ -67,6 +67,8 @@ pub enum PathError {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
 
     #[test]
@@ -82,5 +84,32 @@ mod tests {
             SafeRelativePath::new("src/../../secret"),
             Err(PathError::Traversal(_))
         ));
+    }
+
+    proptest! {
+        #[test]
+        fn accepted_components_round_trip_portably(
+            components in prop::collection::vec("[A-Za-z0-9_-]{1,12}", 1..16)
+        ) {
+            let expected = components.join("/");
+            let decorated = format!("./{}", components.join("/./"));
+            let actual = SafeRelativePath::new(&decorated).ok().map(|path| path.portable());
+            prop_assert_eq!(actual, Some(expected));
+        }
+
+        #[test]
+        fn traversal_is_rejected_at_every_component_boundary(
+            prefix in prop::collection::vec("[A-Za-z0-9_-]{1,12}", 0..8),
+            suffix in prop::collection::vec("[A-Za-z0-9_-]{1,12}", 0..8)
+        ) {
+            let mut components = prefix;
+            components.push("..".to_owned());
+            components.extend(suffix);
+            let hostile = components.join("/");
+            prop_assert!(matches!(
+                SafeRelativePath::new(hostile),
+                Err(PathError::Traversal(_))
+            ));
+        }
     }
 }

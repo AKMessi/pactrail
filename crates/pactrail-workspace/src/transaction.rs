@@ -8,12 +8,13 @@ use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-use crate::manifest::{apply_mode, fingerprint, unix_mode};
+use crate::manifest::{apply_mode, fingerprint, manifest_digest, unix_mode};
 use crate::{PathError, SafeRelativePath, WorkspaceManifest};
 
 const METADATA_FILE: &str = "transaction.json";
 const WORKSPACE_DIRECTORY: &str = "workspace";
 const APPLY_JOURNAL_DIRECTORY: &str = "apply-journal";
+const MAX_TRANSACTION_METADATA_BYTES: u64 = 64 * 1024 * 1024;
 
 /// Current schema for isolated workspace transaction metadata.
 pub const TRANSACTION_SCHEMA_VERSION: u32 = 1;
@@ -22,6 +23,7 @@ pub const TRANSACTION_SCHEMA_VERSION: u32 = 1;
 pub const MIN_TRANSACTION_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct TransactionMetadata {
     schema_version: u32,
     source_root: PathBuf,
@@ -131,9 +133,21 @@ impl WorkspaceTransaction {
     /// Returns an error if transaction metadata is missing, malformed, or uses
     /// an unsupported schema, or if the workspace copy is missing.
     pub fn open(control_root: impl AsRef<Path>) -> Result<Self, TransactionError> {
+        let requested_root = control_root.as_ref();
+        let requested_metadata =
+            fs::symlink_metadata(requested_root).map_err(|source| TransactionError::Io {
+                path: requested_root.to_path_buf(),
+                source,
+            })?;
+        if requested_metadata.file_type().is_symlink() {
+            return Err(TransactionError::SymbolicLink(requested_root.to_path_buf()));
+        }
+        if !requested_metadata.is_dir() {
+            return Err(TransactionError::NotDirectory(requested_root.to_path_buf()));
+        }
         let control_root =
-            fs::canonicalize(control_root.as_ref()).map_err(|source| TransactionError::Io {
-                path: control_root.as_ref().to_path_buf(),
+            fs::canonicalize(requested_root).map_err(|source| TransactionError::Io {
+                path: requested_root.to_path_buf(),
                 source,
             })?;
         let metadata_path = control_root.join(METADATA_FILE);
@@ -141,8 +155,17 @@ impl WorkspaceTransaction {
         if metadata.schema_version != TRANSACTION_SCHEMA_VERSION {
             return Err(TransactionError::UnsupportedSchema(metadata.schema_version));
         }
+        validate_metadata(&metadata)?;
         let workspace_root = control_root.join(WORKSPACE_DIRECTORY);
-        if !workspace_root.is_dir() {
+        let workspace_metadata =
+            fs::symlink_metadata(&workspace_root).map_err(|source| TransactionError::Io {
+                path: workspace_root.clone(),
+                source,
+            })?;
+        if workspace_metadata.file_type().is_symlink() {
+            return Err(TransactionError::SymbolicLink(workspace_root));
+        }
+        if !workspace_metadata.is_dir() {
             return Err(TransactionError::NotDirectory(workspace_root));
         }
         Ok(Self {
@@ -310,11 +333,20 @@ impl WorkspaceTransaction {
     }
 
     fn apply_change_set(&self, changes: &[FileChange]) -> Result<ApplyOutcome, TransactionError> {
+        self.apply_change_set_with_faults(changes, &NoApplyFaults)
+    }
+
+    fn apply_change_set_with_faults(
+        &self,
+        changes: &[FileChange],
+        faults: &impl ApplyFaultInjector,
+    ) -> Result<ApplyOutcome, TransactionError> {
         let journal_root = self.control_root.join(APPLY_JOURNAL_DIRECTORY);
         if journal_root.exists() {
             match self.source_state(changes)? {
                 SourceState::Applied => {
                     let outcome = self.current_apply_outcome(changes.len())?;
+                    faults.check(ApplyFaultPoint::JournalCleanup)?;
                     fs::remove_dir_all(&journal_root).map_err(|source| TransactionError::Io {
                         path: journal_root,
                         source,
@@ -326,6 +358,7 @@ impl WorkspaceTransaction {
                     &journal_root,
                     &self.metadata.baseline,
                     changes,
+                    faults,
                 )?,
                 SourceState::Baseline => {}
                 SourceState::Drift {
@@ -344,6 +377,7 @@ impl WorkspaceTransaction {
                     ));
                 }
             }
+            faults.check(ApplyFaultPoint::JournalCleanup)?;
             fs::remove_dir_all(&journal_root).map_err(|source| TransactionError::Io {
                 path: journal_root.clone(),
                 source,
@@ -379,12 +413,13 @@ impl WorkspaceTransaction {
         })?;
         backup_changed_files(&self.metadata.source_root, &journal_root, changes)?;
 
-        if let Err(apply_error) = self.apply_changes(changes) {
+        if let Err(apply_error) = self.apply_changes(changes, faults) {
             if let Err(rollback_error) = rollback(
                 &self.metadata.source_root,
                 &journal_root,
                 &self.metadata.baseline,
                 changes,
+                faults,
             ) {
                 return Err(TransactionError::RollbackFailed {
                     apply: Box::new(apply_error),
@@ -395,6 +430,7 @@ impl WorkspaceTransaction {
         }
 
         let outcome = self.current_apply_outcome(changes.len())?;
+        faults.check(ApplyFaultPoint::JournalCleanup)?;
         fs::remove_dir_all(&journal_root).map_err(|source| TransactionError::Io {
             path: journal_root,
             source,
@@ -470,8 +506,13 @@ impl WorkspaceTransaction {
         }
     }
 
-    fn apply_changes(&self, changes: &[FileChange]) -> Result<(), TransactionError> {
-        for change in changes {
+    fn apply_changes(
+        &self,
+        changes: &[FileChange],
+        faults: &impl ApplyFaultInjector,
+    ) -> Result<(), TransactionError> {
+        for (index, change) in changes.iter().enumerate() {
+            faults.check(ApplyFaultPoint::ApplyChange(index))?;
             let source = self.metadata.source_root.join(&change.path);
             let candidate = self.workspace_root.join(&change.path);
             ensure_no_symlink_ancestors(&self.metadata.source_root, &source)?;
@@ -532,6 +573,25 @@ impl WorkspaceTransaction {
                 })?,
             }
         }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ApplyFaultPoint {
+    ApplyChange(usize),
+    RollbackChange(usize),
+    JournalCleanup,
+}
+
+trait ApplyFaultInjector {
+    fn check(&self, point: ApplyFaultPoint) -> Result<(), TransactionError>;
+}
+
+struct NoApplyFaults;
+
+impl ApplyFaultInjector for NoApplyFaults {
+    fn check(&self, _point: ApplyFaultPoint) -> Result<(), TransactionError> {
         Ok(())
     }
 }
@@ -649,8 +709,10 @@ fn rollback(
     journal: &Path,
     baseline: &WorkspaceManifest,
     changes: &[FileChange],
+    faults: &impl ApplyFaultInjector,
 ) -> Result<(), TransactionError> {
-    for change in changes {
+    for (index, change) in changes.iter().enumerate() {
+        faults.check(ApplyFaultPoint::RollbackChange(index))?;
         let destination = source.join(&change.path);
         if change.before_digest.is_some() {
             let backup = journal.join(&change.path);
@@ -702,18 +764,87 @@ fn ensure_no_symlink_ancestors(root: &Path, candidate: &Path) -> Result<(), Tran
 
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), TransactionError> {
     let bytes = serde_json::to_vec_pretty(value).map_err(TransactionError::Serialization)?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_TRANSACTION_METADATA_BYTES {
+        return Err(TransactionError::ArtifactTooLarge {
+            path: path.to_path_buf(),
+            limit: MAX_TRANSACTION_METADATA_BYTES,
+        });
+    }
     write_atomic(path, &bytes, None)
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, TransactionError> {
-    let mut bytes = Vec::new();
+    let metadata = fs::symlink_metadata(path).map_err(|source| TransactionError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if metadata.file_type().is_symlink() {
+        return Err(TransactionError::SymbolicLink(path.to_path_buf()));
+    }
+    if !metadata.is_file() {
+        return Err(TransactionError::UnsupportedFile(path.to_path_buf()));
+    }
+    if metadata.len() > MAX_TRANSACTION_METADATA_BYTES {
+        return Err(TransactionError::ArtifactTooLarge {
+            path: path.to_path_buf(),
+            limit: MAX_TRANSACTION_METADATA_BYTES,
+        });
+    }
+    let mut bytes = Vec::with_capacity(usize::try_from(metadata.len()).unwrap_or(0));
     File::open(path)
-        .and_then(|mut file| file.read_to_end(&mut bytes))
+        .and_then(|file| {
+            file.take(MAX_TRANSACTION_METADATA_BYTES.saturating_add(1))
+                .read_to_end(&mut bytes)
+        })
         .map_err(|source| TransactionError::Io {
             path: path.to_path_buf(),
             source,
         })?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_TRANSACTION_METADATA_BYTES {
+        return Err(TransactionError::ArtifactTooLarge {
+            path: path.to_path_buf(),
+            limit: MAX_TRANSACTION_METADATA_BYTES,
+        });
+    }
     serde_json::from_slice(&bytes).map_err(TransactionError::Serialization)
+}
+
+fn validate_metadata(metadata: &TransactionMetadata) -> Result<(), TransactionError> {
+    if metadata.allowed_write_paths.is_empty() {
+        return Err(TransactionError::EmptyWriteScope);
+    }
+    for scope in &metadata.allowed_write_paths {
+        if scope != "." {
+            let _safe = SafeRelativePath::new(scope)?;
+        }
+    }
+    if !metadata.source_root.is_absolute() {
+        return Err(TransactionError::Invariant(
+            "transaction source root is not absolute".to_owned(),
+        ));
+    }
+    for (path, fingerprint) in &metadata.baseline.files {
+        let safe = SafeRelativePath::new(path)?;
+        if safe.portable() != *path || !valid_digest(&fingerprint.digest) {
+            return Err(TransactionError::Invariant(format!(
+                "transaction baseline entry {path:?} is malformed"
+            )));
+        }
+    }
+    let expected_digest = manifest_digest(&metadata.baseline.files);
+    if metadata.baseline.digest != expected_digest {
+        return Err(TransactionError::Invariant(
+            "transaction baseline manifest digest is invalid".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn valid_digest(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn write_atomic(
@@ -810,6 +941,8 @@ pub enum TransactionError {
     UnsupportedSchema(u32),
     #[error("transaction metadata is invalid: {0}")]
     Serialization(serde_json::Error),
+    #[error("transaction artifact {path} exceeds the {limit}-byte safety limit")]
+    ArtifactTooLarge { path: PathBuf, limit: u64 },
     #[error("transaction invariant failed: {0}")]
     Invariant(String),
     #[error(
@@ -843,7 +976,33 @@ pub enum TransactionError {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+
     use super::*;
+
+    #[derive(Default)]
+    struct TestFaults {
+        apply_change: Option<usize>,
+        rollback_change: Option<usize>,
+        journal_cleanup: bool,
+    }
+
+    impl ApplyFaultInjector for TestFaults {
+        fn check(&self, point: ApplyFaultPoint) -> Result<(), TransactionError> {
+            let injected = match point {
+                ApplyFaultPoint::ApplyChange(index) => self.apply_change == Some(index),
+                ApplyFaultPoint::RollbackChange(index) => self.rollback_change == Some(index),
+                ApplyFaultPoint::JournalCleanup => self.journal_cleanup,
+            };
+            if injected {
+                Err(TransactionError::Invariant(format!(
+                    "injected transaction fault at {point:?}"
+                )))
+            } else {
+                Ok(())
+            }
+        }
+    }
 
     fn fixture() -> (tempfile::TempDir, tempfile::TempDir, WorkspaceTransaction) {
         let source =
@@ -858,6 +1017,32 @@ mod tests {
         let transaction =
             WorkspaceTransaction::create(source.path(), &control_path, &["src".to_owned()])
                 .unwrap_or_else(|error| unreachable!("create transaction: {error}"));
+        (source, control, transaction)
+    }
+
+    fn two_file_fixture() -> (tempfile::TempDir, tempfile::TempDir, WorkspaceTransaction) {
+        let source =
+            tempfile::tempdir().unwrap_or_else(|error| unreachable!("source tempdir: {error}"));
+        fs::create_dir(source.path().join("src"))
+            .unwrap_or_else(|error| unreachable!("source directory: {error}"));
+        fs::write(source.path().join("src/first.rs"), "old first\n")
+            .unwrap_or_else(|error| unreachable!("first fixture: {error}"));
+        fs::write(source.path().join("src/second.rs"), "old second\n")
+            .unwrap_or_else(|error| unreachable!("second fixture: {error}"));
+        let control =
+            tempfile::tempdir().unwrap_or_else(|error| unreachable!("control tempdir: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &["src".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("create transaction: {error}"));
+        transaction
+            .write_file("src/first.rs", b"new first\n")
+            .unwrap_or_else(|error| unreachable!("first candidate: {error}"));
+        transaction
+            .write_file("src/second.rs", b"new second\n")
+            .unwrap_or_else(|error| unreachable!("second candidate: {error}"));
         (source, control, transaction)
     }
 
@@ -920,6 +1105,186 @@ mod tests {
         let reopened = WorkspaceTransaction::open(&transaction.control_root)
             .unwrap_or_else(|error| unreachable!("open transaction: {error}"));
         assert_eq!(reopened.baseline_digest(), transaction.baseline_digest());
+    }
+
+    #[test]
+    fn apply_failure_rolls_back_and_retry_completes_from_the_journal() {
+        let (source, _control, transaction) = two_file_fixture();
+        let changes = transaction
+            .changes()
+            .unwrap_or_else(|error| unreachable!("changes: {error}"));
+        let faults = TestFaults {
+            apply_change: Some(1),
+            ..TestFaults::default()
+        };
+        assert!(matches!(
+            transaction.apply_change_set_with_faults(&changes, &faults),
+            Err(TransactionError::Invariant(message)) if message.contains("ApplyChange(1)")
+        ));
+        assert_eq!(
+            fs::read_to_string(source.path().join("src/first.rs")).ok(),
+            Some("old first\n".to_owned())
+        );
+        assert_eq!(
+            fs::read_to_string(source.path().join("src/second.rs")).ok(),
+            Some("old second\n".to_owned())
+        );
+        assert!(
+            transaction
+                .control_root
+                .join(APPLY_JOURNAL_DIRECTORY)
+                .is_dir()
+        );
+
+        transaction
+            .apply_expected(&changes)
+            .unwrap_or_else(|error| unreachable!("journal retry: {error}"));
+        assert_eq!(
+            fs::read_to_string(source.path().join("src/first.rs")).ok(),
+            Some("new first\n".to_owned())
+        );
+        assert_eq!(
+            fs::read_to_string(source.path().join("src/second.rs")).ok(),
+            Some("new second\n".to_owned())
+        );
+        assert!(
+            !transaction
+                .control_root
+                .join(APPLY_JOURNAL_DIRECTORY)
+                .exists()
+        );
+    }
+
+    #[test]
+    fn rollback_failure_is_diagnosable_and_a_clean_retry_recovers() {
+        let (source, _control, transaction) = two_file_fixture();
+        let changes = transaction
+            .changes()
+            .unwrap_or_else(|error| unreachable!("changes: {error}"));
+        let faults = TestFaults {
+            apply_change: Some(1),
+            rollback_change: Some(0),
+            journal_cleanup: false,
+        };
+        assert!(matches!(
+            transaction.apply_change_set_with_faults(&changes, &faults),
+            Err(TransactionError::RollbackFailed { .. })
+        ));
+        assert_eq!(
+            fs::read_to_string(source.path().join("src/first.rs")).ok(),
+            Some("new first\n".to_owned())
+        );
+        assert_eq!(
+            fs::read_to_string(source.path().join("src/second.rs")).ok(),
+            Some("old second\n".to_owned())
+        );
+
+        transaction
+            .apply_expected(&changes)
+            .unwrap_or_else(|error| unreachable!("recovery retry: {error}"));
+        assert_eq!(
+            fs::read_to_string(source.path().join("src/first.rs")).ok(),
+            Some("new first\n".to_owned())
+        );
+        assert_eq!(
+            fs::read_to_string(source.path().join("src/second.rs")).ok(),
+            Some("new second\n".to_owned())
+        );
+    }
+
+    #[test]
+    fn cleanup_failure_leaves_an_idempotently_recoverable_applied_journal() {
+        let (source, _control, transaction) = two_file_fixture();
+        let changes = transaction
+            .changes()
+            .unwrap_or_else(|error| unreachable!("changes: {error}"));
+        let faults = TestFaults {
+            journal_cleanup: true,
+            ..TestFaults::default()
+        };
+        assert!(matches!(
+            transaction.apply_change_set_with_faults(&changes, &faults),
+            Err(TransactionError::Invariant(message)) if message.contains("JournalCleanup")
+        ));
+        assert_eq!(
+            fs::read_to_string(source.path().join("src/first.rs")).ok(),
+            Some("new first\n".to_owned())
+        );
+        assert!(
+            transaction
+                .control_root
+                .join(APPLY_JOURNAL_DIRECTORY)
+                .is_dir()
+        );
+
+        let recovered = transaction
+            .apply_expected(&changes)
+            .unwrap_or_else(|error| unreachable!("cleanup recovery: {error}"));
+        assert_eq!(recovered.changed_files, 2);
+        assert!(
+            !transaction
+                .control_root
+                .join(APPLY_JOURNAL_DIRECTORY)
+                .exists()
+        );
+    }
+
+    #[test]
+    fn oversized_and_extended_transaction_metadata_fail_closed() {
+        let (_source, _control, transaction) = fixture();
+        let metadata_path = transaction.control_root.join(METADATA_FILE);
+        let original =
+            fs::read(&metadata_path).unwrap_or_else(|error| unreachable!("read metadata: {error}"));
+        let mut value: serde_json::Value = serde_json::from_slice(&original)
+            .unwrap_or_else(|error| unreachable!("decode metadata: {error}"));
+        value
+            .as_object_mut()
+            .unwrap_or_else(|| unreachable!("metadata object"))
+            .insert("unexpected".to_owned(), serde_json::Value::Bool(true));
+        fs::write(
+            &metadata_path,
+            serde_json::to_vec(&value)
+                .unwrap_or_else(|error| unreachable!("encode metadata: {error}")),
+        )
+        .unwrap_or_else(|error| unreachable!("write extended metadata: {error}"));
+        assert!(matches!(
+            WorkspaceTransaction::open(&transaction.control_root),
+            Err(TransactionError::Serialization(_))
+        ));
+
+        let file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&metadata_path)
+            .unwrap_or_else(|error| unreachable!("open metadata: {error}"));
+        file.set_len(MAX_TRANSACTION_METADATA_BYTES + 1)
+            .unwrap_or_else(|error| unreachable!("extend metadata: {error}"));
+        assert!(matches!(
+            WorkspaceTransaction::open(&transaction.control_root),
+            Err(TransactionError::ArtifactTooLarge { .. })
+        ));
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(32))]
+
+        #[test]
+        fn arbitrary_candidate_bytes_land_exactly(content in prop::collection::vec(any::<u8>(), 0..8192)) {
+            let (source, _control, transaction) = fixture();
+            let mut expected = content;
+            expected.push(0xff);
+            transaction
+                .write_file("src/lib.rs", &expected)
+                .unwrap_or_else(|error| unreachable!("candidate: {error}"));
+            let changes = transaction
+                .changes()
+                .unwrap_or_else(|error| unreachable!("changes: {error}"));
+            prop_assert_eq!(changes.len(), 1);
+            prop_assert!(transaction.apply_expected(&changes).is_ok());
+            let landed = fs::read(source.path().join("src/lib.rs"))
+                .unwrap_or_else(|error| unreachable!("landed content: {error}"));
+            prop_assert_eq!(landed, expected);
+        }
     }
 
     #[cfg(unix)]

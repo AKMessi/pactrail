@@ -52,6 +52,12 @@ messages only after fixture construction where failure cannot be recovered.
 - CLI integration tests launch the real binary against a local mock HTTP
   provider, verify source isolation, inspect portable traces, and apply from a
   second process.
+- Proptest suites generate path, event, transaction, schema, stream-fragment,
+  and terminal-control cases. Transaction fault tests deterministically cover
+  partial apply, rollback failure, and cleanup recovery.
+- `fuzz/` contains libFuzzer targets for workspace paths, event envelopes, and
+  untrusted MCP schemas. The `Fuzz` workflow runs each target on a bounded weekly
+  schedule; see [the fuzzing guide](../fuzz/README.md) for local commands.
 - CI repeats the complete suite on current Linux, macOS, and Windows runners.
 
 Tests must not contact public providers or rely on a locally installed model.
