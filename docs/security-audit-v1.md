@@ -40,10 +40,13 @@ described in [the threat model](threat-model.md).
      fixed Pactrail names; artifact/cache data could also be redirected.
    - Fix: state roots and known children now require real local directories;
      artifact roots, digest prefixes, targets, and cache component chains reject
-     links and special files before reads or writes.
+     links and special files before reads or writes. Cache creation walks one
+     component at a time and validates each component before descending; it
+     never calls recursive creation across an unvalidated cache root.
    - Verification: negative unit tests cover root, child, digest-prefix, and
-     repository-cache redirection; cross-platform code uses
-     `symlink_metadata`, with Unix link creation exercised in CI.
+     repository-cache redirection and assert that no intermediate directory is
+     created through the link; cross-platform code uses `symlink_metadata`,
+     with Unix link creation exercised in CI.
 
 2. **[Medium] MCP state reads followed file links**
    - Confidence: High

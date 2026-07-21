@@ -98,6 +98,9 @@ No user-visible changes yet.
   diff, apply, and discard, preventing preseeded state from redirecting a
   transaction outside the workspace. The public audit report explicitly
   distinguishes this work from an independent third-party review.
+- Repository-cache directory creation now validates each real directory before
+  descending, so a linked cache root cannot receive even intermediate
+  directories before the request is rejected.
 
 ### Changed
 

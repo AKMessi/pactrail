@@ -1347,10 +1347,7 @@ fn store_cached_analysis(cache_root: &Path, analysis: &CachedFileAnalysis) -> bo
     let Some(parent) = path.parent() else {
         return false;
     };
-    if fs::create_dir_all(parent).is_err() {
-        return false;
-    }
-    if !real_cache_directory_chain(cache_root, parent) {
+    if !ensure_real_cache_directory_chain(cache_root, parent) {
         return false;
     }
     if fs::symlink_metadata(&path)
@@ -1368,6 +1365,35 @@ fn store_cached_analysis(cache_root: &Path, analysis: &CachedFileAnalysis) -> bo
         return false;
     }
     temporary.persist(&path).is_ok()
+}
+
+fn ensure_real_cache_directory_chain(cache_root: &Path, directory: &Path) -> bool {
+    let Ok(relative) = directory.strip_prefix(cache_root) else {
+        return false;
+    };
+    let mut current = cache_root.to_path_buf();
+    if !ensure_real_directory(&current) {
+        return false;
+    }
+    for component in relative.components() {
+        current.push(component);
+        if !ensure_real_directory(&current) {
+            return false;
+        }
+    }
+    true
+}
+
+fn ensure_real_directory(path: &Path) -> bool {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => !metadata.file_type().is_symlink() && metadata.is_dir(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir(path).is_ok()
+                && fs::symlink_metadata(path)
+                    .is_ok_and(|metadata| !metadata.file_type().is_symlink() && metadata.is_dir())
+        }
+        Err(_) => false,
+    }
 }
 
 fn real_cache_directory_chain(cache_root: &Path, directory: &Path) -> bool {
