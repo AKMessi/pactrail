@@ -26,8 +26,11 @@ maintained as separate security branches.
 Pactrail treats model output, repository content, memory, provider/tool output,
 and terminal text as untrusted. Its workspace transaction protects the normal
 review/apply path; it does **not** sandbox native child processes. Process
-execution is disabled by default and should remain disabled for untrusted code
-until a production sandbox backend ships.
+execution is disabled by default. For untrusted code, keep native execution
+disabled and use the restricted OCI backend only after reviewing its documented
+runtime, daemon, image, kernel, and host-account trust assumptions.
 
 See [docs/threat-model.md](docs/threat-model.md) for defended properties,
-limitations, and out-of-scope risks.
+limitations, and out-of-scope risks. The maintainer review and resolved findings
+for the stable boundary are recorded in
+[docs/security-audit-v1.md](docs/security-audit-v1.md).

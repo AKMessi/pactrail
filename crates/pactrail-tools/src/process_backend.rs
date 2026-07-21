@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -19,6 +19,7 @@ const RUNTIME_PROBE_TIMEOUT: Duration = Duration::from_secs(30);
 const RUNTIME_PROBE_OUTPUT_BYTES: usize = 64 * 1024;
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(15);
 const READ_CHUNK_BYTES: usize = 16 * 1024;
+const MAX_OCI_ENVIRONMENT_BYTES: usize = 2 * 1024 * 1024;
 const CONTAINER_WORKSPACE: &str = "/workspace";
 const CONTAINER_TMP: &str = "/tmp";
 const RUNTIME_ENVIRONMENT_NAMES: &[&str] = &[
@@ -418,6 +419,7 @@ impl OciProcessBackend {
         workspace: &Path,
         request: &ProcessRequest,
         container_name: &str,
+        environment_file: Option<&Path>,
     ) -> Result<Vec<OsString>, ProcessBackendError> {
         let workspace = workspace.canonicalize().map_err(|source| {
             ProcessBackendError::WorkspaceCanonicalization {
@@ -457,9 +459,8 @@ impl OciProcessBackend {
         if let Some(user) = &self.profile.user {
             args.insert(args.len() - 1, OsString::from(format!("--user={user}")));
         }
-        for (name, value) in &request.environment {
-            args.push(OsString::from("--env"));
-            args.push(OsString::from(format!("{name}={value}")));
+        if let Some(path) = environment_file {
+            args.push(OsString::from(format!("--env-file={}", path.display())));
         }
         args.push(OsString::from(&self.image_identity));
         args.extend(request.args.iter().map(OsString::from));
@@ -497,7 +498,13 @@ impl ProcessBackend for OciProcessBackend {
             });
         }
         let container_name = unique_container_name();
-        let args = self.command_plan(workspace, request, &container_name)?;
+        let environment_file = write_oci_environment_file(&request.environment)?;
+        let args = self.command_plan(
+            workspace,
+            request,
+            &container_name,
+            environment_file.as_ref().map(tempfile::NamedTempFile::path),
+        )?;
         let mut command = runtime_command(&self.runtime_path);
         command.args(&args);
         let captured = execute_child(
@@ -519,6 +526,55 @@ impl ProcessBackend for OciProcessBackend {
             },
         }
     }
+}
+
+fn write_oci_environment_file(
+    environment: &BTreeMap<String, String>,
+) -> Result<Option<tempfile::NamedTempFile>, ProcessBackendError> {
+    if environment.is_empty() {
+        return Ok(None);
+    }
+    let mut bytes = Vec::new();
+    for (name, value) in environment {
+        if name.is_empty()
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+            || value.contains(['\0', '\r', '\n'])
+        {
+            return Err(ProcessBackendError::InvalidConfiguration(
+                "OCI environment names must be ASCII alphanumeric/underscore and values cannot contain NUL or line breaks"
+                    .to_owned(),
+            ));
+        }
+        let next = bytes
+            .len()
+            .checked_add(name.len())
+            .and_then(|length| length.checked_add(value.len()))
+            .and_then(|length| length.checked_add(2))
+            .ok_or_else(|| {
+                ProcessBackendError::InvalidConfiguration(
+                    "OCI environment exceeds its byte limit".to_owned(),
+                )
+            })?;
+        if next > MAX_OCI_ENVIRONMENT_BYTES {
+            return Err(ProcessBackendError::InvalidConfiguration(format!(
+                "OCI environment cannot exceed {MAX_OCI_ENVIRONMENT_BYTES} bytes"
+            )));
+        }
+        bytes.extend_from_slice(name.as_bytes());
+        bytes.push(b'=');
+        bytes.extend_from_slice(value.as_bytes());
+        bytes.push(b'\n');
+    }
+    let mut file = tempfile::Builder::new()
+        .prefix("pactrail-oci-env-")
+        .tempfile()
+        .map_err(|source| ProcessBackendError::EnvironmentFile { source })?;
+    file.write_all(&bytes)
+        .and_then(|()| file.as_file().sync_all())
+        .map_err(|source| ProcessBackendError::EnvironmentFile { source })?;
+    Ok(Some(file))
 }
 
 #[derive(Debug)]
@@ -1145,6 +1201,11 @@ pub enum ProcessBackendError {
     },
     #[error("container {container:?} still existed after forced cleanup")]
     ContainerCleanup { container: String },
+    #[error("could not prepare the transient OCI environment file: {source}")]
+    EnvironmentFile {
+        #[source]
+        source: io::Error,
+    },
     #[error("process failed ({primary}) and cleanup could not be proven ({cleanup})")]
     CleanupAfterFailure { primary: String, cleanup: String },
 }
@@ -1180,7 +1241,12 @@ mod tests {
     fn restricted_plan_contains_every_security_boundary() {
         let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
         let args = backend(OciRuntimeKind::Docker)
-            .command_plan(workspace.path(), &request(), "pactrail-fixture")
+            .command_plan(
+                workspace.path(),
+                &request(),
+                "pactrail-fixture",
+                Some(Path::new("/private/pactrail-env")),
+            )
             .unwrap_or_else(|error| unreachable!("plan: {error}"));
         let args = args
             .iter()
@@ -1211,8 +1277,15 @@ mod tests {
             args.iter()
                 .any(|argument| argument.starts_with("--mount=type=bind,source="))
         );
-        assert!(args.iter().any(|argument| argument == "--env"));
-        assert!(args.iter().any(|argument| argument == "RUST_BACKTRACE=1"));
+        assert!(
+            args.iter()
+                .any(|argument| argument == "--env-file=/private/pactrail-env")
+        );
+        assert!(
+            !args
+                .iter()
+                .any(|argument| argument.contains("RUST_BACKTRACE"))
+        );
         assert_eq!(args[args.len() - 2], "test");
         assert_eq!(args[args.len() - 1], "--workspace");
         if cfg!(unix) {
@@ -1230,7 +1303,7 @@ mod tests {
             "$(touch /host)".to_owned(),
         ];
         let args = backend(OciRuntimeKind::Podman)
-            .command_plan(workspace.path(), &request, "pactrail-fixture")
+            .command_plan(workspace.path(), &request, "pactrail-fixture", None)
             .unwrap_or_else(|error| unreachable!("plan: {error}"));
         let image_index = args
             .iter()
@@ -1245,6 +1318,47 @@ mod tests {
                 .iter()
                 .any(|argument| argument == "--network=none")
         );
+    }
+
+    #[test]
+    fn oci_environment_values_never_enter_runtime_arguments() {
+        let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let secret = "not-visible-in-process-arguments";
+        let request = ProcessRequest {
+            environment: BTreeMap::from([("TOKEN".to_owned(), secret.to_owned())]),
+            ..request()
+        };
+        let file = write_oci_environment_file(&request.environment)
+            .unwrap_or_else(|error| unreachable!("environment file: {error}"))
+            .unwrap_or_else(|| unreachable!("non-empty environment creates a file"));
+        let args = backend(OciRuntimeKind::Docker)
+            .command_plan(
+                workspace.path(),
+                &request,
+                "pactrail-fixture",
+                Some(file.path()),
+            )
+            .unwrap_or_else(|error| unreachable!("plan: {error}"));
+        assert!(
+            args.iter()
+                .any(|argument| { argument.to_string_lossy().starts_with("--env-file=") })
+        );
+        assert!(
+            args.iter()
+                .all(|argument| !argument.to_string_lossy().contains(secret))
+        );
+        let contents = std::fs::read_to_string(file.path())
+            .unwrap_or_else(|error| unreachable!("environment contents: {error}"));
+        assert_eq!(contents, format!("TOKEN={secret}\n"));
+    }
+
+    #[test]
+    fn oci_environment_rejects_line_injection() {
+        let environment = BTreeMap::from([("SAFE".to_owned(), "value\nINJECTED=yes".to_owned())]);
+        assert!(matches!(
+            write_oci_environment_file(&environment),
+            Err(ProcessBackendError::InvalidConfiguration(_))
+        ));
     }
 
     #[test]

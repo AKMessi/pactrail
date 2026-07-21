@@ -570,7 +570,7 @@ fn load_manifest_required(state: &Path) -> Result<McpManifest, McpCliError> {
 
 fn load_manifest_optional(state: &Path) -> Result<Option<McpManifest>, McpCliError> {
     let path = manifest_path(state);
-    if !path.exists() {
+    if !optional_regular_file(&path)? {
         return Ok(None);
     }
     let bytes = read_bounded(&path, MAX_MANIFEST_BYTES)?;
@@ -588,7 +588,7 @@ fn read_snapshot(
     config: &McpServerConfig,
 ) -> Result<Option<McpSnapshot>, McpCliError> {
     let path = snapshot_path(state, &config.name);
-    if !path.exists() {
+    if !optional_regular_file(&path)? {
         return Ok(None);
     }
     let bytes = read_bounded(&path, MAX_SNAPSHOT_BYTES)?;
@@ -598,13 +598,13 @@ fn read_snapshot(
 }
 
 fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, McpCliError> {
-    let metadata = fs::metadata(path).map_err(|source| McpCliError::Io {
+    let metadata = fs::symlink_metadata(path).map_err(|source| McpCliError::Io {
         path: path.to_path_buf(),
         source,
     })?;
-    if !metadata.is_file() {
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(McpCliError::Argument(format!(
-            "MCP path {} is not a regular file",
+            "MCP path {} is not a regular, non-symlink file",
             path.display()
         )));
     }
@@ -630,8 +630,26 @@ fn read_bounded(path: &Path, limit: u64) -> Result<Vec<u8>, McpCliError> {
     Ok(bytes)
 }
 
+fn optional_regular_file(path: &Path) -> Result<bool, McpCliError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            Err(McpCliError::Argument(format!(
+                "MCP path {} is not a regular, non-symlink file",
+                path.display()
+            )))
+        }
+        Ok(_) => Ok(true),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(source) => Err(McpCliError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
+}
+
 fn lock_state(state: &Path) -> Result<fs::File, McpCliError> {
     let path = state.join("mcp.lock");
+    let _exists = optional_regular_file(&path)?;
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -659,14 +677,26 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), McpCliError> {
         path: parent.to_path_buf(),
         source,
     })?;
+    let parent_metadata = fs::symlink_metadata(parent).map_err(|source| McpCliError::Io {
+        path: parent.to_path_buf(),
+        source,
+    })?;
+    if parent_metadata.file_type().is_symlink() || !parent_metadata.is_dir() {
+        return Err(McpCliError::Argument(format!(
+            "MCP directory {} is not a real local directory",
+            parent.display()
+        )));
+    }
     let backup = path.with_extension(format!(
         "{}.bak",
         path.extension()
             .and_then(|extension| extension.to_str())
             .unwrap_or("file")
     ));
-    if backup.exists() {
-        if path.exists() {
+    let mut path_exists = optional_regular_file(path)?;
+    let backup_exists = optional_regular_file(&backup)?;
+    if backup_exists {
+        if path_exists {
             fs::remove_file(&backup).map_err(|source| McpCliError::Io {
                 path: backup.clone(),
                 source,
@@ -676,6 +706,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), McpCliError> {
                 path: backup.clone(),
                 source,
             })?;
+            path_exists = true;
         }
     }
     let mut temporary = NamedTempFile::new_in(parent).map_err(|source| McpCliError::Io {
@@ -689,7 +720,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), McpCliError> {
             path: temporary.path().to_path_buf(),
             source,
         })?;
-    if path.exists() {
+    if path_exists {
         fs::rename(path, &backup).map_err(|source| McpCliError::Io {
             path: path.to_path_buf(),
             source,
@@ -739,6 +770,24 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("manifest: {error}"));
         assert!(manifest.servers.is_empty());
         assert!(init(state.path()).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn manifest_reads_reject_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let state = tempfile::tempdir().unwrap_or_else(|error| unreachable!("state: {error}"));
+        let outside = tempfile::tempdir().unwrap_or_else(|error| unreachable!("outside: {error}"));
+        let external = outside.path().join("manifest.toml");
+        fs::write(&external, "schema = 1\nservers = []\n")
+            .unwrap_or_else(|error| unreachable!("external: {error}"));
+        symlink(&external, manifest_path(state.path()))
+            .unwrap_or_else(|error| unreachable!("manifest symlink: {error}"));
+        assert!(matches!(
+            load_manifest_optional(state.path()),
+            Err(McpCliError::Argument(message)) if message.contains("non-symlink")
+        ));
     }
 
     #[test]

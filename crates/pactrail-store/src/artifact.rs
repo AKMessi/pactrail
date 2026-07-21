@@ -33,6 +33,7 @@ impl ArtifactStore {
             path: root.clone(),
             source,
         })?;
+        require_real_directory(&root)?;
         Ok(Self { root })
     }
 
@@ -51,9 +52,7 @@ impl ArtifactStore {
         }
         let digest = blake3::hash(content).to_hex().to_string();
         let destination = self.path_for(&digest)?;
-        if destination.exists() {
-            self.get(&digest)?;
-        } else {
+        if !optional_real_file(&destination)? {
             let parent = destination
                 .parent()
                 .ok_or_else(|| ArtifactError::InvalidDigest(digest.clone()))?;
@@ -61,6 +60,7 @@ impl ArtifactStore {
                 path: parent.to_path_buf(),
                 source,
             })?;
+            require_real_directory(parent)?;
             let mut temporary =
                 tempfile::NamedTempFile::new_in(parent).map_err(|source| ArtifactError::Io {
                     path: parent.to_path_buf(),
@@ -89,16 +89,18 @@ impl ArtifactStore {
                 })?;
             match temporary.persist_noclobber(&destination) {
                 Ok(_) => {}
-                Err(_error) if destination.exists() => {}
                 Err(error) => {
-                    return Err(ArtifactError::Io {
-                        path: destination,
-                        source: error.error,
-                    });
+                    if !optional_real_file(&destination)? {
+                        return Err(ArtifactError::Io {
+                            path: destination,
+                            source: error.error,
+                        });
+                    }
                 }
             }
         }
-        let compressed_bytes = fs::metadata(&destination)
+        self.get(&digest)?;
+        let compressed_bytes = fs::symlink_metadata(&destination)
             .map_err(|source| ArtifactError::Io {
                 path: destination,
                 source,
@@ -119,12 +121,14 @@ impl ArtifactStore {
     /// or content that no longer matches its address.
     pub fn get(&self, digest: &str) -> Result<Vec<u8>, ArtifactError> {
         let path = self.path_for(digest)?;
-        let compressed_bytes = fs::metadata(&path)
-            .map_err(|source| ArtifactError::Io {
-                path: path.clone(),
-                source,
-            })?
-            .len();
+        let metadata = fs::symlink_metadata(&path).map_err(|source| ArtifactError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(ArtifactError::UnsafePath(path));
+        }
+        let compressed_bytes = metadata.len();
         if compressed_bytes > MAX_COMPRESSED_BYTES {
             return Err(ArtifactError::TooLarge {
                 actual: compressed_bytes,
@@ -171,7 +175,7 @@ impl ArtifactStore {
     ///
     /// Returns [`ArtifactError::InvalidDigest`] when `digest` is not a BLAKE3 hex digest.
     pub fn contains(&self, digest: &str) -> Result<bool, ArtifactError> {
-        self.path_for(digest).map(|path| path.is_file())
+        optional_real_file(&self.path_for(digest)?)
     }
 
     fn path_for(&self, digest: &str) -> Result<PathBuf, ArtifactError> {
@@ -183,6 +187,32 @@ impl ArtifactStore {
             return Err(ArtifactError::InvalidDigest(digest.to_owned()));
         }
         Ok(self.root.join(&digest[..2]).join(format!("{digest}.zst")))
+    }
+}
+
+fn require_real_directory(path: &std::path::Path) -> Result<(), ArtifactError> {
+    let metadata = fs::symlink_metadata(path).map_err(|source| ArtifactError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        Err(ArtifactError::UnsafePath(path.to_path_buf()))
+    } else {
+        Ok(())
+    }
+}
+
+fn optional_real_file(path: &std::path::Path) -> Result<bool, ArtifactError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            Err(ArtifactError::UnsafePath(path.to_path_buf()))
+        }
+        Ok(_) => Ok(true),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(source) => Err(ArtifactError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
     }
 }
 
@@ -201,6 +231,8 @@ pub enum ArtifactError {
     },
     #[error("artifact integrity failed: expected {expected}, got {actual}")]
     Integrity { expected: String, actual: String },
+    #[error("artifact path is not a real local file or directory: {0}")]
+    UnsafePath(PathBuf),
 }
 
 #[cfg(test)]
@@ -258,5 +290,32 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("corrupt fixture: {error}"));
 
         assert!(store.put(b"durable evidence").is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn artifact_roots_prefixes_and_files_reject_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let outside = tempfile::tempdir().unwrap_or_else(|error| unreachable!("outside: {error}"));
+        let linked_root = root.path().join("linked");
+        symlink(outside.path(), &linked_root)
+            .unwrap_or_else(|error| unreachable!("root symlink: {error}"));
+        assert!(matches!(
+            ArtifactStore::open(&linked_root),
+            Err(ArtifactError::UnsafePath(_))
+        ));
+
+        let store_root = root.path().join("store");
+        let store =
+            ArtifactStore::open(&store_root).unwrap_or_else(|error| unreachable!("store: {error}"));
+        let digest = blake3::hash(b"redirected evidence").to_hex().to_string();
+        symlink(outside.path(), store_root.join(&digest[..2]))
+            .unwrap_or_else(|error| unreachable!("prefix symlink: {error}"));
+        assert!(matches!(
+            store.put(b"redirected evidence"),
+            Err(ArtifactError::UnsafePath(_))
+        ));
     }
 }

@@ -781,25 +781,42 @@ fn openai_user_content(content: &UserContent) -> Value {
 }
 
 fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResponse, ModelError> {
-    let choice = value
+    let choices = value
         .get("choices")
         .and_then(Value::as_array)
-        .and_then(|choices| choices.first())
-        .ok_or_else(|| ModelError::MalformedResponse("missing choices[0]".to_owned()))?;
+        .ok_or_else(|| ModelError::MalformedResponse("missing choices".to_owned()))?;
+    if choices.len() != 1 {
+        return Err(ModelError::MalformedResponse(
+            "OpenAI response must contain exactly one choice".to_owned(),
+        ));
+    }
+    let choice = &choices[0];
     let message = choice
         .get("message")
         .ok_or_else(|| ModelError::MalformedResponse("missing response message".to_owned()))?;
     let text = message
         .get("content")
         .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    let tool_calls = message
+        .unwrap_or_default();
+    if text.len() > MAX_STREAM_TEXT_BYTES {
+        return Err(ModelError::ResponseTooLarge {
+            limit: MAX_STREAM_TEXT_BYTES,
+        });
+    }
+    let calls = message
         .get("tool_calls")
         .and_then(Value::as_array)
-        .map(|calls| calls.iter().map(parse_tool_call).collect())
-        .transpose()?
+        .map(Vec::as_slice)
         .unwrap_or_default();
+    if calls.len() > MAX_TOOL_CALLS {
+        return Err(ModelError::MalformedResponse(format!(
+            "OpenAI response exceeded the {MAX_TOOL_CALLS}-call limit"
+        )));
+    }
+    let tool_calls = calls
+        .iter()
+        .map(parse_tool_call)
+        .collect::<Result<Vec<_>, _>>()?;
     let finish_reason = openai_finish_reason(choice.get("finish_reason").and_then(Value::as_str));
     let usage = value
         .get("usage")
@@ -815,7 +832,7 @@ fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResp
         }
     }
     Ok(ModelResponse {
-        text,
+        text: text.to_owned(),
         tool_calls,
         finish_reason,
         usage,
@@ -833,30 +850,46 @@ fn cached_input_tokens(usage: &Value) -> u64 {
 }
 
 fn parse_tool_call(value: &Value) -> Result<ToolCall, ModelError> {
-    let id = value
-        .get("id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ModelError::MalformedResponse("tool call is missing id".to_owned()))?;
+    let id = bounded_identifier(value.get("id"), "tool call id")?;
     let function = value
         .get("function")
         .ok_or_else(|| ModelError::MalformedResponse("tool call is missing function".to_owned()))?;
-    let name = function
-        .get("name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| ModelError::MalformedResponse("tool call is missing name".to_owned()))?;
+    let name = bounded_identifier(function.get("name"), "tool call name")?;
     let arguments = function
         .get("arguments")
         .and_then(Value::as_str)
         .ok_or_else(|| {
             ModelError::MalformedResponse("tool call is missing arguments".to_owned())
         })?;
-    let arguments = serde_json::from_str(arguments).map_err(ModelError::Json)?;
+    if arguments.len() > MAX_TOOL_ARGUMENT_BYTES {
+        return Err(ModelError::ResponseTooLarge {
+            limit: MAX_TOOL_ARGUMENT_BYTES,
+        });
+    }
+    let arguments: Value = serde_json::from_str(arguments).map_err(ModelError::Json)?;
+    if !arguments.is_object() {
+        return Err(ModelError::MalformedResponse(
+            "tool call arguments must be a JSON object".to_owned(),
+        ));
+    }
     Ok(ToolCall {
-        id: id.to_owned(),
-        name: name.to_owned(),
+        id,
+        name,
         arguments,
         extensions: serde_json::Map::new(),
     })
+}
+
+fn bounded_identifier(value: Option<&Value>, field: &str) -> Result<String, ModelError> {
+    let value = value.and_then(Value::as_str).ok_or_else(|| {
+        ModelError::MalformedResponse(format!("{field} is missing or is not a string"))
+    })?;
+    if value.is_empty() || value.len() > 512 || value.chars().any(char::is_control) {
+        return Err(ModelError::MalformedResponse(format!(
+            "{field} is empty, oversized, or contains control characters"
+        )));
+    }
+    Ok(value.to_owned())
 }
 
 fn number(value: &Value, key: &str) -> u64 {
@@ -1218,6 +1251,78 @@ mod tests {
         assert!(matches!(
             OpenAiStreamAccumulator::default().finish(None, 0),
             Err(ModelError::MalformedResponse(message)) if message.contains("disconnected")
+        ));
+    }
+
+    #[test]
+    fn buffered_response_enforces_streaming_safety_bounds() {
+        let valid = |arguments: String| {
+            json!({
+                "choices": [{
+                    "message": {
+                        "content": "done",
+                        "tool_calls": [{
+                            "id": "call-1",
+                            "function": {"name": "read_file", "arguments": arguments}
+                        }]
+                    },
+                    "finish_reason": "tool_calls"
+                }]
+            })
+        };
+        assert!(parse_response(&valid("{}".to_owned()), None).is_ok());
+        assert!(matches!(
+            parse_response(
+                &valid(format!(
+                    "{{\"value\":\"{}\"}}",
+                    "x".repeat(MAX_TOOL_ARGUMENT_BYTES)
+                )),
+                None
+            ),
+            Err(ModelError::ResponseTooLarge { .. })
+        ));
+
+        let mut invalid_identifier = valid("{}".to_owned());
+        invalid_identifier["choices"][0]["message"]["tool_calls"][0]["function"]["name"] =
+            Value::String("read_file\u{1b}".to_owned());
+        assert!(matches!(
+            parse_response(&invalid_identifier, None),
+            Err(ModelError::MalformedResponse(message)) if message.contains("control")
+        ));
+
+        let non_object = valid("[]".to_owned());
+        assert!(matches!(
+            parse_response(&non_object, None),
+            Err(ModelError::MalformedResponse(message)) if message.contains("JSON object")
+        ));
+    }
+
+    #[test]
+    fn buffered_response_rejects_multiple_choices_and_excess_calls() {
+        let mut multiple = json!({
+            "choices": [
+                {"message": {"content": "one"}, "finish_reason": "stop"},
+                {"message": {"content": "two"}, "finish_reason": "stop"}
+            ]
+        });
+        assert!(matches!(
+            parse_response(&multiple, None),
+            Err(ModelError::MalformedResponse(message)) if message.contains("exactly one")
+        ));
+
+        multiple["choices"] = json!([{
+            "message": {
+                "content": "",
+                "tool_calls": (0..=MAX_TOOL_CALLS).map(|index| json!({
+                    "id": format!("call-{index}"),
+                    "function": {"name": "read_file", "arguments": "{}"}
+                })).collect::<Vec<_>>()
+            },
+            "finish_reason": "tool_calls"
+        }]);
+        assert!(matches!(
+            parse_response(&multiple, None),
+            Err(ModelError::MalformedResponse(message)) if message.contains("call limit")
         ));
     }
 
