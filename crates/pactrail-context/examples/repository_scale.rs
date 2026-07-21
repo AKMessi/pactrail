@@ -12,6 +12,8 @@ use serde::Serialize;
 
 const DEFAULT_FILES: usize = 2_000;
 const MAX_FILES: usize = 100_000;
+const DEFAULT_ITERATIONS: usize = 1;
+const MAX_ITERATIONS: usize = 20;
 const DEFAULT_CONTEXT_BYTES: usize = 32 * 1024;
 const DEFAULT_PHASE_BUDGET: Duration = Duration::from_mins(2);
 const FIXTURE_ANCHOR_FILES: usize = 3;
@@ -19,6 +21,7 @@ const FIXTURE_ANCHOR_FILES: usize = 3;
 #[derive(Clone, Copy)]
 struct Config {
     files: usize,
+    iterations: usize,
     context_bytes: usize,
     max_cold: Duration,
     max_warm: Duration,
@@ -30,6 +33,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             files: DEFAULT_FILES,
+            iterations: DEFAULT_ITERATIONS,
             context_bytes: DEFAULT_CONTEXT_BYTES,
             max_cold: DEFAULT_PHASE_BUDGET,
             max_warm: DEFAULT_PHASE_BUDGET,
@@ -58,12 +62,13 @@ struct ContextReport {
 }
 
 #[derive(Serialize)]
-struct RepositoryScaleReport {
-    schema_version: u32,
-    fixture_profile: &'static str,
-    generated_source_files: usize,
+struct IterationReport {
+    iteration: usize,
     indexed_files: usize,
     bytes_hashed: u64,
+    repository_digest: String,
+    incremental_repository_digest: String,
+    context_digest: String,
     repository_digest_stable_cold_to_warm: bool,
     cold: PhaseReport,
     warm: PhaseReport,
@@ -73,11 +78,90 @@ struct RepositoryScaleReport {
     violations: Vec<String>,
 }
 
+#[derive(Serialize)]
+struct StabilityReport {
+    repository_digest_stable: bool,
+    incremental_digest_stable: bool,
+    context_digest_stable: bool,
+}
+
+impl StabilityReport {
+    const fn passed(&self) -> bool {
+        self.repository_digest_stable
+            && self.incremental_digest_stable
+            && self.context_digest_stable
+    }
+}
+
+#[derive(Serialize)]
+struct RepositoryScaleReport {
+    schema_version: u32,
+    fixture_profile: &'static str,
+    generated_source_files: usize,
+    iterations_requested: usize,
+    iterations_completed: usize,
+    stability: StabilityReport,
+    iterations: Vec<IterationReport>,
+    passed: bool,
+    violations: Vec<String>,
+}
+
 // Keeping the measured lifecycle linear makes it harder to accidentally retain
 // a previous index and distort a later phase's memory or latency measurement.
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = parse_config(env::args().skip(1))?;
+    let mut iterations = Vec::with_capacity(config.iterations);
+    for iteration in 1..=config.iterations {
+        iterations.push(run_iteration(config, iteration)?);
+    }
+    let stability = stability(&iterations)?;
+    let mut violations = iterations
+        .iter()
+        .flat_map(|report| {
+            report
+                .violations
+                .iter()
+                .map(move |violation| format!("iteration {}: {violation}", report.iteration))
+        })
+        .collect::<Vec<_>>();
+    if !stability.repository_digest_stable {
+        violations.push("repository digest changed across fresh iterations".to_owned());
+    }
+    if !stability.incremental_digest_stable {
+        violations.push("incremental repository digest changed across iterations".to_owned());
+    }
+    if !stability.context_digest_stable {
+        violations.push("targeted context digest changed across iterations".to_owned());
+    }
+    let passed = violations.is_empty() && stability.passed();
+    let report = RepositoryScaleReport {
+        schema_version: 2,
+        fixture_profile: "synthetic-polyglot-v1",
+        generated_source_files: config.files,
+        iterations_requested: config.iterations,
+        iterations_completed: iterations.len(),
+        stability,
+        iterations,
+        passed,
+        violations,
+    };
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    serde_json::to_writer_pretty(&mut output, &report)?;
+    output.write_all(b"\n")?;
+    output.flush()?;
+    if !passed {
+        return Err("repository-scale performance, correctness, or stability budget failed".into());
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+fn run_iteration(
+    config: Config,
+    iteration: usize,
+) -> Result<IterationReport, Box<dyn std::error::Error>> {
     let source = tempfile::tempdir()?;
     let cache = tempfile::tempdir()?;
     create_fixture(source.path(), config.files)?;
@@ -101,11 +185,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let warm_digest = warm_index.digest.clone();
 
     let context_budget = ContextBudget::new(config.context_bytes)?;
-    let contract = TaskContract::new("change Unit42 and update its callers", ".");
+    let contract = fixture_contract()?;
     let context_started = Instant::now();
     let context = ContextPack::compile_with_budget(&contract, &warm_index, &[], context_budget)?;
     let context_elapsed = context_started.elapsed();
     drop(warm_index);
+    let context_digest = blake3::hash(context.rendered.as_bytes())
+        .to_hex()
+        .to_string();
     let context_report = ContextReport {
         elapsed_ms: millis(context_elapsed),
         budget_ms: millis(config.max_context),
@@ -125,6 +212,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         telemetry: incremental_telemetry,
     } = RepositoryIndex::build_with_cache(source.path(), cache.path())?;
     let incremental_elapsed = incremental_started.elapsed();
+    let incremental_digest = incremental_index.digest.clone();
     drop(incremental_index);
 
     let mut violations = Vec::new();
@@ -175,12 +263,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let passed = violations.is_empty();
-    let report = RepositoryScaleReport {
-        schema_version: 1,
-        fixture_profile: "synthetic-polyglot-v1",
-        generated_source_files: config.files,
+    Ok(IterationReport {
+        iteration,
         indexed_files,
         bytes_hashed: cold_telemetry.bytes_hashed,
+        repository_digest: cold_digest.clone(),
+        incremental_repository_digest: incremental_digest,
+        context_digest,
         repository_digest_stable_cold_to_warm: cold_digest == warm_digest,
         cold: PhaseReport {
             elapsed_ms: millis(cold_elapsed),
@@ -200,16 +289,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         context: context_report,
         passed,
         violations,
-    };
-    let stdout = io::stdout();
-    let mut output = stdout.lock();
-    serde_json::to_writer_pretty(&mut output, &report)?;
-    output.write_all(b"\n")?;
-    output.flush()?;
-    if !passed {
-        return Err("repository-scale performance or correctness budget failed".into());
-    }
-    Ok(())
+    })
 }
 
 fn parse_config(
@@ -223,6 +303,7 @@ fn parse_config(
             .ok_or_else(|| format!("{argument} requires a value"))?;
         match argument.as_str() {
             "--files" => config.files = parse_usize(&value, "files")?,
+            "--iterations" => config.iterations = parse_usize(&value, "iterations")?,
             "--context-bytes" => config.context_bytes = parse_usize(&value, "context bytes")?,
             "--max-cold-ms" => config.max_cold = parse_duration(&value, "cold budget")?,
             "--max-warm-ms" => config.max_warm = parse_duration(&value, "warm budget")?,
@@ -236,8 +317,39 @@ fn parse_config(
     if !(100..=MAX_FILES).contains(&config.files) {
         return Err(format!("files must be between 100 and {MAX_FILES}").into());
     }
+    if !(1..=MAX_ITERATIONS).contains(&config.iterations) {
+        return Err(format!("iterations must be between 1 and {MAX_ITERATIONS}").into());
+    }
     ContextBudget::new(config.context_bytes)?;
     Ok(config)
+}
+
+fn fixture_contract() -> Result<TaskContract, Box<dyn std::error::Error>> {
+    let mut contract = TaskContract::new("change Unit42 and update its callers", ".");
+    let Some(obligation) = contract.obligations.first_mut() else {
+        return Err("synthetic task contract did not create an obligation".into());
+    };
+    obligation.id = "01900000-0000-7000-8000-000000000042".parse()?;
+    Ok(contract)
+}
+
+fn stability(
+    iterations: &[IterationReport],
+) -> Result<StabilityReport, Box<dyn std::error::Error>> {
+    let Some(first) = iterations.first() else {
+        return Err("repository-scale soak requires at least one iteration".into());
+    };
+    Ok(StabilityReport {
+        repository_digest_stable: iterations
+            .iter()
+            .all(|report| report.repository_digest == first.repository_digest),
+        incremental_digest_stable: iterations.iter().all(|report| {
+            report.incremental_repository_digest == first.incremental_repository_digest
+        }),
+        context_digest_stable: iterations
+            .iter()
+            .all(|report| report.context_digest == first.context_digest),
+    })
 }
 
 fn parse_usize(value: &str, name: &str) -> Result<usize, Box<dyn std::error::Error>> {
@@ -322,4 +434,36 @@ fn check_duration(name: &str, actual: Duration, budget: Duration, violations: &m
 
 fn millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn arguments(values: &[&str]) -> impl Iterator<Item = String> {
+        values.iter().map(ToString::to_string)
+    }
+
+    #[test]
+    fn parses_bounded_soak_iterations() {
+        let config = parse_config(arguments(&["--files", "100", "--iterations", "3"]))
+            .unwrap_or_else(|error| unreachable!("configuration: {error}"));
+        assert_eq!(config.files, 100);
+        assert_eq!(config.iterations, 3);
+    }
+
+    #[test]
+    fn rejects_empty_or_unbounded_soaks() {
+        assert!(parse_config(arguments(&["--iterations", "0"])).is_err());
+        assert!(parse_config(arguments(&["--iterations", "21"])).is_err());
+    }
+
+    #[test]
+    fn synthetic_contract_identity_is_repeatable() {
+        let first = fixture_contract()
+            .unwrap_or_else(|error| unreachable!("first synthetic contract: {error}"));
+        let second = fixture_contract()
+            .unwrap_or_else(|error| unreachable!("second synthetic contract: {error}"));
+        assert_eq!(first, second);
+    }
 }
