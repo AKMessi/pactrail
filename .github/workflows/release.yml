@@ -16,7 +16,31 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
+  metadata:
+    name: Release metadata contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Verify tag, package, changelog, and release notes agree
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\([0-9][0-9.]*\)"$/\1/p' Cargo.toml | head -n 1)"
+          test -n "$version"
+          test "$GITHUB_REF_NAME" = "v$version"
+          test "$(git rev-list -n 1 "$GITHUB_REF_NAME")" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          test -f "docs/release-$GITHUB_REF_NAME.md"
+          grep -Fq "## [$version] -" CHANGELOG.md
+          grep -Fq "# Pactrail $GITHUB_REF_NAME" "docs/release-$GITHUB_REF_NAME.md"
+      - uses: dtolnay/rust-toolchain@eac0f66a48bc4b70a10b9acd4c4e930f835d95ff # 1.95.0
+      - name: Verify locked package metadata
+        run: cargo metadata --locked --no-deps --format-version 1 > /dev/null
+
   build:
+    needs: metadata
     strategy:
       fail-fast: false
       matrix:
@@ -58,6 +82,7 @@ jobs:
           if-no-files-found: error
 
   release-soak:
+    needs: metadata
     name: Release candidate deterministic soak
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -95,7 +120,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [build, release-soak]
+    needs: [metadata, build, release-soak]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -140,11 +165,14 @@ jobs:
           PACTRAIL_VERSION: ${{ github.ref_name }}
         run: |
           sh install.sh
-          "$PACTRAIL_INSTALL_DIR/pactrail" --version
+          test "$("$PACTRAIL_INSTALL_DIR/pactrail" --version)" = "pactrail ${GITHUB_REF_NAME#v}"
       - name: Install published Windows release
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $installDir = Join-Path $env:RUNNER_TEMP "pactrail-bin"
           .\install.ps1 -InstallDir $installDir -Version $env:GITHUB_REF_NAME -NoModifyPath
-          & (Join-Path $installDir "pactrail.exe") --version
+          $actual = & (Join-Path $installDir "pactrail.exe") --version
+          if ($actual -ne "pactrail $($env:GITHUB_REF_NAME.TrimStart('v'))") {
+            throw "installed version mismatch: $actual"
+          }

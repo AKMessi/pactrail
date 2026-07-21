@@ -15,7 +15,7 @@ workspace = true
 [dependencies]
 gix.workspace = true
 ignore.workspace = true
-pactrail-workspace = { version = "0.7.0", path = "../pactrail-workspace" }
+pactrail-workspace = { version = "1.0.0", path = "../pactrail-workspace" }
 serde.workspace = true
 similar.workspace = true
 thiserror.workspace = true

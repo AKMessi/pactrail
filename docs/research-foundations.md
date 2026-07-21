@@ -39,7 +39,7 @@ copy its benchmark claim into Pactrail.
   declarations while preserving a feature-disabled lexical fallback.
 - [Language Server Protocol](https://microsoft.github.io/language-server-protocol/)
   standardizes editor/server features including definitions and references.
-  Pactrail accepts only an explicit normalized reference snapshot in 0.8; it
+  Pactrail accepts only an explicit normalized reference snapshot in v1; it
   does not infer that protocol support grants permission to start a server.
 
 ## Context and validation

@@ -16,9 +16,9 @@ bytes.workspace = true
 futures-util.workspace = true
 http.workspace = true
 jsonschema.workspace = true
-pactrail-context = { version = "0.7.0", path = "../pactrail-context" }
-pactrail-core = { version = "0.7.0", path = "../pactrail-core" }
-pactrail-tools = { version = "0.7.0", path = "../pactrail-tools" }
+pactrail-context = { version = "1.0.0", path = "../pactrail-context" }
+pactrail-core = { version = "1.0.0", path = "../pactrail-core" }
+pactrail-tools = { version = "1.0.0", path = "../pactrail-tools" }
 reqwest.workspace = true
 rmcp.workspace = true
 serde.workspace = true

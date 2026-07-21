@@ -7,7 +7,7 @@ and user-facing failure mode are complete.
 This file distinguishes shipped behavior from planned work. It is not a release
 promise or a security claim.
 
-## Shipped through 0.7
+## Foundation shipped in v1
 
 - Contract-first runs with explicit capability policy and overgrant detection.
 - Isolated workspace transactions, receipt-bound review/apply, source-drift
@@ -76,7 +76,7 @@ Exit criterion: disconnects, poisoned descriptions, malformed schemas,
 oversized results, collisions, and unauthorized effects have deterministic
 tests and legible CLI diagnostics.
 
-## Shipped toward 0.8
+## Repository-scale work shipped in v1
 
 - Content-addressed repository-index invalidation with exact current-byte
   hashing, cache rejection telemetry, and deterministic cold fallback.
@@ -96,15 +96,15 @@ tests and legible CLI diagnostics.
   Anthropic, and Gemini transports, with CLI attachment queues, context
   reservation, durable resume, and path/base64-safe traces.
 
-## 0.8 — repository-scale intelligence and performance
+## Repository intelligence and performance
 
-All planned 0.8 implementation items are shipped on `main`; release packaging
-remains part of the versioned release process.
+The planned repository-intelligence implementation is shipped in v1. Release
+soak reports remain versioned, checksum-covered release evidence.
 
 Exit criterion: cold/warm performance and retrieval-relevance suites cover tiny
 local models through hosted models without hidden prompt truncation.
 
-## 0.9 — stabilization and public evaluation
+## Stabilization shipped in v1
 
 - Compatibility inventory and a current-format fixture now cover durable core,
   event database, memory, settings, transaction, checkpoint, MCP, tool, model,
@@ -123,9 +123,10 @@ local models through hosted models without hidden prompt truncation.
   concurrent source changes, abrupt process death, and provider network loss.
   Permission-denied and storage-full failures are injected before and after
   every apply/rollback boundary and run on Linux, macOS, and Windows CI.
-- Public matched-harness evaluation measuring task correctness, regression rate,
-  tokens/cost, tool efficiency, context use, trace completeness, containment,
-  recovery, and human review burden—with raw artifacts and preregistration.
+- Public matched-harness evaluation infrastructure measures task correctness,
+  regression rate, tokens/cost, tool efficiency, trace completeness,
+  containment, recovery, and human review burden with raw artifacts. New v1
+  comparative runs remain intentionally deferred until maintainer approval.
 - Performance ceilings and deterministic release-candidate soak runs now gate
   publishing and retain attested raw evidence. A read-only upgrade command now
   combines the integrity/migration audit with a fixture-pinned deprecation
@@ -133,9 +134,9 @@ local models through hosted models without hidden prompt truncation.
   audit is closed with all discovered findings fixed and retained as a public
   evidence report; independent third-party review remains explicitly external.
 
-Exit criterion: no open release-blocking correctness or security defect, all
-compatibility fixtures pass on supported platforms, and evaluation claims are
-reproducible from public artifacts.
+Exit criterion: no known release-blocking correctness or security defect and all
+compatibility fixtures pass on supported platforms. Any evaluation claim must
+remain reproducible from public artifacts.
 
 ## 1.0 — stable public contract
 
@@ -144,15 +145,26 @@ reproducible from public artifacts.
   windows, security response process, and upgrade guide.
 - At least one production sandbox backend with adversarial fixtures.
 - Deterministic interruption recovery at every source-mutation boundary.
-- Signed and attested reproducible artifacts plus checksum-verifying installers.
-- Independent review of path handling, apply, process, provider, MCP, memory,
-  persistence, and release boundaries, with all critical/high findings resolved.
-- A final v1 evaluation report that makes only protocol-bounded, reproducible
-  comparisons; benchmark execution begins only after maintainer approval.
+- Provenance-attested release artifacts plus checksum-verifying installers.
+- A public maintainer review of path handling, apply, process, provider, MCP,
+  memory, persistence, and release boundaries, with every discovered finding
+  resolved. Independent third-party review remains explicitly external.
+- Reproducible evaluation tooling and retained historical evidence. New
+  comparative benchmark execution begins only after maintainer approval and is
+  not a prerequisite for the stable compatibility contract.
 
-Pactrail will not label itself 1.0 solely because the CLI is polished. The
+Pactrail 1.0 is not a label applied solely because the CLI is polished. The
 version means downstream users can rely on the public contracts and migration
 policy as well as the runtime behavior.
+
+## Beyond 1.0
+
+- Independent external security review and remediation of any accepted report.
+- Approved, preregistered v1 matched-harness and real-issue evaluation runs.
+- Broader prebuilt platform coverage where CI and installer verification can
+  support the same release contract.
+- Governed optional language-server process integration without weakening the
+  explicit evidence and capability boundary.
 
 ## Non-goals
 

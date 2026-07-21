@@ -6,6 +6,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+No user-visible changes yet.
+
+## [1.0.0] - 2026-07-22
+
 ### Added
 
 - Content-addressed repository analysis with bounded embedded Tree-sitter
@@ -59,6 +63,9 @@ follow [Semantic Versioning](https://semver.org/).
   next steps in one report. Deprecated process aliases now warn consistently
   and remain supported through 1.x; `pactrail migrate --apply` remains the only
   mutating upgrade step.
+- A stable 1.x compatibility contract, Tier 1 platform/provider support matrix,
+  security maintenance window, immutable-tag Rust SDK policy, v1 upgrade path,
+  and release runbook define the public support boundary.
 
 ### Security
 
@@ -79,14 +86,24 @@ follow [Semantic Versioning](https://semver.org/).
   paths and baseline digest are revalidated on open. Apply now rejects even an
   integrity-valid receipt unless it matches the transaction's exact source and
   baseline.
+- The v1 maintainer security audit closes durable-state, MCP-state, artifact,
+  repository-cache, OCI environment, buffered provider-response, and terminal
+  tracing weaknesses with negative regression coverage. The public audit report
+  explicitly distinguishes this work from an independent third-party review.
 
 ### Changed
 
 - The Rust embedding surface revision is 4 and now includes typed structural,
   LSP-provenance, Git evidence/tool contracts, and sealed multimodal user
   content.
+- Pactrail now declares its stable 1.x CLI, JSON, durable-format, authority,
+  recovery, and `pactrail-sdk` compatibility promises. Human terminal layout
+  remains free to improve without becoming a scripting interface.
 
-## [0.7.0] - 2026-07-21
+The 0.4.0–0.7.0 entries below record source development milestones that were
+not published as separate GitHub releases. Their changes ship in v1.0.0.
+
+## 0.7.0 development milestone - 2026-07-21
 
 ### Added
 
@@ -113,7 +130,7 @@ follow [Semantic Versioning](https://semver.org/).
   rejected, results and schemas are bounded, and uncertain calls are never
   replayed.
 
-## [0.6.0] - 2026-07-20
+## 0.6.0 development milestone - 2026-07-20
 
 ### Added
 
@@ -153,7 +170,7 @@ follow [Semantic Versioning](https://semver.org/).
 - Provider metadata is scalar-allowlisted, length-bounded, and terminal-safe
   before it enters the durable trace.
 
-## [0.5.0] - 2026-07-20
+## 0.5.0 development milestone - 2026-07-20
 
 ### Added
 
@@ -186,7 +203,7 @@ follow [Semantic Versioning](https://semver.org/).
 - CLI and interactive trace views render effect admission and completion as
   first-class rows instead of burying effect safety inside generic tool output.
 
-## [0.4.0] - 2026-07-20
+## 0.4.0 development milestone - 2026-07-20
 
 ### Added
 
@@ -359,11 +376,8 @@ follow [Semantic Versioning](https://semver.org/).
 - Bounded run-goal and memory previews now end with a visible ellipsis instead
   of silently dropping continuation text.
 
-[Unreleased]: https://github.com/AKMessi/pactrail/compare/v0.7.0...HEAD
-[0.7.0]: https://github.com/AKMessi/pactrail/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/AKMessi/pactrail/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/AKMessi/pactrail/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/AKMessi/pactrail/compare/v0.3.0...v0.4.0
+[Unreleased]: https://github.com/AKMessi/pactrail/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/AKMessi/pactrail/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/AKMessi/pactrail/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/AKMessi/pactrail/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AKMessi/pactrail/releases/tag/v0.1.0
