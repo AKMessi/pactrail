@@ -43,6 +43,7 @@ use crate::cli::{
     OciRuntimeArg, OutputFormat, ProbeArgs, ProcessApprovalArg, ProcessBackendArg, ProviderKind,
     ResumeArgs, RunArgs, RunIdArgs,
 };
+use crate::diff::{DiffError, render_receipt_diff};
 use crate::mcp::{McpCliError, McpRuntime};
 use crate::output::{
     escape_json_terminal_controls, write_human_stdout, write_stderr, write_stdout,
@@ -57,7 +58,11 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
         Command::Probe(args) => probe(args).await,
         Command::Inspect(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
-            inspect(&state, &args)
+            inspect(&state, &cli.workspace, &args)
+        }
+        Command::Diff(args) => {
+            let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
+            diff(&state, &cli.workspace, &args)
         }
         Command::Trace(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
@@ -65,11 +70,11 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
         }
         Command::Apply(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
-            apply(&state, &args)
+            apply(&state, &cli.workspace, &args)
         }
         Command::Discard(args) => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
-            discard(&state, &args)
+            discard(&state, &cli.workspace, &args)
         }
         Command::List { json } => {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
@@ -238,6 +243,7 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
 
 pub(crate) const RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;
 pub(crate) const MIN_RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;
+pub(crate) const DIFF_REPORT_SCHEMA_VERSION: u32 = 1;
 const MAX_RUN_MANIFEST_BYTES: u64 = 1024 * 1024;
 const MAX_RECEIPT_BYTES: u64 = 16 * 1024 * 1024;
 
@@ -1481,12 +1487,12 @@ fn mebibytes(value: u64, label: &str) -> Result<u64, CliError> {
         .ok_or_else(|| CliError::Argument(format!("{label} is too large to represent in bytes")))
 }
 
-pub(crate) fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+pub(crate) fn inspect(state: &Path, workspace: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
     let run_root = run_root(state, run_id);
     let receipt_path = run_root.join("receipt.json");
     if optional_regular_file(&receipt_path, "receipt")? {
-        let receipt = read_receipt(&run_root)?;
+        let receipt = read_bound_receipt(state, workspace, run_id)?;
         if args.json {
             return write_json(&receipt);
         }
@@ -1505,6 +1511,7 @@ pub(crate) fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
         );
         return write_human_stdout(&text).map_err(CliError::Output);
     }
+    let _events = load_trace(state, run_id)?;
     let store = EventStore::open(state.join("events.sqlite3"))?;
     let snapshot = store.snapshot(run_id)?;
     let value = json!({
@@ -1524,6 +1531,43 @@ pub(crate) fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     }
 }
 
+#[derive(Serialize)]
+struct DiffReport<'a> {
+    schema_version: u32,
+    run_id: RunId,
+    outcome: ReceiptOutcome,
+    receipt_integrity: &'static str,
+    changes: &'a [pactrail_core::FileChange],
+    unified_diff: &'a str,
+}
+
+pub(crate) fn diff(state: &Path, workspace: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+    let run_id = parse_run_id(&args.run_id)?;
+    let run_root = run_root(state, run_id);
+    let receipt = read_bound_receipt(state, workspace, run_id)?;
+    let rendered = render_receipt_diff(&run_root, &receipt)?;
+    if args.json {
+        return write_json(&DiffReport {
+            schema_version: DIFF_REPORT_SCHEMA_VERSION,
+            run_id,
+            outcome: receipt.outcome,
+            receipt_integrity: "verified",
+            changes: &receipt.changes,
+            unified_diff: &rendered,
+        });
+    }
+    let heading = format!(
+        "Diff {run_id}  ({} {}, receipt integrity verified)\n",
+        receipt.changes.len(),
+        if receipt.changes.len() == 1 {
+            "file"
+        } else {
+            "files"
+        }
+    );
+    write_human_stdout(&format!("{heading}{rendered}")).map_err(CliError::Output)
+}
+
 pub(crate) fn trace(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
     let events = load_trace(state, run_id)?;
@@ -1534,20 +1578,58 @@ pub(crate) fn trace(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
 }
 
 pub(crate) fn load_trace(state: &Path, run_id: RunId) -> Result<Vec<EventEnvelope>, CliError> {
-    EventStore::open(state.join("events.sqlite3"))?
-        .load(run_id)
-        .map_err(CliError::Store)
+    let database = state.join("events.sqlite3");
+    if !optional_regular_file(&database, "event database")? {
+        return Err(CliError::Argument(format!(
+            "run {run_id} was not found in the selected state directory"
+        )));
+    }
+    let events = EventStore::open(database)?.load(run_id)?;
+    if events.is_empty() {
+        return Err(CliError::Argument(format!(
+            "run {run_id} was not found in the selected state directory"
+        )));
+    }
+    Ok(events)
 }
 
 fn render_trace_text(run_id: RunId, events: &[EventEnvelope]) -> String {
+    render_trace_text_with_columns(run_id, events, trace_terminal_columns())
+}
+
+fn trace_terminal_columns() -> usize {
+    terminal_size::terminal_size()
+        .map(|(terminal_size::Width(width), _)| usize::from(width))
+        .or_else(|| {
+            std::env::var("COLUMNS")
+                .ok()
+                .and_then(|value| value.parse::<usize>().ok())
+        })
+        .unwrap_or(100)
+        .clamp(40, 240)
+}
+
+fn render_trace_text_with_columns(
+    run_id: RunId,
+    events: &[EventEnvelope],
+    columns: usize,
+) -> String {
+    let columns = columns.max(40);
     if events.is_empty() {
         return format!("Trace {run_id}\nNo durable events found.\n");
     }
     let started = events[0].timestamp;
-    let mut lines = vec![format!(
-        "Trace {run_id}  ({} events, hash chain verified)",
-        events.len()
-    )];
+    let mut lines = Vec::new();
+    push_wrapped_trace_line(
+        &mut lines,
+        "",
+        "  ",
+        &format!(
+            "Trace {run_id}  ({} events, hash chain verified)",
+            events.len()
+        ),
+        columns,
+    );
     for envelope in events {
         let elapsed = envelope.timestamp - started;
         let elapsed_ms = elapsed.whole_milliseconds().max(0);
@@ -1556,89 +1638,239 @@ fn render_trace_text(run_id: RunId, events: &[EventEnvelope]) -> String {
             format_trace_elapsed(elapsed_ms),
             envelope.sequence
         );
-        match &envelope.event {
-            RunEvent::ContractRegistered(contract) => {
-                lines.push(format!("{prefix}  CONTRACT  {}", contract.goal));
-            }
-            RunEvent::StateChanged { from, to } => {
-                lines.push(format!("{prefix}  STATE     {from:?} -> {to:?}"));
-            }
-            RunEvent::ActionCompleted(action) => {
-                lines.push(format!(
-                    "{prefix}  {:<9} {:>7}  {}  {}",
-                    trace_actor(&action.actor),
-                    format_trace_elapsed(i128::from(action.duration_ms)),
-                    if action.succeeded { "OK" } else { "FAIL" },
-                    action.summary
-                ));
-                if !action.attributes.is_empty() {
-                    lines.push(format!(
-                        "                    {}",
-                        action
-                            .attributes
-                            .iter()
-                            .map(|(key, value)| format!("{key}={value}"))
-                            .collect::<Vec<_>>()
-                            .join("  ")
-                    ));
-                }
-                if !action.observed_effects.is_empty() {
-                    lines.push(format!(
-                        "                    effects: {}",
-                        action.observed_effects.join(", ")
-                    ));
-                }
-            }
-            RunEvent::EvidenceRecorded(evidence) => lines.push(format!(
-                "{prefix}  EVIDENCE  {:?}/{:?}  {}",
-                evidence.grade, evidence.status, evidence.summary
-            )),
-            RunEvent::PolicyEvaluated(decision) => {
-                lines.push(format!("{prefix}  POLICY    {decision:?}"));
-            }
-            RunEvent::ApprovalDecided(approval) => {
-                lines.push(format!(
-                    "{prefix}  APPROVAL  {:?}  {} via {}",
-                    approval.decision, approval.binding.capability, approval.binding.backend_kind
-                ));
-                lines.push(format!(
-                    "                    actor={}  profile={}  resource={}",
-                    short_digest(&approval.binding.actor_fingerprint),
-                    short_digest(&approval.binding.profile_digest),
-                    approval.binding.resource
-                ));
-            }
-            RunEvent::EffectPrepared(effect) => {
-                lines.push(format!(
-                    "{prefix}  PREPARE   {}  {}  risk={}",
-                    effect.tool, effect.call_id, effect.risk
-                ));
-                lines.push(format!(
-                    "                    args={}  candidate={}  runtime={}",
-                    short_digest(&effect.arguments_digest),
-                    short_digest(&effect.candidate_digest_before),
-                    short_digest(&effect.runtime_profile_digest)
-                ));
-            }
-            RunEvent::EffectCompleted(effect) => {
-                lines.push(format!(
-                    "{prefix}  EFFECT    {}  {}  result={}  candidate={}",
-                    if effect.succeeded { "OK" } else { "FAIL" },
-                    effect.call_id,
-                    short_digest(&effect.result_digest),
-                    short_digest(&effect.candidate_digest_after)
-                ));
-            }
-            RunEvent::CheckpointCreated { checkpoint } => {
-                lines.push(format!("{prefix}  CHECKPT   {checkpoint}"));
-            }
-            RunEvent::NoteRecorded { message } => {
-                lines.push(format!("{prefix}  NOTE      {message}"));
-            }
-        }
+        push_trace_event(&mut lines, &prefix, &envelope.event, columns);
     }
     lines.push(String::new());
     lines.join("\n")
+}
+
+fn push_trace_event(lines: &mut Vec<String>, prefix: &str, event: &RunEvent, columns: usize) {
+    match event {
+        RunEvent::ContractRegistered(contract) => {
+            push_trace_row(lines, prefix, "CONTRACT", &contract.goal, columns);
+        }
+        RunEvent::StateChanged { from, to } => {
+            push_trace_row(
+                lines,
+                prefix,
+                "STATE",
+                &format!("{from:?} -> {to:?}"),
+                columns,
+            );
+        }
+        RunEvent::ActionCompleted(action) => push_trace_action(lines, prefix, action, columns),
+        RunEvent::EvidenceRecorded(evidence) => push_trace_row(
+            lines,
+            prefix,
+            "EVIDENCE",
+            &format!(
+                "{:?}/{:?}  {}",
+                evidence.grade, evidence.status, evidence.summary
+            ),
+            columns,
+        ),
+        RunEvent::PolicyEvaluated(decision) => {
+            push_trace_row(lines, prefix, "POLICY", &format!("{decision:?}"), columns);
+        }
+        RunEvent::ApprovalDecided(approval) => {
+            push_trace_approval(lines, prefix, approval, columns);
+        }
+        RunEvent::EffectPrepared(effect) => {
+            push_trace_prepared_effect(lines, prefix, effect, columns);
+        }
+        RunEvent::EffectCompleted(effect) => {
+            push_trace_completed_effect(lines, prefix, effect, columns);
+        }
+        RunEvent::CheckpointCreated { checkpoint } => {
+            push_trace_row(lines, prefix, "CHECKPT", checkpoint, columns);
+        }
+        RunEvent::NoteRecorded { message } => {
+            push_trace_row(lines, prefix, "NOTE", message, columns);
+        }
+    }
+}
+
+fn push_trace_action(
+    lines: &mut Vec<String>,
+    prefix: &str,
+    action: &pactrail_core::ActionRecord,
+    columns: usize,
+) {
+    push_trace_row(
+        lines,
+        prefix,
+        trace_actor(&action.actor),
+        &format!(
+            "{}  {}  {}",
+            format_trace_elapsed(i128::from(action.duration_ms)),
+            if action.succeeded { "OK" } else { "FAIL" },
+            action.summary
+        ),
+        columns,
+    );
+    if !action.attributes.is_empty() {
+        let attributes = action
+            .attributes
+            .iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect::<Vec<_>>()
+            .join("  ·  ");
+        push_trace_detail(lines, prefix, &attributes, columns);
+    }
+    if !action.observed_effects.is_empty() {
+        push_trace_detail(
+            lines,
+            prefix,
+            &format!("effects · {}", action.observed_effects.join("  ·  ")),
+            columns,
+        );
+    }
+}
+
+fn push_trace_approval(
+    lines: &mut Vec<String>,
+    prefix: &str,
+    approval: &pactrail_core::ApprovalRecord,
+    columns: usize,
+) {
+    push_trace_row(
+        lines,
+        prefix,
+        "APPROVAL",
+        &format!(
+            "{:?}  {} via {}",
+            approval.decision, approval.binding.capability, approval.binding.backend_kind
+        ),
+        columns,
+    );
+    push_trace_detail(
+        lines,
+        prefix,
+        &format!(
+            "actor={}  ·  profile={}  ·  resource={}",
+            short_digest(&approval.binding.actor_fingerprint),
+            short_digest(&approval.binding.profile_digest),
+            approval.binding.resource
+        ),
+        columns,
+    );
+}
+
+fn push_trace_prepared_effect(
+    lines: &mut Vec<String>,
+    prefix: &str,
+    effect: &pactrail_core::EffectPrepared,
+    columns: usize,
+) {
+    push_trace_row(
+        lines,
+        prefix,
+        "PREPARE",
+        &format!("{}  {}  risk={}", effect.tool, effect.call_id, effect.risk),
+        columns,
+    );
+    push_trace_detail(
+        lines,
+        prefix,
+        &format!(
+            "args={}  ·  candidate={}  ·  runtime={}",
+            short_digest(&effect.arguments_digest),
+            short_digest(&effect.candidate_digest_before),
+            short_digest(&effect.runtime_profile_digest)
+        ),
+        columns,
+    );
+}
+
+fn push_trace_completed_effect(
+    lines: &mut Vec<String>,
+    prefix: &str,
+    effect: &pactrail_core::EffectCompleted,
+    columns: usize,
+) {
+    push_trace_row(
+        lines,
+        prefix,
+        "EFFECT",
+        &format!(
+            "{}  {}  result={}  candidate={}",
+            if effect.succeeded { "OK" } else { "FAIL" },
+            effect.call_id,
+            short_digest(&effect.result_digest),
+            short_digest(&effect.candidate_digest_after)
+        ),
+        columns,
+    );
+}
+
+fn push_trace_row(lines: &mut Vec<String>, prefix: &str, lane: &str, detail: &str, columns: usize) {
+    let head = format!("{prefix}  {lane:<9} ");
+    let continuation = " ".repeat(head.chars().count());
+    push_wrapped_trace_line(lines, &head, &continuation, detail, columns);
+}
+
+fn push_trace_detail(lines: &mut Vec<String>, prefix: &str, detail: &str, columns: usize) {
+    let indent = " ".repeat(prefix.chars().count() + 12);
+    push_wrapped_trace_line(lines, &indent, &indent, detail, columns);
+}
+
+fn push_wrapped_trace_line(
+    lines: &mut Vec<String>,
+    first_prefix: &str,
+    continuation_prefix: &str,
+    value: &str,
+    columns: usize,
+) {
+    let first_width = columns.saturating_sub(first_prefix.chars().count()).max(1);
+    let continuation_width = columns
+        .saturating_sub(continuation_prefix.chars().count())
+        .max(1);
+    let mut wrapped = wrap_trace_text(value, first_width).into_iter();
+    let first = wrapped.next().unwrap_or_default();
+    lines.push(format!("{first_prefix}{first}"));
+    for segment in wrapped {
+        for continuation in wrap_trace_text(&segment, continuation_width) {
+            lines.push(format!("{continuation_prefix}{continuation}"));
+        }
+    }
+}
+
+fn wrap_trace_text(value: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in value.split_whitespace() {
+        let mut remaining = word;
+        loop {
+            let separator = usize::from(!line.is_empty());
+            let capacity = width.saturating_sub(line.chars().count() + separator);
+            if remaining.chars().count() <= capacity {
+                if !line.is_empty() {
+                    line.push(' ');
+                }
+                line.push_str(remaining);
+                break;
+            }
+            if capacity == 0 || !line.is_empty() {
+                lines.push(std::mem::take(&mut line));
+                continue;
+            }
+            let split = remaining
+                .char_indices()
+                .nth(width)
+                .map_or(remaining.len(), |(index, _)| index);
+            let (chunk, rest) = remaining.split_at(split);
+            lines.push(chunk.to_owned());
+            remaining = rest;
+            if remaining.is_empty() {
+                break;
+            }
+        }
+    }
+    if !line.is_empty() || lines.is_empty() {
+        lines.push(line);
+    }
+    lines
 }
 
 fn trace_actor(actor: &str) -> &'static str {
@@ -1669,9 +1901,9 @@ fn short_digest(value: &str) -> &str {
     value.get(..12).unwrap_or(value)
 }
 
-pub(crate) fn apply(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+pub(crate) fn apply(state: &Path, workspace: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
-    let receipt = apply_run(state, run_id)?;
+    let receipt = apply_run(state, workspace, run_id)?;
     if args.json {
         write_json(&receipt)
     } else {
@@ -1685,9 +1917,15 @@ pub(crate) fn apply(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     }
 }
 
-pub(crate) fn apply_run(state: &Path, run_id: RunId) -> Result<ChangeReceipt, CliError> {
+pub(crate) fn apply_run(
+    state: &Path,
+    workspace: &Path,
+    run_id: RunId,
+) -> Result<ChangeReceipt, CliError> {
     let run_root = run_root(state, run_id);
     let receipt = read_receipt(&run_root)?;
+    require_receipt_integrity(&receipt)?;
+    require_receipt_workspace(&receipt, workspace)?;
     let transaction = WorkspaceTransaction::open(&run_root)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
     let applied = apply_ready_receipt(&run_root, receipt, &transaction, &mut store)?;
@@ -1751,9 +1989,9 @@ fn apply_ready_receipt(
     Ok(applied)
 }
 
-pub(crate) fn discard(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+pub(crate) fn discard(state: &Path, workspace: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
-    let discarded = discard_run(state, run_id)?;
+    let discarded = discard_run(state, workspace, run_id)?;
     if args.json {
         write_json(&discarded)
     } else {
@@ -1762,9 +2000,15 @@ pub(crate) fn discard(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     }
 }
 
-pub(crate) fn discard_run(state: &Path, run_id: RunId) -> Result<ChangeReceipt, CliError> {
+pub(crate) fn discard_run(
+    state: &Path,
+    workspace: &Path,
+    run_id: RunId,
+) -> Result<ChangeReceipt, CliError> {
     let run_root = run_root(state, run_id);
     let receipt = read_receipt(&run_root)?;
+    require_receipt_integrity(&receipt)?;
+    require_receipt_workspace(&receipt, workspace)?;
     let mut store = EventStore::open(state.join("events.sqlite3"))?;
     if let Some(discarded) = recover_completed_discard(&run_root, receipt.clone(), &store)? {
         write_trace_artifact(&run_root, &store, run_id)?;
@@ -2744,6 +2988,57 @@ pub(crate) fn read_receipt(run_root: &Path) -> Result<ChangeReceipt, CliError> {
     read_receipt_exact(run_root)
 }
 
+pub(crate) fn read_bound_receipt(
+    state: &Path,
+    workspace: &Path,
+    run_id: RunId,
+) -> Result<ChangeReceipt, CliError> {
+    let events = load_trace(state, run_id)?;
+    let receipt = read_receipt(&run_root(state, run_id))?;
+    require_receipt_integrity(&receipt)?;
+    if receipt.run_id != run_id {
+        return Err(CliError::Argument(format!(
+            "receipt run {} does not match requested run {run_id}",
+            receipt.run_id
+        )));
+    }
+    require_receipt_workspace(&receipt, workspace)?;
+    let event_head = events
+        .last()
+        .map(|event| event.hash.0.as_str())
+        .ok_or_else(|| CliError::Argument(format!("run {run_id} has no durable event head")))?;
+    if receipt.final_event_hash != event_head {
+        return Err(CliError::Argument(format!(
+            "receipt for run {run_id} is not bound to the durable event head"
+        )));
+    }
+    Ok(receipt)
+}
+
+fn require_receipt_workspace(
+    receipt: &ChangeReceipt,
+    selected_workspace: &Path,
+) -> Result<(), CliError> {
+    let selected = fs::canonicalize(selected_workspace).map_err(|source| CliError::Io {
+        path: selected_workspace.to_path_buf(),
+        source,
+    })?;
+    let claimed = PathBuf::from(&receipt.contract.workspace_root);
+    let bound = fs::canonicalize(&claimed).map_err(|source| CliError::Io {
+        path: claimed,
+        source,
+    })?;
+    if selected != bound {
+        return Err(CliError::Argument(format!(
+            "run {} is bound to workspace {}, not the selected workspace {}",
+            receipt.run_id,
+            bound.display(),
+            selected.display()
+        )));
+    }
+    Ok(())
+}
+
 fn read_receipt_exact(run_root: &Path) -> Result<ChangeReceipt, CliError> {
     let path = run_root.join("receipt.json");
     let bytes = read_bounded_regular_file(&path, MAX_RECEIPT_BYTES, "receipt")?;
@@ -2931,6 +3226,8 @@ pub enum CliError {
     Mcp(#[from] McpCliError),
     #[error("receipt failed: {0}")]
     Receipt(#[from] pactrail_core::ReceiptError),
+    #[error("diff failed: {0}")]
+    Diff(#[from] DiffError),
 }
 
 impl CliError {
@@ -2944,7 +3241,7 @@ impl CliError {
 
 #[cfg(test)]
 mod tests {
-    use pactrail_core::{Evidence, EvidenceKind};
+    use pactrail_core::{ActionRecord, Evidence, EvidenceKind};
 
     use super::*;
 
@@ -3404,5 +3701,71 @@ mod tests {
     fn generated_budget_can_reach_every_configured_turn() {
         assert_eq!(generated_model_token_budget(16_384, 2_048, 16), 294_912);
         assert_eq!(generated_model_token_budget(u64::MAX, 1, 256), u64::MAX);
+    }
+
+    #[test]
+    fn human_trace_hard_wraps_every_lane_and_digest() {
+        let run_id = RunId::new();
+        let mut store = EventStore::open_in_memory()
+            .unwrap_or_else(|error| unreachable!("event store: {error}"));
+        store
+            .append(
+                run_id,
+                0,
+                RunEvent::ContractRegistered(TaskContract::new(
+                    "Explain a deliberately long workspace goal without allowing the terminal to wrap it",
+                    ".",
+                )),
+            )
+            .unwrap_or_else(|error| unreachable!("contract: {error}"));
+        store
+            .append(
+                run_id,
+                1,
+                RunEvent::ActionCompleted(ActionRecord {
+                    actor: "tool:read_file".to_owned(),
+                    action: "read_file".to_owned(),
+                    summary: "read a long path and returned enough context to exercise hanging indentation"
+                        .to_owned(),
+                    declared_effects: vec!["fs.read:src/a-very-long-component-name.rs".to_owned()],
+                    observed_effects: vec![
+                        "fs.read:src/a-very-long-component-name.rs".to_owned(),
+                        "fs.metadata:src/a-very-long-component-name.rs".to_owned(),
+                    ],
+                    succeeded: true,
+                    duration_ms: 12_345,
+                    attributes: std::collections::BTreeMap::from([
+                        ("arguments_digest".to_owned(), "a".repeat(64)),
+                        ("output_bytes".to_owned(), "123456".to_owned()),
+                        ("output_truncated".to_owned(), "false".to_owned()),
+                    ]),
+                }),
+            )
+            .unwrap_or_else(|error| unreachable!("action: {error}"));
+        store
+            .append(
+                run_id,
+                2,
+                RunEvent::CheckpointCreated {
+                    checkpoint: format!("candidate:{}", "f".repeat(64)),
+                },
+            )
+            .unwrap_or_else(|error| unreachable!("checkpoint: {error}"));
+        let events = store
+            .load(run_id)
+            .unwrap_or_else(|error| unreachable!("trace: {error}"));
+
+        for columns in [40, 60, 80] {
+            let rendered = render_trace_text_with_columns(run_id, &events, columns);
+            assert!(rendered.contains("CONTRACT"));
+            assert!(rendered.contains("TOOL"));
+            assert!(rendered.contains("CHECKPT"));
+            for line in rendered.lines() {
+                assert!(
+                    line.chars().count() <= columns,
+                    "trace line exceeded {columns} columns: {line:?}"
+                );
+            }
+        }
     }
 }

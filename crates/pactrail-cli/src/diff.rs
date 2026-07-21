@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use pactrail_core::{ChangeReceipt, FileChange};
+use pactrail_workspace::SafeRelativePath;
 use similar::TextDiff;
 use tempfile::NamedTempFile;
 use thiserror::Error;
@@ -15,9 +16,22 @@ pub(crate) fn render_receipt_diff(
     run_root: &Path,
     receipt: &ChangeReceipt,
 ) -> Result<String, DiffError> {
+    if !receipt.verify_integrity()? {
+        return Err(DiffError::ReceiptIntegrity);
+    }
     let review = run_root.join(REVIEW_FILE);
-    if review.is_file() {
-        return read_review(&review);
+    match fs::symlink_metadata(&review) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            return Err(DiffError::UnsafePath(review));
+        }
+        Ok(_) => return read_review(&review),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
+        Err(source) => {
+            return Err(DiffError::Io {
+                path: review,
+                source,
+            });
+        }
     }
     render_live_diff(run_root, receipt)
 }
@@ -26,6 +40,9 @@ pub(crate) fn write_receipt_diff(
     run_root: &Path,
     receipt: &ChangeReceipt,
 ) -> Result<(), DiffError> {
+    if !receipt.verify_integrity()? {
+        return Err(DiffError::ReceiptIntegrity);
+    }
     let review = run_root.join(REVIEW_FILE);
     let rendered = render_live_diff(run_root, receipt)?;
     if review.exists() {
@@ -73,6 +90,16 @@ fn render_live_diff(run_root: &Path, receipt: &ChangeReceipt) -> Result<String, 
 }
 
 fn read_review(path: &Path) -> Result<String, DiffError> {
+    let metadata = fs::symlink_metadata(path).map_err(|source| DiffError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(DiffError::UnsafePath(path.to_path_buf()));
+    }
+    if metadata.len() > u64::try_from(MAX_DIFF_OUTPUT_BYTES).unwrap_or(u64::MAX) {
+        return Err(DiffError::ReviewTooLarge(path.to_path_buf()));
+    }
     let file = fs::File::open(path).map_err(|source| DiffError::Io {
         path: path.to_path_buf(),
         source,
@@ -109,10 +136,9 @@ fn render_change(
     candidate_root: &Path,
     change: &FileChange,
 ) -> Result<(), DiffError> {
-    let before_path = source_root.join(&change.path);
-    let after_path = candidate_root.join(&change.path);
-    let before = read_text(&before_path)?;
-    let after = read_text(&after_path)?;
+    let relative = SafeRelativePath::new(&change.path).map_err(DiffError::UnsafeChangePath)?;
+    let before = read_text_below(source_root, &relative)?;
+    let after = read_text_below(candidate_root, &relative)?;
     match (before, after) {
         (FileContents::Text(before), FileContents::Text(after)) => {
             render_text_change(output, change, &before, &after);
@@ -166,30 +192,72 @@ enum FileContents {
     BinaryOrLarge,
 }
 
-fn read_text(path: &Path) -> Result<FileContents, DiffError> {
-    let metadata = match fs::metadata(path) {
+fn read_text_below(root: &Path, relative: &SafeRelativePath) -> Result<FileContents, DiffError> {
+    validate_real_parent_chain(root, relative.as_path())?;
+    let path = root.join(relative.as_path());
+    let metadata = match fs::symlink_metadata(&path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Ok(FileContents::Missing);
         }
         Err(source) => {
             return Err(DiffError::Io {
-                path: path.to_path_buf(),
+                path: path.clone(),
                 source,
             });
         }
     };
+    if metadata.file_type().is_symlink() {
+        return Err(DiffError::UnsafePath(path));
+    }
     if !metadata.is_file() || metadata.len() > MAX_DIFF_FILE_BYTES {
         return Ok(FileContents::BinaryOrLarge);
     }
-    let bytes = fs::read(path).map_err(|source| DiffError::Io {
-        path: path.to_path_buf(),
+    let bytes = fs::read(&path).map_err(|source| DiffError::Io {
+        path: path.clone(),
         source,
     })?;
     match String::from_utf8(bytes) {
         Ok(text) if !text.contains('\0') => Ok(FileContents::Text(text)),
         Ok(_) | Err(_) => Ok(FileContents::BinaryOrLarge),
     }
+}
+
+fn validate_real_parent_chain(root: &Path, relative: &Path) -> Result<(), DiffError> {
+    match fs::symlink_metadata(root) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            return Err(DiffError::UnsafePath(root.to_path_buf()));
+        }
+        Ok(_) => {}
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(source) => {
+            return Err(DiffError::Io {
+                path: root.to_path_buf(),
+                source,
+            });
+        }
+    }
+    let mut current = root.to_path_buf();
+    let Some(parent) = relative.parent() else {
+        return Ok(());
+    };
+    for component in parent.components() {
+        current.push(component);
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                return Err(DiffError::UnsafePath(current));
+            }
+            Ok(_) => {}
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(source) => {
+                return Err(DiffError::Io {
+                    path: current,
+                    source,
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Error)]
@@ -206,6 +274,14 @@ pub(crate) enum DiffError {
     ReviewTooLarge(PathBuf),
     #[error("review artifact is not UTF-8 at {0}")]
     ReviewNotUtf8(PathBuf),
+    #[error("change receipt integrity is invalid; refusing to render its paths")]
+    ReceiptIntegrity,
+    #[error("change receipt could not be verified: {0}")]
+    Receipt(#[from] pactrail_core::ReceiptError),
+    #[error("unsafe review or diff input path: {0}")]
+    UnsafePath(PathBuf),
+    #[error("unsafe receipt change path: {0}")]
+    UnsafeChangePath(pactrail_workspace::PathError),
 }
 
 #[cfg(test)]
@@ -276,6 +352,56 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("stored diff: {error}"));
         assert!(diff.contains("-before"));
         assert!(diff.contains("+after"));
+    }
+
+    #[test]
+    fn rejects_tampered_receipt_before_resolving_diff_paths() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("tempdir: {error}"));
+        let run = root.path().join("run");
+        fs::create_dir(&run).unwrap_or_else(|error| unreachable!("run: {error}"));
+        let mut receipt = fixture_receipt(root.path());
+        receipt.changes[0].path = "../../outside.txt".to_owned();
+
+        assert!(matches!(
+            render_receipt_diff(&run, &receipt),
+            Err(DiffError::ReceiptIntegrity)
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_linked_review_and_candidate_inputs() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("tempdir: {error}"));
+        let source = root.path().join("source");
+        let run = root.path().join("run");
+        let outside = root.path().join("outside");
+        fs::create_dir_all(run.join("workspace"))
+            .unwrap_or_else(|error| unreachable!("workspace: {error}"));
+        fs::create_dir(&source).unwrap_or_else(|error| unreachable!("source: {error}"));
+        fs::create_dir(&outside).unwrap_or_else(|error| unreachable!("outside: {error}"));
+        fs::write(source.join("hello.txt"), "before\n")
+            .unwrap_or_else(|error| unreachable!("before: {error}"));
+        fs::write(outside.join("secret.txt"), "must not render\n")
+            .unwrap_or_else(|error| unreachable!("outside file: {error}"));
+        let receipt = fixture_receipt(&source);
+
+        symlink(outside.join("secret.txt"), run.join(REVIEW_FILE))
+            .unwrap_or_else(|error| unreachable!("review link: {error}"));
+        assert!(matches!(
+            render_receipt_diff(&run, &receipt),
+            Err(DiffError::UnsafePath(_))
+        ));
+
+        fs::remove_file(run.join(REVIEW_FILE))
+            .unwrap_or_else(|error| unreachable!("unlink review: {error}"));
+        symlink(outside.join("secret.txt"), run.join("workspace/hello.txt"))
+            .unwrap_or_else(|error| unreachable!("candidate link: {error}"));
+        assert!(matches!(
+            render_receipt_diff(&run, &receipt),
+            Err(DiffError::UnsafePath(_))
+        ));
     }
 
     fn fixture_receipt(source: &Path) -> ChangeReceipt {

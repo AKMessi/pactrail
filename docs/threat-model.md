@@ -36,6 +36,9 @@ validation.
   process escapes the candidate directory.
 - Apply binds the receipt to the exact candidate change set and refuses a source
   path whose baseline bytes or mode changed concurrently.
+- Inspect, diff, apply, and discard independently require the receipt's
+  canonical workspace to equal the workspace selected on the current command;
+  agreement between preseeded receipt and transaction records is insufficient.
 - Landing uses synchronized same-directory temporary files, atomic replacement,
   a backup journal, rollback, and idempotent recovery. Permission-denied and
   storage-full failures are injected around every mutation boundary in the
@@ -46,6 +49,11 @@ validation.
 - Event envelopes are sequence-checked and BLAKE3 hash-linked.
 - Receipts bind contract, evidence, baseline, resulting digest, changes, risks,
   and final event hash.
+- Review and diff commands first verify the authoritative event chain, then
+  require receipt integrity, matching run identity, and an exact final-event
+  head. Immutable review files and live candidate paths must be regular local
+  entries beneath their validated roots; links and special files fail closed.
+  Unknown run IDs do not create or project state.
 - Transaction, settings, event, memory, contract, and receipt schemas reject
   unknown future versions.
 - Resume requires a content-addressed checkpoint named by the current event
