@@ -54,6 +54,11 @@ follow [Semantic Versioning](https://semver.org/).
   nondeterminism. Pull requests run one iteration, `main` runs three, weekly CI
   runs five, and release publishing is blocked on an attested three-iteration
   schema-v2 report plus latency, descriptor, and peak-RSS ceilings.
+- `pactrail upgrade [--json]` provides a non-creating state/integrity readiness
+  check, fixture-pinned active deprecations, planned removal versions, and exact
+  next steps in one report. Deprecated process aliases now warn consistently
+  and remain supported through 1.x; `pactrail migrate --apply` remains the only
+  mutating upgrade step.
 
 ### Security
 

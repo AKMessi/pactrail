@@ -10,6 +10,7 @@ mod migration;
 mod output;
 mod settings;
 mod theme;
+mod upgrade;
 
 use std::io::IsTerminal;
 use std::process::ExitCode;

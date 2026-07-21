@@ -2179,11 +2179,21 @@ impl Session {
                     self.theme.success("Process execution disabled.")
                 ))
             }
-            ["native" | "on"] => {
+            ["native"] => {
                 settings.process_backend = ProcessBackendArg::Native;
                 self.persist(settings)?;
                 self.emit(&format!(
                     "{}\n{}\n",
+                    self.theme.warning("Trusted native process execution enabled."),
+                    self.theme.muted("Commands can access the host filesystem, network, secrets, and external services.")
+                ))
+            }
+            ["on"] => {
+                settings.process_backend = ProcessBackendArg::Native;
+                self.persist(settings)?;
+                self.emit(&format!(
+                    "{}\n{}\n{}\n",
+                    self.theme.warning("Deprecated: /process on will be removed in 2.0; use /process native."),
                     self.theme.warning("Trusted native process execution enabled."),
                     self.theme.muted("Commands can access the host filesystem, network, secrets, and external services.")
                 ))

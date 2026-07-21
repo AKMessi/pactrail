@@ -127,8 +127,10 @@ local models through hosted models without hidden prompt truncation.
   tokens/cost, tool efficiency, context use, trace completeness, containment,
   recovery, and human review burden—with raw artifacts and preregistration.
 - Performance ceilings and deterministic release-candidate soak runs now gate
-  publishing and retain attested raw evidence. Security audit closure and
-  deprecation/migration tooling remain release work.
+  publishing and retain attested raw evidence. A read-only upgrade command now
+  combines the integrity/migration audit with a fixture-pinned deprecation
+  inventory and exact machine-readable next steps. Security audit closure
+  remains release work.
 
 Exit criterion: no open release-blocking correctness or security defect, all
 compatibility fixtures pass on supported platforms, and evaluation claims are

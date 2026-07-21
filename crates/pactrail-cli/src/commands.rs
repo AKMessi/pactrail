@@ -96,6 +96,10 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
             let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
             crate::migration::execute(&state, apply, json)
         }
+        Command::Upgrade { json } => {
+            let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
+            crate::upgrade::execute(&state, json)
+        }
     }
 }
 
@@ -301,7 +305,7 @@ async fn run(
 ) -> Result<(), CliError> {
     if args.allow_process {
         write_stderr(
-            "warning: --allow-process is deprecated; use --process-backend native --process-approval allow-run\n",
+            "warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run\n",
         )
         .map_err(CliError::Output)?;
     }
