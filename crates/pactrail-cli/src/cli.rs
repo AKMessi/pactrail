@@ -100,6 +100,12 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Run a read-only state, integrity, and deprecation upgrade preflight.
+    Upgrade {
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// Side-effect-free provider capability probe options.
@@ -554,6 +560,16 @@ mod tests {
             unreachable!("run command")
         };
         assert_eq!(args.request_timeout_seconds, 300);
+    }
+
+    #[test]
+    fn upgrade_preflight_parses_machine_readable_output() {
+        let cli = Cli::try_parse_from(["pactrail", "upgrade", "--json"])
+            .unwrap_or_else(|error| unreachable!("valid upgrade CLI: {error}"));
+        let Some(Command::Upgrade { json }) = cli.command else {
+            unreachable!("upgrade command")
+        };
+        assert!(json);
     }
 
     #[test]

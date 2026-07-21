@@ -42,7 +42,7 @@ struct ValidationSummary {
 }
 
 #[derive(Debug, Serialize)]
-struct MigrationReport {
+pub(crate) struct MigrationReport {
     schema: u32,
     state_directory: PathBuf,
     applied: bool,
@@ -52,7 +52,18 @@ struct MigrationReport {
     validation: ValidationSummary,
 }
 
+impl MigrationReport {
+    #[must_use]
+    pub(crate) const fn pending_components(&self) -> usize {
+        self.pending_components
+    }
+}
+
 pub(crate) fn execute(state: &Path, apply: bool, json: bool) -> Result<(), CliError> {
+    if !apply {
+        let report = audit(state)?;
+        return output_report(&report, json);
+    }
     let settings = SettingsStore::discover().map_err(settings_error)?;
     let before = inspect_components(state, &settings)?;
     reject_incompatible(&before)?;
@@ -95,10 +106,35 @@ pub(crate) fn execute(state: &Path, apply: bool, json: bool) -> Result<(), CliEr
         components,
         validation,
     };
+    output_report(&report, json)
+}
+
+/// Performs the complete non-creating migration and integrity preflight.
+pub(crate) fn audit(state: &Path) -> Result<MigrationReport, CliError> {
+    let settings = SettingsStore::discover().map_err(settings_error)?;
+    let components = inspect_components(state, &settings)?;
+    reject_incompatible(&components)?;
+    let pending_components = components
+        .iter()
+        .filter(|component| component.status == ComponentStatus::MigrationRequired)
+        .count();
+    let validation = validate_state(state, &components, &settings)?;
+    Ok(MigrationReport {
+        schema: MIGRATION_REPORT_SCHEMA,
+        state_directory: state.to_path_buf(),
+        applied: false,
+        pending_components,
+        changed_components: 0,
+        components,
+        validation,
+    })
+}
+
+fn output_report(report: &MigrationReport, json: bool) -> Result<(), CliError> {
     if json {
-        write_json(&report)
+        write_json(report)
     } else {
-        render_human(&report)
+        render_human(report)
     }
 }
 

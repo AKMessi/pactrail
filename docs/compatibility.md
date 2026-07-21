@@ -40,6 +40,10 @@ pactrail migrate
 pactrail migrate --json
 ```
 
+For one read-only operational report that combines this state audit with active
+CLI deprecations and exact next steps, use `pactrail upgrade [--json]`. See the
+[upgrade guide](upgrading.md).
+
 These forms are read-only. They inspect schema headers without creating a
 database, verify current event chains, transaction/run bindings, receipts,
 checkpoint artifacts, and offline MCP snapshots, then report every pending or

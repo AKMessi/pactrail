@@ -967,6 +967,35 @@ fn state_migration_is_explicit_preflighted_and_machine_readable() {
         .unwrap_or_else(|error| unreachable!("audited settings: {error}"));
     assert!(audited_settings.contains("schema = 1"));
 
+    let upgrade = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "--state-dir",
+            path_text(&state),
+            "upgrade",
+            "--json",
+        ])
+        .env("PACTRAIL_CONFIG_DIR", &config)
+        .output()
+        .unwrap_or_else(|error| unreachable!("upgrade preflight: {error}"));
+    assert!(
+        upgrade.status.success(),
+        "{}",
+        String::from_utf8_lossy(&upgrade.stderr)
+    );
+    let upgrade: Value = serde_json::from_slice(&upgrade.stdout)
+        .unwrap_or_else(|error| unreachable!("upgrade preflight JSON: {error}"));
+    assert_eq!(upgrade["schema"], 1);
+    assert_eq!(upgrade["changes_applied"], false);
+    assert_eq!(upgrade["ready_for_current_version"], false);
+    assert_eq!(upgrade["state"]["pending_components"], 3);
+    assert_eq!(
+        upgrade["deprecations"]["entries"].as_array().map(Vec::len),
+        Some(2)
+    );
+    assert!(std::fs::read_to_string(&settings).is_ok_and(|text| text.contains("schema = 1")));
+
     let apply = Command::new(env!("CARGO_BIN_EXE_pactrail"))
         .args([
             "--workspace",
@@ -994,6 +1023,24 @@ fn state_migration_is_explicit_preflighted_and_machine_readable() {
             .iter()
             .all(|component| component["status"] == "current")
     }));
+
+    let ready = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "--state-dir",
+            path_text(&state),
+            "upgrade",
+            "--json",
+        ])
+        .env("PACTRAIL_CONFIG_DIR", &config)
+        .output()
+        .unwrap_or_else(|error| unreachable!("ready upgrade preflight: {error}"));
+    assert!(ready.status.success());
+    let ready: Value = serde_json::from_slice(&ready.stdout)
+        .unwrap_or_else(|error| unreachable!("ready upgrade JSON: {error}"));
+    assert_eq!(ready["ready_for_current_version"], true);
+    assert_eq!(ready["state"]["pending_components"], 0);
     let settings_path = apply["components"]
         .as_array()
         .and_then(|components| {
