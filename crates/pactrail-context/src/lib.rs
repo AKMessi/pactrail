@@ -1224,6 +1224,20 @@ fn load_cached_analysis(
     file_bytes: u64,
 ) -> CacheLookup {
     let path = analysis_cache_path(cache_root, content_digest, language);
+    let Some(parent) = path.parent() else {
+        return CacheLookup::Rejected;
+    };
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            return CacheLookup::Rejected;
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return CacheLookup::Miss,
+        Err(_) => return CacheLookup::Rejected,
+    }
+    if !real_cache_directory_chain(cache_root, parent) {
+        return CacheLookup::Rejected;
+    }
     let file = match fs::File::open(&path) {
         Ok(file) => file,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return CacheLookup::Miss,
@@ -1336,13 +1350,12 @@ fn store_cached_analysis(cache_root: &Path, analysis: &CachedFileAnalysis) -> bo
     if fs::create_dir_all(parent).is_err() {
         return false;
     }
-    let Ok(canonical_root) = fs::canonicalize(cache_root) else {
+    if !real_cache_directory_chain(cache_root, parent) {
         return false;
-    };
-    let Ok(canonical_parent) = fs::canonicalize(parent) else {
-        return false;
-    };
-    if !canonical_parent.starts_with(&canonical_root) {
+    }
+    if fs::symlink_metadata(&path)
+        .is_ok_and(|metadata| metadata.file_type().is_symlink() || !metadata.is_file())
+    {
         return false;
     }
     let Ok(mut temporary) = tempfile::NamedTempFile::new_in(parent) else {
@@ -1355,6 +1368,27 @@ fn store_cached_analysis(cache_root: &Path, analysis: &CachedFileAnalysis) -> bo
         return false;
     }
     temporary.persist(&path).is_ok()
+}
+
+fn real_cache_directory_chain(cache_root: &Path, directory: &Path) -> bool {
+    let Ok(relative) = directory.strip_prefix(cache_root) else {
+        return false;
+    };
+    let mut current = cache_root.to_path_buf();
+    let valid_directory = |path: &Path| {
+        fs::symlink_metadata(path)
+            .is_ok_and(|metadata| !metadata.file_type().is_symlink() && metadata.is_dir())
+    };
+    if !valid_directory(&current) {
+        return false;
+    }
+    for component in relative.components() {
+        current.push(component);
+        if !valid_directory(&current) {
+            return false;
+        }
+    }
+    true
 }
 
 fn build_repository_graph(
@@ -2661,6 +2695,31 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("warm index: {error}"));
         assert_eq!(warm.telemetry.cache_hits, 1);
         assert_eq!(warm.telemetry.rejected_cache_entries, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn repository_cache_never_follows_directory_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let outside = tempfile::tempdir().unwrap_or_else(|error| unreachable!("outside: {error}"));
+        fs::write(root.path().join("lib.rs"), "pub fn safe() {}\n")
+            .unwrap_or_else(|error| unreachable!("source: {error}"));
+        let cache = control.path().join("cache");
+        symlink(outside.path(), &cache)
+            .unwrap_or_else(|error| unreachable!("cache symlink: {error}"));
+
+        let build = RepositoryIndex::build_with_cache(root.path(), &cache)
+            .unwrap_or_else(|error| unreachable!("index: {error}"));
+        assert_eq!(build.telemetry.cache_writes, 0);
+        assert_eq!(
+            fs::read_dir(outside.path())
+                .unwrap_or_else(|error| unreachable!("outside listing: {error}"))
+                .count(),
+            0
+        );
     }
 
     #[test]

@@ -2581,10 +2581,61 @@ pub(crate) fn state_dir(
     workspace: &Path,
     override_path: Option<&Path>,
 ) -> Result<PathBuf, CliError> {
-    override_path.map_or_else(
-        || absolute_or_join(workspace, Path::new(".pactrail")),
-        |path| absolute_or_join(workspace, path),
-    )
+    let requested = override_path.unwrap_or_else(|| Path::new(".pactrail"));
+    let state = if requested.is_absolute() {
+        requested.to_path_buf()
+    } else {
+        workspace.join(requested)
+    };
+    validate_state_layout(&state)?;
+    if state.exists() {
+        fs::canonicalize(&state).map_err(|source| CliError::Io {
+            path: state,
+            source,
+        })
+    } else {
+        Ok(state)
+    }
+}
+
+fn validate_state_layout(state: &Path) -> Result<(), CliError> {
+    validate_optional_state_entry(state, true)?;
+    if !state.exists() {
+        return Ok(());
+    }
+    for directory in ["runs", "artifacts", "mcp"] {
+        validate_optional_state_entry(&state.join(directory), true)?;
+    }
+    for file in ["events.sqlite3", "memory.sqlite3", "mcp.toml", "mcp.lock"] {
+        validate_optional_state_entry(&state.join(file), false)?;
+    }
+    Ok(())
+}
+
+fn validate_optional_state_entry(path: &Path, directory: bool) -> Result<(), CliError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(source) => {
+            return Err(CliError::Io {
+                path: path.to_path_buf(),
+                source,
+            });
+        }
+    };
+    let valid_type = if directory {
+        metadata.is_dir()
+    } else {
+        metadata.is_file()
+    };
+    if metadata.file_type().is_symlink() || !valid_type {
+        return Err(CliError::Argument(format!(
+            "Pactrail state path {} must be a real local {} and cannot be a symlink",
+            path.display(),
+            if directory { "directory" } else { "file" }
+        )));
+    }
+    Ok(())
 }
 
 fn absolute_or_join(base: &Path, path: &Path) -> Result<PathBuf, CliError> {
@@ -2896,6 +2947,42 @@ mod tests {
     use pactrail_core::{Evidence, EvidenceKind};
 
     use super::*;
+
+    #[test]
+    fn state_layout_rejects_non_directory_control_roots() {
+        let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        fs::write(workspace.path().join(".pactrail"), b"not a directory")
+            .unwrap_or_else(|error| unreachable!("fixture: {error}"));
+        assert!(matches!(
+            state_dir(workspace.path(), None),
+            Err(CliError::Argument(message)) if message.contains("cannot be a symlink")
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn state_layout_rejects_root_and_child_symlink_redirection() {
+        use std::os::unix::fs::symlink;
+
+        let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let outside = tempfile::tempdir().unwrap_or_else(|error| unreachable!("outside: {error}"));
+        let state = workspace.path().join(".pactrail");
+        symlink(outside.path(), &state)
+            .unwrap_or_else(|error| unreachable!("state symlink: {error}"));
+        assert!(matches!(
+            state_dir(workspace.path(), None),
+            Err(CliError::Argument(message)) if message.contains("cannot be a symlink")
+        ));
+
+        fs::remove_file(&state).unwrap_or_else(|error| unreachable!("unlink: {error}"));
+        fs::create_dir(&state).unwrap_or_else(|error| unreachable!("state directory: {error}"));
+        symlink(outside.path(), state.join("runs"))
+            .unwrap_or_else(|error| unreachable!("runs symlink: {error}"));
+        assert!(matches!(
+            state_dir(workspace.path(), None),
+            Err(CliError::Argument(message)) if message.contains("cannot be a symlink")
+        ));
+    }
 
     fn tiny_png(width: u32, height: u32) -> Vec<u8> {
         let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();

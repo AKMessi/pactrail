@@ -2419,7 +2419,9 @@ fn normalize_tool_result(
             }
         }
         Err(error) => {
-            warn!(tool = %call.name, %error, "tool call failed");
+            let tool = bounded_trace_value(&call.name);
+            let diagnostic = bounded_trace_value(&error.to_string());
+            warn!(tool = %tool, error = %diagnostic, "tool call failed");
             let content = json!({ "error": model_safe_tool_error(&error) });
             let output_bytes = content.to_string().len();
             NormalizedToolResult {
@@ -2666,9 +2668,11 @@ impl VerificationWorkspace {
 impl Drop for VerificationWorkspace {
     fn drop(&mut self) {
         if let Err(error) = remove_verification_workspace(&self.control_root) {
+            let path = bounded_trace_value(&self.control_root.display().to_string());
+            let diagnostic = bounded_trace_value(&error.to_string());
             warn!(
-                path = %self.control_root.display(),
-                %error,
+                path = %path,
+                error = %diagnostic,
                 "could not remove disposable verification workspace"
             );
         }
@@ -2818,7 +2822,8 @@ fn ensure_failed_state(store: &mut EventStore, run_id: RunId, observer: &dyn Run
     let snapshot = match store.snapshot(run_id) {
         Ok(snapshot) => snapshot,
         Err(error) => {
-            warn!(%run_id, %error, "could not inspect failed run lifecycle");
+            let diagnostic = bounded_trace_value(&error.to_string());
+            warn!(%run_id, error = %diagnostic, "could not inspect failed run lifecycle");
             return;
         }
     };
@@ -2834,7 +2839,8 @@ fn ensure_failed_state(store: &mut EventStore, run_id: RunId, observer: &dyn Run
             to: RunState::Failed,
         },
     ) {
-        warn!(%run_id, %error, "could not finalize failed run lifecycle");
+        let diagnostic = bounded_trace_value(&error.to_string());
+        warn!(%run_id, error = %diagnostic, "could not finalize failed run lifecycle");
         return;
     }
     observer.on_progress(&RunProgress::StateChanged {
@@ -2856,7 +2862,9 @@ fn transition_terminal_state(
     let snapshot = match store.snapshot(run_id) {
         Ok(snapshot) => snapshot,
         Err(error) => {
-            warn!(%run_id, %error, "could not inspect {label} run lifecycle");
+            let label = bounded_trace_value(label);
+            let diagnostic = bounded_trace_value(&error.to_string());
+            warn!(%run_id, error = %diagnostic, "could not inspect {label} run lifecycle");
             return;
         }
     };
@@ -2872,7 +2880,9 @@ fn transition_terminal_state(
             to: terminal,
         },
     ) {
-        warn!(%run_id, %error, "could not finalize {label} run lifecycle");
+        let label = bounded_trace_value(label);
+        let diagnostic = bounded_trace_value(&error.to_string());
+        warn!(%run_id, error = %diagnostic, "could not finalize {label} run lifecycle");
         return;
     }
     observer.on_progress(&RunProgress::StateChanged { state: terminal });

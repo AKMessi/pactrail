@@ -129,8 +129,9 @@ local models through hosted models without hidden prompt truncation.
 - Performance ceilings and deterministic release-candidate soak runs now gate
   publishing and retain attested raw evidence. A read-only upgrade command now
   combines the integrity/migration audit with a fixture-pinned deprecation
-  inventory and exact machine-readable next steps. Security audit closure
-  remains release work.
+  inventory and exact machine-readable next steps. The maintainer security
+  audit is closed with all discovered findings fixed and retained as a public
+  evidence report; independent third-party review remains explicitly external.
 
 Exit criterion: no open release-blocking correctness or security defect, all
 compatibility fixtures pass on supported platforms, and evaluation claims are

@@ -26,11 +26,9 @@ serde.workspace = true
 serde_json.workspace = true
 similar.workspace = true
 thiserror.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 rustix.workspace = true
