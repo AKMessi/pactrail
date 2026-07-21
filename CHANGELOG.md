@@ -44,6 +44,11 @@ follow [Semantic Versioning](https://semver.org/).
   in Pactrail's declared readable ranges. A single cross-workspace suite proves
   event-envelope verification, event-database migration, settings migration,
   and exact fixture-inventory coverage through the owning production readers.
+- Source replacements now install a fully written, synced temporary file with
+  an atomic same-directory replace instead of truncating the live source. A
+  cross-platform matrix injects permission-denied and storage-full errors at
+  every journal, backup, apply, rollback, and cleanup boundary and proves exact
+  rollback or idempotent recovery.
 
 ### Security
 

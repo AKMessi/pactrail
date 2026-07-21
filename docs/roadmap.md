@@ -120,8 +120,9 @@ local models through hosted models without hidden prompt truncation.
   event-envelope, and MCP-schema trust boundaries on a bounded weekly schedule.
 - Deterministic journal fault injection now covers partial apply, rollback
   failure, and post-apply cleanup recovery. Existing integration tests cover
-  concurrent source changes, abrupt process death, and provider network loss;
-  platform permission/storage-exhaustion matrices remain in progress.
+  concurrent source changes, abrupt process death, and provider network loss.
+  Permission-denied and storage-full failures are injected before and after
+  every apply/rollback boundary and run on Linux, macOS, and Windows CI.
 - Public matched-harness evaluation measuring task correctness, regression rate,
   tokens/cost, tool efficiency, context use, trace completeness, containment,
   recovery, and human review burden—with raw artifacts and preregistration.

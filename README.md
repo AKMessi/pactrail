@@ -167,7 +167,8 @@ pactrail ❯ Fix the parser regression and add a test.
 - Git-aware or plain-directory copy-on-run transactions.
 - Workspace-relative path enforcement, write-scope enforcement, symlink and
   special-file rejection, and concurrent source-drift protection.
-- Idempotent apply with a synchronized crash journal and rollback.
+- Idempotent apply with synchronized atomic source replacement, a crash journal,
+  deterministic permission/storage fault coverage, and rollback.
 - SQLite WAL event and memory stores with full synchronization and fail-closed
   schema versions.
 - BLAKE3 hash-linked events, integrity-protected receipts, and a tested
