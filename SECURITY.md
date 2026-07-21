@@ -17,9 +17,17 @@ coordinate validation, remediation, release, and disclosure with the reporter.
 
 ## Supported versions
 
-Before the first stable release, security fixes target the latest `main` and the
-latest GitHub release, when one exists. Older developer-preview commits are not
-maintained as separate security branches.
+Security fixes target the latest stable 1.x minor and current `main`. For 90
+days after a newer 1.x minor is released, the previous minor remains eligible
+for critical/high fixes. The 0.x developer-preview line is unsupported after
+v1.0.0.
+
+Maintainers target initial triage within ten business days of acknowledging a
+complete report. After validation, the target remediation window is 7 calendar
+days for critical severity and 30 calendar days for high severity. Medium and
+low findings normally ship in the next planned release. Complex fixes or
+coordinated disclosures may require a different private schedule; the reporter
+will be told when that happens.
 
 ## Security model
 

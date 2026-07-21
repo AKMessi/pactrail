@@ -9,7 +9,7 @@
 //!
 //! See `docs/embedding.md` in the repository for a complete composition guide.
 
-/// SDK surface revision used by Pactrail 0.8.
+/// SDK surface revision shipped by Pactrail 1.0.
 ///
 /// This revision tracks source-level extension compatibility independently of
 /// durable task, event, receipt, checkpoint, and MCP schema versions.

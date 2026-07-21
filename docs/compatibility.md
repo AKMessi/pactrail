@@ -79,10 +79,32 @@ All future schema versions fail closed. Pactrail never downgrades durable state,
 and it never obtains new process, network, MCP, write, or secret authority while
 migrating a known format.
 
-## Change rules before 1.0
+## Stable 1.x contract
 
-Until the stable 1.0 contract is declared, a minor release may introduce a new
-schema. Such a change must include:
+Pactrail 1.x follows Semantic Versioning for the surfaces below:
+
+- documented non-interactive commands, flags, exit behavior, and versioned
+  JSON envelopes;
+- documented interactive commands and their durable effects;
+- task, event, receipt, trace, checkpoint, MCP snapshot, settings, and other
+  formats listed by `pactrail compatibility --json`;
+- the provider-neutral model/tool contracts reexported by `pactrail-sdk`; and
+- the authority, isolation, review, apply, and recovery guarantees described in
+  the threat model and architecture documents.
+
+Human-oriented colors, spacing, progress animation, prose, and diagnostic
+wording may improve in any 1.x release. Scripts must use JSON modes and stable
+exit codes, not scrape terminal output. New optional JSON fields, enum variants
+marked non-exhaustive, commands, tools, and provider capabilities may be added
+in a minor release. Removing or changing a documented field or behavior
+requires a major release unless the old behavior is unsafe.
+
+The stable Rust contract is the `pactrail-sdk` facade, not every public item in
+the workspace's implementation crates. Downstream embedders should depend on an
+exact Pactrail tag or compatible `1.x` release and check `SDK_API_REVISION` when
+their integration needs a specific extension surface.
+
+Every 1.x durable-schema change must include:
 
 1. an updated entry in `pactrail compatibility --json`;
 2. a checked-in current or historical fixture exercised by its production
@@ -91,10 +113,22 @@ schema. Such a change must include:
 4. documented atomicity, rollback, and authority behavior; and
 5. a release-note migration section.
 
-Removing a readable schema requires a deprecation notice in at least one prior
-minor release. Security fixes may reject a previously accepted unsafe format
-immediately; the release notes must say why.
+Pactrail 1.x will continue to read or atomically migrate every safe format
+shipped by 1.0 for the lifetime of the 1.x line. A schema may stop being
+accepted only in 2.0 after a deprecation notice in at least one prior 1.x minor
+release. Security fixes may reject a previously accepted unsafe format
+immediately; the release notes must name the exception and the safe recovery
+path.
 
 The manifest describes format compatibility, not binary downgrade safety. Do
 not open state with an older Pactrail binary after a newer binary has migrated
 it unless that older release explicitly declares the resulting schema readable.
+
+## Distribution and support
+
+GitHub release binaries, their checksum manifest, provenance attestations, and
+source installation from an immutable tag are the v1 distribution contract.
+Publishing individual workspace crates to crates.io is not part of the 1.0
+contract. See the [support matrix](support.md), [upgrade guide](upgrading.md),
+and [security policy](../SECURITY.md) for platform tiers and maintenance
+windows.

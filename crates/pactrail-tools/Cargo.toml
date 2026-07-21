@@ -16,11 +16,11 @@ workspace = true
 async-trait.workspace = true
 blake3.workspace = true
 ignore.workspace = true
-pactrail-core = { version = "0.7.0", path = "../pactrail-core" }
-pactrail-context = { version = "0.7.0", path = "../pactrail-context" }
-pactrail-git = { version = "0.7.0", path = "../pactrail-git" }
-pactrail-memory = { version = "0.7.0", path = "../pactrail-memory" }
-pactrail-workspace = { version = "0.7.0", path = "../pactrail-workspace" }
+pactrail-core = { version = "1.0.0", path = "../pactrail-core" }
+pactrail-context = { version = "1.0.0", path = "../pactrail-context" }
+pactrail-git = { version = "1.0.0", path = "../pactrail-git" }
+pactrail-memory = { version = "1.0.0", path = "../pactrail-memory" }
+pactrail-workspace = { version = "1.0.0", path = "../pactrail-workspace" }
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

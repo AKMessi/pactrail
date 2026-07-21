@@ -46,6 +46,29 @@ Do not open migrated state with an older binary unless that release explicitly
 declares the resulting schemas readable. Source files and unapplied candidate
 workspaces are not rewritten by state migration.
 
+## Upgrading from 0.x to 1.0
+
+Pactrail 1.0 reads or atomically migrates every safe historical format listed by
+`pactrail compatibility --json`; the checked-in fixture suite exercises those
+readers and migrators. Use this sequence for each workspace that contains
+Pactrail state:
+
+```console
+# With the existing binary, finish, apply, or discard active candidates first.
+# Back up .pactrail, install v1.0.0, then inspect without mutating state.
+pactrail --version
+pactrail upgrade
+
+# Only when the report names known pending migrations:
+pactrail migrate --apply
+pactrail upgrade
+```
+
+Back up `.pactrail` before an organizational rollout even though known
+migrations are crash-safe. Never copy an active run between machines, manually
+edit hash-linked events/receipts/checkpoints, or use an older binary after v1
+has migrated state. The 0.x line receives no security fixes after v1.0.0.
+
 ## Deprecated process aliases
 
 The following aliases remain supported throughout Pactrail 1.x and are planned
@@ -76,6 +99,7 @@ curl --proto '=https' --tlsv1.2 -LsSf \
   https://raw.githubusercontent.com/AKMessi/pactrail/main/install.sh | sh
 ```
 
-For reproducible deployments, set an explicit release version as documented in
-the installer help, verify `pactrail --version`, and retain the release checksum
-and provenance attestation with your deployment record.
+For reproducible deployments, set `PACTRAIL_VERSION=v1.0.0` on Unix or pass
+`-Version v1.0.0` to the downloaded PowerShell installer, verify
+`pactrail --version`, and retain the release checksum and provenance attestation
+with your deployment record.

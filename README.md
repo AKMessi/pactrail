@@ -17,7 +17,7 @@ The central abstraction is not a chat wrapper or an agent persona. It is a
 durable, inspectable software change transaction.
 
 ```text
-  ╭─ P A C T R A I L  v0.7.0
+  ╭─ P A C T R A I L  v1.0.0
   │  verification-native coding · every change carries evidence
   ├─
   │ workspace  C:\work\project
@@ -211,8 +211,9 @@ kernel. It reexports the provider-neutral `ModelDriver`, typed `Tool`, policy,
 engine, MCP, transaction, store, checkpoint, memory, and context contracts. An
 out-of-tree-style compatibility fixture implements a custom provider and tool
 and composes them with `RunEngine`. See the [embedding guide](docs/embedding.md).
-The pre-1.0 SDK is consumed from a pinned Git revision; crates.io publication
-and the formal SemVer support window remain v1 release work.
+The v1 SDK is consumed from an immutable Git tag and follows the documented 1.x
+SemVer contract. Workspace implementation crates remain internal; crates.io
+publication is not part of the 1.0 distribution contract.
 
 ## Install
 
@@ -244,7 +245,7 @@ release targets are Windows x86_64, Linux x86_64, and Apple Silicon macOS.
 To build the current source with Rust 1.95 or newer:
 
 ```console
-cargo install --git https://github.com/AKMessi/pactrail.git --locked pactrail
+cargo install --git https://github.com/AKMessi/pactrail.git --tag v1.0.0 --locked pactrail
 ```
 
 Or from a local checkout:
@@ -479,7 +480,9 @@ The twelve crates keep the core domain, storage, memory, context, Git evidence,
 models, MCP, tools, workspace transactions, engine, SDK, and CLI independently testable. See
 [Architecture](docs/architecture.md), [Threat model](docs/threat-model.md),
 [Interactive CLI](docs/interactive-cli.md), [Providers](docs/providers.md),
-[Compatibility contracts](docs/compatibility.md), [Upgrade guide](docs/upgrading.md), and [Roadmap](docs/roadmap.md). The primary-paper mechanisms behind recent
+[Support matrix](docs/support.md), [Compatibility contracts](docs/compatibility.md),
+[Upgrade guide](docs/upgrading.md), [Release runbook](docs/releasing.md), and
+[Roadmap](docs/roadmap.md). The primary-paper mechanisms behind recent
 architecture decisions are recorded in [Research foundations](docs/research-foundations.md).
 
 ## Durable local layout
@@ -520,19 +523,19 @@ and MCP schemas weekly. Start with
 
 ## Project status
 
-Pactrail 0.7 is a production-grade developer preview: its invariants and failure
-modes are tested, while Rust APIs and versioned local formats may still evolve
-before 1.0. Governed MCP, the static embedding facade, content-addressed
-repository analysis, bounded parser-backed structure, and explicit optional LSP
-reference ingestion, plus bounded process-free Git evidence, are implemented.
-A built-in governed LSP process adapter
-and public release-candidate evaluation remain roadmap work—not current claims.
+Pactrail 1.0 is the stable public contract for the CLI, versioned JSON output,
+durable state and migration behavior, transaction/apply guarantees, provider
+and tool boundaries, and the `pactrail-sdk` facade. Stable does not mean
+infallible: human UI presentation may evolve, model quality remains external,
+and every security guarantee is limited by the documented threat model.
 
-It is ready for public evaluation, contributions, demos, and social launch as a
-developer preview. The OCI backend is a production containment option with an
-adversarial CI fixture; it is not protection from a compromised runtime, daemon,
-kernel, desktop VM, or user account. Native process execution remains explicitly
-trusted and unsandboxed.
+The release is supported for public use, evaluation, integrations, and
+contributions on the Tier 1 platforms in the [support matrix](docs/support.md).
+The restricted OCI backend has an adversarial Docker CI fixture; it is not
+protection from a compromised runtime, daemon, kernel, desktop VM, or user
+account. Native process execution remains explicitly trusted and unsandboxed.
+The v1 maintainer audit is public; independent third-party review remains
+welcome and is not implied by the version number.
 
 ## License
 

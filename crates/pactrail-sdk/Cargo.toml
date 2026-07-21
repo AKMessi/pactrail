@@ -11,16 +11,16 @@ publish = false
 
 [dependencies]
 async-trait.workspace = true
-pactrail-context = { version = "0.7.0", path = "../pactrail-context" }
-pactrail-core = { version = "0.7.0", path = "../pactrail-core" }
-pactrail-engine = { version = "0.7.0", path = "../pactrail-engine" }
-pactrail-git = { version = "0.7.0", path = "../pactrail-git" }
-pactrail-mcp = { version = "0.7.0", path = "../pactrail-mcp" }
-pactrail-memory = { version = "0.7.0", path = "../pactrail-memory" }
-pactrail-models = { version = "0.7.0", path = "../pactrail-models" }
-pactrail-store = { version = "0.7.0", path = "../pactrail-store" }
-pactrail-tools = { version = "0.7.0", path = "../pactrail-tools" }
-pactrail-workspace = { version = "0.7.0", path = "../pactrail-workspace" }
+pactrail-context = { version = "1.0.0", path = "../pactrail-context" }
+pactrail-core = { version = "1.0.0", path = "../pactrail-core" }
+pactrail-engine = { version = "1.0.0", path = "../pactrail-engine" }
+pactrail-git = { version = "1.0.0", path = "../pactrail-git" }
+pactrail-mcp = { version = "1.0.0", path = "../pactrail-mcp" }
+pactrail-memory = { version = "1.0.0", path = "../pactrail-memory" }
+pactrail-models = { version = "1.0.0", path = "../pactrail-models" }
+pactrail-store = { version = "1.0.0", path = "../pactrail-store" }
+pactrail-tools = { version = "1.0.0", path = "../pactrail-tools" }
+pactrail-workspace = { version = "1.0.0", path = "../pactrail-workspace" }
 tokio-util.workspace = true
 
 [dev-dependencies]

@@ -1,6 +1,6 @@
 # Threat model
 
-This document describes Pactrail's current pre-v1 security boundary. It is not a claim that model
+This document describes Pactrail 1.0's security boundary. It is not a claim that model
 execution, native processes, containers, MCP servers, or third-party providers
 are intrinsically safe.
 

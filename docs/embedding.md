@@ -5,9 +5,11 @@ the real Pactrail kernel without the bundled CLI. It is not a native plugin
 loader: the host chooses and links model and tool implementations at build time,
 so a repository cannot cause arbitrary extension code to load.
 
-The facade crate is `pactrail-sdk`. During the pre-1.0 series it is consumed
-from the repository or a pinned Git revision; crates.io publication and the
-SemVer stability window are v1 release work. `SDK_API_REVISION` is currently 4.
+The facade crate is `pactrail-sdk`. The v1 distribution contract is an immutable
+Git tag; crates.io publication is not required or promised for 1.0. The facade
+follows Pactrail's 1.x SemVer contract while implementation crates remain
+internal. `SDK_API_REVISION` is currently 4 and lets embedders require a specific
+additive extension surface independently of durable schema versions.
 
 ## Custom model provider
 
