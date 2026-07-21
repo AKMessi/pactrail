@@ -103,6 +103,45 @@ described in [the threat model](threat-model.md).
    - Verification: the existing generated terminal-safety suite plus engine and
      CLI tests cover the rendering boundary.
 
+6. **[Medium] Review diff reads could escape the run-state boundary**
+   - Confidence: High
+   - Location: `crates/pactrail-cli/src/diff.rs`,
+     `crates/pactrail-cli/src/commands.rs`
+   - Attack path: externally modified run receipt plus a linked immutable
+     `review.diff`, or a linked parent/final candidate path -> the review command
+     followed the target before proving that the receipt described the durable
+     run -> bounded external file content could enter human or JSON output.
+   - Impact: bounded local-file disclosure to the invoking user and an
+     integrity-confused review presentation.
+   - Fix: diff rendering verifies receipt integrity before filesystem access;
+     CLI review additionally binds run identity and final event hash to the
+     verified event journal. Immutable review files must be bounded regular
+     non-links. Live change paths pass `SafeRelativePath` validation and every
+     root, parent, and final component rejects links and special entries.
+   - Verification: regressions reject tampered receipts and, on Unix CI, linked
+     review files, candidate parents, and candidate files. End-to-end tests
+     cover the schema-v1 JSON diff report against a complete durable run.
+
+7. **[High] Preseeded run state could redirect an explicitly applied change**
+   - Confidence: High
+   - Location: `crates/pactrail-cli/src/commands.rs`,
+     `crates/pactrail-cli/src/interactive.rs`
+   - Attack path: repository-controlled `.pactrail` state -> crafted receipt
+     and transaction metadata agreed on an external source directory -> a user
+     inspected and explicitly applied the apparent local candidate -> old
+     validation compared the two attacker-controlled workspace records only.
+   - Impact: candidate writes could land outside the workspace selected on the
+     current CLI invocation. Review and discard could likewise operate on a run
+     presented under the wrong workspace identity.
+   - Fix: inspect, diff, apply, and discard now canonicalize the independently
+     selected workspace and require the integrity-valid receipt to bind exactly
+     to it before opening a transaction or reading change paths. Transaction
+     baseline/source checks remain a second, independent apply condition.
+   - Verification: an end-to-end complete-run test reuses a valid state root
+     from a different selected workspace and proves that all four commands fail,
+     no source file lands, and the correctly selected workspace still completes
+     the normal diff/apply path.
+
 No critical or high-severity finding remained open in the reviewed scope.
 
 ## Verification record

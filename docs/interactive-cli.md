@@ -270,8 +270,16 @@ and CI should use stable subcommands:
 pactrail run "Fix the parser" --model qwen3-coder --output json
 pactrail trace <RUN_ID> --json
 pactrail inspect <RUN_ID> --json
+pactrail diff <RUN_ID> --json
+pactrail runs --json
 pactrail apply <RUN_ID> --json
 ```
+
+`diff --json` returns the receipt outcome, integrity result, typed change set,
+and immutable unified diff in a schema-versioned report. Unknown run IDs fail
+without creating state. The human trace renderer uses the same deliberate
+hanging indentation as the interactive timeline, including for metadata,
+effects, and long integrity digests.
 
 Generate native completion with `pactrail completion <shell>`. Supported shells
 are Bash, Elvish, Fish, PowerShell (`powershell` or `pwsh`), and Zsh.

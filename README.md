@@ -399,6 +399,8 @@ pactrail run "Fix the parser" --model qwen3-coder --output json --process-backen
 pactrail resume <RUN_ID> --output json
 pactrail trace <RUN_ID> --json
 pactrail inspect <RUN_ID> --json
+pactrail diff <RUN_ID> --json
+pactrail runs --json
 pactrail apply <RUN_ID> --json
 ```
 
@@ -412,8 +414,8 @@ pactrail run --task pactrail.task.toml --model qwen3-coder --output json
 Other discovery commands include `pactrail tools --json`, `pactrail schema`,
 `pactrail compatibility --json`, the read-only `pactrail upgrade` preflight,
 the explicit `pactrail migrate` state migration,
-`pactrail mcp list --json`, `pactrail memory list`, `pactrail list`, `pactrail
-doctor`, and `pactrail completion <shell>`.
+`pactrail mcp list --json`, `pactrail memory list`, `pactrail runs` (an alias
+for `list`), `pactrail doctor`, and `pactrail completion <shell>`.
 
 ## Reproducible evaluation
 

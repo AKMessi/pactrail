@@ -41,6 +41,7 @@ const MAX_DISCOVERED_MODEL_BYTES: usize = 512;
 const DEFAULT_TERMINAL_COLUMNS: usize = 100;
 const MIN_TERMINAL_COLUMNS: usize = 40;
 const MAX_TERMINAL_COLUMNS: usize = 240;
+const IMAGE_TIMELINE_MARKER: &str = "◈";
 const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Kernel", "Safety", "Session"];
 const COMMANDS: &[CommandHelp] = &[
     CommandHelp::new(
@@ -499,7 +500,7 @@ impl RunActivity {
             .collect::<Vec<_>>()
             .join(", ");
         self.row(
-            "â—ˆ",
+            IMAGE_TIMELINE_MARKER,
             "images",
             &format!(
                 "{} sealed · {} · ~{} input tokens · {}",
@@ -1296,12 +1297,16 @@ impl Session {
                         .map_or_else(String::new, |candidate| format!("; try /help {candidate}"));
                     CliError::Argument(format!("no help for {topic:?}{suggestion}"))
                 })?;
-            return self.emit(&format!(
-                "\n{}\n  {}\n  {}\n\n",
+            let mut lines = vec![
                 self.theme.heading(command.name()),
-                self.theme.code(command.usage),
-                self.theme.text(command.description),
-            ));
+                format!("  {}", self.theme.code(command.usage)),
+            ];
+            lines.extend(
+                wrap_text(command.description, content_width(columns, 2, 96))
+                    .into_iter()
+                    .map(|line| format!("  {}", self.theme.text(&line))),
+            );
+            return self.emit(&format!("\n{}\n\n", lines.join("\n")));
         }
 
         let mut lines = vec![self.theme.heading("Command palette")];
@@ -2370,8 +2375,7 @@ impl Session {
 
     fn inspect_run(&self, argument: &str, include_diff: bool) -> Result<(), CliError> {
         let run_id = self.resolve_run(argument)?;
-        let run_root = commands::run_root(&self.state, run_id);
-        let receipt = commands::read_receipt(&run_root)?;
+        let receipt = commands::read_bound_receipt(&self.state, &self.workspace, run_id)?;
         self.render_receipt(&receipt)?;
         if include_diff {
             self.render_diff(run_id)?;
@@ -2381,7 +2385,7 @@ impl Session {
 
     fn render_diff(&self, run_id: RunId) -> Result<(), CliError> {
         let run_root = commands::run_root(&self.state, run_id);
-        let receipt = commands::read_receipt(&run_root)?;
+        let receipt = commands::read_bound_receipt(&self.state, &self.workspace, run_id)?;
         let diff = render_receipt_diff(&run_root, &receipt)
             .map_err(|error| CliError::Argument(format!("diff failed: {error}")))?;
         let (bytes_added, bytes_removed) = change_bytes(&receipt);
@@ -2416,7 +2420,7 @@ impl Session {
     }
 
     fn apply_run(&mut self, run_id: RunId) -> Result<(), CliError> {
-        let receipt = commands::apply_run(&self.state, run_id)?;
+        let receipt = commands::apply_run(&self.state, &self.workspace, run_id)?;
         self.last_run = Some(run_id);
         self.refresh_pending_runs()?;
         self.refresh_memory_count()?;
@@ -2431,7 +2435,7 @@ impl Session {
     }
 
     fn discard_run(&mut self, run_id: RunId) -> Result<(), CliError> {
-        commands::discard_run(&self.state, run_id)?;
+        commands::discard_run(&self.state, &self.workspace, run_id)?;
         self.last_run = Some(run_id);
         self.refresh_pending_runs()?;
         self.emit(&format!(
@@ -2651,9 +2655,8 @@ impl Session {
 
     fn render_error(&self, message: &str) -> Result<(), CliError> {
         self.emit(&format!(
-            "{} {}\n",
-            self.theme.danger("Error:"),
-            self.theme.text(message)
+            "{}\n",
+            error_lines(&self.theme, terminal_columns(), message).join("\n")
         ))
     }
 
@@ -3574,7 +3577,8 @@ fn labelled_rows(
 }
 
 fn command_lines(theme: &Theme, columns: usize, command: &str, description: &str) -> Vec<String> {
-    if columns < 72 {
+    const COMMAND_COLUMN_CHARS: usize = 29;
+    if columns < 72 || command.chars().count() > COMMAND_COLUMN_CHARS {
         let mut lines = vec![format!("  {}", theme.code(command))];
         lines.extend(
             wrap_text(description, content_width(columns, 4, 88))
@@ -3596,6 +3600,21 @@ fn command_lines(theme: &Theme, columns: usize, command: &str, description: &str
             })
             .collect()
     }
+}
+
+fn error_lines(theme: &Theme, columns: usize, message: &str) -> Vec<String> {
+    let wrapped = wrap_text(message, content_width(columns, 7, 120));
+    wrapped
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            if index == 0 {
+                format!("{} {}", theme.danger("Error:"), theme.text(&line))
+            } else {
+                format!("       {}", theme.text(&line))
+            }
+        })
+        .collect()
 }
 
 fn parse_count(value: &str, name: &str) -> Result<u64, CliError> {
@@ -3952,6 +3971,7 @@ mod tests {
         assert_eq!(truncate("abcdef", 3), "ab\u{2026}");
         assert_eq!(truncate("abc", 3), "abc");
         assert_eq!(format_bytes(2_048), "2.0 KiB");
+        assert_eq!(IMAGE_TIMELINE_MARKER.chars().count(), 1);
         assert_eq!(
             display_path_text(r"\\?\C:\Users\aarya\project"),
             r"C:\Users\aarya\project"
@@ -4071,11 +4091,14 @@ mod tests {
             r"C:\Users\builder\a-very-long-workspace-name\project",
             TimelineTone::Normal,
         );
-        let commands = command_lines(
+        let commands = COMMANDS
+            .iter()
+            .flat_map(|command| command_lines(&theme, columns, command.usage, command.description))
+            .collect::<Vec<_>>();
+        let errors = error_lines(
             &theme,
             columns,
-            "/output-tokens <tokens>",
-            "set the maximum model output budget per turn",
+            "unknown command \"/trac\"; did you mean /trace? Use /help to browse commands",
         );
         let tool = builtin_registry()
             .unwrap_or_else(|error| unreachable!("tools: {error}"))
@@ -4089,6 +4112,7 @@ mod tests {
             .iter()
             .chain(&fields)
             .chain(&commands)
+            .chain(&errors)
             .chain(&tools)
             .flat_map(|line| line.lines())
         {
@@ -4097,6 +4121,21 @@ mod tests {
                 "line exceeded {columns} columns: {line:?}"
             );
         }
+        for command in COMMANDS {
+            for line in command_lines(&theme, 80, command.usage, command.description) {
+                assert!(
+                    line.chars().count() <= 80,
+                    "wide command exceeded 80 columns: {line:?}"
+                );
+            }
+        }
         assert!(timeline.join("").contains("remain/visible"));
+        assert_eq!(
+            errors,
+            [
+                "Error: unknown command \"/trac\"; did you mean /trace? Use",
+                "       /help to browse commands"
+            ]
+        );
     }
 }

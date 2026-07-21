@@ -243,10 +243,48 @@ fn complete_run_is_isolated_then_applies() {
         .unwrap_or_else(|error| unreachable!("review artifact: {error}"));
     assert!(review_before.contains("+# Created by Pactrail"));
 
+    assert_cross_workspace_run_commands_fail(workspace.path(), run_id);
+    assert!(!workspace.path().join("README.md").exists());
+    assert_review_commands(workspace.path(), run_id);
+    apply_and_assert_receipt(workspace.path(), run_id, &review_path, &review_before);
+    assert_applied_memory(workspace.path(), run_id);
+}
+
+fn assert_review_commands(workspace: &Path, run_id: &str) {
+    let diff = pactrail(workspace, ["diff", run_id, "--json"]);
+    assert!(
+        diff.status.success(),
+        "diff failed: {}",
+        String::from_utf8_lossy(&diff.stderr)
+    );
+    let diff: Value = serde_json::from_slice(&diff.stdout)
+        .unwrap_or_else(|error| unreachable!("diff JSON: {error}"));
+    assert_eq!(diff["schema_version"], 1);
+    assert_eq!(diff["run_id"], run_id);
+    assert_eq!(diff["receipt_integrity"], "verified");
+    assert!(
+        diff["unified_diff"]
+            .as_str()
+            .is_some_and(|text| text.contains("+# Created by Pactrail"))
+    );
+
+    let runs_alias = pactrail(workspace, ["runs", "--json"]);
+    assert!(runs_alias.status.success());
+    let runs: Value = serde_json::from_slice(&runs_alias.stdout)
+        .unwrap_or_else(|error| unreachable!("runs alias JSON: {error}"));
+    assert!(runs.as_array().is_some_and(|runs| !runs.is_empty()));
+}
+
+fn apply_and_assert_receipt(
+    workspace: &Path,
+    run_id: &str,
+    review_path: &Path,
+    review_before: &str,
+) {
     let apply = Command::new(env!("CARGO_BIN_EXE_pactrail"))
         .args([
             "--workspace",
-            path_text(workspace.path()),
+            path_text(workspace),
             "apply",
             run_id,
             "--json",
@@ -259,12 +297,12 @@ fn complete_run_is_isolated_then_applies() {
         String::from_utf8_lossy(&apply.stderr)
     );
     assert_eq!(
-        std::fs::read_to_string(workspace.path().join("README.md")).ok(),
+        std::fs::read_to_string(workspace.join("README.md")).ok(),
         Some("# Created by Pactrail\n".to_owned())
     );
     assert_eq!(
-        std::fs::read_to_string(&review_path).ok(),
-        Some(review_before)
+        std::fs::read_to_string(review_path).ok(),
+        Some(review_before.to_owned())
     );
     let applied: Value = serde_json::from_slice(&apply.stdout)
         .unwrap_or_else(|error| unreachable!("apply JSON: {error}"));
@@ -273,7 +311,7 @@ fn complete_run_is_isolated_then_applies() {
     let repeated = Command::new(env!("CARGO_BIN_EXE_pactrail"))
         .args([
             "--workspace",
-            path_text(workspace.path()),
+            path_text(workspace),
             "apply",
             run_id,
             "--json",
@@ -291,8 +329,6 @@ fn complete_run_is_isolated_then_applies() {
         repeated_receipt["integrity_hash"],
         applied["integrity_hash"]
     );
-
-    assert_applied_memory(workspace.path(), run_id);
 }
 
 #[test]
@@ -878,7 +914,7 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
     let compatibility: Value = serde_json::from_slice(&compatibility.stdout)
         .unwrap_or_else(|error| unreachable!("compatibility JSON: {error}"));
     assert_eq!(compatibility["manifest_schema"], 1);
-    assert_eq!(compatibility["formats"].as_array().map(Vec::len), Some(17));
+    assert_eq!(compatibility["formats"].as_array().map(Vec::len), Some(18));
     assert!(
         compatibility["formats"]
             .as_array()
@@ -898,6 +934,25 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
         );
     }
     assert!(!workspace.path().join(".pactrail").exists());
+}
+
+#[test]
+fn unknown_run_inspection_fails_without_creating_state() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let unknown = "00000000-0000-7000-8000-000000000000";
+    for command in ["inspect", "trace", "diff"] {
+        let output = pactrail(workspace.path(), [command, unknown]);
+        assert!(!output.status.success(), "{command} unexpectedly succeeded");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("not found"),
+            "{command} did not explain the missing run: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(
+            !workspace.path().join(".pactrail").exists(),
+            "{command} created state while inspecting an unknown run"
+        );
+    }
 }
 
 #[test]
@@ -1279,6 +1334,32 @@ fn pactrail<const N: usize>(workspace: &Path, arguments: [&str; N]) -> std::proc
         .args(arguments)
         .output()
         .unwrap_or_else(|error| unreachable!("pactrail command: {error}"))
+}
+
+fn assert_cross_workspace_run_commands_fail(bound_workspace: &Path, run_id: &str) {
+    let foreign_workspace =
+        tempfile::tempdir().unwrap_or_else(|error| unreachable!("foreign workspace: {error}"));
+    let state = bound_workspace.join(".pactrail");
+    for command in ["inspect", "diff", "apply", "discard"] {
+        let rejected = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+            .args([
+                "--workspace",
+                path_text(foreign_workspace.path()),
+                "--state-dir",
+                path_text(&state),
+                command,
+                run_id,
+                "--json",
+            ])
+            .output()
+            .unwrap_or_else(|error| unreachable!("foreign {command}: {error}"));
+        assert!(!rejected.status.success(), "foreign {command} was accepted");
+        assert!(
+            String::from_utf8_lossy(&rejected.stderr).contains("not the selected workspace"),
+            "foreign {command} did not explain the workspace binding: {}",
+            String::from_utf8_lossy(&rejected.stderr)
+        );
+    }
 }
 
 fn pactrail_with_state<const N: usize>(

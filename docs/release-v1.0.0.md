@@ -32,9 +32,18 @@ reporting, and a public maintainer security audit.
 That audit fixed link-redirection hazards in durable/MCP/artifact/cache state,
 removed OCI environment values from runtime arguments, aligned buffered
 OpenAI-compatible responses with streaming bounds, and sanitized dynamic engine
-trace fields. It found no remaining critical or high-severity issue in the
-reviewed scope. This was not an independent third-party audit; the report and
-residual risks are published in `docs/security-audit-v1.md`.
+trace fields. The final review pass also bound every diff read to an
+integrity-valid receipt and authoritative event head, rejected redirected
+review/candidate paths, required the user-selected workspace to match every
+inspect/diff/apply/discard transaction, and made unknown-run inspection fail
+without creating state. It found no remaining critical or high-severity issue
+in the reviewed scope. This was not an independent third-party audit; the
+report and residual risks are published in `docs/security-audit-v1.md`.
+
+The CLI closes the same evidence loop for humans and automation: narrow
+terminal help and trace views use deliberate hanging indentation, while
+`pactrail diff <RUN_ID> --json` and the `pactrail runs` alias expose immutable
+review data and history without scraping terminal prose.
 
 ## Upgrade from 0.x
 

@@ -2,7 +2,9 @@
 
 use serde::Serialize;
 
-use crate::commands::{MIN_RUN_MANIFEST_SCHEMA_VERSION, RUN_MANIFEST_SCHEMA_VERSION};
+use crate::commands::{
+    DIFF_REPORT_SCHEMA_VERSION, MIN_RUN_MANIFEST_SCHEMA_VERSION, RUN_MANIFEST_SCHEMA_VERSION,
+};
 use crate::settings::{MIN_SETTINGS_SCHEMA, SETTINGS_SCHEMA};
 
 const COMPATIBILITY_MANIFEST_SCHEMA: u32 = 1;
@@ -78,6 +80,14 @@ pub(crate) fn manifest() -> CompatibilityManifest {
             pactrail_core::ChangeReceipt::SCHEMA_VERSION,
             CompatibilityStrategy::ExactVersion,
             true,
+        ),
+        format(
+            "diff_report",
+            "pactrail",
+            DIFF_REPORT_SCHEMA_VERSION,
+            DIFF_REPORT_SCHEMA_VERSION,
+            CompatibilityStrategy::ExactVersion,
+            false,
         ),
         format(
             "event_database",

@@ -66,6 +66,9 @@ No user-visible changes yet.
 - A stable 1.x compatibility contract, Tier 1 platform/provider support matrix,
   security maintenance window, immutable-tag Rust SDK policy, v1 upgrade path,
   and release runbook define the public support boundary.
+- `pactrail diff <RUN_ID> --json` exposes the immutable, integrity-checked
+  review diff and typed change set as a versioned automation report;
+  `pactrail runs` is now a discoverable alias for run history.
 
 ### Security
 
@@ -88,8 +91,13 @@ No user-visible changes yet.
   baseline.
 - The v1 maintainer security audit closes durable-state, MCP-state, artifact,
   repository-cache, OCI environment, buffered provider-response, and terminal
-  tracing weaknesses with negative regression coverage. The public audit report
-  explicitly distinguishes this work from an independent third-party review.
+  tracing weaknesses with negative regression coverage. Review diff reads now
+  verify receipt integrity and authoritative event-head binding, validate every
+  candidate path, and reject linked or special review/candidate files. The
+  selected CLI workspace is also an independent mandatory binding for inspect,
+  diff, apply, and discard, preventing preseeded state from redirecting a
+  transaction outside the workspace. The public audit report explicitly
+  distinguishes this work from an independent third-party review.
 
 ### Changed
 
@@ -99,6 +107,17 @@ No user-visible changes yet.
 - Pactrail now declares its stable 1.x CLI, JSON, durable-format, authority,
   recovery, and `pactrail-sdk` compatibility promises. Human terminal layout
   remains free to improve without becoming a scripting interface.
+- Human command help, errors, and durable trace rows now wrap to the detected
+  terminal width with readable hanging indentation. Long trace attributes,
+  effects, paths, and digests remain complete without relying on native
+  mid-word terminal wrapping.
+
+### Fixed
+
+- Inspection, trace, and diff commands reject unknown run IDs instead of
+  projecting an empty run or creating a state database as a side effect.
+- Interactive help no longer allows long command usages to overflow an
+  80-column terminal, and the queued-image marker renders as one Unicode glyph.
 
 The 0.4.0–0.7.0 entries below record source development milestones that were
 not published as separate GitHub releases. Their changes ship in v1.0.0.

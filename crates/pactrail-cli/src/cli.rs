@@ -38,6 +38,8 @@ pub enum Command {
     Probe(ProbeArgs),
     /// Inspect a durable run and its evidence receipt.
     Inspect(RunIdArgs),
+    /// Render a run's immutable, integrity-checked candidate diff.
+    Diff(RunIdArgs),
     /// Render the integrity-checked execution trace for a run.
     Trace(RunIdArgs),
     /// Apply a ready transaction after baseline-drift checks.
@@ -45,6 +47,7 @@ pub enum Command {
     /// Discard a ready transaction while preserving its receipt.
     Discard(RunIdArgs),
     /// List durable runs in the selected state directory.
+    #[command(visible_alias = "runs")]
     List {
         /// Emit machine-readable JSON.
         #[arg(long)]
