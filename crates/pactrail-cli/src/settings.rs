@@ -367,6 +367,15 @@ pub(crate) struct SettingsStore {
 
 impl SettingsStore {
     pub fn discover() -> Result<Self, SettingsError> {
+        if let Some(override_path) = std::env::var_os("PACTRAIL_CONFIG_DIR") {
+            let directory = PathBuf::from(override_path);
+            if !directory.is_absolute() {
+                return Err(SettingsError::Invalid(
+                    "PACTRAIL_CONFIG_DIR must be an absolute path".to_owned(),
+                ));
+            }
+            return Ok(Self { directory });
+        }
         let base = BaseDirs::new().ok_or(SettingsError::NoConfigDirectory)?;
         Ok(Self {
             directory: base.config_dir().join("pactrail"),
@@ -374,7 +383,7 @@ impl SettingsStore {
     }
 
     #[cfg(test)]
-    fn at(directory: PathBuf) -> Self {
+    pub(crate) fn at(directory: PathBuf) -> Self {
         Self { directory }
     }
 
@@ -389,62 +398,33 @@ impl SettingsStore {
     }
 
     pub fn load(&self) -> Result<InteractiveSettings, SettingsError> {
-        let path = self.settings_path();
-        if !path.exists() {
+        let Some(text) = self.read_optional()? else {
             return Ok(InteractiveSettings::default());
+        };
+        let (settings, migration_required) = Self::decode(&text)?;
+        if migration_required {
+            self.save(&settings)?;
         }
-        let metadata = fs::metadata(&path).map_err(|source| SettingsError::Io {
-            path: path.clone(),
-            source,
-        })?;
-        if metadata.len() > MAX_SETTINGS_BYTES {
-            return Err(SettingsError::Invalid(format!(
-                "settings file exceeds {MAX_SETTINGS_BYTES} bytes"
-            )));
+        Ok(settings)
+    }
+
+    /// Fully parses and validates settings without applying a migration.
+    pub fn validate_without_migration(&self) -> Result<(), SettingsError> {
+        if let Some(text) = self.read_optional()? {
+            let _decoded = Self::decode(&text)?;
         }
-        let mut text = String::new();
-        fs::File::open(&path)
-            .and_then(|mut file| file.read_to_string(&mut text))
-            .map_err(|source| SettingsError::Io {
-                path: path.clone(),
-                source,
-            })?;
-        let header: SettingsHeader = toml::from_str(&text).map_err(SettingsError::Toml)?;
-        match header.schema {
-            SETTINGS_SCHEMA => {
-                let settings: InteractiveSettings =
-                    toml::from_str(&text).map_err(SettingsError::Toml)?;
-                settings.validate()?;
-                Ok(settings)
-            }
-            1 => {
-                let legacy: InteractiveSettingsV1 =
-                    toml::from_str(&text).map_err(SettingsError::Toml)?;
-                let settings = InteractiveSettings::from(legacy);
-                settings.validate()?;
-                self.save(&settings)?;
-                Ok(settings)
-            }
-            2 => {
-                let legacy: InteractiveSettingsV2 =
-                    toml::from_str(&text).map_err(SettingsError::Toml)?;
-                let settings = InteractiveSettings::from(legacy);
-                settings.validate()?;
-                self.save(&settings)?;
-                Ok(settings)
-            }
-            3 => {
-                let legacy: InteractiveSettingsV3 =
-                    toml::from_str(&text).map_err(SettingsError::Toml)?;
-                let settings = InteractiveSettings::from(legacy);
-                settings.validate()?;
-                self.save(&settings)?;
-                Ok(settings)
-            }
-            schema => Err(SettingsError::Invalid(format!(
-                "unsupported settings schema {schema}; expected {SETTINGS_SCHEMA}"
-            ))),
-        }
+        Ok(())
+    }
+
+    /// Reads only the settings schema without applying a migration.
+    pub fn schema_version(&self) -> Result<Option<u16>, SettingsError> {
+        self.read_optional()?
+            .map(|text| {
+                toml::from_str::<SettingsHeader>(&text)
+                    .map(|header| header.schema)
+                    .map_err(SettingsError::Toml)
+            })
+            .transpose()
     }
 
     pub fn save(&self, settings: &InteractiveSettings) -> Result<(), SettingsError> {
@@ -497,6 +477,82 @@ impl SettingsStore {
             path: self.directory.clone(),
             source,
         })
+    }
+
+    fn decode(text: &str) -> Result<(InteractiveSettings, bool), SettingsError> {
+        let header: SettingsHeader = toml::from_str(text).map_err(SettingsError::Toml)?;
+        let (settings, migration_required) = match header.schema {
+            SETTINGS_SCHEMA => (
+                toml::from_str::<InteractiveSettings>(text).map_err(SettingsError::Toml)?,
+                false,
+            ),
+            1 => (
+                InteractiveSettings::from(
+                    toml::from_str::<InteractiveSettingsV1>(text).map_err(SettingsError::Toml)?,
+                ),
+                true,
+            ),
+            2 => (
+                InteractiveSettings::from(
+                    toml::from_str::<InteractiveSettingsV2>(text).map_err(SettingsError::Toml)?,
+                ),
+                true,
+            ),
+            3 => (
+                InteractiveSettings::from(
+                    toml::from_str::<InteractiveSettingsV3>(text).map_err(SettingsError::Toml)?,
+                ),
+                true,
+            ),
+            schema => {
+                return Err(SettingsError::Invalid(format!(
+                    "unsupported settings schema {schema}; expected {SETTINGS_SCHEMA}"
+                )));
+            }
+        };
+        settings.validate()?;
+        Ok((settings, migration_required))
+    }
+
+    fn read_optional(&self) -> Result<Option<String>, SettingsError> {
+        let path = self.settings_path();
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(source) => {
+                return Err(SettingsError::Io {
+                    path: path.clone(),
+                    source,
+                });
+            }
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(SettingsError::Invalid(format!(
+                "settings path {} is not a regular, non-symlink file",
+                path.display()
+            )));
+        }
+        if metadata.len() > MAX_SETTINGS_BYTES {
+            return Err(SettingsError::Invalid(format!(
+                "settings file exceeds {MAX_SETTINGS_BYTES} bytes"
+            )));
+        }
+        let mut text = String::with_capacity(usize::try_from(metadata.len()).unwrap_or(0));
+        fs::File::open(&path)
+            .and_then(|file| {
+                file.take(MAX_SETTINGS_BYTES.saturating_add(1))
+                    .read_to_string(&mut text)
+            })
+            .map_err(|source| SettingsError::Io {
+                path: path.clone(),
+                source,
+            })?;
+        if u64::try_from(text.len()).unwrap_or(u64::MAX) > MAX_SETTINGS_BYTES {
+            return Err(SettingsError::Invalid(format!(
+                "settings file grew beyond {MAX_SETTINGS_BYTES} bytes while being read"
+            )));
+        }
+        Ok(Some(text))
     }
 }
 

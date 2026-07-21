@@ -17,6 +17,33 @@ whether the data is authoritative durable state or safe-to-rebuild derived
 state. The inventory is generated from the same constants used by runtime
 readers and is pinned by a checked-in compatibility fixture.
 
+Audit the actual workspace state and interactive settings before an upgrade:
+
+```console
+pactrail migrate
+pactrail migrate --json
+```
+
+These forms are read-only. They inspect schema headers without creating a
+database, verify current event chains, transaction/run bindings, receipts,
+checkpoint artifacts, and offline MCP snapshots, then report every pending or
+incompatible component. Apply only known migrations explicitly:
+
+```console
+pactrail migrate --apply
+```
+
+Apply mode completes the whole compatibility preflight before changing a
+component, refuses to run while a local run lock is active, and re-audits the
+result. Each SQLite schema change is committed in one database transaction;
+settings use the same fsync-and-rename persistence path as normal interactive
+updates. Unknown versions stop the preflight, so no supported component is
+changed in that invocation.
+
+`PACTRAIL_CONFIG_DIR` may point to an absolute alternate settings directory for
+portable installations and hermetic CI. It does not change workspace state;
+`--state-dir` remains the independent workspace-state override.
+
 ## Strategies
 
 - `exact_version`: only the named schema is accepted. Unknown older or newer

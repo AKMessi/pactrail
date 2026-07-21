@@ -484,6 +484,7 @@ fn failed_run_exports_trace_and_remains_discoverable() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn answered_run_is_inspectable_and_has_no_apply_boundary() {
     let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
     let listener = TcpListener::bind("127.0.0.1:0")
@@ -552,6 +553,31 @@ fn answered_run_is_inspectable_and_has_no_apply_boundary() {
         .unwrap_or_else(|error| unreachable!("list JSON: {error}"));
     assert_eq!(runs[0]["state"], "completed");
     assert_eq!(runs[0]["outcome"], "answered");
+
+    let migration = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "migrate",
+            "--json",
+        ])
+        .env("PACTRAIL_CONFIG_DIR", workspace.path().join("config"))
+        .output()
+        .unwrap_or_else(|error| unreachable!("state audit: {error}"));
+    assert!(
+        migration.status.success(),
+        "state audit failed: {}",
+        String::from_utf8_lossy(&migration.stderr)
+    );
+    let migration: Value = serde_json::from_slice(&migration.stdout)
+        .unwrap_or_else(|error| unreachable!("state audit JSON: {error}"));
+    assert_eq!(migration["validation"]["event_runs"], 1);
+    assert_eq!(migration["validation"]["receipts"], 1);
+    assert!(
+        migration["validation"]["checkpoints"]
+            .as_u64()
+            .is_some_and(|count| count > 0)
+    );
 }
 
 #[test]
@@ -872,6 +898,122 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
         );
     }
     assert!(!workspace.path().join(".pactrail").exists());
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn state_migration_is_explicit_preflighted_and_machine_readable() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let state = workspace.path().join("state");
+    std::fs::create_dir_all(&state).unwrap_or_else(|error| unreachable!("state: {error}"));
+    let events = state.join("events.sqlite3");
+    drop(
+        pactrail_store::EventStore::open(&events)
+            .unwrap_or_else(|error| unreachable!("events fixture: {error}")),
+    );
+    let connection = rusqlite::Connection::open(&events)
+        .unwrap_or_else(|error| unreachable!("events fixture: {error}"));
+    connection
+        .pragma_update(
+            None,
+            "user_version",
+            pactrail_store::MIN_EVENT_DATABASE_SCHEMA_VERSION,
+        )
+        .unwrap_or_else(|error| unreachable!("events schema: {error}"));
+    drop(connection);
+    let memory = state.join("memory.sqlite3");
+    drop(
+        rusqlite::Connection::open(&memory)
+            .unwrap_or_else(|error| unreachable!("memory fixture: {error}")),
+    );
+
+    let config = workspace.path().join("config").join("pactrail");
+    let settings = config.join("settings.toml");
+    std::fs::create_dir_all(&config)
+        .unwrap_or_else(|error| unreachable!("config fixture: {error}"));
+    std::fs::write(&settings, "schema = 1\nprovider = \"ollama\"\napi_key_env = \"KEY\"\ncontext_tokens = 4096\nmax_output_tokens = 512\nmax_turns = 4\nallow_process = false\n")
+        .unwrap_or_else(|error| unreachable!("settings fixture: {error}"));
+
+    let audit = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "--state-dir",
+            path_text(&state),
+            "migrate",
+            "--json",
+        ])
+        .env("PACTRAIL_CONFIG_DIR", &config)
+        .output()
+        .unwrap_or_else(|error| unreachable!("migration audit: {error}"));
+    assert!(
+        audit.status.success(),
+        "{}",
+        String::from_utf8_lossy(&audit.stderr)
+    );
+    let audit: Value = serde_json::from_slice(&audit.stdout)
+        .unwrap_or_else(|error| unreachable!("migration audit JSON: {error}"));
+    assert_eq!(audit["pending_components"], 3, "{audit:#}");
+    assert_eq!(audit["changed_components"], 0);
+    assert_eq!(
+        pactrail_store::EventStore::database_schema_version(&events).ok(),
+        Some(Some(pactrail_store::MIN_EVENT_DATABASE_SCHEMA_VERSION))
+    );
+    assert_eq!(
+        pactrail_memory::MemoryStore::database_schema_version(&memory).ok(),
+        Some(Some(0))
+    );
+    let audited_settings = std::fs::read_to_string(&settings)
+        .unwrap_or_else(|error| unreachable!("audited settings: {error}"));
+    assert!(audited_settings.contains("schema = 1"));
+
+    let apply = Command::new(env!("CARGO_BIN_EXE_pactrail"))
+        .args([
+            "--workspace",
+            path_text(workspace.path()),
+            "--state-dir",
+            path_text(&state),
+            "migrate",
+            "--apply",
+            "--json",
+        ])
+        .env("PACTRAIL_CONFIG_DIR", &config)
+        .output()
+        .unwrap_or_else(|error| unreachable!("migration apply: {error}"));
+    assert!(
+        apply.status.success(),
+        "{}",
+        String::from_utf8_lossy(&apply.stderr)
+    );
+    let apply: Value = serde_json::from_slice(&apply.stdout)
+        .unwrap_or_else(|error| unreachable!("migration apply JSON: {error}"));
+    assert_eq!(apply["pending_components"], 3);
+    assert_eq!(apply["changed_components"], 3);
+    assert!(apply["components"].as_array().is_some_and(|components| {
+        components
+            .iter()
+            .all(|component| component["status"] == "current")
+    }));
+    let settings_path = apply["components"]
+        .as_array()
+        .and_then(|components| {
+            components
+                .iter()
+                .find(|component| component["id"] == "interactive_settings")
+        })
+        .and_then(|component| component["path"].as_str())
+        .unwrap_or_else(|| unreachable!("settings component path"));
+    let migrated_settings = std::fs::read_to_string(settings_path)
+        .unwrap_or_else(|error| unreachable!("migrated settings: {error}"));
+    assert!(migrated_settings.contains("schema = 4"));
+    assert_eq!(
+        pactrail_store::EventStore::database_schema_version(events).ok(),
+        Some(Some(pactrail_store::EVENT_DATABASE_SCHEMA_VERSION))
+    );
+    assert_eq!(
+        pactrail_memory::MemoryStore::database_schema_version(memory).ok(),
+        Some(Some(pactrail_memory::MEMORY_DATABASE_SCHEMA_VERSION))
+    );
 }
 
 #[test]

@@ -29,6 +29,10 @@ follow [Semantic Versioning](https://semver.org/).
 - `pactrail compatibility` exposes a fixture-pinned JSON inventory of every
   durable and public interchange schema, its owning crate, readable range, and
   exact migration or rebuild policy.
+- `pactrail migrate` provides a read-only state audit and explicit `--apply`
+  mode with full compatibility preflight, active-run exclusion, atomic known
+  settings/database upgrades, and post-migration event/receipt/checkpoint/MCP
+  integrity validation. `PACTRAIL_CONFIG_DIR` enables hermetic settings tests.
 
 ### Security
 
@@ -42,6 +46,9 @@ follow [Semantic Versioning](https://semver.org/).
   bounded container structure, unsupported formats, oversized payloads, and
   dangerous dimensions before durable run creation. Traces omit base64 and
   host paths; attached image data is explicitly treated as untrusted evidence.
+- Run manifests, receipts, settings, and database schema probes reject symlink
+  files; receipt reads are bounded, and migration refuses orphaned run state or
+  integrity bindings that do not match the authoritative event journal.
 
 ### Changed
 

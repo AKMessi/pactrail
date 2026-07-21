@@ -160,6 +160,30 @@ impl McpRuntime {
     }
 }
 
+/// Validates the complete local MCP manifest/snapshot set without connecting.
+pub(crate) fn validate_local_state(state: &Path) -> Result<usize, McpCliError> {
+    let statuses = statuses(state)?;
+    let failures = statuses
+        .iter()
+        .filter(|status| status.error.is_some() || status.enabled && status.snapshot != "valid")
+        .map(|status| {
+            format!(
+                "{} ({})",
+                status.name,
+                status.error.as_deref().unwrap_or(status.snapshot)
+            )
+        })
+        .collect::<Vec<_>>();
+    if !failures.is_empty() {
+        return Err(McpCliError::Argument(format!(
+            "MCP state validation failed: {}",
+            failures.join(", ")
+        )));
+    }
+    let _runtime = McpRuntime::load(state)?;
+    Ok(statuses.len())
+}
+
 #[derive(Serialize)]
 struct ServerStatus {
     name: String,

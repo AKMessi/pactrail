@@ -92,6 +92,10 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
         }
         Command::Doctor { json } => doctor(json),
         Command::Compatibility { json } => compatibility(json),
+        Command::Migrate { apply, json } => {
+            let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
+            crate::migration::execute(&state, apply, json)
+        }
     }
 }
 
@@ -231,6 +235,7 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
 pub(crate) const RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;
 pub(crate) const MIN_RUN_MANIFEST_SCHEMA_VERSION: u32 = 1;
 const MAX_RUN_MANIFEST_BYTES: u64 = 1024 * 1024;
+const MAX_RECEIPT_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1476,7 +1481,7 @@ pub(crate) fn inspect(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
     let run_id = parse_run_id(&args.run_id)?;
     let run_root = run_root(state, run_id);
     let receipt_path = run_root.join("receipt.json");
-    if receipt_path.is_file() {
+    if optional_regular_file(&receipt_path, "receipt")? {
         let receipt = read_receipt(&run_root)?;
         if args.json {
             return write_json(&receipt);
@@ -1987,7 +1992,8 @@ pub(crate) fn run_history(state_root: &Path) -> Result<Vec<RunHistoryEntry>, Cli
             }
         }
         let root = run_root(state_root, run_id);
-        let receipt = if root.join("receipt.json").is_file() {
+        let receipt_path = root.join("receipt.json");
+        let receipt = if optional_regular_file(&receipt_path, "receipt")? {
             Some(read_receipt(&root)?)
         } else {
             None
@@ -2005,8 +2011,16 @@ pub(crate) fn run_history(state_root: &Path) -> Result<Vec<RunHistoryEntry>, Cli
 
 pub(crate) fn completed_runs(state: &Path) -> Result<Vec<ChangeReceipt>, CliError> {
     let runs = state.join("runs");
-    if !runs.is_dir() {
-        return Ok(Vec::new());
+    let metadata = match fs::symlink_metadata(&runs) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(source) => return Err(CliError::Io { path: runs, source }),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(CliError::Argument(format!(
+            "run directory {} is not a real local directory",
+            runs.display()
+        )));
     }
     let mut receipts = Vec::new();
     for entry in fs::read_dir(&runs).map_err(|source| CliError::Io {
@@ -2017,12 +2031,122 @@ pub(crate) fn completed_runs(state: &Path) -> Result<Vec<ChangeReceipt>, CliErro
             path: runs.clone(),
             source,
         })?;
-        if entry.path().join("receipt.json").is_file() {
+        let file_type = entry.file_type().map_err(|source| CliError::Io {
+            path: entry.path(),
+            source,
+        })?;
+        if file_type.is_symlink() || !file_type.is_dir() {
+            return Err(CliError::Argument(format!(
+                "unexpected non-directory entry in {}",
+                runs.display()
+            )));
+        }
+        let name = entry.file_name();
+        let name = name.to_str().ok_or_else(|| {
+            CliError::Argument("run directory name is not valid UTF-8".to_owned())
+        })?;
+        let _run_id = parse_run_id(name)?;
+        let receipt_path = entry.path().join("receipt.json");
+        if optional_regular_file(&receipt_path, "receipt")? {
             receipts.push(read_receipt(entry.path().as_path())?);
         }
     }
     receipts.sort_by_key(|receipt| receipt.run_id.to_string());
     Ok(receipts)
+}
+
+/// Validates run manifests and transaction metadata against the event journal
+/// without invoking backup recovery or mutating state.
+pub(crate) fn validate_run_artifacts(state: &Path, store: &EventStore) -> Result<usize, CliError> {
+    let run_ids = store.list_run_ids()?;
+    let expected = run_ids
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    let runs = state.join("runs");
+    let metadata = match fs::symlink_metadata(&runs) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound && expected.is_empty() => {
+            return Ok(0);
+        }
+        Err(source) => {
+            return Err(CliError::Io {
+                path: runs.clone(),
+                source,
+            });
+        }
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(CliError::Argument(format!(
+            "run directory {} is not a real local directory",
+            runs.display()
+        )));
+    }
+
+    let mut discovered = std::collections::BTreeSet::new();
+    for entry in fs::read_dir(&runs).map_err(|source| CliError::Io {
+        path: runs.clone(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| CliError::Io {
+            path: runs.clone(),
+            source,
+        })?;
+        let file_type = entry.file_type().map_err(|source| CliError::Io {
+            path: entry.path(),
+            source,
+        })?;
+        if file_type.is_symlink() || !file_type.is_dir() {
+            return Err(CliError::Argument(format!(
+                "unexpected non-directory entry in {}",
+                runs.display()
+            )));
+        }
+        let name = entry.file_name();
+        let name = name.to_str().ok_or_else(|| {
+            CliError::Argument("run directory name is not valid UTF-8".to_owned())
+        })?;
+        let run_id = parse_run_id(name)?;
+        if !expected.contains(&run_id) {
+            return Err(CliError::Argument(format!(
+                "run directory {run_id} has no authoritative event journal"
+            )));
+        }
+        discovered.insert(run_id);
+    }
+    if discovered != expected {
+        let missing = expected
+            .difference(&discovered)
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        return Err(CliError::Argument(format!(
+            "event journal run(s) are missing local transaction state: {}",
+            missing.join(", ")
+        )));
+    }
+
+    for run_id in &run_ids {
+        let root = run_root(state, *run_id);
+        let transaction = WorkspaceTransaction::open(&root)?;
+        let (manifest, _digest) = read_run_manifest_exact(&root)?;
+        manifest.validate(*run_id, &transaction)?;
+        let snapshot = store.snapshot(*run_id)?;
+        if snapshot.contract.as_ref() != Some(&manifest.contract) {
+            return Err(CliError::Argument(format!(
+                "run {run_id} manifest contract does not match its event journal"
+            )));
+        }
+        let receipt_path = root.join("receipt.json");
+        if optional_regular_file(&receipt_path, "receipt")? {
+            let receipt = read_receipt_exact(&root)?;
+            if receipt.run_id != *run_id || !receipt.verify_integrity()? {
+                return Err(CliError::Argument(format!(
+                    "run {run_id} receipt identity or integrity is invalid"
+                )));
+            }
+        }
+    }
+    Ok(run_ids.len())
 }
 
 fn tools(state: &Path, json_output: bool) -> Result<(), CliError> {
@@ -2529,31 +2653,12 @@ fn read_run_manifest(run_root: &Path) -> Result<(RunManifest, String), CliError>
             source,
         })?;
     }
-    let length = fs::metadata(&path)
-        .map_err(|source| CliError::Io {
-            path: path.clone(),
-            source,
-        })?
-        .len();
-    if length > MAX_RUN_MANIFEST_BYTES {
-        return Err(CliError::Argument(format!(
-            "run manifest {} exceeds the {MAX_RUN_MANIFEST_BYTES}-byte safety limit",
-            path.display()
-        )));
-    }
-    let mut bytes = Vec::with_capacity(usize::try_from(length).unwrap_or(0));
-    fs::File::open(&path)
-        .and_then(|mut file| file.read_to_end(&mut bytes))
-        .map_err(|source| CliError::Io {
-            path: path.clone(),
-            source,
-        })?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_RUN_MANIFEST_BYTES {
-        return Err(CliError::Argument(format!(
-            "run manifest {} grew beyond its safety limit while being read",
-            path.display()
-        )));
-    }
+    read_run_manifest_exact(run_root)
+}
+
+fn read_run_manifest_exact(run_root: &Path) -> Result<(RunManifest, String), CliError> {
+    let path = run_root.join("run.json");
+    let bytes = read_bounded_regular_file(&path, MAX_RUN_MANIFEST_BYTES, "run manifest")?;
     let digest = blake3::hash(&bytes).to_hex().to_string();
     let manifest = serde_json::from_slice(&bytes).map_err(CliError::Json)?;
     Ok((manifest, digest))
@@ -2568,13 +2673,12 @@ pub(crate) fn read_receipt(run_root: &Path) -> Result<ChangeReceipt, CliError> {
             source,
         })?;
     }
-    let mut bytes = Vec::new();
-    fs::File::open(&path)
-        .and_then(|mut file| file.read_to_end(&mut bytes))
-        .map_err(|source| CliError::Io {
-            path: path.clone(),
-            source,
-        })?;
+    read_receipt_exact(run_root)
+}
+
+fn read_receipt_exact(run_root: &Path) -> Result<ChangeReceipt, CliError> {
+    let path = run_root.join("receipt.json");
+    let bytes = read_bounded_regular_file(&path, MAX_RECEIPT_BYTES, "receipt")?;
     serde_json::from_slice(&bytes).map_err(CliError::Json)
 }
 
@@ -2582,7 +2686,62 @@ fn write_receipt(run_root: &Path, receipt: &ChangeReceipt) -> Result<(), CliErro
     let path = run_root.join("receipt.json");
     let backup = run_root.join("receipt.json.bak");
     let bytes = serde_json::to_vec_pretty(receipt).map_err(CliError::Json)?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_RECEIPT_BYTES {
+        return Err(CliError::Argument(format!(
+            "receipt exceeds the {MAX_RECEIPT_BYTES}-byte safety limit"
+        )));
+    }
     write_atomic_artifact(&path, &backup, &bytes)
+}
+
+fn read_bounded_regular_file(path: &Path, limit: u64, label: &str) -> Result<Vec<u8>, CliError> {
+    let metadata = fs::symlink_metadata(path).map_err(|source| CliError::Io {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(CliError::Argument(format!(
+            "{label} path {} is not a regular, non-symlink file",
+            path.display()
+        )));
+    }
+    if metadata.len() > limit {
+        return Err(CliError::Argument(format!(
+            "{label} {} exceeds the {limit}-byte safety limit",
+            path.display()
+        )));
+    }
+    let mut bytes = Vec::with_capacity(usize::try_from(metadata.len()).unwrap_or(0));
+    fs::File::open(path)
+        .and_then(|file| file.take(limit.saturating_add(1)).read_to_end(&mut bytes))
+        .map_err(|source| CliError::Io {
+            path: path.to_path_buf(),
+            source,
+        })?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > limit {
+        return Err(CliError::Argument(format!(
+            "{label} {} grew beyond its safety limit while being read",
+            path.display()
+        )));
+    }
+    Ok(bytes)
+}
+
+fn optional_regular_file(path: &Path, label: &str) -> Result<bool, CliError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            Err(CliError::Argument(format!(
+                "{label} path {} is not a regular, non-symlink file",
+                path.display()
+            )))
+        }
+        Ok(_) => Ok(true),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(source) => Err(CliError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
 }
 
 fn write_trace_artifact(
@@ -2655,7 +2814,7 @@ fn write_atomic_artifact(path: &Path, backup: &Path, bytes: &[u8]) -> Result<(),
     Ok(())
 }
 
-fn write_json<T: Serialize + ?Sized>(value: &T) -> Result<(), CliError> {
+pub(crate) fn write_json<T: Serialize + ?Sized>(value: &T) -> Result<(), CliError> {
     let mut text = serde_json::to_string_pretty(value).map_err(CliError::Json)?;
     text.push('\n');
     write_stdout(&escape_json_terminal_controls(&text)).map_err(CliError::Output)
@@ -2755,6 +2914,21 @@ mod tests {
         assert!(matches!(
             load_input_images(&[first, second]),
             Err(CliError::Argument(message)) if message.contains("more than once")
+        ));
+    }
+
+    #[test]
+    fn optional_artifact_probe_distinguishes_missing_from_unsafe_paths() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let missing = root.path().join("missing.json");
+        assert_eq!(optional_regular_file(&missing, "fixture").ok(), Some(false));
+
+        let directory = root.path().join("receipt.json");
+        fs::create_dir(&directory)
+            .unwrap_or_else(|error| unreachable!("fixture directory: {error}"));
+        assert!(matches!(
+            optional_regular_file(&directory, "receipt"),
+            Err(CliError::Argument(message)) if message.contains("non-symlink file")
         ));
     }
 

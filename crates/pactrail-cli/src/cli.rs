@@ -91,6 +91,15 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Audit local state and explicitly apply supported schema migrations.
+    Migrate {
+        /// Apply known migrations after a complete read-only preflight.
+        #[arg(long)]
+        apply: bool,
+        /// Emit machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// Side-effect-free provider capability probe options.

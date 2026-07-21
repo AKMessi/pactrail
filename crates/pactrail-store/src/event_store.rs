@@ -1,10 +1,11 @@
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use pactrail_core::{
     EVENT_SCHEMA_VERSION, EventEnvelope, EventHash, RunEvent, RunId, RunSnapshot, StateError,
 };
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
 use thiserror::Error;
 use time::OffsetDateTime;
 
@@ -21,12 +22,92 @@ pub struct EventStore {
 }
 
 impl EventStore {
+    /// Reads the on-disk database schema without creating or migrating state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for inaccessible, non-regular, symlinked, or malformed
+    /// database paths.
+    pub fn database_schema_version(path: impl AsRef<Path>) -> Result<Option<i64>, StoreError> {
+        let path = path.as_ref();
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(source) => {
+                return Err(StoreError::Io {
+                    path: path.to_path_buf(),
+                    source,
+                });
+            }
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(StoreError::InvalidDatabasePath(path.to_path_buf()));
+        }
+        let connection = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(StoreError::Database)?;
+        connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .map(Some)
+            .map_err(StoreError::Database)
+    }
+
+    /// Opens a compatible initialized database without creating tables,
+    /// changing pragmas, or migrating its schema.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing/malformed database or a schema outside
+    /// the declared readable range.
+    pub fn open_read_only(path: impl AsRef<Path>) -> Result<Self, StoreError> {
+        let path = path.as_ref();
+        let version = Self::database_schema_version(path)?
+            .ok_or_else(|| StoreError::InvalidDatabasePath(path.to_path_buf()))?;
+        if !(MIN_EVENT_DATABASE_SCHEMA_VERSION..=EVENT_DATABASE_SCHEMA_VERSION).contains(&version) {
+            return Err(StoreError::UnsupportedDatabaseSchema(version));
+        }
+        let connection = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(StoreError::Database)?;
+        Ok(Self { connection })
+    }
+
+    /// Verifies that a schema-zero `SQLite` file contains no user objects.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file is not schema zero or already contains
+    /// tables, indexes, triggers, or views that Pactrail cannot classify.
+    pub fn validate_uninitialized(path: impl AsRef<Path>) -> Result<(), StoreError> {
+        let path = path.as_ref();
+        if Self::database_schema_version(path)? != Some(0) {
+            return Err(StoreError::ExpectedUninitializedDatabase);
+        }
+        let connection = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(StoreError::Database)?;
+        let objects = unversioned_object_count(&connection)?;
+        if objects == 0 {
+            Ok(())
+        } else {
+            Err(StoreError::UnexpectedUnversionedObjects(objects))
+        }
+    }
+
     /// Opens a durable event database and applies supported migrations.
     ///
     /// # Errors
     ///
     /// Returns a database error when the file cannot be opened or initialized.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StoreError> {
+        let path = path.as_ref();
+        validate_database_target(path)?;
         let connection = Connection::open(path).map_err(StoreError::Database)?;
         Self::initialize(connection)
     }
@@ -41,7 +122,7 @@ impl EventStore {
         Self::initialize(connection)
     }
 
-    fn initialize(connection: Connection) -> Result<Self, StoreError> {
+    fn initialize(mut connection: Connection) -> Result<Self, StoreError> {
         connection
             .pragma_update(None, "foreign_keys", "ON")
             .and_then(|()| connection.pragma_update(None, "journal_mode", "WAL"))
@@ -53,10 +134,18 @@ impl EventStore {
         if !(0..=EVENT_DATABASE_SCHEMA_VERSION).contains(&database_version) {
             return Err(StoreError::UnsupportedDatabaseSchema(database_version));
         }
-        connection
+        if database_version == 0 {
+            let objects = unversioned_object_count(&connection)?;
+            if objects != 0 {
+                return Err(StoreError::UnexpectedUnversionedObjects(objects));
+            }
+        }
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(StoreError::Database)?;
+        transaction
             .execute_batch(
-                "BEGIN IMMEDIATE;
-                 CREATE TABLE IF NOT EXISTS events (
+                "CREATE TABLE IF NOT EXISTS events (
                     run_id TEXT NOT NULL,
                     sequence INTEGER NOT NULL,
                     schema_version INTEGER NOT NULL,
@@ -73,15 +162,15 @@ impl EventStore {
                     run_id TEXT PRIMARY KEY,
                     owner TEXT NOT NULL,
                     expires_unix_ms INTEGER NOT NULL CHECK (expires_unix_ms >= 0)
-                 ) STRICT;
-                 COMMIT;",
+                 ) STRICT;",
             )
             .map_err(StoreError::Database)?;
         if database_version < EVENT_DATABASE_SCHEMA_VERSION {
-            connection
+            transaction
                 .pragma_update(None, "user_version", EVENT_DATABASE_SCHEMA_VERSION)
                 .map_err(StoreError::Database)?;
         }
+        transaction.commit().map_err(StoreError::Database)?;
         Ok(Self { connection })
     }
 
@@ -357,6 +446,30 @@ impl EventStore {
     }
 }
 
+fn unversioned_object_count(connection: &Connection) -> Result<i64, StoreError> {
+    connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(StoreError::Database)
+}
+
+fn validate_database_target(path: &Path) -> Result<(), StoreError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            Err(StoreError::InvalidDatabasePath(path.to_path_buf()))
+        }
+        Ok(_) => Ok(()),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(StoreError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
+}
+
 /// Exact ownership token for a bounded local run lease.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RunLease {
@@ -383,6 +496,14 @@ fn validate_lease_owner(owner: &str) -> Result<(), StoreError> {
 pub enum StoreError {
     #[error("event database error: {0}")]
     Database(rusqlite::Error),
+    #[error("event database I/O failed at {path}: {source}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("event database path is not a regular, non-symlink file: {0}")]
+    InvalidDatabasePath(PathBuf),
     #[error("event serialization failed: {0}")]
     Serialization(serde_json::Error),
     #[error("event timestamp formatting failed: {0}")]
@@ -421,6 +542,10 @@ pub enum StoreError {
     UnsupportedSchema,
     #[error("event database schema version {0} is unsupported")]
     UnsupportedDatabaseSchema(i64),
+    #[error("schema-zero event database contains {0} unrecognized user object(s)")]
+    UnexpectedUnversionedObjects(i64),
+    #[error("event database is not an uninitialized schema-zero file")]
+    ExpectedUninitializedDatabase,
 }
 
 #[cfg(test)]
@@ -554,8 +679,80 @@ mod tests {
         drop(connection);
 
         assert!(matches!(
-            EventStore::open(path),
+            EventStore::open(&path),
             Err(StoreError::UnsupportedDatabaseSchema(99))
+        ));
+        assert_eq!(
+            EventStore::database_schema_version(path).ok(),
+            Some(Some(99))
+        );
+    }
+
+    #[test]
+    fn schema_inspection_is_read_only_and_known_schema_migrates() {
+        let directory = tempfile::tempdir()
+            .unwrap_or_else(|error| unreachable!("temporary directory: {error}"));
+        let path = directory.path().join("events.sqlite3");
+        assert_eq!(EventStore::database_schema_version(&path).ok(), Some(None));
+        drop(EventStore::open(&path).unwrap_or_else(|error| unreachable!("fixture: {error}")));
+        let connection = Connection::open(&path)
+            .unwrap_or_else(|error| unreachable!("fixture database: {error}"));
+        connection
+            .pragma_update(None, "user_version", MIN_EVENT_DATABASE_SCHEMA_VERSION)
+            .unwrap_or_else(|error| unreachable!("fixture schema: {error}"));
+        drop(connection);
+
+        assert_eq!(
+            EventStore::database_schema_version(&path).ok(),
+            Some(Some(MIN_EVENT_DATABASE_SCHEMA_VERSION))
+        );
+        let read_only = EventStore::open_read_only(&path)
+            .unwrap_or_else(|error| unreachable!("read-only: {error}"));
+        assert!(read_only.list_run_ids().is_ok());
+        drop(read_only);
+        drop(EventStore::open(&path).unwrap_or_else(|error| unreachable!("migration: {error}")));
+        assert_eq!(
+            EventStore::database_schema_version(path).ok(),
+            Some(Some(EVENT_DATABASE_SCHEMA_VERSION))
+        );
+    }
+
+    #[test]
+    fn unversioned_user_objects_are_never_stamped_as_pactrail_state() {
+        let directory = tempfile::tempdir()
+            .unwrap_or_else(|error| unreachable!("temporary directory: {error}"));
+        let path = directory.path().join("events.sqlite3");
+        let connection = Connection::open(&path)
+            .unwrap_or_else(|error| unreachable!("fixture database: {error}"));
+        connection
+            .execute("CREATE TABLE foreign_data (value TEXT)", [])
+            .unwrap_or_else(|error| unreachable!("fixture table: {error}"));
+        drop(connection);
+
+        assert!(matches!(
+            EventStore::open(&path),
+            Err(StoreError::UnexpectedUnversionedObjects(1))
+        ));
+        assert!(matches!(
+            EventStore::validate_uninitialized(&path),
+            Err(StoreError::UnexpectedUnversionedObjects(1))
+        ));
+        assert_eq!(
+            EventStore::database_schema_version(path).ok(),
+            Some(Some(0))
+        );
+    }
+
+    #[test]
+    fn open_rejects_non_file_database_targets() {
+        let directory = tempfile::tempdir()
+            .unwrap_or_else(|error| unreachable!("temporary directory: {error}"));
+        let path = directory.path().join("events.sqlite3");
+        fs::create_dir(&path).unwrap_or_else(|error| unreachable!("fixture directory: {error}"));
+
+        assert!(matches!(
+            EventStore::open(&path),
+            Err(StoreError::InvalidDatabasePath(found)) if found == path
         ));
     }
 }

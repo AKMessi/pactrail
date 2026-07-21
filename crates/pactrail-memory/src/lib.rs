@@ -6,12 +6,13 @@
 //! persist arbitrary claims.
 
 use std::collections::BTreeSet;
+use std::fs;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
 
 use pactrail_core::{ChangeReceipt, ReceiptOutcome, RunId};
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -190,6 +191,109 @@ pub struct MemoryStore {
 }
 
 impl MemoryStore {
+    /// Reads the on-disk database schema without creating or migrating state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for inaccessible, non-regular, symlinked, or malformed
+    /// database paths.
+    pub fn database_schema_version(path: impl AsRef<Path>) -> Result<Option<i64>, MemoryError> {
+        let path = path.as_ref();
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(source) => {
+                return Err(MemoryError::Io {
+                    path: path.to_path_buf(),
+                    source,
+                });
+            }
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(MemoryError::InvalidDatabasePath(path.to_path_buf()));
+        }
+        let connection = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(MemoryError::Database)?;
+        connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .map(Some)
+            .map_err(MemoryError::Database)
+    }
+
+    /// Opens a current memory database without changing pragmas or state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing/malformed database or unsupported schema.
+    pub fn open_read_only(path: impl AsRef<Path>) -> Result<Self, MemoryError> {
+        let path = path.as_ref();
+        let version = Self::database_schema_version(path)?
+            .ok_or_else(|| MemoryError::InvalidDatabasePath(path.to_path_buf()))?;
+        if version != MEMORY_DATABASE_SCHEMA_VERSION {
+            return Err(MemoryError::UnsupportedDatabaseSchema(version));
+        }
+        let connection = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(MemoryError::Database)?;
+        Ok(Self {
+            connection: Mutex::new(connection),
+        })
+    }
+
+    /// Verifies that a schema-zero `SQLite` file contains no user objects.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the file is not schema zero or already contains
+    /// objects that Pactrail cannot safely classify as a new memory store.
+    pub fn validate_uninitialized(path: impl AsRef<Path>) -> Result<(), MemoryError> {
+        let path = path.as_ref();
+        if Self::database_schema_version(path)? != Some(0) {
+            return Err(MemoryError::ExpectedUninitializedDatabase);
+        }
+        let connection = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(MemoryError::Database)?;
+        let objects = unversioned_object_count(&connection)?;
+        if objects == 0 {
+            Ok(())
+        } else {
+            Err(MemoryError::UnexpectedUnversionedObjects(objects))
+        }
+    }
+
+    /// Decodes every memory row without updating access metadata.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a malformed table or corrupt record.
+    pub fn validate_all(&self) -> Result<usize, MemoryError> {
+        let connection = self.connection()?;
+        let mut statement = connection
+            .prepare(
+                "SELECT id, kind, source, title, content, tags_json, source_run_id,
+                        source_integrity_hash, created_at, updated_at, access_count
+                 FROM memories ORDER BY id ASC",
+            )
+            .map_err(MemoryError::Database)?;
+        let rows = statement
+            .query_map([], decode_row)
+            .map_err(MemoryError::Database)?;
+        let mut count = 0_usize;
+        for row in rows {
+            let _memory = row.map_err(MemoryError::Database)??;
+            count = count.saturating_add(1);
+        }
+        Ok(count)
+    }
+
     /// Opens a durable store and initializes the supported schema.
     ///
     /// # Errors
@@ -199,11 +303,12 @@ impl MemoryStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, MemoryError> {
         let path = path.as_ref();
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|source| MemoryError::Io {
+            fs::create_dir_all(parent).map_err(|source| MemoryError::Io {
                 path: parent.to_path_buf(),
                 source,
             })?;
         }
+        validate_database_target(path)?;
         let connection = Connection::open(path).map_err(MemoryError::Database)?;
         Self::initialize(connection)
     }
@@ -217,7 +322,7 @@ impl MemoryStore {
         Self::initialize(Connection::open_in_memory().map_err(MemoryError::Database)?)
     }
 
-    fn initialize(connection: Connection) -> Result<Self, MemoryError> {
+    fn initialize(mut connection: Connection) -> Result<Self, MemoryError> {
         connection
             .pragma_update(None, "foreign_keys", "ON")
             .and_then(|()| connection.pragma_update(None, "journal_mode", "WAL"))
@@ -229,10 +334,18 @@ impl MemoryStore {
         if !matches!(version, 0 | MEMORY_DATABASE_SCHEMA_VERSION) {
             return Err(MemoryError::UnsupportedDatabaseSchema(version));
         }
-        connection
+        if version == 0 {
+            let objects = unversioned_object_count(&connection)?;
+            if objects != 0 {
+                return Err(MemoryError::UnexpectedUnversionedObjects(objects));
+            }
+        }
+        let transaction = connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(MemoryError::Database)?;
+        transaction
             .execute_batch(
-                "BEGIN IMMEDIATE;
-                 CREATE TABLE IF NOT EXISTS memories (
+                "CREATE TABLE IF NOT EXISTS memories (
                     id TEXT PRIMARY KEY NOT NULL,
                     kind TEXT NOT NULL,
                     source TEXT NOT NULL,
@@ -248,15 +361,15 @@ impl MemoryStore {
                     active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1))
                  ) STRICT;
                  CREATE INDEX IF NOT EXISTS memories_active_updated
-                    ON memories (active, updated_at DESC);
-                 COMMIT;",
+                    ON memories (active, updated_at DESC);",
             )
             .map_err(MemoryError::Database)?;
         if version == 0 {
-            connection
+            transaction
                 .pragma_update(None, "user_version", MEMORY_DATABASE_SCHEMA_VERSION)
                 .map_err(MemoryError::Database)?;
         }
+        transaction.commit().map_err(MemoryError::Database)?;
         Ok(Self {
             connection: Mutex::new(connection),
         })
@@ -585,6 +698,30 @@ fn decode_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Result<MemoryRecord, 
     })())
 }
 
+fn unversioned_object_count(connection: &Connection) -> Result<i64, MemoryError> {
+    connection
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(MemoryError::Database)
+}
+
+fn validate_database_target(path: &Path) -> Result<(), MemoryError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+            Err(MemoryError::InvalidDatabasePath(path.to_path_buf()))
+        }
+        Ok(_) => Ok(()),
+        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(MemoryError::Io {
+            path: path.to_path_buf(),
+            source,
+        }),
+    }
+}
+
 fn validate_draft(draft: &MemoryDraft) -> Result<(), MemoryError> {
     let title = draft.title.trim();
     let content = draft.content.trim();
@@ -730,6 +867,12 @@ pub enum MemoryError {
     ProvenanceConflict(RunId),
     #[error("memory database schema version {0} is unsupported")]
     UnsupportedDatabaseSchema(i64),
+    #[error("memory database path is not a regular, non-symlink file: {0}")]
+    InvalidDatabasePath(std::path::PathBuf),
+    #[error("schema-zero memory database contains {0} unrecognized user object(s)")]
+    UnexpectedUnversionedObjects(i64),
+    #[error("memory database is not an uninitialized schema-zero file")]
+    ExpectedUninitializedDatabase,
     #[error("memory database lock was poisoned")]
     Poisoned,
 }
@@ -808,8 +951,64 @@ mod tests {
         drop(connection);
 
         assert!(matches!(
-            MemoryStore::open(path),
+            MemoryStore::open(&path),
             Err(MemoryError::UnsupportedDatabaseSchema(99))
+        ));
+        assert_eq!(
+            MemoryStore::database_schema_version(path).ok(),
+            Some(Some(99))
+        );
+    }
+
+    #[test]
+    fn schema_inspection_does_not_create_and_initialized_store_is_current() {
+        let directory = tempfile::tempdir()
+            .unwrap_or_else(|error| unreachable!("temporary directory: {error}"));
+        let path = directory.path().join("memory.sqlite3");
+        assert_eq!(MemoryStore::database_schema_version(&path).ok(), Some(None));
+        drop(MemoryStore::open(&path).unwrap_or_else(|error| unreachable!("open: {error}")));
+        assert_eq!(
+            MemoryStore::database_schema_version(path).ok(),
+            Some(Some(MEMORY_DATABASE_SCHEMA_VERSION))
+        );
+    }
+
+    #[test]
+    fn unversioned_user_objects_are_never_stamped_as_memory_state() {
+        let directory = tempfile::tempdir()
+            .unwrap_or_else(|error| unreachable!("temporary directory: {error}"));
+        let path = directory.path().join("memory.sqlite3");
+        let connection = Connection::open(&path)
+            .unwrap_or_else(|error| unreachable!("fixture database: {error}"));
+        connection
+            .execute("CREATE TABLE foreign_data (value TEXT)", [])
+            .unwrap_or_else(|error| unreachable!("fixture table: {error}"));
+        drop(connection);
+
+        assert!(matches!(
+            MemoryStore::open(&path),
+            Err(MemoryError::UnexpectedUnversionedObjects(1))
+        ));
+        assert!(matches!(
+            MemoryStore::validate_uninitialized(&path),
+            Err(MemoryError::UnexpectedUnversionedObjects(1))
+        ));
+        assert_eq!(
+            MemoryStore::database_schema_version(path).ok(),
+            Some(Some(0))
+        );
+    }
+
+    #[test]
+    fn open_rejects_non_file_database_targets() {
+        let directory = tempfile::tempdir()
+            .unwrap_or_else(|error| unreachable!("temporary directory: {error}"));
+        let path = directory.path().join("memory.sqlite3");
+        fs::create_dir(&path).unwrap_or_else(|error| unreachable!("fixture directory: {error}"));
+
+        assert!(matches!(
+            MemoryStore::open(&path),
+            Err(MemoryError::InvalidDatabasePath(found)) if found == path
         ));
     }
 }

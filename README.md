@@ -408,8 +408,9 @@ pactrail run --task pactrail.task.toml --model qwen3-coder --output json
 ```
 
 Other discovery commands include `pactrail tools --json`, `pactrail schema`,
-`pactrail compatibility --json`, `pactrail mcp list --json`, `pactrail memory
-list`, `pactrail list`, `pactrail doctor`, and `pactrail completion <shell>`.
+`pactrail compatibility --json`, the read-only `pactrail migrate` state audit,
+`pactrail mcp list --json`, `pactrail memory list`, `pactrail list`, `pactrail
+doctor`, and `pactrail completion <shell>`.
 
 ## Reproducible evaluation
 

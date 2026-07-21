@@ -260,6 +260,58 @@ impl CheckpointStore {
         Ok(checkpoint)
     }
 
+    /// Validates every checkpoint artifact referenced by a run's event chain.
+    ///
+    /// This audit does not require a checkpoint to be the current event head;
+    /// each artifact is instead verified against the exact naming event's
+    /// previous sequence and hash.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a malformed reference, missing/tampered artifact,
+    /// unsupported schema, wrong run, or broken event binding.
+    pub fn validate_all(
+        &self,
+        events: &EventStore,
+        run_id: RunId,
+    ) -> Result<usize, CheckpointError> {
+        let envelopes = events.load(run_id)?;
+        let mut validated = 0_usize;
+        for envelope in envelopes {
+            let RunEvent::CheckpointCreated { checkpoint } = &envelope.event else {
+                continue;
+            };
+            let Some(digest) = checkpoint.strip_prefix(CHECKPOINT_EVENT_PREFIX) else {
+                if let Some(context_digest) = checkpoint.strip_prefix("context:") {
+                    validate_digest("context", context_digest)?;
+                    continue;
+                }
+                return Err(CheckpointError::InvalidEventReference(checkpoint.clone()));
+            };
+            validate_digest("checkpoint", digest)?;
+            let bytes = self.artifacts.get(digest)?;
+            let checkpoint: RunCheckpoint =
+                serde_json::from_slice(&bytes).map_err(CheckpointError::Decoding)?;
+            checkpoint.validate()?;
+            if checkpoint.run_id != run_id {
+                return Err(CheckpointError::WrongRun {
+                    expected: run_id,
+                    actual: checkpoint.run_id,
+                });
+            }
+            if checkpoint.event_sequence.saturating_add(1) != envelope.sequence
+                || checkpoint.event_hash != envelope.previous_hash
+            {
+                return Err(CheckpointError::HeadBinding {
+                    checkpoint_sequence: checkpoint.event_sequence,
+                    event_sequence: envelope.sequence,
+                });
+            }
+            validated = validated.saturating_add(1);
+        }
+        Ok(validated)
+    }
+
     /// Formats the event reference for a previously persisted artifact.
     #[must_use]
     pub fn event_reference(artifact: &StoredArtifact) -> String {
@@ -429,6 +481,7 @@ mod tests {
             checkpoints.load_head(&events, run_id),
             Err(CheckpointError::NotAtHead { .. })
         ));
+        assert_eq!(checkpoints.validate_all(&events, run_id).ok(), Some(1));
     }
 
     #[test]
