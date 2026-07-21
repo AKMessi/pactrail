@@ -111,7 +111,9 @@ local models through hosted models without hidden prompt truncation.
   provider-report, and derived-cache boundaries. A read-only audit and explicit
   migration command verify event/receipt/checkpoint/MCP bindings and atomically
   upgrade every historical schema currently supported by runtime readers.
-  Historical per-format fixture expansion remains in progress.
+  Checked-in historical fixtures now cover every schema below the current
+  version in a declared readable range, and one cross-workspace command runs
+  each fixture through its owning production reader or migrator.
 - Generated-input property suites cover path handling, event replay/tamper,
   exact transaction apply, provider SSE fragmentation, MCP schema enforcement,
   and terminal rendering. Dedicated libFuzzer targets cover the public path,

@@ -1,0 +1,13 @@
+schema = 3
+provider = "gemini"
+api_key_env = "GEMINI_API_KEY"
+context_tokens = 32768
+max_output_tokens = 4096
+max_turns = 24
+streaming = true
+process_backend = "disabled"
+sandbox_runtime = "docker"
+sandbox_memory_mib = 2048
+sandbox_cpu_millis = 2000
+sandbox_pids = 128
+sandbox_tmpfs_mib = 512

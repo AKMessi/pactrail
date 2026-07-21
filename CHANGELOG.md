@@ -40,6 +40,10 @@ follow [Semantic Versioning](https://semver.org/).
 - Deterministic transaction fault points test partial apply, rollback failure,
   and post-apply cleanup failure through the same journal recovery path used in
   production.
+- Immutable historical fixtures cover every schema below the current version
+  in Pactrail's declared readable ranges. A single cross-workspace suite proves
+  event-envelope verification, event-database migration, settings migration,
+  and exact fixture-inventory coverage through the owning production readers.
 
 ### Security
 

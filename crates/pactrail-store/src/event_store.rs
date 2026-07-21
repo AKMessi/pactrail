@@ -689,17 +689,27 @@ mod tests {
     }
 
     #[test]
-    fn schema_inspection_is_read_only_and_known_schema_migrates() {
+    fn event_database_schema_one_compatibility_fixture_migrates_atomically() {
         let directory = tempfile::tempdir()
             .unwrap_or_else(|error| unreachable!("temporary directory: {error}"));
         let path = directory.path().join("events.sqlite3");
         assert_eq!(EventStore::database_schema_version(&path).ok(), Some(None));
-        drop(EventStore::open(&path).unwrap_or_else(|error| unreachable!("fixture: {error}")));
         let connection = Connection::open(&path)
             .unwrap_or_else(|error| unreachable!("fixture database: {error}"));
         connection
-            .pragma_update(None, "user_version", MIN_EVENT_DATABASE_SCHEMA_VERSION)
+            .execute_batch(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../tests/fixtures/compatibility/historical/event-database-v1.sql"
+            )))
             .unwrap_or_else(|error| unreachable!("fixture schema: {error}"));
+        let legacy_lease_tables: i64 = connection
+            .query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE type = 'table' AND name = 'run_leases'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|error| unreachable!("fixture shape: {error}"));
+        assert_eq!(legacy_lease_tables, 0);
         drop(connection);
 
         assert_eq!(
@@ -712,9 +722,19 @@ mod tests {
         drop(read_only);
         drop(EventStore::open(&path).unwrap_or_else(|error| unreachable!("migration: {error}")));
         assert_eq!(
-            EventStore::database_schema_version(path).ok(),
+            EventStore::database_schema_version(&path).ok(),
             Some(Some(EVENT_DATABASE_SCHEMA_VERSION))
         );
+        let migrated = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .unwrap_or_else(|error| unreachable!("migrated database: {error}"));
+        let lease_tables: i64 = migrated
+            .query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE type = 'table' AND name = 'run_leases'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|error| unreachable!("migrated shape: {error}"));
+        assert_eq!(lease_tables, 1);
     }
 
     #[test]

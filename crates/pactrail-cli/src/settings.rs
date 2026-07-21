@@ -629,12 +629,15 @@ mod tests {
     }
 
     #[test]
-    fn schema_one_process_boolean_migrates_atomically() {
+    fn settings_schema_one_compatibility_fixture_migrates_atomically() {
         let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("tempdir: {error}"));
         let store = SettingsStore::at(root.path().to_path_buf());
         fs::write(
             store.settings_path(),
-            "schema = 1\nprovider = \"ollama\"\napi_key_env = \"KEY\"\ncontext_tokens = 4096\nmax_output_tokens = 512\nmax_turns = 4\nallow_process = true\n",
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../tests/fixtures/compatibility/historical/settings-v1.toml"
+            )),
         )
         .unwrap_or_else(|error| unreachable!("fixture: {error}"));
 
@@ -652,12 +655,15 @@ mod tests {
     }
 
     #[test]
-    fn schema_two_configuration_migrates_without_silently_enabling_streaming() {
+    fn settings_schema_two_compatibility_fixture_preserves_streaming_policy() {
         let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("tempdir: {error}"));
         let store = SettingsStore::at(root.path().to_path_buf());
         fs::write(
             store.settings_path(),
-            "schema = 2\nprovider = \"ollama\"\napi_key_env = \"KEY\"\ncontext_tokens = 4096\nmax_output_tokens = 512\nmax_turns = 4\nprocess_backend = \"disabled\"\nsandbox_runtime = \"docker\"\nsandbox_memory_mib = 2048\nsandbox_cpu_millis = 2000\nsandbox_pids = 128\nsandbox_tmpfs_mib = 512\n",
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../tests/fixtures/compatibility/historical/settings-v2.toml"
+            )),
         )
         .unwrap_or_else(|error| unreachable!("fixture: {error}"));
 
@@ -673,12 +679,15 @@ mod tests {
     }
 
     #[test]
-    fn schema_three_configuration_migrates_to_explicit_auto_capabilities() {
+    fn settings_schema_three_compatibility_fixture_adds_explicit_capabilities() {
         let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("tempdir: {error}"));
         let store = SettingsStore::at(root.path().to_path_buf());
         fs::write(
             store.settings_path(),
-            "schema = 3\nprovider = \"gemini\"\napi_key_env = \"GEMINI_API_KEY\"\ncontext_tokens = 32768\nmax_output_tokens = 4096\nmax_turns = 24\nstreaming = true\nprocess_backend = \"disabled\"\nsandbox_runtime = \"docker\"\nsandbox_memory_mib = 2048\nsandbox_cpu_millis = 2000\nsandbox_pids = 128\nsandbox_tmpfs_mib = 512\n",
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../tests/fixtures/compatibility/historical/settings-v3.toml"
+            )),
         )
         .unwrap_or_else(|error| unreachable!("fixture: {error}"));
 

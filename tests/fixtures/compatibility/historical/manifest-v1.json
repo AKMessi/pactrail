@@ -1,0 +1,35 @@
+{
+  "manifest_schema": 1,
+  "fixtures": [
+    {
+      "format": "event_database",
+      "schema": 1,
+      "path": "event-database-v1.sql",
+      "strategy": "migrate_atomically"
+    },
+    {
+      "format": "event_envelope",
+      "schema": 1,
+      "path": "event-envelope-v1.json",
+      "strategy": "read_compatible"
+    },
+    {
+      "format": "interactive_settings",
+      "schema": 1,
+      "path": "settings-v1.toml",
+      "strategy": "migrate_atomically"
+    },
+    {
+      "format": "interactive_settings",
+      "schema": 2,
+      "path": "settings-v2.toml",
+      "strategy": "migrate_atomically"
+    },
+    {
+      "format": "interactive_settings",
+      "schema": 3,
+      "path": "settings-v3.toml",
+      "strategy": "migrate_atomically"
+    }
+  ]
+}

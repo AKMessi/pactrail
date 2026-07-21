@@ -220,9 +220,51 @@ fn format(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::fs;
+    use std::path::{Component, Path, PathBuf};
+
+    use serde::Deserialize;
 
     use super::*;
+
+    const MAX_FIXTURE_BYTES: u64 = 1024 * 1024;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct HistoricalFixtureManifest {
+        manifest_schema: u32,
+        fixtures: Vec<HistoricalFixture>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct HistoricalFixture {
+        format: String,
+        schema: u64,
+        path: String,
+        strategy: HistoricalFixtureStrategy,
+    }
+
+    #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+    #[serde(rename_all = "snake_case")]
+    enum HistoricalFixtureStrategy {
+        ReadCompatible,
+        MigrateAtomically,
+        RebuildDerived,
+        ExactVersion,
+    }
+
+    impl From<CompatibilityStrategy> for HistoricalFixtureStrategy {
+        fn from(value: CompatibilityStrategy) -> Self {
+            match value {
+                CompatibilityStrategy::ReadCompatible => Self::ReadCompatible,
+                CompatibilityStrategy::MigrateAtomically => Self::MigrateAtomically,
+                CompatibilityStrategy::RebuildDerived => Self::RebuildDerived,
+                CompatibilityStrategy::ExactVersion => Self::ExactVersion,
+            }
+        }
+    }
 
     #[test]
     fn inventory_is_unique_ordered_and_has_sane_ranges() {
@@ -254,5 +296,75 @@ mod tests {
             .unwrap_or_else(|| unreachable!("manifest object"))
             .remove("pactrail_version");
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn historical_compatibility_fixture_manifest_covers_every_readable_schema() {
+        let fixture_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/compatibility/historical");
+        let fixture_manifest: HistoricalFixtureManifest =
+            serde_json::from_str(include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../tests/fixtures/compatibility/historical/manifest-v1.json"
+            )))
+            .unwrap_or_else(|error| unreachable!("historical fixture manifest: {error}"));
+        assert_eq!(fixture_manifest.manifest_schema, 1);
+
+        let compatibility = manifest();
+        let contracts: BTreeMap<_, _> = compatibility
+            .formats
+            .iter()
+            .map(|contract| (contract.id, contract))
+            .collect();
+        let required: BTreeSet<_> = compatibility
+            .formats
+            .iter()
+            .flat_map(|contract| {
+                (contract.minimum_readable_schema..contract.current_schema)
+                    .map(move |schema| (contract.id.to_owned(), schema))
+            })
+            .collect();
+
+        let mut provided = BTreeSet::new();
+        let mut paths = BTreeSet::new();
+        for fixture in fixture_manifest.fixtures {
+            let Some(contract) = contracts.get(fixture.format.as_str()) else {
+                unreachable!("fixture references unknown format {}", fixture.format);
+            };
+            assert_eq!(
+                fixture.strategy,
+                HistoricalFixtureStrategy::from(contract.strategy),
+                "fixture strategy drifted for {} schema {}",
+                fixture.format,
+                fixture.schema
+            );
+            assert!(
+                provided.insert((fixture.format.clone(), fixture.schema)),
+                "duplicate historical fixture for {} schema {}",
+                fixture.format,
+                fixture.schema
+            );
+            assert!(paths.insert(fixture.path.clone()), "duplicate fixture path");
+
+            let relative = Path::new(&fixture.path);
+            assert_eq!(
+                relative.components().count(),
+                1,
+                "fixture path must be one safe relative filename"
+            );
+            assert!(matches!(
+                relative.components().next(),
+                Some(Component::Normal(_))
+            ));
+            let metadata =
+                fs::symlink_metadata(fixture_root.join(relative)).unwrap_or_else(|error| {
+                    unreachable!("historical fixture {}: {error}", fixture.path)
+                });
+            assert!(!metadata.file_type().is_symlink());
+            assert!(metadata.is_file());
+            assert!((1..=MAX_FIXTURE_BYTES).contains(&metadata.len()));
+        }
+
+        assert_eq!(provided, required, "historical fixture coverage drifted");
     }
 }
