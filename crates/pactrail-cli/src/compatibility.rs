@@ -142,7 +142,7 @@ pub(crate) fn manifest() -> CompatibilityManifest {
             "pactrail-memory",
             pactrail_memory::MEMORY_DATABASE_SCHEMA_VERSION,
             pactrail_memory::MIN_MEMORY_DATABASE_SCHEMA_VERSION,
-            CompatibilityStrategy::ExactVersion,
+            CompatibilityStrategy::MigrateAtomically,
             true,
         ),
         format(

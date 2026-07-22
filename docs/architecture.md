@@ -142,8 +142,13 @@ also live and durable telemetry. Optional LSP evidence never starts a server:
 the SDK accepts only a prebuilt strict snapshot, validates every symbol/path/
 line before mutation, and folds the snapshot digest into context identity.
 
-Memory is advisory. It includes an identifier, kind, source, title, and content;
-it never overrides the task contract, scoped instructions, or current files.
+Memory relevance and memory trust are separate signals. Human entries are
+explicitly `user_asserted` and advisory. Applied-run entries carry the receipt
+hash plus bounded per-file post-apply BLAKE3 anchors. Before initial context or
+tool recall, Pactrail streams current candidate digests through the transaction
+path boundary. Only complete, matching receipt memories are `current`; stale or
+legacy-unverified entries are withheld. Memory never overrides the task
+contract, scoped instructions, or current files.
 
 ## Tool Kernel v2
 
@@ -319,9 +324,19 @@ are conventions, decisions, and warnings. Inputs and tags are bounded and
 validated; forgetting is a durable soft delete.
 
 Applied-run memories are accepted only from an integrity-valid `Applied`
-receipt. Run ID and receipt hash provide idempotency and provenance. The model
-has a read-only recall tool; no model tool can add, rewrite, or forget memory,
-which prevents straightforward prompt-driven memory poisoning.
+receipt. Run ID and receipt hash provide idempotency and provenance. Schema two
+also stores up to 2,048 changed-path post-apply digests plus a completeness bit.
+Each recall validates that entire set against the current isolated candidate;
+any mismatch makes the entry stale, while schema-one history is readable but
+unverified until superseded by newly applied evidence. A wider bounded
+candidate pool prevents stale high-ranking history from crowding current memory
+out of the result cap.
+
+The model has a read-only recall tool; no model tool can add, rewrite, or forget
+memory, which prevents straightforward prompt-driven memory poisoning. Human
+entries remain advisory and are labelled separately from receipt-verified
+history. The schema-one-to-two upgrade is one SQLite transaction and preserves
+legacy records without manufacturing missing anchors.
 
 ## Event protocol and traces
 

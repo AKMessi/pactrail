@@ -11,7 +11,7 @@
     {"id":"lsp_reference_snapshot","owner":"pactrail-context","current_schema":1,"minimum_readable_schema":1,"strategy":"exact_version","durable":true},
     {"id":"mcp_manifest","owner":"pactrail-mcp","current_schema":1,"minimum_readable_schema":1,"strategy":"exact_version","durable":true},
     {"id":"mcp_snapshot","owner":"pactrail-mcp","current_schema":1,"minimum_readable_schema":1,"strategy":"exact_version","durable":true},
-    {"id":"memory_database","owner":"pactrail-memory","current_schema":1,"minimum_readable_schema":1,"strategy":"exact_version","durable":true},
+    {"id":"memory_database","owner":"pactrail-memory","current_schema":2,"minimum_readable_schema":1,"strategy":"migrate_atomically","durable":true},
     {"id":"model_ir","owner":"pactrail-models","current_schema":1,"minimum_readable_schema":1,"strategy":"exact_version","durable":false},
     {"id":"repository_index_cache","owner":"pactrail-context","current_schema":2,"minimum_readable_schema":2,"strategy":"rebuild_derived","durable":false},
     {"id":"run_checkpoint","owner":"pactrail-engine","current_schema":1,"minimum_readable_schema":1,"strategy":"exact_version","durable":true},

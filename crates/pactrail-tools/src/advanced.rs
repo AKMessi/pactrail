@@ -267,7 +267,7 @@ impl Tool for RecallMemoryTool {
     fn descriptor(&self) -> ToolDescriptor {
         descriptor::<RecallMemoryInput>(
             "recall_memory",
-            "Recall relevant user-curated conventions, decisions, warnings, and integrity-backed applied-run history for this workspace.",
+            "Recall relevant workspace memory with explicit trust and freshness. Human memories are advisory; receipt-derived history is returned only while all recorded file digests match the current isolated candidate.",
             Capability::MemoryRead,
         )
     }
@@ -290,13 +290,45 @@ impl Tool for RecallMemoryTool {
         }
         context.authorize(&Capability::MemoryRead, ".", "recall_memory")?;
         let memory = context.memory.ok_or(ToolError::MemoryUnavailable)?;
-        let matches = memory.search(&request.query, request.max_results)?;
+        // Validate a wider bounded candidate pool so stale high-ranking history
+        // cannot crowd current lower-ranking memory out of the requested result set.
+        let scan_limit = request.max_results.saturating_mul(4).min(48);
+        let matches = memory.search(&request.query, scan_limit)?;
+        let mut eligible = Vec::new();
+        let mut stale = 0_usize;
+        let mut unverified = 0_usize;
+        for item in matches {
+            let item = item.validate_against(|path| context.workspace.current_file_digest(path))?;
+            if item.validation.eligible_for_model() {
+                if eligible.len() < request.max_results {
+                    eligible.push(item);
+                }
+            } else {
+                match item.validation.freshness {
+                    pactrail_memory::MemoryFreshness::Stale => {
+                        stale = stale.saturating_add(1);
+                    }
+                    pactrail_memory::MemoryFreshness::Unverified => {
+                        unverified = unverified.saturating_add(1);
+                    }
+                    pactrail_memory::MemoryFreshness::Advisory
+                    | pactrail_memory::MemoryFreshness::Current => {}
+                }
+            }
+        }
+        let eligible_count = eligible.len();
         Ok(success(
-            serde_json::to_value(&matches).map_err(ToolError::Serialization)?,
+            json!({
+                "memories": eligible,
+                "excluded": {
+                    "stale": stale,
+                    "unverified": unverified,
+                },
+                "policy": "stale and unverified receipt memories are withheld; current files remain authoritative",
+            }),
             format!(
-                "recalled {} workspace memories for {:?}",
-                matches.len(),
-                request.query
+                "recalled {} current/advisory workspace memories for {:?}; withheld {stale} stale and {unverified} unverified",
+                eligible_count, request.query
             ),
             vec!["memory.read:workspace".to_owned()],
         ))
@@ -307,6 +339,10 @@ impl Tool for RecallMemoryTool {
 mod tests {
     use std::fs;
 
+    use pactrail_core::{
+        ChangeReceipt, Evidence, EvidenceKind, FileChange, ReceiptInput, ReceiptOutcome, RunId,
+        TaskContract,
+    };
     use pactrail_memory::{MemoryDraft, MemoryKind, MemoryStore};
     use serde_json::json;
 
@@ -422,7 +458,78 @@ mod tests {
             .execute(&context, json!({"query": "parser"}))
             .await
             .unwrap_or_else(|error| unreachable!("recall: {error}"));
-        assert_eq!(output.content[0]["memory"]["source"], "user");
-        assert_eq!(output.content[0]["memory"]["title"], "Parser ownership");
+        assert_eq!(output.content["memories"][0]["memory"]["source"], "user");
+        assert_eq!(
+            output.content["memories"][0]["memory"]["title"],
+            "Parser ownership"
+        );
+        assert_eq!(
+            output.content["memories"][0]["validation"]["freshness"],
+            "advisory"
+        );
+        assert_eq!(output.content["excluded"]["stale"], 0);
+    }
+
+    #[tokio::test]
+    async fn memory_recall_withholds_receipt_history_after_candidate_drift() {
+        let (_source, _control, transaction) = fixture();
+        let current_digest = transaction
+            .current_file_digest("a.txt")
+            .unwrap_or_else(|error| unreachable!("digest: {error}"));
+        let contract = TaskContract::new("Verified parser anchor", ".");
+        let receipt = ChangeReceipt::build(ReceiptInput {
+            run_id: RunId::new(),
+            evidence: vec![Evidence::deterministic_pass(
+                contract.obligations[0].id,
+                EvidenceKind::Test,
+                "fixture passed",
+            )],
+            contract,
+            outcome: ReceiptOutcome::Applied,
+            baseline_digest: "baseline".to_owned(),
+            final_event_hash: "event".to_owned(),
+            changes: vec![FileChange {
+                path: "a.txt".to_owned(),
+                before_digest: None,
+                after_digest: current_digest,
+                before_unix_mode: None,
+                after_unix_mode: None,
+                bytes_added: 11,
+                bytes_removed: 0,
+            }],
+            approvals: Vec::new(),
+            unresolved_risks: Vec::new(),
+        })
+        .unwrap_or_else(|error| unreachable!("receipt: {error}"));
+        let memory =
+            MemoryStore::open_in_memory().unwrap_or_else(|error| unreachable!("memory: {error}"));
+        memory
+            .remember_applied_run(&receipt)
+            .unwrap_or_else(|error| unreachable!("remember: {error}"));
+        let policy = PolicyEngine::local_default().with_allowed(Capability::MemoryRead);
+        let context = ToolContext::new(&transaction, &policy, Some(&memory));
+
+        let current = RecallMemoryTool
+            .execute(&context, json!({"query": "parser anchor"}))
+            .await
+            .unwrap_or_else(|error| unreachable!("current recall: {error}"));
+        assert_eq!(
+            current.content["memories"].as_array().map(Vec::len),
+            Some(1)
+        );
+        assert_eq!(
+            current.content["memories"][0]["validation"]["freshness"],
+            "current"
+        );
+
+        transaction
+            .write_file("a.txt", b"candidate drift\n")
+            .unwrap_or_else(|error| unreachable!("drift: {error}"));
+        let stale = RecallMemoryTool
+            .execute(&context, json!({"query": "parser anchor"}))
+            .await
+            .unwrap_or_else(|error| unreachable!("stale recall: {error}"));
+        assert_eq!(stale.content["memories"].as_array().map(Vec::len), Some(0));
+        assert_eq!(stale.content["excluded"]["stale"], 1);
     }
 }

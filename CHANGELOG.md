@@ -22,6 +22,11 @@ follow [Semantic Versioning](https://semver.org/).
   Git or shell execution. It supports add/update/delete, exact hunk and line
   validation, optional stale-digest rejection, CRLF preservation, explicit
   no-final-newline handling, and current-source mutation evidence.
+- Receipt-derived memory now records bounded changed-file post-apply digests and
+  validates the complete anchor set against the current isolated candidate.
+  Recall exposes trust/freshness, withholds stale and legacy-unverified receipt
+  history, and keeps explicit human memory advisory. Memory database schema one
+  remains read-compatible and migrates atomically to schema two.
 
 ### Changed
 

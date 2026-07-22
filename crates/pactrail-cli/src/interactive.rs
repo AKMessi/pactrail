@@ -1868,8 +1868,9 @@ impl Session {
                 MemoryKind::AppliedRun => self.theme.muted("✓"),
             };
             lines.push(format!(
-                "  {marker} {}  {}",
+                "  {marker} {}  {}  {}",
                 self.theme.muted(&memory.kind.to_string()),
+                self.theme.muted(&memory.trust().to_string()),
                 self.theme
                     .text(&truncate(&memory.title, content_width(columns, 20, 62)))
             ));

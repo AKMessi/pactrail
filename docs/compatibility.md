@@ -29,9 +29,10 @@ The fixture manifest is checked against the compile-time inventory, so adding
 a readable schema without a corresponding artifact fails the suite. Each
 artifact is then exercised by its owning production reader: event envelopes
 are hash-verified and projected, event databases are opened read-only and
-atomically migrated, and settings are migrated through the normal crash-safe
-persistence path. A manifest-only placeholder therefore cannot satisfy the
-compatibility gate.
+atomically migrated, memory schema one is read without mutation and upgraded
+transactionally without inventing receipt anchors, and settings are migrated
+through the normal crash-safe persistence path. A manifest-only placeholder
+therefore cannot satisfy the compatibility gate.
 
 Audit the actual workspace state and interactive settings before an upgrade:
 
