@@ -16,9 +16,10 @@ use pactrail_core::{
 };
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
-    ConversationItem, FinishReason, ImageArtifact, MAX_INLINE_MODEL_REQUEST_BYTES, Message,
-    ModelDriver, ModelError, ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver,
-    Role, ToolCall, ToolResult, Usage, UserContent, validate_image_set,
+    CapabilitySource, ConversationItem, FinishReason, ImageArtifact,
+    MAX_INLINE_MODEL_REQUEST_BYTES, Message, ModelDriver, ModelError, ModelRequest, ModelResponse,
+    ModelStreamEvent, ModelStreamObserver, Role, ToolCall, ToolResult, Usage, UserContent,
+    validate_image_set,
 };
 use pactrail_store::{EventStore, StoreError};
 use pactrail_tools::{
@@ -37,7 +38,10 @@ use crate::checkpoint::{
 };
 use crate::context_window::{CompactionReport, ContextWindow};
 use crate::controller::{ControllerKernel, GoalIntent, classify_goal};
-use crate::{CheckpointError, ControllerPhase, VerificationCommand, detect_verification_commands};
+use crate::{
+    AdaptiveRuntimeClass, AdaptiveRuntimeProfile, CheckpointError, ControllerPhase,
+    VerificationCommand, detect_verification_commands,
+};
 
 const DEFAULT_MAX_TURNS: u16 = 24;
 const STALLED_TOOL_TURN_LIMIT: u16 = 3;
@@ -67,6 +71,16 @@ pub enum RunProgress {
         run_id: RunId,
         goal: String,
         model: String,
+    },
+    /// Deterministic orchestration limits selected from effective model capabilities.
+    RuntimeProfileSelected {
+        class: AdaptiveRuntimeClass,
+        capability_source: CapabilitySource,
+        input_tokens: u64,
+        turn_output_tokens: u64,
+        discovery_turn_cap: u16,
+        max_tool_calls_per_turn: usize,
+        parallel_read_width: usize,
     },
     /// Integrity-bound image inputs were validated before durable execution.
     InputArtifactsReady {
@@ -576,6 +590,15 @@ impl<'a> RunEngine<'a> {
             .map_err(|error| EngineError::InvalidConfiguration(error.to_string()))?;
         let request_ceiling_bytes = request_ceiling_for_images(&input_images)?;
         let model_capabilities = self.model.capabilities();
+        if model_capabilities.context_tokens < 1_024
+            || model_capabilities.max_output_tokens == 0
+            || model_capabilities.max_output_tokens >= model_capabilities.context_tokens
+        {
+            return Err(EngineError::InvalidConfiguration(format!(
+                "model limits require context_tokens >= 1024 and 0 < max_output_tokens < context_tokens; received context_tokens={} max_output_tokens={}",
+                model_capabilities.context_tokens, model_capabilities.max_output_tokens
+            )));
+        }
         if image_summary.count > 0 && !model_capabilities.vision {
             return Err(EngineError::InvalidConfiguration(
                 "image input requires a model profile with vision enabled".to_owned(),
@@ -593,10 +616,22 @@ impl<'a> RunEngine<'a> {
         let effective_context_tokens = model_capabilities
             .context_tokens
             .saturating_sub(image_summary.estimated_input_tokens);
+        let mut effective_capabilities = model_capabilities.clone();
+        effective_capabilities.context_tokens = effective_context_tokens;
+        let runtime_profile = AdaptiveRuntimeProfile::from_capabilities(&effective_capabilities);
         observer.on_progress(&RunProgress::RunStarted {
             run_id,
             goal: contract.goal.clone(),
             model: format!("{}/{}", self.model.name(), self.model.model()),
+        });
+        observer.on_progress(&RunProgress::RuntimeProfileSelected {
+            class: runtime_profile.class,
+            capability_source: runtime_profile.capability_source,
+            input_tokens: runtime_profile.input_tokens,
+            turn_output_tokens: runtime_profile.turn_output_tokens,
+            discovery_turn_cap: runtime_profile.discovery_turn_cap,
+            max_tool_calls_per_turn: runtime_profile.max_tool_calls_per_turn,
+            parallel_read_width: runtime_profile.parallel_read_width,
         });
         if image_summary.count > 0 {
             observer.on_progress(&RunProgress::InputArtifactsReady {
@@ -923,8 +958,55 @@ impl<'a> RunEngine<'a> {
                 0,
             )
         };
+        journal.append(RunEvent::ActionCompleted(ActionRecord {
+            actor: "controller".to_owned(),
+            action: "select_runtime_profile".to_owned(),
+            summary: format!(
+                "selected {} runtime profile from effective model capabilities",
+                runtime_profile.class.label()
+            ),
+            declared_effects: Vec::new(),
+            observed_effects: Vec::new(),
+            succeeded: true,
+            duration_ms: 0,
+            attributes: BTreeMap::from([
+                (
+                    "capability_source".to_owned(),
+                    runtime_profile.capability_source_label().to_owned(),
+                ),
+                (
+                    "discovery_turn_cap".to_owned(),
+                    runtime_profile.discovery_turn_cap.to_string(),
+                ),
+                (
+                    "input_tokens".to_owned(),
+                    runtime_profile.input_tokens.to_string(),
+                ),
+                (
+                    "max_tool_calls_per_turn".to_owned(),
+                    runtime_profile.max_tool_calls_per_turn.to_string(),
+                ),
+                (
+                    "parallel_read_width".to_owned(),
+                    runtime_profile.parallel_read_width.to_string(),
+                ),
+                (
+                    "profile".to_owned(),
+                    runtime_profile.class.label().to_owned(),
+                ),
+                (
+                    "turn_output_tokens".to_owned(),
+                    runtime_profile.turn_output_tokens.to_string(),
+                ),
+            ]),
+        }))?;
         let mut accepted_completion_gate = None;
-        let mut controller = ControllerKernel::restore(&contract.goal, max_turns, &conversation);
+        let mut controller = ControllerKernel::restore_with_discovery_cap(
+            &contract.goal,
+            max_turns,
+            runtime_profile.discovery_turn_cap,
+            &conversation,
+        );
         let (mut proactive_verification_attempts, mut last_proactive_candidate_digest) =
             restore_controller_verification_state(&conversation);
         debug_assert_eq!(controller.intent(), goal_intent);
@@ -1036,7 +1118,7 @@ impl<'a> RunEngine<'a> {
             let request = ModelRequest {
                 conversation: conversation.clone(),
                 tools: control.tools.clone(),
-                max_output_tokens: self.model.capabilities().max_output_tokens.min(8_192),
+                max_output_tokens: runtime_profile.turn_output_tokens,
                 temperature: Some(0.0),
             };
             let model_started = Instant::now();
@@ -1135,6 +1217,15 @@ impl<'a> RunEngine<'a> {
                     "model returned tool calls while native tools are disabled in its capability profile"
                         .to_owned(),
                 ));
+            }
+            if response.tool_calls.len() > runtime_profile.max_tool_calls_per_turn {
+                transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                return Err(EngineError::Protocol(format!(
+                    "model returned {} tool calls in one turn; the {} runtime profile allows at most {}",
+                    response.tool_calls.len(),
+                    runtime_profile.class.label(),
+                    runtime_profile.max_tool_calls_per_turn
+                )));
             }
 
             if response.tool_calls.is_empty() {
@@ -1281,7 +1372,9 @@ impl<'a> RunEngine<'a> {
             )?;
             let mut any_tool_succeeded = false;
             let mut controller_results = Vec::new();
-            for batch in self.schedule_tool_batches(response.tool_calls) {
+            for batch in
+                self.schedule_tool_batches(response.tool_calls, runtime_profile.parallel_read_width)
+            {
                 let candidate_before = candidate_changes_digest(&transaction.changes()?);
                 for call in &batch {
                     journal.append(RunEvent::EffectPrepared(
@@ -1522,6 +1615,7 @@ impl<'a> RunEngine<'a> {
                                 max_turns,
                                 repeated_tool_turns,
                                 &reason,
+                                runtime_profile.turn_output_tokens,
                             )
                             .await
                         {
@@ -1739,6 +1833,7 @@ impl<'a> RunEngine<'a> {
         max_turns: u16,
         repeated_turns: u16,
         reason: &str,
+        turn_output_tokens: u64,
     ) -> Result<String, EngineError> {
         observer.on_progress(&RunProgress::RecoveryStarted {
             repeated_turns,
@@ -1770,7 +1865,7 @@ impl<'a> RunEngine<'a> {
         let request = ModelRequest {
             conversation: conversation.clone(),
             tools: Vec::new(),
-            max_output_tokens: self.model.capabilities().max_output_tokens.min(8_192),
+            max_output_tokens: turn_output_tokens,
             temperature: Some(0.0),
         };
         let model_started = Instant::now();
@@ -1891,9 +1986,14 @@ impl<'a> RunEngine<'a> {
         }
     }
 
-    fn schedule_tool_batches(&self, calls: Vec<ToolCall>) -> Vec<Vec<ToolCall>> {
+    fn schedule_tool_batches(
+        &self,
+        calls: Vec<ToolCall>,
+        parallel_read_width: usize,
+    ) -> Vec<Vec<ToolCall>> {
         let mut batches = Vec::new();
         let mut read_batch = Vec::new();
+        let parallel_read_width = parallel_read_width.max(1);
         for call in calls {
             let parallel_safe = self
                 .tools
@@ -1901,6 +2001,9 @@ impl<'a> RunEngine<'a> {
                 .is_some_and(|descriptor| descriptor.annotations.parallel_safe);
             if parallel_safe {
                 read_batch.push(call);
+                if read_batch.len() == parallel_read_width {
+                    batches.push(std::mem::take(&mut read_batch));
+                }
                 continue;
             }
             if !read_batch.is_empty() {
@@ -4411,6 +4514,114 @@ mod tests {
         );
     }
 
+    #[test]
+    fn adaptive_read_width_bounds_parallel_safe_batches() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "batch-test".to_owned(),
+            responses: Mutex::new(VecDeque::new()),
+            capabilities: ModelCapabilities::default(),
+        };
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let engine = RunEngine::new(&model, &registry, &policy);
+        let calls = (0..3)
+            .map(|index| ToolCall {
+                id: format!("read-{index}"),
+                name: "list_files".to_owned(),
+                arguments: json!({"path": "."}),
+                extensions: serde_json::Map::new(),
+            })
+            .collect::<Vec<_>>();
+
+        let serial = engine.schedule_tool_batches(calls.clone(), 1);
+        assert_eq!(serial.iter().map(Vec::len).collect::<Vec<_>>(), [1, 1, 1]);
+        let bounded_parallel = engine.schedule_tool_batches(calls, 2);
+        assert_eq!(
+            bounded_parallel.iter().map(Vec::len).collect::<Vec<_>>(),
+            [2, 1]
+        );
+    }
+
+    #[tokio::test]
+    async fn compact_profile_rejects_oversized_tool_call_bursts_before_execution() {
+        let tool_calls = (0..5)
+            .map(|index| ToolCall {
+                id: format!("read-{index}"),
+                name: "list_files".to_owned(),
+                arguments: json!({"path": "."}),
+                extensions: serde_json::Map::new(),
+            })
+            .collect();
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "compact-burst-test".to_owned(),
+            responses: Mutex::new(VecDeque::from([ModelResponse {
+                text: String::new(),
+                tool_calls,
+                finish_reason: FinishReason::ToolCalls,
+                usage: Usage::default(),
+                provider_request_id: None,
+                extensions: serde_json::Map::new(),
+            }])),
+            capabilities: ModelCapabilities {
+                context_tokens: 4_096,
+                max_output_tokens: 512,
+                parallel_tools: true,
+                source: CapabilitySource::Probed,
+                ..ModelCapabilities::default()
+            },
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let engine = RunEngine::new(&model, &registry, &policy).with_max_turns(1);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let run_id = RunId::new();
+        let mut contract = TaskContract::new("Inspect the workspace", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+
+        let result = engine
+            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .await;
+
+        assert!(
+            matches!(
+                &result,
+                Err(EngineError::Protocol(message))
+                    if message.contains("compact runtime profile allows at most 4")
+            ),
+            "unexpected result: {result:?}"
+        );
+        let events = store
+            .load(run_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"));
+        assert!(events.iter().all(|event| {
+            !matches!(
+                &event.event,
+                RunEvent::ActionCompleted(action) if action.actor.starts_with("tool:")
+            )
+        }));
+        assert_eq!(
+            store
+                .snapshot(run_id)
+                .unwrap_or_else(|error| unreachable!("snapshot: {error}"))
+                .state,
+            RunState::Failed
+        );
+    }
+
     #[tokio::test]
     #[allow(clippy::too_many_lines)]
     async fn tool_loop_produces_isolated_change_receipt() {
@@ -4518,6 +4729,15 @@ mod tests {
             event,
             RunProgress::RunStarted { run_id, goal, .. }
                 if *run_id == outcome.run_id && goal == "Create a README"
+        )));
+        assert!(progress.iter().any(|event| matches!(
+            event,
+            RunProgress::RuntimeProfileSelected {
+                class: AdaptiveRuntimeClass::Balanced,
+                discovery_turn_cap: 4,
+                parallel_read_width: 1,
+                ..
+            }
         )));
         assert!(progress.contains(&RunProgress::ModelTurnStarted {
             turn: 1,

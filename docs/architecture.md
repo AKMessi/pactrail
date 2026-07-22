@@ -316,6 +316,15 @@ request and executes nothing; it can produce positive observations but cannot
 infer support from a provider name or turn a missing observation into a
 negative capability decision.
 
+The engine derives one immutable adaptive runtime profile from those effective
+capabilities after reserving image input: `compact`, `balanced`, or `expanded`.
+The tier controls the discovery-turn ceiling, per-turn output ceiling, maximum
+tool-call fan-out, and parallel-safe read width. Parallel width is always one
+unless `parallel_tools` is explicitly effective. The profile never examines a
+provider or model name, is reconstructed deterministically on resume, appears
+in `RunProgress`, and is recorded as a hash-linked controller action before the
+first model turn.
+
 ## Durable memory
 
 Workspace memory uses a separate SQLite database in WAL mode with full

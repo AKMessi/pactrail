@@ -1717,7 +1717,7 @@ fn push_trace_action(
         &format!(
             "{}  {}  {}",
             format_trace_elapsed(i128::from(action.duration_ms)),
-            if action.succeeded { "OK" } else { "FAIL" },
+            trace_action_outcome(action),
             action.summary
         ),
         columns,
@@ -1726,7 +1726,7 @@ fn push_trace_action(
         let attributes = action
             .attributes
             .iter()
-            .map(|(key, value)| format!("{key}={value}"))
+            .map(|(key, value)| format_trace_attribute(key, value))
             .collect::<Vec<_>>()
             .join("  ·  ");
         push_trace_detail(lines, prefix, &attributes, columns);
@@ -1894,9 +1894,37 @@ fn trace_actor(actor: &str) -> &'static str {
         "TOOL"
     } else if actor == "verifier" {
         "VERIFY"
+    } else if actor == "controller" {
+        "CONTROL"
+    } else if actor == "context" {
+        "CONTEXT"
+    } else if actor == "input" {
+        "INPUT"
     } else {
         "ACTION"
     }
+}
+
+fn trace_action_outcome(action: &pactrail_core::ActionRecord) -> &'static str {
+    if action.actor == "controller" && action.action == "assess_progress" && !action.succeeded {
+        "STALL"
+    } else if action.succeeded {
+        "OK"
+    } else {
+        "FAIL"
+    }
+}
+
+fn format_trace_attribute(key: &str, value: &str) -> String {
+    let value = if key.ends_with("_digest")
+        || key.ends_with("_hash")
+        || matches!(key, "candidate" | "runtime_profile")
+    {
+        short_digest(value)
+    } else {
+        value
+    };
+    format!("{key}={value}")
 }
 
 fn format_trace_elapsed(milliseconds: i128) -> String {

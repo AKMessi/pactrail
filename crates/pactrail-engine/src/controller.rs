@@ -76,7 +76,17 @@ pub(crate) struct ControllerKernel {
 }
 
 impl ControllerKernel {
+    #[cfg(test)]
     pub(crate) fn restore(goal: &str, max_turns: u16, conversation: &[ConversationItem]) -> Self {
+        Self::restore_with_discovery_cap(goal, max_turns, MAX_DISCOVERY_TURNS, conversation)
+    }
+
+    pub(crate) fn restore_with_discovery_cap(
+        goal: &str,
+        max_turns: u16,
+        discovery_turn_cap: u16,
+        conversation: &[ConversationItem],
+    ) -> Self {
         let mut evidence_digests = BTreeSet::new();
         let mut announced_phases = BTreeSet::new();
         let mut phase = None;
@@ -123,7 +133,7 @@ impl ControllerKernel {
         Self {
             intent: classify_goal(goal),
             max_turns,
-            discovery_limit: discovery_turn_limit(max_turns),
+            discovery_limit: discovery_turn_limit(max_turns, discovery_turn_cap),
             phase,
             phase_turn,
             announced_phases,
@@ -278,12 +288,12 @@ impl ControllerKernel {
     }
 }
 
-fn discovery_turn_limit(max_turns: u16) -> u16 {
+fn discovery_turn_limit(max_turns: u16, discovery_turn_cap: u16) -> u16 {
     if max_turns <= MIN_RESERVED_ACTION_TURNS {
         return 0;
     }
     (max_turns / 3)
-        .clamp(2, MAX_DISCOVERY_TURNS)
+        .clamp(2, MAX_DISCOVERY_TURNS.min(discovery_turn_cap.max(2)))
         .min(max_turns.saturating_sub(MIN_RESERVED_ACTION_TURNS))
 }
 
@@ -445,11 +455,31 @@ mod tests {
 
     #[test]
     fn reserves_action_turns_even_for_small_budgets() {
-        assert_eq!(discovery_turn_limit(1), 0);
-        assert_eq!(discovery_turn_limit(4), 0);
-        assert_eq!(discovery_turn_limit(8), 2);
-        assert_eq!(discovery_turn_limit(16), 5);
-        assert_eq!(discovery_turn_limit(24), 6);
+        assert_eq!(discovery_turn_limit(1, MAX_DISCOVERY_TURNS), 0);
+        assert_eq!(discovery_turn_limit(4, MAX_DISCOVERY_TURNS), 0);
+        assert_eq!(discovery_turn_limit(8, MAX_DISCOVERY_TURNS), 2);
+        assert_eq!(discovery_turn_limit(16, MAX_DISCOVERY_TURNS), 5);
+        assert_eq!(discovery_turn_limit(24, MAX_DISCOVERY_TURNS), 6);
+        assert_eq!(discovery_turn_limit(24, 2), 2);
+    }
+
+    #[test]
+    fn adaptive_discovery_cap_moves_compact_profiles_to_action_early() {
+        let mut controller =
+            ControllerKernel::restore_with_discovery_cap("Implement a focused fix", 24, 2, &[]);
+        let tools = Vec::<ToolDescriptor>::new();
+        assert_eq!(
+            controller.before_turn(0, false, &tools).phase,
+            ControllerPhase::Investigating
+        );
+        assert_eq!(
+            controller.before_turn(1, false, &tools).phase,
+            ControllerPhase::Investigating
+        );
+        assert_eq!(
+            controller.before_turn(2, false, &tools).phase,
+            ControllerPhase::Implementing
+        );
     }
 
     #[test]

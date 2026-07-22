@@ -8,10 +8,11 @@ so a repository cannot cause arbitrary extension code to load.
 The facade crate is `pactrail-sdk`. The v1 distribution contract is an immutable
 Git tag; crates.io publication is not required or promised for 1.0. The facade
 follows Pactrail's 1.x SemVer contract while implementation crates remain
-internal. `SDK_API_REVISION` is currently 5 and lets embedders require a specific
+internal. `SDK_API_REVISION` is currently 6 and lets embedders require a specific
 additive extension surface independently of durable schema versions.
 
-Revision 5 exports `ControllerPhase` and adds phase, semantic-progress,
+Revision 6 exports `ControllerPhase`, `AdaptiveRuntimeProfile`, and
+`AdaptiveRuntimeClass`, and adds runtime-profile, phase, semantic-progress,
 intervention, and proactive-verification variants to the non-exhaustive
 `RunProgress` stream. Embedders can render the controller's decisions without
 interpreting model text. Existing observers must continue treating
@@ -20,6 +21,12 @@ interpreting model text. Existing observers must continue treating
 The same revision exports `ApplyPatchTool`. It uses the normal `Tool` contract,
 `FileRead`/`FileWrite` policy, isolated transaction, effect fence, output bound,
 and receipt path; embedding it does not introduce a parallel mutation channel.
+
+`AdaptiveRuntimeProfile::from_capabilities` exposes the exact provider-neutral
+derivation used by the engine. Embedders can preview compact/balanced/expanded
+limits, while `RunProgress::RuntimeProfileSelected` reports the profile that
+governed a run. The engine rejects invalid context/output relationships before
+durable model work.
 
 ## Custom model provider
 
