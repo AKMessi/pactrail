@@ -224,15 +224,39 @@ and reclaimed bytes to the hash-linked action journal and appears in the live
 CLI timeline. Raw observations remain intentionally absent from the durable
 trace.
 
-The loop controller separately tracks identical tool turns and all-failed tool
-turns. A repeated successful read-only call receives explicit steering. If a
-conservatively classified informational goal still repeats three times, Pactrail
-permits exactly one additional model attempt with no tools and an evidence-only
-synthesis instruction. This recovery consumes the normal model-attempt and
-token budgets and is fully journaled. Generated CLI contracts derive those
-budgets from the configured context, output, and turn ceilings; explicit task
-contracts retain their declared resource governance. Failed calls, change requests, and
-mutation loops do not receive this fallback.
+The execution controller is a deterministic kernel above the model loop. It
+classifies the task as informational or change-seeking, divides the existing
+turn ceiling into `investigating`, `implementing`, `validating`, and
+`synthesizing` phases, and always reserves at least four action/finalization
+turns when the configured budget permits. The phase is not merely a prompt:
+each `ModelRequest` advertises a phase-specific tool subset and tool dispatch
+rejects calls outside that exact set before registry or policy execution.
+
+Change tasks receive bounded discovery. Once its budget is exhausted, broad
+list/search/history/memory tools disappear; the first implementation turn may
+retain one focused file read, while mutation and candidate-inspection tools
+remain available. As soon as an isolated candidate exists the controller enters
+validation. Informational tasks retain discovery tools until evidence stalls or
+the final synthesis reserve is reached, then receive a tool-free answer turn.
+
+After each tool turn the controller hashes normalized successful result content
+without the provider's call ID. Different requests that return equivalent
+observations therefore count as no semantic progress. A candidate mutation or
+previously unseen successful evidence resets the counter. Two stagnant turns
+produce explicit steering and a narrower next action; the older identical-call
+and all-failed-call stop conditions remain independent fail-safes.
+
+Phase entry, available tool count, progress assessment, and intervention are
+visible through `RunProgress` and recorded as hash-linked controller actions or
+notes. Phase prompts and action-space changes are checkpointed before provider
+I/O. Resume reconstructs the semantic ledger from checkpointed tool results and
+phase markers, so no new durable schema is required and interruption cannot
+silently restore a broader tool set.
+
+Generated CLI contracts derive all controller limits from the configured
+context, output, and turn ceilings; explicit task contracts retain their
+declared resource governance. A change intent cannot complete successfully
+without a non-empty isolated candidate.
 
 ## Provider and streaming boundary
 

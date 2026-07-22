@@ -6,7 +6,19 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-No user-visible changes yet.
+### Added
+
+- A deterministic, phase-aware controller kernel now reserves implementation
+  and validation turns, measures semantic evidence progress, narrows advertised
+  tools after bounded discovery, and exposes every phase decision and
+  intervention in the live timeline and hash-linked trace.
+- `ControllerPhase` and the controller progress events are available through
+  SDK API revision 5.
+
+### Changed
+
+- Change tasks that return a summary without producing an isolated candidate
+  now fail explicitly instead of exposing an empty ready-to-apply receipt.
 
 ## [1.0.0] - 2026-07-22
 

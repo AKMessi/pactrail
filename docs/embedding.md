@@ -8,8 +8,13 @@ so a repository cannot cause arbitrary extension code to load.
 The facade crate is `pactrail-sdk`. The v1 distribution contract is an immutable
 Git tag; crates.io publication is not required or promised for 1.0. The facade
 follows Pactrail's 1.x SemVer contract while implementation crates remain
-internal. `SDK_API_REVISION` is currently 4 and lets embedders require a specific
+internal. `SDK_API_REVISION` is currently 5 and lets embedders require a specific
 additive extension surface independently of durable schema versions.
+
+Revision 5 exports `ControllerPhase` and adds phase, semantic-progress, and
+intervention variants to the non-exhaustive `RunProgress` stream. Embedders can
+render the controller's decisions without interpreting model text. Existing
+observers must continue treating `RunProgress` as non-exhaustive.
 
 ## Custom model provider
 

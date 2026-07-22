@@ -596,6 +596,86 @@ impl RunActivity {
         self.set_message("context compacted · recent evidence preserved");
     }
 
+    fn on_controller_progress(&self, progress: &RunProgress) {
+        match progress {
+            RunProgress::ControllerPhaseChanged {
+                phase,
+                turn,
+                phase_turn,
+                phase_limit,
+                tools_available,
+                reason,
+            } => {
+                let phase_budget = if *phase_limit == 0 {
+                    "reserved".to_owned()
+                } else {
+                    format!("{phase_turn}/{phase_limit}")
+                };
+                self.row(
+                    "◆",
+                    "control",
+                    &format!(
+                        "{} · turn {turn} · phase {phase_budget} · {tools_available} {} · {reason}",
+                        phase.label(),
+                        plural(*tools_available, "tool", "tools")
+                    ),
+                    TimelineTone::Brand,
+                );
+                self.set_message(format!("{} · {reason}", phase.label()));
+            }
+            RunProgress::ControllerProgressAssessed {
+                turn,
+                novel_evidence,
+                candidate_changed,
+                no_progress_turns,
+            } => {
+                let candidate = if *candidate_changed {
+                    " · candidate changed"
+                } else {
+                    ""
+                };
+                let stalled = if *no_progress_turns == 0 {
+                    String::new()
+                } else {
+                    format!(" · {no_progress_turns} stalled")
+                };
+                self.row(
+                    if *candidate_changed || *novel_evidence > 0 {
+                        "◇"
+                    } else {
+                        "!"
+                    },
+                    "progress",
+                    &format!(
+                        "turn {turn} · {novel_evidence} new {}{candidate}{stalled}",
+                        plural(*novel_evidence, "observation", "observations")
+                    ),
+                    if *no_progress_turns == 0 {
+                        TimelineTone::Normal
+                    } else {
+                        TimelineTone::Warning
+                    },
+                );
+            }
+            RunProgress::ControllerIntervened {
+                turn,
+                no_progress_turns,
+                reason,
+            } => {
+                self.row(
+                    "↻",
+                    "control",
+                    &format!(
+                        "turn {turn} · intervened after {no_progress_turns} stalled turns · {reason}"
+                    ),
+                    TimelineTone::Warning,
+                );
+                self.set_message("controller narrowed the next action");
+            }
+            _ => {}
+        }
+    }
+
     fn on_model_progress(&self, progress: &RunProgress) {
         match progress {
             RunProgress::ModelTurnStarted { turn, max_turns } => {
@@ -860,6 +940,11 @@ impl RunObserver for RunActivity {
             RunProgress::StateChanged { .. } => self.on_state_progress(progress),
             RunProgress::ContextBuilt { .. } => self.on_context_progress(progress),
             RunProgress::ContextCompacted { .. } => self.on_compaction_progress(progress),
+            RunProgress::ControllerPhaseChanged { .. }
+            | RunProgress::ControllerProgressAssessed { .. }
+            | RunProgress::ControllerIntervened { .. } => {
+                self.on_controller_progress(progress);
+            }
             RunProgress::ModelTurnStarted { .. }
             | RunProgress::ModelStreamStarted { .. }
             | RunProgress::ModelTextDelta { .. }
