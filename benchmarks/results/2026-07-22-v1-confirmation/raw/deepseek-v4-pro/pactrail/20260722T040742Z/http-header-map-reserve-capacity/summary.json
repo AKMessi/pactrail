@@ -1,0 +1,98 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-v1-real-issue-pro-replication",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 1.0.0",
+    "model":  "deepseek-v4-pro",
+    "started_at":  "20260722T040742Z",
+    "cases":  1,
+    "functional_passed":  0,
+    "task_passed":  0,
+    "strict_passed":  0,
+    "median_duration_ms":  39826,
+    "total_duration_ms":  39826,
+    "total_input_tokens":  191907,
+    "total_cached_input_tokens":  165248,
+    "total_output_tokens":  2167,
+    "total_tokens":  194074,
+    "estimated_cost_usd":  0.014081,
+    "balance_before_usd":  "1.54",
+    "balance_after_usd":  "1.53",
+    "protocol":  {
+                     "manifest_sha256":  "732ac74c53304b8ae1e2b5e4a1bcb81e978df4cbfe1a722340abab4edd12f09a",
+                     "runner_sha256":  "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+                     "opencode_config_sha256":  "fc4c9a7c779d2f815a865b9f71869e87d4694af39b4d6af4e05a544785fa15f0",
+                     "harness_executable_sha256":  "90da5dc5053077a4bb6fc3294364583b93009a4f3667319b4f3632d9c821b41a",
+                     "context_tokens":  16384,
+                     "max_output_tokens":  2048,
+                     "max_steps":  16,
+                     "temperature":  0,
+                     "thinking":  "disabled"
+                 },
+    "results":  [
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-v1-real-issue-pro-replication",
+                        "case_id":  "http-header-map-reserve-capacity",
+                        "repository":  "hyperium/http",
+                        "difficulty":  "allocation-capacity-regression",
+                        "source_base_commit":  "4e020461ca29efec5ac45e6b2e7871fe29ff1b50",
+                        "reference_commit":  "68845bd24d843670cd45e6decc60d01ac7266f40",
+                        "prompt_sha256":  "3d7852ab575b144237901fc700cd29c04001dbb0a42d20061b8dea168b1b8ca0",
+                        "harness":  "pactrail",
+                        "harness_version":  "pactrail 1.0.0",
+                        "model":  "deepseek-v4-pro",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "process_error",
+                        "exit_code":  1,
+                        "timed_out":  false,
+                        "duration_ms":  39826,
+                        "grading_duration_ms":  7623,
+                        "run_id":  "019f8802-0df4-7de1-808e-62e0137163cc",
+                        "changed_paths":  [
+                                              "Cargo.lock"
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  0,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  0
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --test header_map pactrail_hidden_reserve_capacity",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  5800,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test --lib",
+                                                "exit_code":  0,
+                                                "timed_out":  false,
+                                                "duration_ms":  1823,
+                                                "passed":  true
+                                            },
+                        "input_tokens":  191907,
+                        "cached_input_tokens":  165248,
+                        "output_tokens":  2167,
+                        "total_tokens":  194074,
+                        "estimated_cost_usd":  0.014081,
+                        "model_calls":  16,
+                        "tool_calls":  23,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  1,
+                        "source_isolation_preserved":  true,
+                        "trace_integrity_verified":  true,
+                        "applied_candidate_matches":  false,
+                        "summary":  ""
+                    }
+                ]
+}

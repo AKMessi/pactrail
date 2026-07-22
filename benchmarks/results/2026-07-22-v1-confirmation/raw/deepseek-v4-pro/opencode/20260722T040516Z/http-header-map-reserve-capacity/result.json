@@ -1,0 +1,64 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-v1-real-issue-pro-replication",
+    "case_id":  "http-header-map-reserve-capacity",
+    "repository":  "hyperium/http",
+    "difficulty":  "allocation-capacity-regression",
+    "source_base_commit":  "4e020461ca29efec5ac45e6b2e7871fe29ff1b50",
+    "reference_commit":  "68845bd24d843670cd45e6decc60d01ac7266f40",
+    "prompt_sha256":  "3d7852ab575b144237901fc700cd29c04001dbb0a42d20061b8dea168b1b8ca0",
+    "harness":  "opencode",
+    "harness_version":  "1.2.27",
+    "model":  "deepseek-v4-pro",
+    "functional_passed":  true,
+    "instructions_passed":  true,
+    "task_passed":  true,
+    "strict_passed":  true,
+    "outcome":  "completed",
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  103585,
+    "grading_duration_ms":  7149,
+    "run_id":  "",
+    "changed_paths":  [
+                          "src/header/map.rs"
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  1,
+                  "additions":  9,
+                  "deletions":  7,
+                  "bytes":  1293
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test --test header_map pactrail_hidden_reserve_capacity",
+                          "exit_code":  0,
+                          "timed_out":  false,
+                          "duration_ms":  5462,
+                          "passed":  true
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test --lib",
+                            "exit_code":  0,
+                            "timed_out":  false,
+                            "duration_ms":  1687,
+                            "passed":  true
+                        },
+    "input_tokens":  204954,
+    "cached_input_tokens":  103168,
+    "output_tokens":  3871,
+    "total_tokens":  208825,
+    "estimated_cost_usd":  0.048019,
+    "model_calls":  13,
+    "tool_calls":  12,
+    "failed_tool_calls":  0,
+    "provider_errors":  0,
+    "source_isolation_preserved":  false,
+    "trace_integrity_verified":  false,
+    "applied_candidate_matches":  false,
+    "summary":  "I\u0027ll start by understanding the codebase structure and the issue.\n---\n## Goal\n\nFix hyperium/http issue #741 in `HeaderMap::reserve`. The bug is that `reserve(n)` treats the requested number of entries as raw hash-table capacity instead of usable entry capacity. After `reserve(n)`, inserting `n` entries into an empty map must not trigger another allocation. Overflow and existing-map behavior must remain correct.\n\n## Instructions\n\n- Do NOT inspect git history or any remote\n- Do NOT modify tests, documentation, changelogs, or manifests\n- Make a focused production-quality fix\n- Run relevant tests before finishing\n- Work offline only\n\n## Discoveries\n\n- The `HeaderMap` structure uses a hash table (`indices`) with robin hood hashing. The actual entries are stored in `entries: Vec\u003cBucket\u003cT\u003e\u003e` and overflow values in `extra_values: Vec\u003cExtraValue\u003cT\u003e\u003e`.\n- `types: Size = u16`, `MAX_SIZE: usize = 1 \u003c\u003c 15` (32,768)\n- Key helper function: `usable_capacity(raw_cap: usize) -\u003e usize` - this converts raw hash-table capacity to the number of entries that can be stored. The name `usable_capacity` implies there\u0027s a conversion needed.\n- `try_reserve` (line 701-728): The bug is that `cap` is computed as `entries.len() + additional`, but when the map is empty and `cap \u003e self.indices.len()`, it computes `cap = cap.checked_next_power_of_two()` and then creates `indices` with that size directly. However, it does correctly call `usable_capacity(cap)` for `entries.with_capacity()`.\n- BUT: The condition `if cap \u003e self.indices.len()` treats `cap` (entry count) as directly comparable to `self.indices.len()` (raw hash-table slots). The indices array needs to be larger than the entry count by a factor given by the usable-to-raw conversion.\n- `try_reserve_one` (line 1692-1730): When the map is full, it checks `len == self.capacity()` where `capacity()` returns `usable_capacity(self.indices.len())`. This is the correct pattern - checking entry count against usable capacity.\n- The fix needs to ensure that when computing the new raw capacity for `indices`, the code converts the desired entry capacity (entries.len() + additional) to a raw hash-table capacity using the inverse of `usable_capacity`. The function `to_raw_capacity` likely exists to do this conversion (reference at line 512 in `try_with_capacity`).\n\n## Accomplished\n\n- Read and analyzed the full source code of `src/header/map.rs` (3396 lines)\n- Identified the bug location: `try_reserve` method at lines 701-728\n- The core issue: `cap` (entry count) is compared against `self.indices.len()` (raw slots), and used directly as `next_power_of_two` for the hash table size. Need to convert entry count to raw capacity properly.\n- Not yet modified any files.\n\n## Relevant files / directories\n\n- `D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\v1-confirmation-scored\\20260722T040516Z-opencode-deepseek-v4-pro\\http-header-map-reserve-capacity\\workspace\\src\\header\\map.rs` - The main file containing the `HeaderMap` implementation, specifically `try_reserve` (lines 701-728), `try_with_capacity` (lines 502-529, shows `to_raw_capacity` pattern), `capacity` (line 647-649, uses `usable_capacity`), `try_reserve_one` (lines 1692-1730, shows correct pattern)\n- `D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\v1-confirmation-scored\\20260722T040516Z-opencode-deepseek-v4-pro\\http-header-map-reserve-capacity\\workspace\\tests\\header_map.rs` - Test file (should NOT be modified, but tests should be run after fix)\n- Other dependent helper functions to find: `to_raw_capacity` and `usable_capacity` definitions\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nLet me re-read the key sections of the code to understand the exact fix needed.\nNow let me find the `to_raw_capacity` and `usable_capacity` functions:\nNow I have a clear picture. The fix is straightforward:\n\n- `usable_capacity(cap) = cap - cap/4` (75% load factor)\n- `to_raw_capacity(n) = n + n/3` (inverse: 4/3 ratio)\n\nIn `try_reserve`, `cap` is the desired entry count (`entries.len() + additional`). But it\u0027s compared directly against `self.indices.len()` (raw slots) and used directly as `next_power_of_two` for the hash table. It should be converted to raw capacity first, just like `try_with_capacity` does.\nNow let me run the relevant tests to verify the fix:\nAll 30 tests pass. Let me also run the full test suite to make sure nothing else is broken:\nAll tests pass — 125 unit tests, 30 header_map tests, 1 fuzz test, 8 status_code tests, and 228 doc tests.\n\n**The fix:** In `try_reserve`, the entry count `cap` was being used directly as the raw hash-table capacity. Now it\u0027s converted via `to_raw_capacity(cap)` before comparing against `self.indices.len()` and before computing `next_power_of_two`, matching the pattern already used in `try_with_capacity`. This ensures that after `reserve(n)`, inserting `n` entries into an empty map won\u0027t trigger another allocation.\n---\n## Goal\n\nFix hyperium/http issue #741 in `HeaderMap::reserve`. The bug is that `reserve(n)` treats the requested number of entries as raw hash-table capacity instead of usable entry capacity. After `reserve(n)`, inserting `n` entries into an empty map must not trigger another allocation. Overflow and existing-map behavior must remain correct.\n\n## Instructions\n\n- Do NOT inspect git history or any remote\n- Do NOT modify tests, documentation, changelogs, or manifests\n- Make a focused production-quality fix\n- Run relevant tests before finishing\n- Work offline only\n\n## Discoveries\n\n- The `HeaderMap` structure uses a hash table (`indices`) with robin hood hashing. The actual entries are stored in `entries: Vec\u003cBucket\u003cT\u003e\u003e` and overflow values in `extra_values: Vec\u003cExtraValue\u003cT\u003e\u003e`.\n- `types: Size = u16`, `MAX_SIZE: usize = 1 \u003c\u003c 15` (32,768)\n- Key helper functions (defined at lines 3579-3593 of `src/header/map.rs`):\n  - `usable_capacity(cap: usize) -\u003e usize` = `cap - cap / 4` (converts raw hash-table capacity to usable entry capacity, 75% load factor)\n  - `to_raw_capacity(n: usize) -\u003e usize` = `n + n / 3` (converts desired entry count to raw hash-table capacity, 4/3 ratio)\n- **The bug** (lines 701-728): In `try_reserve`, `cap` is computed as `entries.len() + additional` (entry count), but it was:\n  1. Compared directly against `self.indices.len()` (raw hash-table slots) — this is wrong: indices must be larger than entry count.\n  2. Used directly as `next_power_of_two` for the hash table size — also wrong.\n- **The correct pattern** is shown in `try_with_capacity` (lines 502-529), which calls `to_raw_capacity(capacity)` before computing `next_power_of_two`.\n- Additionally, `capacity()` (line 647-649) correctly returns `usable_capacity(self.indices.len())`, and `try_reserve_one` (line 1692-1730) correctly checks `len == self.capacity()`.\n\n## Accomplished\n\n- Read and analyzed the full source code of `src/header/map.rs` (3901 lines)\n- Identified the bug location: `try_reserve` method at line 701\n- **Applied the fix**: Changed `try_reserve` to convert the entry count `cap` to raw capacity via `to_raw_capacity(cap)` before comparing against `self.indices.len()` and before computing `next_power_of_two`. Also renamed the local variable to `raw_cap` for clarity within the conditional block.\n- Ran all tests: 125 unit tests, 30 header_map tests, 1 fuzz test, 8 status_code tests, and 228 doc tests — all pass.\n- No other files were modified.\n\n## Relevant files / directories\n\n- `D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\v1-confirmation-scored\\20260722T040516Z-opencode-deepseek-v4-pro\\http-header-map-reserve-capacity\\workspace\\src\\header\\map.rs` — The main file containing the `HeaderMap` implementation. Fix applied to `try_reserve` method (previously lines 701-728).\n- `D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\v1-confirmation-scored\\20260722T040516Z-opencode-deepseek-v4-pro\\http-header-map-reserve-capacity\\workspace\\tests\\header_map.rs` — Test file (not modified, all tests pass).\n\n## Task Status\n\n**Complete.** The fix has been applied and all tests pass.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nThe task is complete. The fix for `HeaderMap::reserve` has been applied to `src/header/map.rs` and all 392 tests pass. No further steps are needed unless you have additional requests."
+}

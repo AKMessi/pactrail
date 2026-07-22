@@ -1,0 +1,49 @@
+   Compiling memchr v2.8.3
+   Compiling cfg-if v1.0.4
+   Compiling regex-syntax v0.8.11
+   Compiling zerocopy v0.8.55
+   Compiling serde_core v1.0.229
+   Compiling getrandom v0.4.3
+   Compiling zmij v1.0.23
+   Compiling log v0.4.33
+   Compiling getrandom v0.2.17
+   Compiling rand_core v0.10.1
+   Compiling rand_core v0.6.4
+   Compiling aho-corasick v1.1.4
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling itoa v1.0.18
+   Compiling doc-comment v0.3.4
+   Compiling rand v0.10.2
+   Compiling fnv v1.0.7
+   Compiling regex-automata v0.4.16
+   Compiling bytes v1.12.1
+   Compiling http v1.2.0 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T034029Z-opencode-deepseek-v4-flash\http-header-map-reserve-capacity\grade)
+   Compiling regex v1.13.1
+   Compiling env_filter v2.0.0
+   Compiling env_logger v0.11.11
+   Compiling ppv-lite86 v0.2.21
+   Compiling quickcheck v1.1.0
+   Compiling rand_chacha v0.3.1
+   Compiling rand v0.8.7
+warning: panic message contains unused formatting placeholders
+   --> tests\header_map.rs:661:18
+    |
+661 |         "reserve({requested}) exposed capacity {reserved}"
+    |                  ^^^^^^^^^^^                   ^^^^^^^^^^
+    |
+    = note: this message is not used as a format string when given without arguments, but will be in Rust 2021
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2021/panic-macro-consistency.html>
+    = note: `#[warn(non_fmt_panics)]` (part of `#[warn(rust_2021_compatibility)]`) on by default
+help: add the missing arguments
+    |
+661 |         "reserve({requested}) exposed capacity {reserved}", ...
+    |                                                           +++++
+help: or add a "{}" format string to use the message literally
+    |
+661 |         "{}", "reserve({requested}) exposed capacity {reserved}"
+    |         +++++
+
+warning: `http` (test "header_map") generated 1 warning (run `cargo fix --test "header_map" -p http` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.50s
+     Running tests\header_map.rs (target\debug\deps\header_map-4a6dc393ca6a5b21.exe)

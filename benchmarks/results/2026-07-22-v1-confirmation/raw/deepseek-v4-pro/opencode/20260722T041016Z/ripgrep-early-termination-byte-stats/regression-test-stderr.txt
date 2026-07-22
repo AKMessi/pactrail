@@ -1,0 +1,9 @@
+   Compiling aho-corasick v1.1.3
+   Compiling regex-automata v0.4.9
+   Compiling bstr v1.12.0
+   Compiling regex v1.11.1
+   Compiling grep-regex v0.1.13 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\regex)
+   Compiling grep-searcher v0.1.14 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\searcher)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.17s
+     Running unittests src\lib.rs (target\debug\deps\grep_searcher-e2904ac2cb39ec02.exe)
+error: test failed, to rerun pass `-p grep-searcher --lib`

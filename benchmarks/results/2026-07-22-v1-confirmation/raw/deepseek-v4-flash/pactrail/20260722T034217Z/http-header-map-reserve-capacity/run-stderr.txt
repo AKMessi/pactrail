@@ -1,0 +1,3 @@
+warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run
+error: engine failed for run 019f87ea-c7a0-71b3-bfdd-d2eb90778d9c: model stalled for 3 consecutive tool turns because the model repeated the same tool request
+Portable trace: \\?\D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T034217Z-pactrail-deepseek-v4-flash\http-header-map-reserve-capacity\workspace\.pactrail\runs\019f87ea-c7a0-71b3-bfdd-d2eb90778d9c\trace.jsonl

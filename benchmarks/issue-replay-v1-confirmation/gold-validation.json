@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-v1-real-issue-confirmation",
+  "validated_at": "2026-07-22T00:52:21.7327091+00:00",
+  "passed": 3,
+  "total": 3,
+  "records": [
+    {
+      "case_id": "regex-onepass-excess-capture-slots",
+      "pre_fix_targeted_failed": true,
+      "reference_targeted_passed": true,
+      "reference_regression_passed": true,
+      "valid": true
+    },
+    {
+      "case_id": "http-header-map-reserve-capacity",
+      "pre_fix_targeted_failed": true,
+      "reference_targeted_passed": true,
+      "reference_regression_passed": true,
+      "valid": true
+    },
+    {
+      "case_id": "ripgrep-early-termination-byte-stats",
+      "pre_fix_targeted_failed": true,
+      "reference_targeted_passed": true,
+      "reference_regression_passed": true,
+      "valid": true
+    }
+  ]
+}

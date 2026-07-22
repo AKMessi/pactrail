@@ -1,0 +1,4 @@
+warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run
+2026-07-22T04:09:37.192505Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=process backend failed: process "sed" could not be started: program not found
+error: engine failed for run 019f8803-1c49-78d0-9a1f-f7513120dc03: model did not complete within 16 turns
+Portable trace: \\?\D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T040850Z-pactrail-deepseek-v4-pro\ripgrep-early-termination-byte-stats\workspace\.pactrail\runs\019f8803-1c49-78d0-9a1f-f7513120dc03\trace.jsonl

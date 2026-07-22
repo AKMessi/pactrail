@@ -1,0 +1,189 @@
+diff --git a/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_dense_dfa-5624222820728832 b/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_dense_dfa-5624222820728832
+deleted file mode 100644
+index e236ae735c7f413c90a0e9b61cc4add46ced15e7..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 749
+zcmd5)TMED+469=gkFon-(j{nQDi!=03sh-q(;8}bMmo$a!2W|zr>V_O2(ZE8>!v1*
+z6U=#_h8}h#XfDExxv!cs^^Zrt{#L1#-lYZ{(nKt)H^)$Ct|9sII*#X6$oXD13{eTq
+K(N?9_h4%nug9@bp
+
+diff --git a/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_dense_dfa-5883983265923072 b/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_dense_dfa-5883983265923072
+deleted file mode 100644
+index 233fcbc950a61bc614dc0e0a7418724fa0c36c56..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 2734
+zcmZQ%VEF(4KNFB(WMp6fqESE~1R4m)<B~1`N<6|PIVwIH0;3@?8UmvsFd70h3V}B?
+zGI!Ki8ifF`F~&+YqnQYrgrNdxKN}8RVmQR{30tEzE<yHL0mX!Xv<W_q5IHUo1pr9f
+B2($nI
+
+diff --git a/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_dense_dfa-6363062083649536 b/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_dense_dfa-6363062083649536
+deleted file mode 100644
+index d4a35d1d10e221c0acff68cfca53eba4ddd84aa2..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 2735
+zcmZQ#U|{$U1VDn3k%0k-Mm(qjhJeE$4+R4}?i=iG$K!OmO5qDbx;kXkve6J24S~@R
+o7!85Z5E#G^U_!SW*cfC(7o&i0jn=pXanZ%ljR!SNfdDQH0K!oY)c^nh
+
+diff --git a/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_sparse_dfa-4903112680538112 b/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_sparse_dfa-4903112680538112
+deleted file mode 100644
+index 3056bca2f335559837ff22c307040e7d200693b5..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 953
+zcmcgrzb^z)5dPkCdx%D_SrUavRGOo46+(5LlBjgl;_fdHC6V|8G}<dQ{0AZtiBh9b
+z_!(};H}B1E_GINclgxfI-@KWfnYTN6c-B2%Szh1U-dYop_tS|69)YDN-~xq+m*XLN
+z4tL7cH-@uBjkZYkrUs^|UXPUI!0i1J=Sy}pX9+DA%AtnQNcISwXoly=FQ3sghTUaA
+z7rg<`8K7xLM7~7E#sN;fDPs9v7D)%u?i1`H>v1iCd3X&#o?ZHHI$Q{9vE`2)E1aXc
+z4dV*ibs}S9a$sF5@Ts&8Nm;m!h_LYvQgx@O&0-~*MqvXc*1mdu8%`|_4(ibjUcp(+
+zUaNf^t&($zmCZ!j&`hg&V+sEZeFMdJm&UDZ#tk}9nN`%b_4cnaUQ`}Jy`sc(1@{;A
+cVu5+$3H6G4Prat{2Q-<>jd&&e<ZLqk1EykL>Hq)$
+
+diff --git a/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_sparse_dfa-5415338693754880 b/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_sparse_dfa-5415338693754880
+deleted file mode 100644
+index cac835c53eda6ae94833f300257aec639d5d6b3c..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 992
+zcmb_Y!3~2j40Hfh;@J&O?7)K!I#&1S7L~dge>ewBDFzw=CpmWR>`Uaw8&{ztfLuht
+z9OEkMlRm@GPMN61D$F&Cn6+>ZrBLm@n~)%A$SW)_>nMgNphd}`#b1aGREYySj+v-<
+z*XI>_Ifh~0ogs77L89<;!BdWzdZxm)BoN!fKgw;ivK4+3tmiE)FJRP+7h?(Y-O4>9
+COL@rv
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_dense_crash-9486fb7c8a93b12c12a62166b43d31640c0208a9 b/regex-automata/tests/fuzz/testdata/deserialize_dense_crash-9486fb7c8a93b12c12a62166b43d31640c0208a9
+deleted file mode 100644
+index 972bfb2cd405c68babf906df77a2ab452c01d10a..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 1894
+zcmd^AOHKnZ41F#IbqO~ZiPh}Nif!6ku;3W%D#2~I23M%WhQmN=JL5VtnTSlq4omsH
+z_<8Ku$q?`u4}IT*0BpEDbBo;e+*AZq>3}y}so)cM8erW2#Q189@%WvVQ3Uk<;cVF;
+z(v51j6F-tSXD1X1xY04|W^EA*=;(VK<yJ^{`pt|!OhXC%Es`P<n--BHw+^Bc6+SKQ
+zRe}9o3Dm|CB4@~RM9H8)Cfm+t#khjft9g-)AverTYG=<XX|)`12F$Kx=fSg++)%x*
+zOkP-YdDNcCg})1d>xKGl>OpT%n{KWpm0VPFt{`)FS*u{WJy~0kWN^slEmL_7mdmek
+zEHOE9VH{E@?O1(Tap^dB|JTBux&L~^Glt7g)e*U_mx(9%GJcIUI>ee%fj8A;!TN`Q
+Q7L&y7j}re3CkH_|0iGi2$p8QV
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_dense_minimized-from-9486fb7c8a93b12c12a62166b43d31640c0208a9 b/regex-automata/tests/fuzz/testdata/deserialize_dense_minimized-from-9486fb7c8a93b12c12a62166b43d31640c0208a9
+deleted file mode 100644
+index 72dbdad825d233306b86959937492c336281016e..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 1882
+zcmd^AOHKnZ41F#IbqO~ZiPh}Nif!6ku;3W%D#2~I23M%WhQmN=JL5VtnTSlq4omsH
+z_<8Ku$q?`u4}IT*0BpEDbBo;e+*AZq>3}y}so)cM8erW2#Q189@%WvVQ3Uk<;cVF;
+z(v51j6F-tSXD1X1xY04|W^EA*=;(VK<yJ^{`pt|!OhXC%Es`P<n--BHw+^Bc6+SKQ
+zRe}9o3Dm|CB4@~RM9H8)Cfm+t#khjft9g-)AverTYG=<XX|)`12F$Kx=fSg++)%x*
+zOkP-YdDNcCg})1d>xKGl>OpT%n{KWpm0VPFt{`)FS*u{WJy~0kWN^slEmL_7mdmek
+zEHOE9VH{E@?O1(Tap^dB|JTBux&L~^Glt7g)e*U_mx(9%GJcIUI>ee%fj8A;!TKkF
+P7Ldg14-x+WC&3d=%n|Cz
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-0da59c0434eaf35e5a6b470fa9244bb79c72b000 b/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-0da59c0434eaf35e5a6b470fa9244bb79c72b000
+deleted file mode 100644
+index 5ce508803ef45322bdbd969c864237e04105a6bc..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 941
+zcmWe-WdH+S1||s2QqNQY5dxAda25l@GBEqke<1h?7Y6D!G%z%%g9~6~ur^~AW`Np>
+zLy}@)Mu-Xj5eBV+F&#i&(}nR+X+}s$FaSOJ4I~5dF_2<x0C5-?<RKJu1_RW55Fa_9
+zKzwE(W&<(sfCP{n2hd=May%+grC1rh|5pLI$P^*oiC{7?utPY}45A=_EQ5v3+JHq6
+zO$g*0WWWORE>Z{}%MVF5EZXrn9#@Q_ggzeqKcI4&K>9Wwbx2a#3=HpqTv5^g|KBqJ
+E0N%YJX#fBK
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-18cfc246f2ddfc3dfc92b0c7893178c7cf65efa9 b/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-18cfc246f2ddfc3dfc92b0c7893178c7cf65efa9
+deleted file mode 100644
+index 4fa13fbed47013e22bd6e9c9209ca0e8a61937fb..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 924
+zcmZSHK6fTF1H=FS{|_(#X$D3h1_B^IBR&HN3{ilfp`n2)k_boz7-Yj389<$IF!4Xw
+zr2ou7^C~MUA)pyZ0mVUp$-1)A7Ag#(fP!p5@nEPCXF)WIg31;sSAPPOQCC^nURha#
+zPzBZd2TU`9yaECsh5>~6|NpW741Ymvu)uGyTR_DB|At@{K&AkQ4+;!c5QD)1Otv#*
+zHB1Mya1d>1;>l=y5Em}S(g5T+Fq{CAPymyHMgju^cf;pzFiCQ09+EUNp{PdXfzrod
+w08n=@!h?x6jshk`oB)z4a7u$EegH|3Is+iS4Hm&e025X{RGOs$$Z!B+0PByNd;kCd
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-61fd8e3003bf9d99f6c1e5a8488727eefd234b98 b/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-61fd8e3003bf9d99f6c1e5a8488727eefd234b98
+deleted file mode 100644
+index 0f809f33f44d17fb4e2d04c100226208e407d109..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 933
+zcmd;OVEFSN2tNI8V5<B7{~rSwus|qu@)ulym4U&~z|f!$E`XK6+Kg40fq@B!ICX>>
+zA;$bin6?JSbO14QVLVit5$Y;nXnX_87=nTYNHaD-l*vOV<_rd?`5-=eKrsWw*dPj_
+zB&G<8G?<eBA~}FoF))CX;{dD--~X$CTx5Vl0XsxInn4r<a43Qavo^q3xM_69u)w^F
+m6au()4-pwywBvCuYK$Tj8X}m~W@R%lya$>oD*FHbdj<eaY$DqL
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-a1b839d899ced76d5d7d0f78f9edb7a421505838 b/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-a1b839d899ced76d5d7d0f78f9edb7a421505838
+deleted file mode 100644
+index 8b435fd26ec8154a3996a3e435eae2a335f14ea8..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 802
+zcmZQ-V5qG8_y2!=<$opy1_nz91_K}k1pogV{)d4K6fk2t1Y}ggKy$lFTU!l`2hmR&
+z3DG+NOffPr2*AvO(KuybPK472a268dJ)A8H1P&kq1SCX}T^S4I7y)S(5ZeJnfPgfF
+zf{;uN42BF0nouF2V+Sh$#V20C%8FN-bV)Xt7F`&FG+LW9<tVDD>03yoGBN@)!T<jN
+DH`jIC
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-c383ae07ec5e191422eadc492117439011816570 b/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-c383ae07ec5e191422eadc492117439011816570
+deleted file mode 100644
+index 69b65160c25eae151f431616270beca29d323dd4..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 924
+zcmZRubYNrv0TwWcLHt4%F*Gnl0vT|i0%a*f75@i;iT@cGzziT!2?NbQ#(yRl4@x_L
+z>4Zv<ZbmLJsR}g-8}$cMu(Gla&CE)e)o^+aob{jKFNkdj7JwUuB*56fz_1D^ArF<z
+zV1R@Xn2R1z%s^2#s6xCH2VPlJNqY#F6;%|I$Iig;4=gGQ0+{kBBCHK4T&x_BZ;%1H
+pZ;|DOGn=Rw#S;KOpmIz=`ZhLop!5n9|NkEne=sGM5C%Bg0RZfNZiWB=
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-d07703ceb94b10dcd9e4acb809f2051420449e2b b/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-d07703ceb94b10dcd9e4acb809f2051420449e2b
+deleted file mode 100644
+index 15b43e47f2f97d2825362dfc846f3ee74a98295d..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 922
+zcmZQ#Y_N1-00UMC#gJ}jX!!qsMtlYk0GY@@+0X!)TL}dJ(E(8J|N9U@hQA=%0L+0J
+z&cN{hKS;&@|3Co&kYF?rZw4_K9R7hNz*1lV2=N3+ZHMx4(MZZsnH;EGBp%Q%f-b8f
+z>@p-1Nn_%68BTLxF@#eAJ4{9t1YjH-Gz(mO8k{xCfQJAZoJAhv2T+?1lGbD(`wJ2u
+U$^>R12#YBgn)-p11H*d;040QR*8l(j
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-dbb8172d3984e7e7d03f4b5f8bb86ecd1460eff9 b/regex-automata/tests/fuzz/testdata/deserialize_sparse_crash-dbb8172d3984e7e7d03f4b5f8bb86ecd1460eff9
+deleted file mode 100644
+index aa72eb1dd6123880d4b062ec55f9adc2c0d2539d..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 728
+zcmZQ-V5qG8_y2!=<$opy1_nz91_K}k1pogV{)d4K6fk2t1Y}ggKy$lFTU!l`2hop2
+zsvxm(Fd=#;fGI`>1_21a31(y^NT$8*KWhS11}*_}BAhmWvyd3?;cQVLZ~ze?AR&tE
+zoLDHw2uQPl*bX291f(Gpgk)-9Fl1oRgbD#2%b<uXJ$Trl_{0lXS@BAfF3Co^78D(n
+P1}Z2r7#V>{_y2zY8Pa!;
+

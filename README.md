@@ -447,7 +447,7 @@ exact isolated candidates**, **4/4 source isolation**, and **4/4
 integrity-accepted traces**. It retains the strict failures and the Qwen
 rate-limit diagnostic that exposed and led to a provider-backoff fix.
 
-The latest [DeepSeek V4 matched-harness evaluation](benchmarks/results/2026-07-18-deepseek-v4/README.md)
+An earlier [DeepSeek V4 matched-harness evaluation](benchmarks/results/2026-07-18-deepseek-v4/README.md)
 ran seven cases three times on both V4 Flash and V4 Pro: **Pactrail passed
 42/42**, while OpenCode 1.2.27 passed **36/42** under the same no-shell policy.
 Pactrail used **59.0% fewer reported model tokens**, preserved pre-apply source
@@ -463,6 +463,17 @@ estimated API cost**, with source isolation and verified traces in **3/3**
 runs. This result is deliberately published despite not establishing broad
 superiority: it identifies completion reliability as Pactrail's main remaining
 gap and documents the fixes made after scoring without rerunning the tasks.
+
+The newest [Pactrail v1 confirmation](benchmarks/results/2026-07-22-v1-confirmation/README.md)
+is stricter and intentionally unflattering. Across 12 pass@1 trials on three
+new real Rust defects and both DeepSeek V4 Flash and Pro, Pactrail passed
+**0/6** functional trials while OpenCode passed **2/6**. Pactrail preserved
+source isolation and verified trace integrity in **6/6** trials and used
+**12.8% fewer reported tokens**, **65.0% less agent time**, and **65.0% lower
+estimated API cost**, but its investigation loop never progressed to a
+production edit. Every failure is retained. This result rejects a current
+capability-superiority claim and records the loop behavior as a release
+blocker.
 
 ## Architecture at a glance
 

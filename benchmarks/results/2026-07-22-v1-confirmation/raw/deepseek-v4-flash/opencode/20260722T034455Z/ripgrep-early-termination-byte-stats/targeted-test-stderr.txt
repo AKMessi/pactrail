@@ -1,0 +1,19 @@
+   Compiling windows_aarch64_msvc v0.52.6
+   Compiling memchr v2.7.5
+   Compiling regex-syntax v0.8.5
+   Compiling log v0.4.27
+   Compiling serde v1.0.219
+   Compiling cfg-if v1.0.1
+   Compiling crossbeam-utils v0.8.21
+   Compiling proc-macro2 v1.0.95
+   Compiling encoding_rs v0.8.35
+error: linking with `link.exe` failed: exit code: 1104
+  |
+  = note: "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostARM64\\arm64\\link.exe" "/NOLOGO" "D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\v1-confirmation-scored\\20260722T034455Z-opencode-deepseek-v4-flash\\ripgrep-early-termination-byte-stats\\grade\\target\\debug\\build\\windows_aarch64_msvc-035e16f2667fc96c\\rustcJBU0yY\\symbols.o" "<2 object files omitted>" "<sysroot>\\lib\\rustlib\\aarch64-pc-windows-msvc\\lib/{libstd-*,libpanic_unwind-*,libcfg_if-*,libwindows_link-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libunwind-*,librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "kernel32.lib" "kernel32.lib" "kernel32.lib" "ntdll.lib" "userenv.lib" "ws2_32.lib" "dbghelp.lib" "/defaultlib:msvcrt" "/NXCOMPAT" "/OUT:D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\v1-confirmation-scored\\20260722T034455Z-opencode-deepseek-v4-flash\\ripgrep-early-termination-byte-stats\\grade\\target\\debug\\build\\windows_aarch64_msvc-035e16f2667fc96c\\build_script_build-035e16f2667fc96c.exe" "/OPT:REF,NOICF" "/DEBUG" "/PDBALTPATH:%_PDB%" "/NATVIS:<sysroot>\\lib\\rustlib\\etc\\intrinsic.natvis" "/NATVIS:<sysroot>\\lib\\rustlib\\etc\\liballoc.natvis" "/NATVIS:<sysroot>\\lib\\rustlib\\etc\\libcore.natvis" "/NATVIS:<sysroot>\\lib\\rustlib\\etc\\libstd.natvis"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
+  = note: LINK : fatal error LNK1104: cannot open file 'D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T034455Z-opencode-deepseek-v4-flash\ripgrep-early-termination-byte-stats\grade\target\debug\build\windows_aarch64_msvc-035e16f2667fc96c\build_script_build-035e16f2667fc96c.exe'
+          
+
+   Compiling serde_json v1.0.140
+error: could not compile `windows_aarch64_msvc` (build script) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

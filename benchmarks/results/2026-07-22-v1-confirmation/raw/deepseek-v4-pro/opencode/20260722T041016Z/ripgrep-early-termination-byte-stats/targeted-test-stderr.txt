@@ -1,0 +1,59 @@
+   Compiling windows_aarch64_msvc v0.52.6
+   Compiling memchr v2.7.5
+   Compiling regex-syntax v0.8.5
+   Compiling log v0.4.27
+   Compiling crossbeam-utils v0.8.21
+   Compiling serde v1.0.219
+   Compiling cfg-if v1.0.1
+   Compiling proc-macro2 v1.0.95
+   Compiling encoding_rs v0.8.35
+   Compiling serde_json v1.0.140
+   Compiling windows-targets v0.52.6
+   Compiling aho-corasick v1.1.3
+   Compiling grep-matcher v0.1.7 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\matcher)
+   Compiling windows-sys v0.59.0
+   Compiling memmap2 v0.9.5
+   Compiling ryu v1.0.20
+   Compiling itoa v1.0.15
+   Compiling encoding_rs_io v0.1.7
+   Compiling unicode-ident v1.0.18
+   Compiling winapi-util v0.1.9
+   Compiling crossbeam-epoch v0.9.18
+   Compiling anyhow v1.0.98
+   Compiling termcolor v1.4.1
+   Compiling regex-automata v0.4.9
+   Compiling same-file v1.0.6
+   Compiling walkdir v2.5.0
+   Compiling quote v1.0.40
+   Compiling crossbeam-deque v0.8.6
+   Compiling ripgrep v14.1.1 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade)
+   Compiling syn v2.0.104
+   Compiling lexopt v0.3.1
+   Compiling textwrap v0.16.2
+   Compiling bstr v1.12.0
+   Compiling serde_derive v1.0.219
+   Compiling globset v0.4.16 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\globset)
+   Compiling grep-searcher v0.1.14 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\searcher)
+   Compiling grep-regex v0.1.13 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\regex)
+   Compiling grep-cli v0.1.11 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\cli)
+   Compiling ignore v0.4.23 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\ignore)
+   Compiling grep-printer v0.2.2 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\printer)
+warning: hiding a lifetime that's elided elsewhere is confusing
+   --> crates\printer\src\jsont.rs:193:24
+    |
+193 |     fn from_path(path: &Path) -> Data {
+    |                        ^^^^^     ^^^^ the same lifetime is hidden here
+    |                        |
+    |                        the lifetime is elided here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: use `'_` for type paths
+    |
+193 |     fn from_path(path: &Path) -> Data<'_> {
+    |                                      ++++
+
+   Compiling grep v0.3.2 (D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T041016Z-opencode-deepseek-v4-pro\ripgrep-early-termination-byte-stats\grade\crates\grep)
+warning: `grep-printer` (lib) generated 1 warning (run `cargo fix --lib -p grep-printer` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.73s
+     Running tests\tests.rs (target\debug\deps\integration-6d4029105a482d93.exe)

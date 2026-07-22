@@ -1,0 +1,30 @@
+
+running 1 test
+test regression::pactrail_hidden_early_termination_byte_stats ... FAILED
+
+failures:
+
+---- regression::pactrail_hidden_early_termination_byte_stats stdout ----
+
+thread 'regression::pactrail_hidden_early_termination_byte_stats' (10764) panicked at tests\regression.rs:1462:9:
+unexpected statistics output:
+./haystack:foo1
+./haystack:foo2
+
+2 matches
+2 matched lines
+1 files contained matches
+1 files searched
+32 bytes printed
+0 bytes searched
+0.000215 seconds spent searching
+0.023415 seconds total
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    regression::pactrail_hidden_early_termination_byte_stats
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 301 filtered out; finished in 0.06s
+
