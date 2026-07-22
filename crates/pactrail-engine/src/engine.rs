@@ -36,7 +36,8 @@ use crate::checkpoint::{
     CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint, contract_digest,
 };
 use crate::context_window::{CompactionReport, ContextWindow};
-use crate::{CheckpointError, VerificationCommand, detect_verification_commands};
+use crate::controller::{ControllerKernel, GoalIntent, classify_goal};
+use crate::{CheckpointError, ControllerPhase, VerificationCommand, detect_verification_commands};
 
 const DEFAULT_MAX_TURNS: u16 = 24;
 const STALLED_TOOL_TURN_LIMIT: u16 = 3;
@@ -101,6 +102,28 @@ pub enum RunProgress {
         before_bytes: usize,
         after_bytes: usize,
         reclaimed_bytes: usize,
+    },
+    /// The deterministic controller entered a model-facing execution phase.
+    ControllerPhaseChanged {
+        phase: ControllerPhase,
+        turn: u16,
+        phase_turn: u16,
+        phase_limit: u16,
+        tools_available: usize,
+        reason: String,
+    },
+    /// The controller assessed semantic progress after a complete tool turn.
+    ControllerProgressAssessed {
+        turn: u16,
+        novel_evidence: usize,
+        candidate_changed: bool,
+        no_progress_turns: u16,
+    },
+    /// The controller narrowed the next action after semantic stagnation.
+    ControllerIntervened {
+        turn: u16,
+        no_progress_turns: u16,
+        reason: String,
     },
     /// A model request is about to begin.
     ModelTurnStarted { turn: u16, max_turns: u16 },
@@ -885,6 +908,8 @@ impl<'a> RunEngine<'a> {
             )
         };
         let mut accepted_completion_gate = None;
+        let mut controller = ControllerKernel::restore(&contract.goal, max_turns, &conversation);
+        debug_assert_eq!(controller.intent(), goal_intent);
         self.persist_checkpoint(
             &mut durable_checkpoint,
             transaction,
@@ -910,12 +935,81 @@ impl<'a> RunEngine<'a> {
                 break;
             }
             self.check_cancelled()?;
+            let candidate_present = !transaction.changes()?.is_empty();
+            let control = controller.before_turn(turn, candidate_present, &tool_descriptors);
+            if control.phase_changed {
+                observer.on_progress(&RunProgress::ControllerPhaseChanged {
+                    phase: control.phase,
+                    turn: turn.saturating_add(1),
+                    phase_turn: control.phase_turn,
+                    phase_limit: control.phase_limit,
+                    tools_available: control.tools.len(),
+                    reason: control.reason.clone(),
+                });
+                journal.append(RunEvent::ActionCompleted(ActionRecord {
+                    actor: "controller".to_owned(),
+                    action: "enter_phase".to_owned(),
+                    summary: format!(
+                        "entered {} phase with {} tool(s) available",
+                        control.phase.label(),
+                        control.tools.len()
+                    ),
+                    declared_effects: Vec::new(),
+                    observed_effects: Vec::new(),
+                    succeeded: true,
+                    duration_ms: 0,
+                    attributes: BTreeMap::from([
+                        ("phase".to_owned(), control.phase.label().to_owned()),
+                        ("turn".to_owned(), turn.saturating_add(1).to_string()),
+                        ("phase_turn".to_owned(), control.phase_turn.to_string()),
+                        ("phase_limit".to_owned(), control.phase_limit.to_string()),
+                        (
+                            "tools_available".to_owned(),
+                            control.tools.len().to_string(),
+                        ),
+                        ("reason".to_owned(), bounded_trace_value(&control.reason)),
+                    ]),
+                }))?;
+            }
+            if let Some(prompt) = control.prompt.as_ref() {
+                conversation.push(ConversationItem::Message(Message::system(prompt)));
+                journal.append(RunEvent::NoteRecorded {
+                    message: format!(
+                        "controller announced {} phase and narrowed the model action space",
+                        control.phase.label()
+                    ),
+                })?;
+            }
             compact_model_context(
                 context_window,
                 &mut conversation,
-                &tool_descriptors,
+                &control.tools,
                 &mut journal,
                 observer,
+            )?;
+            // Controller phase events, phase prompts, and deterministic
+            // compaction all precede provider I/O. Bind their exact result to
+            // the event head so an interrupted model request resumes with the
+            // same action space and conversation instead of a stale checkpoint.
+            self.persist_checkpoint(
+                &mut durable_checkpoint,
+                transaction,
+                &mut journal,
+                CheckpointLoopState {
+                    phase: ResumePhase::BeforeModel,
+                    next_turn: turn,
+                    elapsed_active_ms: active_base_ms
+                        .saturating_add(elapsed_millis(active_started)),
+                    conversation: &conversation,
+                    usage,
+                    call_ids: &call_ids,
+                    previous_tool_signature: previous_tool_signature.as_ref(),
+                    repeated_tool_turns,
+                    consecutive_failed_tool_turns,
+                    automatic_repair_cycles,
+                    final_text: &final_text,
+                    recovery_risk: recovery_risk.as_deref(),
+                },
             )?;
             observer.on_progress(&RunProgress::ModelTurnStarted {
                 turn: turn + 1,
@@ -923,7 +1017,7 @@ impl<'a> RunEngine<'a> {
             });
             let request = ModelRequest {
                 conversation: conversation.clone(),
-                tools: tool_descriptors.clone(),
+                tools: control.tools.clone(),
                 max_output_tokens: self.model.capabilities().max_output_tokens.min(8_192),
                 temperature: Some(0.0),
             };
@@ -1202,6 +1296,7 @@ impl<'a> RunEngine<'a> {
                 },
             )?;
             let mut any_tool_succeeded = false;
+            let mut controller_results = Vec::new();
             for batch in self.schedule_tool_batches(response.tool_calls) {
                 let candidate_before = candidate_changes_digest(&transaction.changes()?);
                 for call in &batch {
@@ -1210,10 +1305,26 @@ impl<'a> RunEngine<'a> {
                     ))?;
                 }
                 let executions = self
-                    .execute_tool_batch(run_id, transaction, observer, turn + 1, batch)
+                    .execute_tool_batch(
+                        ToolDispatchContext {
+                            run_id,
+                            transaction,
+                            observer,
+                            turn: turn + 1,
+                            allowed_tool_names: &control.allowed_tool_names,
+                            controller_phase: control.phase,
+                        },
+                        batch,
+                    )
                     .await?;
                 for execution in executions {
                     any_tool_succeeded |= execution.succeeded;
+                    let candidate_changed = execution
+                        .action
+                        .attributes
+                        .get("changed_files")
+                        .is_some_and(|changed| changed != "0");
+                    controller_results.push((execution.result.clone(), candidate_changed));
                     let effect_completion = Self::effect_completion(&execution, transaction)?;
                     append_policy_audit(&mut journal, execution.policy_audit)?;
                     journal.append(RunEvent::ActionCompleted(execution.action.clone()))?;
@@ -1224,6 +1335,41 @@ impl<'a> RunEngine<'a> {
                     conversation.push(ConversationItem::ToolResult(execution.result));
                 }
             }
+            let progress_assessment = controller.observe_turn(&controller_results);
+            observer.on_progress(&RunProgress::ControllerProgressAssessed {
+                turn: turn.saturating_add(1),
+                novel_evidence: progress_assessment.novel_evidence,
+                candidate_changed: progress_assessment.candidate_changed,
+                no_progress_turns: progress_assessment.no_progress_turns,
+            });
+            journal.append(RunEvent::ActionCompleted(ActionRecord {
+                actor: "controller".to_owned(),
+                action: "assess_progress".to_owned(),
+                summary: format!(
+                    "tool turn produced {} novel evidence item(s); candidate_changed={}",
+                    progress_assessment.novel_evidence, progress_assessment.candidate_changed
+                ),
+                declared_effects: Vec::new(),
+                observed_effects: Vec::new(),
+                succeeded: progress_assessment.candidate_changed
+                    || progress_assessment.novel_evidence > 0,
+                duration_ms: 0,
+                attributes: BTreeMap::from([
+                    (
+                        "candidate_changed".to_owned(),
+                        progress_assessment.candidate_changed.to_string(),
+                    ),
+                    (
+                        "no_progress_turns".to_owned(),
+                        progress_assessment.no_progress_turns.to_string(),
+                    ),
+                    (
+                        "novel_evidence".to_owned(),
+                        progress_assessment.novel_evidence.to_string(),
+                    ),
+                    ("turn".to_owned(), turn.saturating_add(1).to_string()),
+                ]),
+            }))?;
             if any_tool_succeeded {
                 consecutive_failed_tool_turns = 0;
             } else {
@@ -1239,6 +1385,25 @@ impl<'a> RunEngine<'a> {
                 )));
                 journal.append(RunEvent::NoteRecorded {
                     message: "loop controller steered the model away from a repeated successful read-only request".to_owned(),
+                })?;
+            }
+            if progress_assessment.no_progress_turns == 2
+                && repeated_tool_turns < STALLED_TOOL_TURN_LIMIT.saturating_sub(1)
+                && let Some(prompt) = controller.steering_prompt()
+            {
+                conversation.push(ConversationItem::Message(Message::system(prompt)));
+                let reason =
+                    "different tool requests produced semantically equivalent evidence".to_owned();
+                observer.on_progress(&RunProgress::ControllerIntervened {
+                    turn: turn.saturating_add(1),
+                    no_progress_turns: progress_assessment.no_progress_turns,
+                    reason: reason.clone(),
+                });
+                journal.append(RunEvent::NoteRecorded {
+                    message: format!(
+                        "controller intervened after {} no-progress turn(s): {reason}",
+                        progress_assessment.no_progress_turns
+                    ),
                 })?;
             }
 
@@ -1431,10 +1596,18 @@ impl<'a> RunEngine<'a> {
         if let Some(risk) = recovery_risk {
             verification.risks.push(risk);
         }
-        let failed = verification
-            .evidence
-            .iter()
-            .any(|evidence| evidence.status == EvidenceStatus::Failed);
+        let missing_required_candidate = goal_intent == GoalIntent::Change && changes.is_empty();
+        if missing_required_candidate {
+            verification.risks.push(
+                "Change task completed without an isolated candidate; Pactrail will not expose an empty ready-to-apply transaction"
+                    .to_owned(),
+            );
+        }
+        let failed = missing_required_candidate
+            || verification
+                .evidence
+                .iter()
+                .any(|evidence| evidence.status == EvidenceStatus::Failed);
         for evidence in &verification.evidence {
             journal.append(RunEvent::EvidenceRecorded(evidence.clone()))?;
         }
@@ -1721,49 +1894,54 @@ impl<'a> RunEngine<'a> {
 
     async fn execute_tool_batch(
         &self,
-        run_id: RunId,
-        transaction: &WorkspaceTransaction,
-        observer: &dyn RunObserver,
-        turn: u16,
+        dispatch: ToolDispatchContext<'_>,
         calls: Vec<ToolCall>,
     ) -> Result<Vec<CompletedToolExecution>, EngineError> {
         let scheduled_parallel = calls.len() > 1;
-        let futures = calls.into_iter().map(|call| {
-            self.execute_tool_call(
-                run_id,
-                transaction,
-                observer,
-                turn,
-                call,
-                scheduled_parallel,
-            )
-        });
+        let futures = calls
+            .into_iter()
+            .map(|call| self.execute_tool_call(&dispatch, call, scheduled_parallel));
         join_all(futures).await.into_iter().collect()
     }
 
     async fn execute_tool_call(
         &self,
-        run_id: RunId,
-        transaction: &WorkspaceTransaction,
-        observer: &dyn RunObserver,
-        turn: u16,
+        dispatch: &ToolDispatchContext<'_>,
         call: ToolCall,
         scheduled_parallel: bool,
     ) -> Result<CompletedToolExecution, EngineError> {
-        observer.on_progress(&RunProgress::ToolStarted {
+        dispatch.observer.on_progress(&RunProgress::ToolStarted {
             name: call.name.clone(),
         });
         let tool_started = Instant::now();
+        if !dispatch.allowed_tool_names.contains(&call.name) {
+            let duration_ms = elapsed_millis(tool_started);
+            let rejection = controller_tool_rejection(
+                call,
+                dispatch.turn,
+                dispatch.controller_phase,
+                duration_ms,
+            );
+            dispatch.observer.on_progress(&RunProgress::ToolCompleted {
+                name: rejection.result.name.clone(),
+                succeeded: false,
+                changed_files: Vec::new(),
+                duration_ms,
+                output_bytes: rejection.result.content.to_string().len(),
+                truncated: false,
+            });
+            return Ok(rejection);
+        }
         let arguments_digest = blake3::hash(call.arguments.to_string().as_bytes())
             .to_hex()
             .to_string();
         let descriptor = self.tools.descriptor(&call.name);
-        let before = change_map(transaction.changes()?);
+        let before = change_map(dispatch.transaction.changes()?);
         let policy_audit = PolicyAuditLog::default();
-        let observer_resolver = ObserverApprovalResolver(observer);
+        let observer_resolver = ObserverApprovalResolver(dispatch.observer);
         let approval_resolver = self.approval_resolver.unwrap_or(&observer_resolver);
-        let tool_context = ToolContext::new(transaction, self.policy, self.memory)
-            .with_policy_audit(run_id, Some(approval_resolver), &policy_audit);
+        let tool_context = ToolContext::new(dispatch.transaction, self.policy, self.memory)
+            .with_policy_audit(dispatch.run_id, Some(approval_resolver), &policy_audit);
         let result = self
             .tools
             .execute(&call.name, &tool_context, call.arguments.clone())
@@ -1775,7 +1953,7 @@ impl<'a> RunEngine<'a> {
         {
             return Err(EngineError::Cancelled);
         }
-        let after = change_map(transaction.changes()?);
+        let after = change_map(dispatch.transaction.changes()?);
         let changed_files = changed_paths(&before, &after);
         let mut observed_effects = changed_files
             .iter()
@@ -1785,7 +1963,7 @@ impl<'a> RunEngine<'a> {
         observed_effects.sort();
         observed_effects.dedup();
         let duration_ms = elapsed_millis(tool_started);
-        observer.on_progress(&RunProgress::ToolCompleted {
+        dispatch.observer.on_progress(&RunProgress::ToolCompleted {
             name: call.name.clone(),
             succeeded: normalized.succeeded,
             changed_files: changed_files.clone(),
@@ -1797,7 +1975,7 @@ impl<'a> RunEngine<'a> {
             &call,
             ToolActionMetadata {
                 descriptor,
-                turn,
+                turn: dispatch.turn,
                 arguments_digest,
                 changed_files: changed_files.len(),
                 observed_effects,
@@ -2332,6 +2510,64 @@ struct CompletedToolExecution {
     succeeded: bool,
     policy_audit: Vec<PolicyAuditEntry>,
     fatal_error: Option<String>,
+}
+
+struct ToolDispatchContext<'a> {
+    run_id: RunId,
+    transaction: &'a WorkspaceTransaction,
+    observer: &'a dyn RunObserver,
+    turn: u16,
+    allowed_tool_names: &'a BTreeSet<String>,
+    controller_phase: ControllerPhase,
+}
+
+fn controller_tool_rejection(
+    call: ToolCall,
+    turn: u16,
+    controller_phase: ControllerPhase,
+    duration_ms: u64,
+) -> CompletedToolExecution {
+    let content = json!({
+        "error": "tool unavailable in the active Pactrail controller phase",
+        "phase": controller_phase.label(),
+        "guidance": "Use one of the tools advertised for this turn. Tool availability is enforced by the controller and cannot be overridden by model output."
+    });
+    let output_bytes = content.to_string().len();
+    CompletedToolExecution {
+        call_id: call.id.clone(),
+        result: ToolResult {
+            call_id: call.id.clone(),
+            name: call.name.clone(),
+            content,
+            is_error: true,
+        },
+        action: ActionRecord {
+            actor: "controller".to_owned(),
+            action: "reject_unavailable_tool".to_owned(),
+            summary: format!(
+                "rejected tool {:?} because it is unavailable during {}",
+                call.name,
+                controller_phase.label()
+            ),
+            declared_effects: Vec::new(),
+            observed_effects: Vec::new(),
+            succeeded: false,
+            duration_ms,
+            attributes: BTreeMap::from([
+                ("call_id".to_owned(), call.id),
+                ("changed_files".to_owned(), "0".to_owned()),
+                (
+                    "controller_phase".to_owned(),
+                    controller_phase.label().to_owned(),
+                ),
+                ("output_bytes".to_owned(), output_bytes.to_string()),
+                ("turn".to_owned(), turn.to_string()),
+            ]),
+        },
+        succeeded: false,
+        policy_audit: Vec::new(),
+        fatal_error: None,
+    }
 }
 
 fn append_policy_audit(
@@ -2888,60 +3124,6 @@ fn transition_terminal_state(
     observer.on_progress(&RunProgress::StateChanged { state: terminal });
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GoalIntent {
-    Informational,
-    Change,
-}
-
-fn classify_goal(goal: &str) -> GoalIntent {
-    let normalized = goal.trim().to_ascii_lowercase();
-    let words = normalized
-        .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
-        .filter(|word| !word.is_empty())
-        .collect::<Vec<_>>();
-    let first = words.first().copied().unwrap_or_default();
-    if matches!(
-        first,
-        "what" | "whats" | "why" | "how" | "who" | "where" | "when"
-    ) {
-        return GoalIntent::Informational;
-    }
-    let requests_change = words.iter().any(|word| {
-        matches!(
-            *word,
-            "add"
-                | "build"
-                | "change"
-                | "create"
-                | "delete"
-                | "edit"
-                | "fix"
-                | "generate"
-                | "implement"
-                | "migrate"
-                | "modify"
-                | "refactor"
-                | "remove"
-                | "rename"
-                | "update"
-                | "write"
-        )
-    });
-    if requests_change {
-        return GoalIntent::Change;
-    }
-    if matches!(
-        first,
-        "analyze" | "describe" | "explain" | "inspect" | "review" | "show" | "summarize"
-    ) || normalized.ends_with('?')
-    {
-        GoalIntent::Informational
-    } else {
-        GoalIntent::Change
-    }
-}
-
 fn is_broad_repository_overview(goal: &str) -> bool {
     let words = goal
         .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
@@ -3203,6 +3385,12 @@ mod tests {
         capabilities: ModelCapabilities,
     }
 
+    struct InspectingModel {
+        responses: Mutex<VecDeque<ModelResponse>>,
+        requests: Mutex<Vec<ModelRequest>>,
+        capabilities: ModelCapabilities,
+    }
+
     struct SlowModel {
         capabilities: ModelCapabilities,
     }
@@ -3278,6 +3466,33 @@ mod tests {
         }
 
         async fn invoke(&self, _request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+            self.responses
+                .lock()
+                .map_err(|_| ModelError::InvalidRequest("script lock poisoned".to_owned()))?
+                .pop_front()
+                .ok_or_else(|| ModelError::InvalidRequest("script exhausted".to_owned()))
+        }
+    }
+
+    #[async_trait]
+    impl ModelDriver for InspectingModel {
+        fn name(&self) -> &'static str {
+            "inspecting"
+        }
+
+        fn model(&self) -> &'static str {
+            "controller-test"
+        }
+
+        fn capabilities(&self) -> &ModelCapabilities {
+            &self.capabilities
+        }
+
+        async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+            self.requests
+                .lock()
+                .map_err(|_| ModelError::InvalidRequest("request lock poisoned".to_owned()))?
+                .push(request.clone());
             self.responses
                 .lock()
                 .map_err(|_| ModelError::InvalidRequest("script lock poisoned".to_owned()))?
@@ -4093,6 +4308,176 @@ mod tests {
             Some(&RunProgress::StateChanged {
                 state: RunState::AwaitingApply,
             })
+        );
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn controller_reserves_action_turns_and_enforces_the_advertised_tool_set() {
+        let responses = VecDeque::from([
+            tool_response(
+                "read-a",
+                "read_file",
+                json!({"path": "a.txt", "start_line": 1, "end_line": 20}),
+            ),
+            tool_response(
+                "read-b",
+                "read_file",
+                json!({"path": "b.txt", "start_line": 1, "end_line": 20}),
+            ),
+            tool_response(
+                "hidden-search",
+                "search",
+                json!({"path": ".", "query": "fixture"}),
+            ),
+            tool_response(
+                "write-result",
+                "write_file",
+                json!({"path": "RESULT.md", "content": "implemented\n"}),
+            ),
+            ModelResponse {
+                text: "Implemented the requested result.".to_owned(),
+                tool_calls: Vec::new(),
+                finish_reason: FinishReason::Complete,
+                usage: Usage::default(),
+                provider_request_id: None,
+                extensions: serde_json::Map::new(),
+            },
+        ]);
+        let model = InspectingModel {
+            responses: Mutex::new(responses),
+            requests: Mutex::new(Vec::new()),
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        fs::write(source.path().join("a.txt"), "first fixture\n")
+            .unwrap_or_else(|error| unreachable!("fixture a: {error}"));
+        fs::write(source.path().join("b.txt"), "second fixture\n")
+            .unwrap_or_else(|error| unreachable!("fixture b: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let mut contract = TaskContract::new("Implement RESULT.md", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let engine = RunEngine::new(&model, &registry, &policy).with_max_turns(8);
+        let observer = RecordingObserver::default();
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+
+        let outcome = engine
+            .execute_with_id_and_observer(
+                RunId::new(),
+                contract,
+                &transaction,
+                &mut store,
+                &observer,
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("run: {error}"));
+
+        assert_eq!(outcome.receipt.outcome, ReceiptOutcome::ReadyToApply);
+        assert_eq!(outcome.receipt.changes[0].path, "RESULT.md");
+        let requests = model
+            .requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(requests.len(), 5);
+        assert!(requests[0].tools.iter().any(|tool| tool.name == "search"));
+        assert!(requests[1].tools.iter().any(|tool| tool.name == "search"));
+        assert!(requests[2].tools.iter().all(|tool| tool.name != "search"));
+        assert!(requests[3].tools.iter().all(|tool| tool.name != "search"));
+        drop(requests);
+
+        let snapshot = store
+            .snapshot(outcome.run_id)
+            .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        let rejection = snapshot
+            .actions
+            .iter()
+            .find(|action| action.action == "reject_unavailable_tool")
+            .unwrap_or_else(|| unreachable!("controller rejection"));
+        assert_eq!(rejection.actor, "controller");
+        assert_eq!(rejection.attributes["controller_phase"], "implementing");
+        assert!(observer.events().iter().any(|event| matches!(
+            event,
+            RunProgress::ControllerPhaseChanged {
+                phase: ControllerPhase::Implementing,
+                turn: 3,
+                tools_available,
+                ..
+            } if *tools_available > 0
+        )));
+        assert!(observer.events().iter().any(|event| matches!(
+            event,
+            RunProgress::ControllerProgressAssessed {
+                turn: 4,
+                candidate_changed: true,
+                ..
+            }
+        )));
+    }
+
+    #[tokio::test]
+    async fn change_task_cannot_produce_an_empty_ready_to_apply_receipt() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "empty-change-test".to_owned(),
+            responses: Mutex::new(VecDeque::from([ModelResponse {
+                text: "Done.".to_owned(),
+                tool_calls: Vec::new(),
+                finish_reason: FinishReason::Complete,
+                usage: Usage::default(),
+                provider_request_id: None,
+                extensions: serde_json::Map::new(),
+            }])),
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let mut contract = TaskContract::new("Create RESULT.md", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let engine = RunEngine::new(&model, &registry, &policy);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+
+        let outcome = engine
+            .execute_with_id(RunId::new(), contract, &transaction, &mut store)
+            .await
+            .unwrap_or_else(|error| unreachable!("run: {error}"));
+
+        assert_eq!(outcome.receipt.outcome, ReceiptOutcome::Failed);
+        assert!(outcome.receipt.changes.is_empty());
+        assert!(
+            outcome
+                .receipt
+                .unresolved_risks
+                .iter()
+                .any(|risk| { risk.contains("completed without an isolated candidate") })
+        );
+        assert_eq!(
+            store
+                .snapshot(outcome.run_id)
+                .unwrap_or_else(|error| unreachable!("snapshot: {error}"))
+                .state,
+            RunState::Failed
         );
     }
 
