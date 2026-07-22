@@ -14,6 +14,10 @@ follow [Semantic Versioning](https://semver.org/).
   intervention in the live timeline and hash-linked trace.
 - `ControllerPhase` and the controller progress events are available through
   SDK API revision 5.
+- Authorized deterministic checks now run proactively after a candidate
+  mutation, up to two digest-bound attempts. The first repairable failure feeds
+  one bounded diagnostics packet back to the model before it can claim
+  completion; a passing unchanged candidate is reused as final evidence.
 
 ### Changed
 

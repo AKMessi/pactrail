@@ -11,10 +11,11 @@ follows Pactrail's 1.x SemVer contract while implementation crates remain
 internal. `SDK_API_REVISION` is currently 5 and lets embedders require a specific
 additive extension surface independently of durable schema versions.
 
-Revision 5 exports `ControllerPhase` and adds phase, semantic-progress, and
-intervention variants to the non-exhaustive `RunProgress` stream. Embedders can
-render the controller's decisions without interpreting model text. Existing
-observers must continue treating `RunProgress` as non-exhaustive.
+Revision 5 exports `ControllerPhase` and adds phase, semantic-progress,
+intervention, and proactive-verification variants to the non-exhaustive
+`RunProgress` stream. Embedders can render the controller's decisions without
+interpreting model text. Existing observers must continue treating
+`RunProgress` as non-exhaustive.
 
 ## Custom model provider
 
