@@ -228,6 +228,23 @@ impl WorkspaceTransaction {
         Ok(candidate)
     }
 
+    /// Returns the current BLAKE3 digest of one regular candidate file.
+    ///
+    /// Missing paths return `None`. Resolution remains workspace-relative and
+    /// rejects symbolic-link traversal, non-regular files, and unsafe paths.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when path validation, metadata access, or streaming
+    /// fingerprinting fails.
+    pub fn current_file_digest(
+        &self,
+        relative: impl AsRef<Path>,
+    ) -> Result<Option<String>, TransactionError> {
+        let path = self.resolve_read(relative)?;
+        fingerprint_optional(&self.workspace_root, &path).map(|value| value.digest)
+    }
+
     /// Writes one file through the transaction's path policy.
     ///
     /// # Errors

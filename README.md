@@ -55,7 +55,9 @@ pactrail ❯ Fix the parser regression and add a test.
   an uncertain tool effect is named in the trace and never guessed or replayed.
 - **Memory has provenance.** Explicit conventions, decisions, and warnings live
   in a durable SQLite store. Applied receipts can create integrity-checked
-  historical records. The model can recall memory but cannot write it.
+  historical records whose changed-file digests are revalidated against the
+  isolated candidate before recall. Stale and legacy-unverified receipt memory
+  is withheld from model context; the model can recall memory but cannot write it.
 - **Context adapts to the model.** Repository topology, scoped `AGENTS.md`
   instructions, relevant memories, and a bounded repository evidence graph are
   compiled under a model-derived byte budget. Project-defined symbols link to
@@ -145,6 +147,10 @@ pactrail ❯ Fix the parser regression and add a test.
   hunk positions and context. It never invokes Git, never fuzzes offsets, can
   bind to the current BLAKE3 file digest, preserves CRLF, and validates the
   complete patch before changing the isolated candidate.
+- `recall_memory` separates relevance from trust. Human entries are
+  `user_asserted`/`advisory`; receipt entries become model-visible only while
+  their complete bounded set of post-apply file digests matches the current
+  candidate. Stale or pre-anchor history is counted and withheld.
 - Conversation growth is bounded independently: older observations are
   compacted locally with BLAKE3 provenance, high-signal anchors, an exact JSON
   preview, and re-read guidance. No model-generated history summary becomes an

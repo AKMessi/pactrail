@@ -580,7 +580,7 @@ async fn execute_run_inner(
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
-    let mut context_fragments = memory_context_fragments(&contract, &memory)?;
+    let mut context_fragments = memory_context_fragments(&contract, &memory, &transaction)?;
     context_fragments.extend(mcp_runtime.context_fragments());
     let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
@@ -885,21 +885,35 @@ fn finish_run(
 fn memory_context_fragments(
     contract: &TaskContract,
     memory: &MemoryStore,
+    transaction: &WorkspaceTransaction,
 ) -> Result<Vec<pactrail_context::ContextFragment>, CliError> {
     if !contract.permissions.allow.contains(&Capability::MemoryRead) {
         return Ok(Vec::new());
     }
-    Ok(memory
-        .search(&contract.goal, 8)?
-        .into_iter()
-        .map(|item| pactrail_context::ContextFragment {
+    let mut fragments = Vec::new();
+    // Validate beyond the context cap so stale high-ranking history cannot
+    // suppress current lower-ranking guidance.
+    for item in memory.search(&contract.goal, 32)? {
+        let item = item.validate_against(|path| transaction.current_file_digest(path))?;
+        if !item.validation.eligible_for_model() {
+            continue;
+        }
+        fragments.push(pactrail_context::ContextFragment {
             source: format!(
-                "memory:{} [{}; {}] {}",
-                item.memory.id, item.memory.kind, item.memory.source, item.memory.title
+                "memory:{} [{}; {}; {}] {}",
+                item.memory.id,
+                item.memory.kind,
+                item.trust,
+                item.validation.freshness,
+                item.memory.title
             ),
             content: item.memory.content,
-        })
-        .collect())
+        });
+        if fragments.len() == 8 {
+            break;
+        }
+    }
+    Ok(fragments)
 }
 
 fn cancelled_run(
@@ -2634,9 +2648,10 @@ fn render_memories(memories: &[MemoryRecord], json_output: bool) -> Result<(), C
         .iter()
         .map(|memory| {
             format!(
-                "{}  {:<11}  {}\n    {}",
+                "{}  {:<11}  {:<16}  {}\n    {}",
                 memory.id,
                 memory.kind,
+                memory.trust(),
                 memory.title,
                 memory.content.replace('\n', " ")
             )

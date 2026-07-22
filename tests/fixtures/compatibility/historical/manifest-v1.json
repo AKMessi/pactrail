@@ -30,6 +30,12 @@
       "schema": 3,
       "path": "settings-v3.toml",
       "strategy": "migrate_atomically"
+    },
+    {
+      "format": "memory_database",
+      "schema": 1,
+      "path": "memory-database-v1.sql",
+      "strategy": "migrate_atomically"
     }
   ]
 }
