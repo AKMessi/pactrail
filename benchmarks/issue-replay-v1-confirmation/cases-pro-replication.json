@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-v1-real-issue-pro-replication",
+  "description": "A preregistered secondary model replication of the completed V4 Flash suite using DeepSeek V4 Pro without harness changes.",
+  "preregistered_at": "2026-07-22T03:59:00Z",
+  "confirmation_status": "secondary replication registered after the V4 Flash outcomes; not an independent held-out confirmation",
+  "source_suite": "pactrail-v1-real-issue-confirmation",
+  "frozen_pactrail_commit": "5d0128862ac0688cd189c371843425f09e4befaa",
+  "frozen_pactrail_version": "1.0.0",
+  "frozen_pactrail_executable_sha256": "90da5dc5053077a4bb6fc3294364583b93009a4f3667319b4f3632d9c821b41a",
+  "comparator": "OpenCode 1.2.27",
+  "controls": {
+    "models": ["deepseek-v4-pro"],
+    "temperature": 0,
+    "thinking": "disabled",
+    "context_tokens": 16384,
+    "max_output_tokens": 2048,
+    "max_steps": 16,
+    "case_repetitions": 1,
+    "case_retry_policy": "No retries, no best-of-n, no replacement samples, and no post-result prompt changes.",
+    "process_execution": "Enabled for both harnesses.",
+    "network_policy": "Task prompts require offline work. Source workspaces have a synthetic baseline commit, no remote, and prefetched dependencies with Cargo offline mode enabled.",
+    "minimum_balance_usd": 1.30,
+    "maximum_case_seconds": 720,
+    "execution_order": [
+      "regex/Pactrail", "regex/OpenCode",
+      "http/OpenCode", "http/Pactrail",
+      "ripgrep/Pactrail", "ripgrep/OpenCode"
+    ],
+    "stopping_rule": "Stop all model calls before the next case when the DeepSeek balance is below $1.30. Do not replace an incomplete case.",
+    "primary_metric": "strict_passed",
+    "secondary_metrics": [
+      "functional_passed",
+      "task_passed",
+      "provider_reported_tokens",
+      "estimated_api_cost_usd",
+      "agent_wall_time_ms",
+      "model_calls",
+      "tool_calls",
+      "failed_tool_calls"
+    ],
+    "pactrail_only_assurance_metrics": [
+      "source_isolation_preserved",
+      "trace_integrity_verified",
+      "applied_candidate_matches"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "regex-onepass-excess-capture-slots",
+      "difficulty": "public-api-panic-regression",
+      "repository": "rust-lang/regex",
+      "repository_url": "https://github.com/rust-lang/regex.git",
+      "issue_url": "https://github.com/rust-lang/regex/issues/1327",
+      "license": "MIT OR Apache-2.0",
+      "base_commit": "5ea3eb1e95f0338e283f5f0b4681f0891a1cd836",
+      "reference_commit": "4733e28ba4f281f643ce93e4089eccbb9a9d5a5a",
+      "prompt": "Fix rust-lang/regex issue #1327 in regex-automata's one-pass DFA. DFA::try_search_slots promises to accept any caller-provided slot slice length, but it panics when the slice has more slots than the compiled regex uses. Preserve captures in the slots the regex owns, leave surplus slots valid, and keep existing behavior for smaller slices. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.",
+      "setup_patch": null,
+      "forbidden_paths": ["regex-automata/tests", "regex-automata/Cargo.toml", "Cargo.toml", "CHANGELOG.md", "README.md"],
+      "hidden_overlay_paths": [],
+      "local_hidden_appends": [
+        {"source": "hidden/regex-onepass-slots.rs", "destination": "regex-automata/src/dfa/onepass.rs"}
+      ],
+      "targeted_test": {
+        "program": "cargo",
+        "args": ["test", "-p", "regex-automata", "--lib", "pactrail_hidden_onepass_slots::too_many_slots_are_accepted"],
+        "timeout_seconds": 300
+      },
+      "regression_test": {
+        "program": "cargo",
+        "args": ["test", "-p", "regex-automata", "--lib"],
+        "timeout_seconds": 420
+      }
+    },
+    {
+      "id": "http-header-map-reserve-capacity",
+      "difficulty": "allocation-capacity-regression",
+      "repository": "hyperium/http",
+      "repository_url": "https://github.com/hyperium/http.git",
+      "issue_url": "https://github.com/hyperium/http/pull/741",
+      "license": "MIT",
+      "base_commit": "4e020461ca29efec5ac45e6b2e7871fe29ff1b50",
+      "reference_commit": "68845bd24d843670cd45e6decc60d01ac7266f40",
+      "prompt": "Fix hyperium/http issue #741 in HeaderMap::reserve. Reserving space for a requested number of entries can allocate insufficient usable capacity because the requested entry capacity is treated as raw hash-table capacity. After reserve(n), inserting n entries into an empty map must not trigger another allocation, while overflow and existing-map behavior remain correct. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.",
+      "setup_patch": null,
+      "setup_replacements": [
+        {
+          "path": "src/lib.rs",
+          "old": "#![deny(warnings, missing_docs, missing_debug_implementations)]",
+          "new": "#![deny(warnings, missing_docs, missing_debug_implementations)]\n#![allow(dangerous_implicit_autorefs)]"
+        }
+      ],
+      "forbidden_paths": ["tests", "Cargo.toml", "CHANGELOG.md", "README.md"],
+      "hidden_overlay_paths": [],
+      "local_hidden_appends": [
+        {"source": "hidden/http-header-map-reserve.rs", "destination": "tests/header_map.rs"}
+      ],
+      "targeted_test": {
+        "program": "cargo",
+        "args": ["test", "--test", "header_map", "pactrail_hidden_reserve_capacity"],
+        "timeout_seconds": 240
+      },
+      "regression_test": {
+        "program": "cargo",
+        "args": ["test", "--lib"],
+        "timeout_seconds": 360
+      }
+    },
+    {
+      "id": "ripgrep-early-termination-byte-stats",
+      "difficulty": "stream-accounting-regression",
+      "repository": "BurntSushi/ripgrep",
+      "repository_url": "https://github.com/BurntSushi/ripgrep.git",
+      "issue_url": "https://github.com/BurntSushi/ripgrep/pull/2944",
+      "license": "Unlicense OR MIT",
+      "base_commit": "6244e635a1a5aa4d401826b1e970d59a3f6cbf7c",
+      "reference_commit": "4ab1862dc04783b6615807d4b4511388c6b30364",
+      "prompt": "Fix ripgrep issue #2944 in search statistics. When a buffered search stops early, such as after --max-count is reached, the reported 'bytes searched' can omit bytes that were already consumed from the reader. Ensure early termination accounts for the consumed portion of the current buffer without changing match output or normal end-of-input accounting. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.",
+      "setup_patch": null,
+      "forbidden_paths": ["tests", "Cargo.toml", "CHANGELOG.md", "README.md"],
+      "hidden_overlay_paths": [],
+      "local_hidden_appends": [
+        {"source": "hidden/ripgrep-byte-stats.rs", "destination": "tests/regression.rs"}
+      ],
+      "targeted_test": {
+        "program": "cargo",
+        "args": ["test", "--test", "integration", "pactrail_hidden_early_termination_byte_stats"],
+        "timeout_seconds": 360
+      },
+      "regression_test": {
+        "program": "cargo",
+        "args": ["test", "-p", "grep-searcher", "--lib"],
+        "timeout_seconds": 420
+      }
+    }
+  ]
+}

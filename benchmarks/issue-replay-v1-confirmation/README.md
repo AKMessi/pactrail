@@ -57,3 +57,11 @@ regression test:
 The scored result directory, environment record, normalized comparison,
 integrity hashes, and an honest limitations section are added only after all
 six declared trials have either completed or hit the stopping rule.
+
+## Secondary V4 Pro replication
+
+After the six V4 Flash outcomes were frozen, a second manifest was registered
+for an unchanged V4 Pro replication. It uses the same tasks, graders, prompts,
+limits, order, harness binaries, and non-thinking mode, with a $1.30 balance
+floor. Because the evaluator had already observed the Flash outcomes, this is
+a model robustness replication and not another independent held-out result.
