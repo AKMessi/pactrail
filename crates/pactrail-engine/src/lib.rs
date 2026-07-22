@@ -1,11 +1,13 @@
 //! Execution and orchestration engine for Pactrail.
 
+mod adaptive;
 mod checkpoint;
 mod context_window;
 mod controller;
 mod engine;
 mod verification;
 
+pub use adaptive::{AdaptiveRuntimeClass, AdaptiveRuntimeProfile};
 pub use checkpoint::{
     CHECKPOINT_SCHEMA_VERSION, CheckpointError, CheckpointIdentity, CheckpointStore,
     MIN_CHECKPOINT_SCHEMA_VERSION, ResumePhase, RunCheckpoint, contract_digest,

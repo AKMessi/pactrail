@@ -13,7 +13,7 @@
 ///
 /// This revision tracks source-level extension compatibility independently of
 /// durable task, event, receipt, checkpoint, and MCP schema versions.
-pub const SDK_API_REVISION: u32 = 5;
+pub const SDK_API_REVISION: u32 = 6;
 
 /// Provider-neutral model extension contracts and built-in adapters.
 pub mod model {
@@ -60,9 +60,10 @@ pub mod core {
 /// Execution, checkpoints, progress observation, and verification discovery.
 pub mod engine {
     pub use pactrail_engine::{
-        CheckpointError, CheckpointIdentity, CheckpointStore, ControllerPhase, EngineError,
-        ResumePhase, RunCheckpoint, RunEngine, RunObserver, RunOutcome, RunProgress,
-        VerificationCommand, contract_digest, detect_verification_commands,
+        AdaptiveRuntimeClass, AdaptiveRuntimeProfile, CheckpointError, CheckpointIdentity,
+        CheckpointStore, ControllerPhase, EngineError, ResumePhase, RunCheckpoint, RunEngine,
+        RunObserver, RunOutcome, RunProgress, VerificationCommand, contract_digest,
+        detect_verification_commands,
     };
 }
 
@@ -97,7 +98,10 @@ pub mod prelude {
     pub use pactrail_core::{
         ApprovalDecision, ApprovalRequest, Capability, PermissionSet, RunId, TaskContract,
     };
-    pub use pactrail_engine::{ControllerPhase, RunEngine, RunObserver, RunOutcome, RunProgress};
+    pub use pactrail_engine::{
+        AdaptiveRuntimeClass, AdaptiveRuntimeProfile, ControllerPhase, RunEngine, RunObserver,
+        RunOutcome, RunProgress,
+    };
     pub use pactrail_models::{
         ImageArtifact, ModelCapabilities, ModelDriver, ModelError, ModelRequest, ModelResponse,
         ModelStreamObserver, UserContent,

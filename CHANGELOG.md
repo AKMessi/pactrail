@@ -12,8 +12,8 @@ follow [Semantic Versioning](https://semver.org/).
   and validation turns, measures semantic evidence progress, narrows advertised
   tools after bounded discovery, and exposes every phase decision and
   intervention in the live timeline and hash-linked trace.
-- `ControllerPhase` and the controller progress events are available through
-  SDK API revision 5.
+- `ControllerPhase`, adaptive runtime profiles, and controller progress events
+  are available through SDK API revision 6.
 - Authorized deterministic checks now run proactively after a candidate
   mutation, up to two digest-bound attempts. The first repairable failure feeds
   one bounded diagnostics packet back to the model before it can claim
@@ -27,6 +27,14 @@ follow [Semantic Versioning](https://semver.org/).
   Recall exposes trust/freshness, withholds stale and legacy-unverified receipt
   history, and keeps explicit human memory advisory. Memory database schema one
   remains read-compatible and migrates atomically to schema two.
+- A provider-neutral adaptive runtime selects compact, balanced, or expanded
+  orchestration from effective context/output/parallel-tool capabilities. It
+  bounds discovery, generation, per-turn tool fan-out, and parallel-safe read
+  width; the selection is live, SDK-visible, and hash-linked in the trace.
+- Live and durable trace views now give controller/profile actions their own
+  lane, distinguish semantic stalls from failures, shorten human-view digests
+  while preserving complete JSON, show model input/output/cache tokens, and
+  retain tool output size plus multi-file mutation counts.
 
 ### Changed
 

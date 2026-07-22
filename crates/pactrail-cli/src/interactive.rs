@@ -461,6 +461,34 @@ impl RunActivity {
         }
     }
 
+    fn on_runtime_profile(&self, progress: &RunProgress) {
+        let RunProgress::RuntimeProfileSelected {
+            class,
+            capability_source,
+            input_tokens,
+            turn_output_tokens,
+            discovery_turn_cap,
+            max_tool_calls_per_turn,
+            parallel_read_width,
+        } = progress
+        else {
+            return;
+        };
+        self.row(
+            "◇",
+            "profile",
+            &format!(
+                "{} · {} · {} input · {} output/turn · {discovery_turn_cap} discovery · {max_tool_calls_per_turn} actions/turn · read width {parallel_read_width}",
+                class.label(),
+                capability_source_label(*capability_source),
+                format_count(*input_tokens),
+                format_count(*turn_output_tokens),
+            ),
+            TimelineTone::Brand,
+        );
+        self.set_message(format!("{} runtime profile selected", class.label()));
+    }
+
     fn on_state_progress(&self, progress: &RunProgress) {
         let RunProgress::StateChanged { state } = progress else {
             return;
@@ -728,6 +756,47 @@ impl RunActivity {
         }
     }
 
+    fn on_model_turn_completed(&self, progress: &RunProgress) {
+        let RunProgress::ModelTurnCompleted {
+            turn,
+            tool_calls,
+            duration_ms,
+            input_tokens,
+            output_tokens,
+            cached_input_tokens,
+            ..
+        } = progress
+        else {
+            return;
+        };
+        let tokens = input_tokens.saturating_add(*output_tokens);
+        self.model_tokens.fetch_add(tokens, Ordering::Relaxed);
+        self.model_time_ms
+            .fetch_add(*duration_ms, Ordering::Relaxed);
+        let duration = format_duration(Duration::from_millis(*duration_ms));
+        let result = if *tool_calls == 0 {
+            "answer".to_owned()
+        } else {
+            format!("{tool_calls} {}", plural(*tool_calls, "action", "actions"))
+        };
+        let cache = if *cached_input_tokens == 0 {
+            String::new()
+        } else {
+            format!(" · {} cached", format_count(*cached_input_tokens))
+        };
+        self.row(
+            "●",
+            "model",
+            &format!(
+                "turn {turn} · {result} · {} in · {} out{cache} · {duration}",
+                format_count(*input_tokens),
+                format_count(*output_tokens)
+            ),
+            TimelineTone::Accent,
+        );
+        self.set_message(format!("turn {turn} complete · {result}"));
+    }
+
     fn on_model_progress(&self, progress: &RunProgress) {
         match progress {
             RunProgress::ModelTurnStarted { turn, max_turns } => {
@@ -796,35 +865,7 @@ impl RunActivity {
                     format_count(usage.total())
                 ));
             }
-            RunProgress::ModelTurnCompleted {
-                turn,
-                tool_calls,
-                duration_ms,
-                input_tokens,
-                output_tokens,
-                ..
-            } => {
-                let tokens = input_tokens.saturating_add(*output_tokens);
-                self.model_tokens.fetch_add(tokens, Ordering::Relaxed);
-                self.model_time_ms
-                    .fetch_add(*duration_ms, Ordering::Relaxed);
-                let duration = format_duration(Duration::from_millis(*duration_ms));
-                let result = if *tool_calls == 0 {
-                    "answer".to_owned()
-                } else {
-                    format!("{tool_calls} {}", plural(*tool_calls, "action", "actions"))
-                };
-                self.row(
-                    "●",
-                    "model",
-                    &format!(
-                        "turn {turn} · {result} · {} tokens · {duration}",
-                        format_count(tokens)
-                    ),
-                    TimelineTone::Accent,
-                );
-                self.set_message(format!("turn {turn} complete · {result}"));
-            }
+            RunProgress::ModelTurnCompleted { .. } => self.on_model_turn_completed(progress),
             _ => {}
         }
     }
@@ -854,9 +895,19 @@ impl RunActivity {
                 }
                 let duration = format_duration(Duration::from_millis(*duration_ms));
                 let (marker, detail, tone) = if let Some(path) = changed_files.first() {
+                    let additional = changed_files.len().saturating_sub(1);
+                    let additional = if additional == 0 {
+                        String::new()
+                    } else {
+                        format!(" +{additional}")
+                    };
                     (
                         "◆",
-                        format!("{name} · changed {} · {duration}", truncate(path, 48)),
+                        format!(
+                            "{name} · changed {}{additional} · {} · {duration}",
+                            truncate(path, 42),
+                            format_bytes(u64::try_from(*output_bytes).unwrap_or(u64::MAX))
+                        ),
                         TimelineTone::Success,
                     )
                 } else if *succeeded {
@@ -984,10 +1035,19 @@ impl RunActivity {
     }
 }
 
+const fn capability_source_label(source: pactrail_models::CapabilitySource) -> &'static str {
+    match source {
+        pactrail_models::CapabilitySource::ConservativeDefault => "conservative default",
+        pactrail_models::CapabilitySource::UserDeclared => "user declared",
+        pactrail_models::CapabilitySource::Probed => "probed",
+    }
+}
+
 impl RunObserver for RunActivity {
     fn on_progress(&self, progress: &RunProgress) {
         match progress {
             RunProgress::RunStarted { .. } => self.on_run_started(progress),
+            RunProgress::RuntimeProfileSelected { .. } => self.on_runtime_profile(progress),
             RunProgress::InputArtifactsReady { .. } => self.on_input_artifacts(progress),
             RunProgress::StateChanged { .. } => self.on_state_progress(progress),
             RunProgress::ContextBuilt { .. } => self.on_context_progress(progress),
@@ -2490,7 +2550,8 @@ impl Session {
             ),
             String::new(),
         ];
-        let legend = "◆ context · ● model · ● tool · ↻ recover · ✓ evidence · ◇ state";
+        let legend =
+            "◆ context · ◇ control · ● model · ● tool · ✓ verify/evidence · ↻ recover · ◇ state";
         lines.extend(
             wrap_text(legend, content_width(columns, 2, 96))
                 .into_iter()
@@ -2832,10 +2893,16 @@ fn tool_activity(name: &str) -> &'static str {
         "read_file" => "reading source",
         "read_many_files" => "reading related sources",
         "search" => "searching workspace",
+        "search_code_graph" => "tracing symbols and references",
+        "search_change_impact" => "mapping likely change impact",
+        "git_status" => "reading source repository status",
+        "git_diff" => "reading source repository diff",
+        "git_history" => "reading source repository history",
         "recall_memory" => "recalling workspace memory",
         "write_file" => "writing candidate file",
         "replace_text" => "editing candidate file",
         "edit_file" => "applying atomic candidate edits",
+        "apply_patch" => "applying strict candidate patch",
         "remove_file" => "removing candidate file",
         "workspace_changes" => "inspecting candidate changes",
         "run_process" => "running trusted process",
@@ -3082,6 +3149,10 @@ fn render_trace_action(
         )
     } else if action.actor == "context" {
         (theme.brand("◆"), theme.brand(&format!("{:<8}", "context")))
+    } else if action.actor == "controller" {
+        (theme.brand("◇"), theme.brand(&format!("{:<8}", "control")))
+    } else if action.actor == "input" {
+        (theme.accent("◇"), theme.accent(&format!("{:<8}", "input")))
     } else if action.actor.starts_with("model:") {
         (theme.brand("●"), theme.accent(&format!("{:<8}", "model")))
     } else if action.actor.starts_with("tool:") {
@@ -3094,7 +3165,12 @@ fn render_trace_action(
     } else {
         (theme.muted("●"), theme.text(&format!("{:<8}", "action")))
     };
-    let outcome = if action.succeeded {
+    let outcome = if action.actor == "controller"
+        && action.action == "assess_progress"
+        && !action.succeeded
+    {
+        theme.warning("stalled")
+    } else if action.succeeded {
         theme.success("ok")
     } else {
         theme.danger("failed")
@@ -3111,7 +3187,7 @@ fn render_trace_action(
         let attributes = action
             .attributes
             .iter()
-            .map(|(key, value)| format!("{key}={value}"))
+            .map(|(key, value)| trace_attribute(key, value))
             .collect::<Vec<_>>()
             .join("  ");
         for text in wrap_text(&attributes, detail_width) {
@@ -3125,6 +3201,18 @@ fn render_trace_action(
         }
     }
     lines
+}
+
+fn trace_attribute(key: &str, value: &str) -> String {
+    let value = if key.ends_with("_digest")
+        || key.ends_with("_hash")
+        || matches!(key, "candidate" | "runtime_profile")
+    {
+        short_digest(value)
+    } else {
+        value
+    };
+    format!("{key}={value}")
 }
 
 fn trace_duration(milliseconds: u64) -> String {

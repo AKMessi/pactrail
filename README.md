@@ -64,6 +64,11 @@ pactrail ❯ Fix the parser regression and add a test.
   lexical reference locations for navigation without pretending to be a runtime
   call graph. Authoritative context fails closed; optional entries are omitted
   whole and the omission is visible.
+- **Orchestration adapts without model-name folklore.** Effective declared or
+  probed context, output, and parallel-tool capabilities select a
+  compact/balanced/expanded runtime profile. It bounds discovery, per-turn
+  output, tool-call fan-out, and safe read concurrency; the selection is visible
+  live and recorded in the hash-linked trace.
 - **Repository intelligence is incremental, not stale.** Every run hashes
   current files, while unchanged bounded structure is reused by content digest.
   The live timeline and durable trace report warm/cold reuse, rejected entries,
@@ -117,7 +122,9 @@ pactrail ❯ Fix the parser regression and add a test.
 - Persistent history, completion, typo suggestions, review-aware prompt, and
   a persistent live execution timeline instead of simulated or disappearing
   activity. Completed context, model, tool, recovery, state, and verification
-  rows stay visible above one current-operation spinner.
+  rows stay visible above one current-operation spinner. Runtime profile,
+  controller budget, input/output/cache tokens, tool result size, mutation
+  count, and proactive checks have distinct readable lanes.
 - Width-aware rendering keeps dashboards, receipts, tools, help, history, and
   complete trace continuations legible in narrow or wide terminals.
 - `/tools` risk/capability inspector, `/trace` execution timeline, `/memory`
