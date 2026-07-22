@@ -18,6 +18,10 @@ follow [Semantic Versioning](https://semver.org/).
   mutation, up to two digest-bound attempts. The first repairable failure feeds
   one bounded diagnostics packet back to the model before it can claim
   completion; a passing unchanged candidate is reused as final evidence.
+- A native `apply_patch` tool applies one strict, bounded unified diff without
+  Git or shell execution. It supports add/update/delete, exact hunk and line
+  validation, optional stale-digest rejection, CRLF preservation, explicit
+  no-final-newline handling, and current-source mutation evidence.
 
 ### Changed
 

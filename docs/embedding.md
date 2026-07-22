@@ -17,6 +17,10 @@ intervention, and proactive-verification variants to the non-exhaustive
 interpreting model text. Existing observers must continue treating
 `RunProgress` as non-exhaustive.
 
+The same revision exports `ApplyPatchTool`. It uses the normal `Tool` contract,
+`FileRead`/`FileWrite` policy, isolated transaction, effect fence, output bound,
+and receipt path; embedding it does not introduce a parallel mutation channel.
+
 ## Custom model provider
 
 Implement `ModelDriver` to translate a provider into Pactrail's ordered,

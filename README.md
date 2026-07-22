@@ -130,8 +130,9 @@ pactrail ❯ Fix the parser regression and add a test.
 
 - Bounded file listing, single and batch reads, lexical search, exact replace,
   repository-wide symbol/reference graph and one-hop change-impact search,
-  read-only Git status/diff/history, atomic multi-edit, write, remove,
-  candidate-change inspection, memory recall, and trusted native verification.
+  read-only Git status/diff/history, strict unified patch, atomic multi-edit,
+  write, remove, candidate-change inspection, memory recall, and trusted native
+  verification.
 - Per-tool read-only, idempotency, parallel-safety, capability, and risk metadata.
 - Consecutive parallel-safe reads overlap; mutations stay serial and durable
   results retain the model's call order.
@@ -140,6 +141,10 @@ pactrail ❯ Fix the parser regression and add a test.
   previews from the isolated candidate around the changed region. Distant or
   oversized changes carry explicit re-read guidance instead of implying that a
   partial preview is complete; no-op replacements are rejected.
+- `apply_patch` handles one add, update, or delete per call with exact unified
+  hunk positions and context. It never invokes Git, never fuzzes offsets, can
+  bind to the current BLAKE3 file digest, preserves CRLF, and validates the
+  complete patch before changing the isolated candidate.
 - Conversation growth is bounded independently: older observations are
   compacted locally with BLAKE3 provenance, high-signal anchors, an exact JSON
   preview, and re-read guidance. No model-generated history summary becomes an

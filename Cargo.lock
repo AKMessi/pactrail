@@ -2588,6 +2588,7 @@ dependencies = [
  "pactrail-git",
  "pactrail-memory",
  "pactrail-workspace",
+ "proptest",
  "rustix",
  "schemars",
  "serde",
