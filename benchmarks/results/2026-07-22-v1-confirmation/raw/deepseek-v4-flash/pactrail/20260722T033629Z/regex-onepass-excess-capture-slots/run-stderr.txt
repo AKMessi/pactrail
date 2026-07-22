@@ -1,0 +1,3 @@
+warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run
+error: engine failed for run 019f87e5-8d4c-7353-8bc5-96e2094dd35f: model did not complete within 16 turns
+Portable trace: \\?\D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\v1-confirmation-scored\20260722T033629Z-pactrail-deepseek-v4-flash\regex-onepass-excess-capture-slots\workspace\.pactrail\runs\019f87e5-8d4c-7353-8bc5-96e2094dd35f\trace.jsonl

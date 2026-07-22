@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "experiment": "pactrail-v1-real-issue-confirmation",
+  "trials": 12,
+  "tasks": 3,
+  "samples_per_model_harness_task": 1,
+  "aggregate": {
+    "deepseek-v4-flash": {
+      "pactrail": {"cases": 3, "functional": 0, "task": 0, "strict": 0, "duration_ms": 94319, "tokens": 545610, "estimated_cost_usd": 0.015768, "model_calls": 46, "tool_calls": 64, "failed_tool_calls": 0},
+      "opencode": {"cases": 3, "functional": 1, "task": 1, "strict": 1, "duration_ms": 260155, "tokens": 613479, "estimated_cost_usd": 0.032198, "model_calls": 49, "tool_calls": 59, "failed_tool_calls": 0},
+      "pactrail_relative": {"fewer_tokens_fraction": 0.110630, "less_agent_time_fraction": 0.637451, "lower_estimated_cost_fraction": 0.510280}
+    },
+    "deepseek-v4-pro": {
+      "pactrail": {"cases": 3, "functional": 0, "task": 0, "strict": 0, "duration_ms": 128550, "tokens": 580742, "estimated_cost_usd": 0.053923, "model_calls": 48, "tool_calls": 65, "failed_tool_calls": 1},
+      "opencode": {"cases": 3, "functional": 1, "task": 1, "strict": 1, "duration_ms": 375679, "tokens": 678104, "estimated_cost_usd": 0.166807, "model_calls": 45, "tool_calls": 50, "failed_tool_calls": 0},
+      "pactrail_relative": {"fewer_tokens_fraction": 0.143580, "less_agent_time_fraction": 0.657820, "lower_estimated_cost_fraction": 0.676734}
+    },
+    "combined": {
+      "pactrail": {"cases": 6, "functional": 0, "task": 0, "strict": 0, "duration_ms": 222869, "tokens": 1126352, "estimated_cost_usd": 0.069691, "model_calls": 94, "tool_calls": 129, "failed_tool_calls": 1, "source_isolation_preserved": 6, "trace_integrity_verified": 6},
+      "opencode": {"cases": 6, "functional": 2, "task": 2, "strict": 2, "duration_ms": 635834, "tokens": 1291583, "estimated_cost_usd": 0.199005, "model_calls": 94, "tool_calls": 109, "failed_tool_calls": 0},
+      "pactrail_relative": {"fewer_tokens_fraction": 0.127929, "less_agent_time_fraction": 0.649486, "lower_estimated_cost_fraction": 0.649803}
+    }
+  },
+  "task_outcomes": [
+    {"id": "regex-onepass-excess-capture-slots", "deepseek-v4-flash": {"pactrail": "fail", "opencode": "fail"}, "deepseek-v4-pro": {"pactrail": "fail", "opencode": "fail"}},
+    {"id": "http-header-map-reserve-capacity", "deepseek-v4-flash": {"pactrail": "fail", "opencode": "pass"}, "deepseek-v4-pro": {"pactrail": "fail", "opencode": "pass"}},
+    {"id": "ripgrep-early-termination-byte-stats", "deepseek-v4-flash": {"pactrail": "fail", "opencode": "fail"}, "deepseek-v4-pro": {"pactrail": "fail", "opencode": "fail"}}
+  ],
+  "claim_supported": "Pactrail preserved source isolation and verified trace integrity in 6/6 trials and used fewer tokens, less agent time, and lower estimated cost.",
+  "claim_rejected": "This experiment does not support claiming Pactrail 1.0.0 is a more capable coding harness than OpenCode 1.2.27."
+}

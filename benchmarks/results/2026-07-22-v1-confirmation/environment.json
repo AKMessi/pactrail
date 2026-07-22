@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-07-22T04:14:40.7803370+00:00",
+  "os": "Microsoft Windows 11 Home Single Language",
+  "os_version": "10.0.26200",
+  "architecture": "ARM64",
+  "cpu": "Snapdragon(R) X Plus - X1P42100 - Qualcomm(R) Oryon(TM) CPU",
+  "logical_processors": 8,
+  "memory_bytes": 16759111680,
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "git": "git version 2.53.0.windows.2",
+  "pactrail": "pactrail 1.0.0",
+  "pactrail_commit": "5d0128862ac0688cd189c371843425f09e4befaa",
+  "pactrail_executable_sha256": "90da5dc5053077a4bb6fc3294364583b93009a4f3667319b4f3632d9c821b41a",
+  "opencode": "1.2.27"
+}

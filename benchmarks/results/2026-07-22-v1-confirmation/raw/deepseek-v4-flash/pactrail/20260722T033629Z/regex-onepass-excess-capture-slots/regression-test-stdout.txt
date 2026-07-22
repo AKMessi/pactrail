@@ -1,0 +1,153 @@
+
+running 136 tests
+test dfa::dense::tests::errors_with_unicode_word_boundary ... ok
+test dfa::dense::tests::regression_validation_order ... ok
+test dfa::dense::tests::roundtrip_never_match ... ok
+test dfa::dense::tests::roundtrip_always_match ... ok
+test dfa::dense::tests::heuristic_unicode_reverse ... ok
+test dfa::automaton::tests::object_safe ... ok
+test dfa::onepass::pactrail_hidden_onepass_slots::too_many_slots_are_accepted ... FAILED
+test dfa::onepass::tests::fail_conflicting_transition ... ok
+test dfa::onepass::tests::assertions ... ok
+test dfa::onepass::tests::fail_multiple_epsilon ... ok
+test dfa::onepass::tests::fail_multiple_match ... ok
+test dfa::onepass::tests::max_slots ... ok
+test dfa::onepass::tests::is_not_one_pass ... ok
+test dfa::sparse::tests::heuristic_unicode_reverse ... ok
+test dfa::sparse::tests::heuristic_unicode_forward ... ok
+test nfa::thompson::builder::tests::state_has_small_size ... ok
+test hybrid::dfa::tests::heuristic_unicode_reverse ... ok
+test nfa::thompson::backtrack::tests::max_haystack_len_overflow ... ok
+test nfa::thompson::compiler::tests::compile_captures_all ... ok
+test nfa::thompson::compiler::tests::compile_alternation ... ok
+test nfa::thompson::compiler::tests::compile_captures_implicit ... ok
+test nfa::thompson::compiler::tests::compile_captures_none ... ok
+test nfa::thompson::compiler::tests::compile_class_ascii ... ok
+test dfa::onepass::tests::is_not_one_pass_bigger ... ok
+test nfa::thompson::compiler::tests::compile_empty ... ok
+test nfa::thompson::compiler::tests::compile_group ... ok
+test meta::regex::tests::regression_suffix_literal_count ... ok
+test nfa::thompson::compiler::tests::compile_many_start_pattern ... ok
+test nfa::thompson::compiler::tests::compile_literal ... ok
+test nfa::thompson::compiler::tests::compile_no_reverse_unanchored_prefix_with_end_anchor ... ok
+test nfa::thompson::compiler::tests::compile_no_unanchored_prefix_with_start_anchor ... ok
+test nfa::thompson::compiler::tests::compile_non_binary_union ... ok
+test nfa::thompson::compiler::tests::compile_repetition ... ok
+test nfa::thompson::compiler::tests::compile_unanchored_prefix ... ok
+test nfa::thompson::compiler::tests::compile_yes_reverse_unanchored_prefix_with_start_anchor ... ok
+test nfa::thompson::compiler::tests::compile_yes_unanchored_prefix_with_end_anchor ... ok
+test dfa::onepass::tests::is_one_pass ... ok
+test nfa::thompson::compiler::tests::empty_class_bytes ... ok
+test nfa::thompson::compiler::tests::empty_class_unicode ... ok
+test nfa::thompson::compiler::tests::compile_class_unicode ... ok
+test nfa::thompson::literal_trie::tests::maker ... ok
+test nfa::thompson::literal_trie::tests::zap ... ok
+test nfa::thompson::nfa::tests::never_match ... ok
+test nfa::thompson::nfa::tests::always_match ... ok
+test nfa::thompson::nfa::tests::state_has_small_size ... ok
+test nfa::thompson::range_trie::tests::no_splits ... ok
+test nfa::thompson::range_trie::tests::splits ... ok
+test util::alphabet::tests::byte_classes ... ok
+test util::alphabet::tests::elements_empty ... ok
+test util::alphabet::tests::elements_singletons ... ok
+test util::alphabet::tests::elements_typical ... ok
+test util::determinize::state::tests::prop_read_write_vari32 ... ok
+test util::alphabet::tests::representatives ... ok
+test util::alphabet::tests::full_byte_classes ... ok
+test util::determinize::state::tests::prop_read_write_varu32 ... ok
+test util::interpolate::tests::find_cap_ref1 ... ok
+test util::interpolate::tests::find_cap_ref10 ... ok
+test util::interpolate::tests::find_cap_ref11 ... ok
+test util::interpolate::tests::find_cap_ref12 ... ok
+test util::interpolate::tests::find_cap_ref13 ... ok
+test util::interpolate::tests::find_cap_ref14 ... ok
+test util::interpolate::tests::find_cap_ref15 ... ok
+test util::interpolate::tests::find_cap_ref16 ... ok
+test util::interpolate::tests::find_cap_ref17 ... ok
+test util::interpolate::tests::find_cap_ref19 ... ok
+test util::interpolate::tests::find_cap_ref2 ... ok
+test util::interpolate::tests::find_cap_ref20 ... ok
+test util::interpolate::tests::find_cap_ref18 ... ok
+test util::interpolate::tests::find_cap_ref21 ... ok
+test util::interpolate::tests::find_cap_ref22 ... ok
+test util::interpolate::tests::find_cap_ref23 ... ok
+test util::interpolate::tests::find_cap_ref24 ... ok
+test util::interpolate::tests::find_cap_ref25 ... ok
+test util::interpolate::tests::find_cap_ref26 ... ok
+test util::interpolate::tests::find_cap_ref3 ... ok
+test util::interpolate::tests::find_cap_ref5 ... ok
+test util::interpolate::tests::find_cap_ref6 ... ok
+test util::interpolate::tests::find_cap_ref7 ... ok
+test util::determinize::state::tests::prop_state_read_write_pattern_ids ... ok
+test util::interpolate::tests::find_cap_ref8 ... ok
+test util::interpolate::tests::find_cap_ref4 ... ok
+test util::interpolate::tests::find_cap_ref9 ... ok
+test util::determinize::state::tests::prop_state_read_write_nfa_state_ids ... ok
+test util::interpolate::tests::interp1 ... ok
+test util::determinize::state::tests::prop_state_read_write_nfa_state_and_pattern_ids ... ok
+test util::interpolate::tests::interp10 ... ok
+test util::interpolate::tests::interp11 ... ok
+test util::interpolate::tests::interp12 ... ok
+test util::interpolate::tests::interp14 ... ok
+test util::interpolate::tests::interp2 ... ok
+test util::interpolate::tests::interp13 ... ok
+test util::interpolate::tests::interp15 ... ok
+test util::interpolate::tests::interp5 ... ok
+test util::interpolate::tests::interp3 ... ok
+test util::interpolate::tests::interp4 ... ok
+test util::interpolate::tests::interp7 ... ok
+test util::interpolate::tests::interp6 ... ok
+test util::interpolate::tests::interp8 ... ok
+test util::interpolate::tests::interp9 ... ok
+test util::look::tests::look_matches_end_line ... ok
+test util::lazy::tests::oibits ... ok
+test util::look::tests::look_matches_end_text ... ok
+test util::look::tests::look_matches_start_text ... ok
+test util::look::tests::look_matches_word_ascii ... ok
+test util::look::tests::look_matches_word_ascii_negate ... ok
+test util::look::tests::look_matches_start_line ... ok
+test util::look::tests::look_matches_word_end_ascii ... ok
+test util::look::tests::look_matches_word_end_half_ascii ... ok
+test util::look::tests::look_matches_word_end_half_unicode ... ok
+test util::look::tests::look_matches_word_end_unicode ... ok
+test util::look::tests::look_matches_word_start_half_unicode ... ok
+test util::look::tests::look_matches_word_start_half_ascii ... ok
+test util::look::tests::look_matches_word_start_unicode ... ok
+test util::look::tests::look_matches_word_unicode ... ok
+test util::look::tests::look_matches_word_start_ascii ... ok
+test util::look::tests::look_matches_word_unicode_negate ... ok
+test util::look::tests::look_set ... ok
+test util::look::tests::look_set_iter ... ok
+test util::look::tests::look_set_debug ... ok
+test util::pool::tests::oibits ... ok
+test util::pool::tests::thread_owner_distinct ... ok
+test util::search::tests::match_error_kind_size ... ok
+test util::search::tests::match_error_size ... ok
+test util::search::tests::incorrect_asref_guard ... ok
+test util::start::tests::start_fwd ... ok
+test util::start::tests::start_fwd_done_range ... ok
+test util::start::tests::start_rev ... ok
+test util::pool::tests::thread_owner_sync ... ok
+test util::pool::tests::thread_owner_optimization ... ok
+test util::start::tests::start_rev_done_range ... ok
+test util::pool::tests::thread_owner_send_drop ... ok
+test util::wire::tests::bad_label_almost_too_long ... ok
+test util::wire::tests::bad_label_interior_nul - should panic ... ok
+test util::wire::tests::labels ... ok
+test util::wire::tests::bad_label_too_long - should panic ... ok
+test util::wire::tests::padding ... ok
+
+failures:
+
+---- dfa::onepass::pactrail_hidden_onepass_slots::too_many_slots_are_accepted stdout ----
+
+thread 'dfa::onepass::pactrail_hidden_onepass_slots::too_many_slots_are_accepted' (23428) panicked at regex-automata\src\dfa\onepass.rs:2576:33:
+range end index 6 out of range for slice of length 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    dfa::onepass::pactrail_hidden_onepass_slots::too_many_slots_are_accepted
+
+test result: FAILED. 135 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

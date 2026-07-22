@@ -1,0 +1,356 @@
+
+running 77 tests
+test line_buffer::tests::buffer_binary_convert4 ... ok
+test line_buffer::tests::buffer_basics4 ... ok
+test line_buffer::tests::buffer_basics3 ... ok
+test line_buffer::tests::buffer_basics2 ... ok
+test line_buffer::tests::buffer_binary_convert1 ... ok
+test line_buffer::tests::buffer_binary_convert3 ... ok
+test line_buffer::tests::buffer_binary_convert2 ... ok
+test line_buffer::tests::buffer_basics1 ... ok
+test line_buffer::tests::buffer_binary_none ... ok
+test line_buffer::tests::buffer_binary_quit1 ... ok
+test line_buffer::tests::buffer_binary_quit2 ... ok
+test line_buffer::tests::buffer_binary_quit3 ... ok
+test line_buffer::tests::buffer_binary_quit4 ... ok
+test line_buffer::tests::buffer_binary_quit5 ... ok
+test line_buffer::tests::buffer_empty ... ok
+test line_buffer::tests::buffer_limited_capacity2 ... ok
+test line_buffer::tests::buffer_small_capacity ... ok
+test line_buffer::tests::buffer_zero_capacity ... ok
+test line_buffer::tests::buffer_limited_capacity3 ... ok
+test line_buffer::tests::buffer_limited_capacity1 ... ok
+test lines::tests::line_count ... ok
+test line_buffer::tests::replace ... ok
+test lines::tests::line_iter_empty ... ok
+test lines::tests::line_iter ... ok
+test lines::tests::line_locate ... ok
+test lines::tests::line_locate_weird ... ok
+test lines::tests::preceding_lines_doc ... ok
+test lines::tests::preceding_lines_empty2 ... ok
+test lines::tests::preceding_lines_empty1 ... ok
+test lines::tests::preceding_lines_sherlock ... ok
+test lines::tests::preceding_lines_short ... ok
+test searcher::glue::tests::basic2 ... ok
+test searcher::glue::tests::basic3 ... ok
+test searcher::glue::tests::basic4 ... ok
+test searcher::glue::tests::basic1 ... ok
+test searcher::glue::tests::binary1 ... ok
+test searcher::glue::tests::binary2 ... ok
+test searcher::glue::tests::context_code1 ... FAILED
+test searcher::glue::tests::context_sherlock1 ... FAILED
+test searcher::glue::tests::context_code2 ... FAILED
+test searcher::glue::tests::context_sherlock3 ... FAILED
+test searcher::glue::tests::context_code3 ... FAILED
+test searcher::glue::tests::context_sherlock2 ... ok
+test searcher::glue::tests::context_sherlock4 ... FAILED
+test searcher::glue::tests::context_sherlock6 ... FAILED
+test searcher::glue::tests::context_sherlock_invert1 ... ok
+test searcher::glue::tests::context_sherlock5 ... ok
+test searcher::glue::tests::context_sherlock_invert2 ... FAILED
+test searcher::glue::tests::empty_line1 ... ok
+test searcher::glue::tests::empty_line2 ... ok
+test searcher::glue::tests::empty_line3 ... ok
+test searcher::glue::tests::big_error_one_line ... ok
+test searcher::glue::tests::invert1 ... ok
+test searcher::glue::tests::empty_line5 ... ok
+test searcher::glue::tests::empty_line6 ... ok
+test searcher::glue::tests::empty_line4 ... ok
+test searcher::glue::tests::multi_line_overlap1 ... ok
+test searcher::glue::tests::line_number1 ... ok
+test searcher::glue::tests::multi_line_overlap2 ... ok
+test searcher::glue::tests::line_number_invert1 ... ok
+test searcher::glue::tests::passthru_sherlock1 ... ok
+test searcher::glue::tests::passthru_sherlock_invert1 ... ok
+test searcher::glue::tests::scratch ... ok
+test searcher::tests::uft8_bom_sniffing ... ok
+test searcher::tests::config_error_heap_limit ... ok
+test searcher::tests::config_error_line_terminator ... ok
+test testutil::tests::empty_line1 ... ok
+test testutil::tests::empty_line2 ... ok
+test testutil::tests::empty_line3 ... ok
+test testutil::tests::empty_line4 ... ok
+test testutil::tests::empty_line6 ... ok
+test testutil::tests::empty_line5 ... ok
+test searcher::glue::tests::big_error_multi_line ... ok
+test searcher::glue::tests::binary4 ... ok
+test searcher::glue::tests::binary3 ... ok
+test searcher::glue::tests::regression_2260 ... ok
+test searcher::glue::tests::big1 ... ok
+
+failures:
+
+---- searcher::glue::tests::context_code1 stdout ----
+
+thread 'searcher::glue::tests::context_code1' (19608) panicked at crates\searcher\src\testutil.rs:285:17:
+
+printed outputs differ! (label: reader-byline-noterm-nonumber)
+
+expected:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+33-
+34-fn main() {
+46:    let stdin = io::stdin();
+75-    let stdout = io::stdout();
+106-
+107:    // Wrap the stdin reader in a Snappy reader.
+156:    let mut rdr = snap::Reader::new(stdin.lock());
+207-    let mut wtr = stdout.lock();
+240-    io::copy(&mut rdr, &mut wtr).expect("I/O operation failed");
+
+byte count:307
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+got:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+33-
+34-fn main() {
+46:    let stdin = io::stdin();
+75-    let stdout = io::stdout();
+106-
+107:    // Wrap the stdin reader in a Snappy reader.
+156:    let mut rdr = snap::Reader::new(stdin.lock());
+207-    let mut wtr = stdout.lock();
+240-    io::copy(&mut rdr, &mut wtr).expect("I/O operation failed");
+
+byte count:309
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- searcher::glue::tests::context_sherlock1 stdout ----
+
+thread 'searcher::glue::tests::context_sherlock1' (7388) panicked at crates\searcher\src\testutil.rs:285:17:
+
+printed outputs differ! (label: reader-byline-noterm-nonumber)
+
+expected:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+0:For the Doctor Watsons of this world, as opposed to the Sherlock
+65-Holmeses, success in the province of detective work must always
+129:be, to a very large extent, the result of luck. Sherlock Holmes
+193-can extract a clew from a wisp of straw or a flake of cigar ash;
+
+byte count:366
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+got:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+0:For the Doctor Watsons of this world, as opposed to the Sherlock
+65-Holmeses, success in the province of detective work must always
+129:be, to a very large extent, the result of luck. Sherlock Holmes
+193-can extract a clew from a wisp of straw or a flake of cigar ash;
+
+byte count:474
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+---- searcher::glue::tests::context_code2 stdout ----
+
+thread 'searcher::glue::tests::context_code2' (21240) panicked at crates\searcher\src\testutil.rs:285:17:
+
+printed outputs differ! (label: reader-byline-noterm-nonumber)
+
+expected:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+34-fn main() {
+46-    let stdin = io::stdin();
+75:    let stdout = io::stdout();
+--
+107-    // Wrap the stdin reader in a Snappy reader.
+156-    let mut rdr = snap::Reader::new(stdin.lock());
+207:    let mut wtr = stdout.lock();
+
+byte count:307
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+got:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+34-fn main() {
+46-    let stdin = io::stdin();
+75:    let stdout = io::stdout();
+--
+107-    // Wrap the stdin reader in a Snappy reader.
+156-    let mut rdr = snap::Reader::new(stdin.lock());
+207:    let mut wtr = stdout.lock();
+
+byte count:374
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+---- searcher::glue::tests::context_sherlock3 stdout ----
+
+thread 'searcher::glue::tests::context_sherlock3' (2452) panicked at crates\searcher\src\testutil.rs:285:17:
+
+printed outputs differ! (label: reader-byline-noterm-nonumber)
+
+expected:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+0:For the Doctor Watsons of this world, as opposed to the Sherlock
+65-Holmeses, success in the province of detective work must always
+129:be, to a very large extent, the result of luck. Sherlock Holmes
+193-can extract a clew from a wisp of straw or a flake of cigar ash;
+258-but Doctor Watson has to have it taken out for him and dusted,
+
+byte count:366
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+got:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+0:For the Doctor Watsons of this world, as opposed to the Sherlock
+65-Holmeses, success in the province of detective work must always
+129:be, to a very large extent, the result of luck. Sherlock Holmes
+193-can extract a clew from a wisp of straw or a flake of cigar ash;
+258-but Doctor Watson has to have it taken out for him and dusted,
+
+byte count:411
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+---- searcher::glue::tests::context_code3 stdout ----
+
+thread 'searcher::glue::tests::context_code3' (24684) panicked at crates\searcher\src\testutil.rs:285:17:
+
+printed outputs differ! (label: reader-byline-noterm-nonumber)
+
+expected:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+20-use std::io;
+33-
+34:fn main() {
+46-    let stdin = io::stdin();
+75-    let stdout = io::stdout();
+106-
+107-    // Wrap the stdin reader in a Snappy reader.
+156:    let mut rdr = snap::Reader::new(stdin.lock());
+207-    let mut wtr = stdout.lock();
+240-    io::copy(&mut rdr, &mut wtr).expect("I/O operation failed");
+
+byte count:307
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+got:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+20-use std::io;
+33-
+34:fn main() {
+46-    let stdin = io::stdin();
+75-    let stdout = io::stdout();
+106-
+107-    // Wrap the stdin reader in a Snappy reader.
+156:    let mut rdr = snap::Reader::new(stdin.lock());
+207-    let mut wtr = stdout.lock();
+240-    io::copy(&mut rdr, &mut wtr).expect("I/O operation failed");
+
+byte count:309
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+---- searcher::glue::tests::context_sherlock4 stdout ----
+
+thread 'searcher::glue::tests::context_sherlock4' (3152) panicked at crates\searcher\src\testutil.rs:285:17:
+
+printed outputs differ! (label: reader-byline-noterm-nonumber)
+
+expected:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+129-be, to a very large extent, the result of luck. Sherlock Holmes
+193-can extract a clew from a wisp of straw or a flake of cigar ash;
+258:but Doctor Watson has to have it taken out for him and dusted,
+
+byte count:366
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+got:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+129-be, to a very large extent, the result of luck. Sherlock Holmes
+193-can extract a clew from a wisp of straw or a flake of cigar ash;
+258:but Doctor Watson has to have it taken out for him and dusted,
+
+byte count:411
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+---- searcher::glue::tests::context_sherlock6 stdout ----
+
+thread 'searcher::glue::tests::context_sherlock6' (14464) panicked at crates\searcher\src\testutil.rs:285:17:
+
+printed outputs differ! (label: reader-byline-noterm-nonumber)
+
+expected:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+0:For the Doctor Watsons of this world, as opposed to the Sherlock
+65-Holmeses, success in the province of detective work must always
+129:be, to a very large extent, the result of luck. Sherlock Holmes
+
+byte count:366
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+got:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+0:For the Doctor Watsons of this world, as opposed to the Sherlock
+65-Holmeses, success in the province of detective work must always
+129:be, to a very large extent, the result of luck. Sherlock Holmes
+
+byte count:539
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+---- searcher::glue::tests::context_sherlock_invert2 stdout ----
+
+thread 'searcher::glue::tests::context_sherlock_invert2' (25020) panicked at crates\searcher\src\testutil.rs:285:17:
+
+printed outputs differ! (label: reader-byline-noterm-nonumber)
+
+expected:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+0:For the Doctor Watsons of this world, as opposed to the Sherlock
+65:Holmeses, success in the province of detective work must always
+--
+193-can extract a clew from a wisp of straw or a flake of cigar ash;
+258:but Doctor Watson has to have it taken out for him and dusted,
+
+byte count:366
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+got:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+0:For the Doctor Watsons of this world, as opposed to the Sherlock
+65:Holmeses, success in the province of detective work must always
+--
+193-can extract a clew from a wisp of straw or a flake of cigar ash;
+258:but Doctor Watson has to have it taken out for him and dusted,
+
+byte count:411
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+
+failures:
+    searcher::glue::tests::context_code1
+    searcher::glue::tests::context_code2
+    searcher::glue::tests::context_code3
+    searcher::glue::tests::context_sherlock1
+    searcher::glue::tests::context_sherlock3
+    searcher::glue::tests::context_sherlock4
+    searcher::glue::tests::context_sherlock6
+    searcher::glue::tests::context_sherlock_invert2
+
+test result: FAILED. 69 passed; 8 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+

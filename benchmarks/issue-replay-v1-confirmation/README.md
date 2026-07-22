@@ -65,3 +65,13 @@ for an unchanged V4 Pro replication. It uses the same tasks, graders, prompts,
 limits, order, harness binaries, and non-thinking mode, with a $1.30 balance
 floor. Because the evaluator had already observed the Flash outcomes, this is
 a model robustness replication and not another independent held-out result.
+
+## Published result
+
+All 12 declared pass@1 trials, including every failure, are published in the
+[`2026-07-22 v1 confirmation report`](../results/2026-07-22-v1-confirmation/README.md).
+Pactrail passed 0/6 functional trials and OpenCode passed 2/6. Pactrail
+preserved source isolation and verified trace integrity in 6/6 trials and used
+less time, fewer reported tokens, and lower estimated API cost, but this suite
+does not support a capability-superiority claim. No trial was retried or
+replaced.

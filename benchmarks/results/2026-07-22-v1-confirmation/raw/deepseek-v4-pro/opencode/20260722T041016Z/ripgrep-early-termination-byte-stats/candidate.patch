@@ -1,0 +1,13 @@
+diff --git a/crates/searcher/src/searcher/glue.rs b/crates/searcher/src/searcher/glue.rs
+index ed78d08..967f976 100644
+--- a/crates/searcher/src/searcher/glue.rs
++++ b/crates/searcher/src/searcher/glue.rs
+@@ -41,7 +41,7 @@ where
+             }
+         }
+         self.core.finish(
+-            self.rdr.absolute_byte_offset(),
++            self.rdr.absolute_byte_offset() + self.core.pos() as u64,
+             self.rdr.binary_byte_offset(),
+         )
+     }

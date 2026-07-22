@@ -1,0 +1,130 @@
+
+running 125 tests
+test error::tests::inner_error_is_invalid_status_code ... ok
+test header::name::tests::test_bounds ... ok
+test header::map::test_bounds ... ok
+test extensions::test_extensions ... ok
+test header::name::tests::test_all_tokens ... ok
+test header::map::skip_duplicates_during_key_iteration ... ok
+test header::name::tests::test_eq_hdr_name ... ok
+test header::name::tests::test_from_hdr_name ... ok
+test header::name::test_parse_standard_headers ... ok
+test header::name::tests::test_from_lowercase ... ok
+test header::name::tests::test_from_static_custom_long ... ok
+test header::name::test_standard_headers_into_bytes ... ok
+test header::name::tests::test_from_static_custom_short ... ok
+test header::name::tests::test_from_static_custom_long_symbol - should panic ... ok
+test header::name::tests::test_from_static_custom_long_uppercase - should panic ... ok
+test header::name::tests::test_from_static_custom_short_uppercase - should panic ... ok
+test header::name::tests::test_from_static_custom_single_char ... ok
+test header::name::tests::test_from_static_custom_short_symbol - should panic ... ok
+test header::name::tests::test_from_static_empty - should panic ... ok
+test header::name::tests::test_from_static_std ... ok
+test header::name::tests::test_from_static_std_symbol - should panic ... ok
+test header::name::tests::test_from_static_std_uppercase - should panic ... ok
+test header::name::tests::test_parse_invalid_headers ... ok
+test header::name::tests::test_static_invalid_name_lengths - should panic ... ok
+test header::value::from_header_name_tests::it_can_insert_header_name_as_header_value ... ok
+test header::value::from_i16 ... ok
+test header::value::from_i32 ... ok
+test header::value::from_i64 ... ok
+test header::value::from_isize ... ok
+test header::value::from_u16 ... ok
+test header::value::from_u32 ... ok
+test header::value::from_u64 ... ok
+test header::value::from_usize ... ok
+test header::value::test_debug ... ok
+test header::value::test_try_from ... ok
+test header::value::try_from_header_name_tests::it_converts_using_try_from ... ok
+test method::test::test_extension_method ... ok
+test method::test::test_invalid_method ... ok
+test method::test::test_is_idempotent ... ok
+test method::test::test_extension_method_chars ... ok
+test method::test::test_method_eq ... ok
+test response::tests::it_can_map_a_body_from_one_type_to_another ... ok
+test request::tests::it_can_map_a_body_from_one_type_to_another ... ok
+test tests::request_satisfies_send_sync ... ok
+test tests::response_satisfies_send_sync ... ok
+test uri::authority::tests::allows_percent_in_ipv6_address ... ok
+test uri::authority::tests::allows_percent_in_userinfo ... ok
+test uri::authority::tests::compares_to_self ... ok
+test uri::authority::tests::compares_with_a_str ... ok
+test uri::authority::tests::compares_with_a_string ... ok
+test uri::authority::tests::equates_with_a_str ... ok
+test uri::authority::tests::equates_with_a_string ... ok
+test uri::authority::tests::equates_with_a_string_of_a_different_authority ... ok
+test uri::authority::tests::from_static_equates_with_a_str ... ok
+test uri::authority::tests::equal_to_self_of_same_authority ... ok
+test uri::authority::tests::not_equal_to_self_of_different_authority ... ok
+test uri::authority::tests::parse_empty_string_is_error ... ok
+test uri::authority::tests::reject_obviously_invalid_ipv6_address ... ok
+test uri::authority::tests::rejects_invalid_use_of_brackets ... ok
+test uri::authority::tests::rejects_invalid_utf8 ... ok
+test uri::authority::tests::not_equal_with_a_str_of_a_different_authority ... ok
+test uri::authority::tests::rejects_percent_in_hostname ... ok
+test uri::authority::tests::rejects_percent_outside_ipv6_address ... ok
+test uri::builder::tests::build_from_str ... ok
+test uri::builder::tests::build_from_string ... ok
+test uri::builder::tests::build_from_uri ... ok
+test uri::builder::tests::build_from_string_ref ... ok
+test uri::path::tests::allow_utf8_in_query ... ok
+test uri::path::tests::allow_utf8_in_path ... ok
+test uri::path::tests::compares_to_self ... ok
+test uri::path::tests::compares_with_a_str ... ok
+test uri::path::tests::compares_with_a_string ... ok
+test uri::path::tests::equates_with_a_string ... ok
+test uri::path::tests::equates_with_a_str ... ok
+test uri::path::tests::ignores_valid_percent_encodings ... ok
+test uri::path::tests::equal_to_self_of_same_path ... ok
+test uri::path::tests::ignores_invalid_percent_encodings ... ok
+test uri::path::tests::json_is_fine ... ok
+test uri::path::tests::not_equal_with_a_str_of_a_different_path ... ok
+test uri::path::tests::not_equal_to_self_of_different_path ... ok
+test uri::path::tests::not_equal_with_a_string_of_a_different_path ... ok
+test uri::port::tests::partialeq_port ... ok
+test uri::port::tests::partialeq_port_different_reprs ... ok
+test uri::port::tests::u16_from_port ... ok
+test uri::port::tests::partialeq_u16 ... ok
+test uri::scheme::test::invalid_scheme_is_error ... ok
+test uri::scheme::test::scheme_eq_to_str ... ok
+test uri::tests::test_authority_uri_parts_round_trip ... ok
+test uri::tests::test_char_table ... ok
+test uri::tests::test_ipv6 ... ok
+test uri::tests::test_ipv6_shorthand ... ok
+test uri::tests::test_ipv6_shorthand2 ... ok
+test uri::tests::test_ipv6_shorthand3 ... ok
+test uri::tests::test_ipv6_with_port ... ok
+test uri::tests::test_overflowing_scheme ... ok
+test uri::tests::test_max_length_scheme ... ok
+test uri::tests::test_partial_eq_path_with_terminating_questionmark ... ok
+test uri::tests::test_max_uri_len ... ok
+test uri::tests::test_path_permissive ... ok
+test uri::tests::test_query_permissive ... ok
+test uri::tests::test_uri_authority_only_one_character_issue_197 ... ok
+test uri::tests::test_uri_parse_absolute_form ... ok
+test uri::tests::test_uri_parse_absolute_form_with_empty_path_and_fragment_with_questionmark ... ok
+test uri::tests::test_percentage_encoded_path ... ok
+test uri::tests::test_uri_parse_absolute_form_with_empty_path_and_fragment_with_slash ... ok
+test uri::tests::test_uri_parse_absolute_form_with_empty_path_and_nonempty_query ... ok
+test uri::tests::test_uri_parse_absolute_form_without_path ... ok
+test uri::tests::test_uri_parse_absolute_with_default_port_http ... ok
+test uri::tests::test_uri_parse_absolute_with_default_port_https ... ok
+test uri::tests::test_uri_parse_authority_form ... ok
+test uri::tests::test_uri_parse_asterisk_form ... ok
+test uri::tests::test_uri_parse_authority_no_port ... ok
+test uri::tests::test_uri_parse_error ... ok
+test uri::tests::test_uri_parse_fragment_questionmark ... ok
+test uri::tests::test_uri_parse_long_host_with_no_scheme ... ok
+test uri::tests::test_uri_parse_path_and_query ... ok
+test uri::tests::test_uri_parse_long_host_with_port_and_no_scheme ... ok
+test uri::tests::test_uri_parse_path_with_terminating_questionmark ... ok
+test uri::tests::test_uri_to_path_and_query ... ok
+test uri::tests::test_userinfo1 ... ok
+test uri::tests::test_userinfo3 ... ok
+test uri::tests::test_userinfo_pass_with_port ... ok
+test uri::tests::test_userinfo_with_port ... ok
+test uri::tests::test_userinfo2 ... ok
+test header::name::tests::test_invalid_name_lengths ... ok
+
+test result: ok. 125 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

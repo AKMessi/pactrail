@@ -1,0 +1,64 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-v1-real-issue-confirmation",
+    "case_id":  "http-header-map-reserve-capacity",
+    "repository":  "hyperium/http",
+    "difficulty":  "allocation-capacity-regression",
+    "source_base_commit":  "4e020461ca29efec5ac45e6b2e7871fe29ff1b50",
+    "reference_commit":  "68845bd24d843670cd45e6decc60d01ac7266f40",
+    "prompt_sha256":  "3d7852ab575b144237901fc700cd29c04001dbb0a42d20061b8dea168b1b8ca0",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 1.0.0",
+    "model":  "deepseek-v4-flash",
+    "functional_passed":  false,
+    "instructions_passed":  true,
+    "task_passed":  false,
+    "strict_passed":  false,
+    "outcome":  "process_error",
+    "exit_code":  1,
+    "timed_out":  false,
+    "duration_ms":  26304,
+    "grading_duration_ms":  7443,
+    "run_id":  "019f87ea-c7a0-71b3-bfdd-d2eb90778d9c",
+    "changed_paths":  [
+                          "Cargo.lock"
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  0,
+                  "additions":  0,
+                  "deletions":  0,
+                  "bytes":  0
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test --test header_map pactrail_hidden_reserve_capacity",
+                          "exit_code":  101,
+                          "timed_out":  false,
+                          "duration_ms":  5714,
+                          "passed":  false
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test --lib",
+                            "exit_code":  0,
+                            "timed_out":  false,
+                            "duration_ms":  1729,
+                            "passed":  true
+                        },
+    "input_tokens":  149910,
+    "cached_input_tokens":  115584,
+    "output_tokens":  1879,
+    "total_tokens":  151789,
+    "estimated_cost_usd":  0.005655,
+    "model_calls":  14,
+    "tool_calls":  18,
+    "failed_tool_calls":  0,
+    "provider_errors":  1,
+    "source_isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "applied_candidate_matches":  false,
+    "summary":  ""
+}

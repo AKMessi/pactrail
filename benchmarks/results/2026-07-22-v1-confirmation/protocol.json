@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "primary_preregistration_commit": "4f4fad6",
+  "pro_replication_preregistration_commit": "dd9ee83",
+  "frozen_pactrail_commit": "5d0128862ac0688cd189c371843425f09e4befaa",
+  "pactrail_executable_sha256": "90da5dc5053077a4bb6fc3294364583b93009a4f3667319b4f3632d9c821b41a",
+  "files": {
+    "flash_manifest_sha256": "9ec201f04b79d5ea3eb606b0407e3704bf80fd27940368809b1bc7e73da6883a",
+    "pro_manifest_sha256": "732ac74c53304b8ae1e2b5e4a1bcb81e978df4cbfe1a722340abab4edd12f09a",
+    "gold_validation_sha256": "abca63bb4294a48605408faad8bb5d55d2f651c602b4a32519652064797ff22a",
+    "runner_sha256": "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca"
+  },
+  "controls": {
+    "temperature": 0,
+    "thinking": "disabled",
+    "context_tokens": 16384,
+    "max_output_tokens": 2048,
+    "max_steps": 16,
+    "pass_at_k": 1,
+    "retries": 0,
+    "process_execution": "enabled for both harnesses",
+    "network": "offline task workspaces with prefetched Cargo dependencies",
+    "order": ["regex/Pactrail", "regex/OpenCode", "http/OpenCode", "http/Pactrail", "ripgrep/Pactrail", "ripgrep/OpenCode"]
+  },
+  "scoring": {
+    "functional": "hidden targeted test and broader regression command both pass",
+    "task": "functional passes and no forbidden path changes",
+    "strict": "task passes, no timeout/provider error, and harness completes cleanly; Pactrail additionally requires ready-to-apply outcome, source isolation, trace verification, and exact applied-candidate match"
+  },
+  "pricing_usd_per_million_tokens": {
+    "source": "https://api-docs.deepseek.com/quick_start/pricing",
+    "deepseek-v4-flash": {"cached_input": 0.0028, "uncached_input": 0.14, "output": 0.28},
+    "deepseek-v4-pro": {"cached_input": 0.003625, "uncached_input": 0.435, "output": 0.87}
+  },
+  "budget": {
+    "starting_balance_usd": 1.65,
+    "settled_final_balance_usd": 1.38,
+    "observed_depletion_usd": 0.27,
+    "estimated_cost_usd": 0.268696,
+    "flash_floor_usd": 1.10,
+    "pro_floor_usd": 1.30,
+    "floor_preserved": true
+  }
+}

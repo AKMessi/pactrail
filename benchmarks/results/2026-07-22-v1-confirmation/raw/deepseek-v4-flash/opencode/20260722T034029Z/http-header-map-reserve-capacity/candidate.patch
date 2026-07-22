@@ -1,0 +1,14 @@
+diff --git a/src/header/map.rs b/src/header/map.rs
+index 67e65fd..18a66da 100644
+--- a/src/header/map.rs
++++ b/src/header/map.rs
+@@ -708,7 +708,8 @@ impl<T> HeaderMap<T> {
+             .ok_or_else(MaxSizeReached::new)?;
+ 
+         if cap > self.indices.len() {
+-            let cap = cap
++            let raw_cap = to_raw_capacity(cap);
++            let cap = raw_cap
+                 .checked_next_power_of_two()
+                 .ok_or_else(MaxSizeReached::new)?;
+             if cap > MAX_SIZE {

@@ -1,0 +1,64 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-v1-real-issue-confirmation",
+    "case_id":  "ripgrep-early-termination-byte-stats",
+    "repository":  "BurntSushi/ripgrep",
+    "difficulty":  "stream-accounting-regression",
+    "source_base_commit":  "6244e635a1a5aa4d401826b1e970d59a3f6cbf7c",
+    "reference_commit":  "4ab1862dc04783b6615807d4b4511388c6b30364",
+    "prompt_sha256":  "282a3bd23beb61c3fa96e2d916a952b375fd234dd0394103acae80da722bcd2e",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 1.0.0",
+    "model":  "deepseek-v4-flash",
+    "functional_passed":  false,
+    "instructions_passed":  true,
+    "task_passed":  false,
+    "strict_passed":  false,
+    "outcome":  "process_error",
+    "exit_code":  1,
+    "timed_out":  false,
+    "duration_ms":  33040,
+    "grading_duration_ms":  11341,
+    "run_id":  "019f87ec-108b-7e02-9b66-62b23481c6d4",
+    "changed_paths":  [
+
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  0,
+                  "additions":  0,
+                  "deletions":  0,
+                  "bytes":  0
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test --test integration pactrail_hidden_early_termination_byte_stats",
+                          "exit_code":  101,
+                          "timed_out":  false,
+                          "duration_ms":  3503,
+                          "passed":  false
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test -p grep-searcher --lib",
+                            "exit_code":  0,
+                            "timed_out":  false,
+                            "duration_ms":  7838,
+                            "passed":  true
+                        },
+    "input_tokens":  203208,
+    "cached_input_tokens":  171008,
+    "output_tokens":  2255,
+    "total_tokens":  205463,
+    "estimated_cost_usd":  0.005618,
+    "model_calls":  16,
+    "tool_calls":  28,
+    "failed_tool_calls":  0,
+    "provider_errors":  1,
+    "source_isolation_preserved":  true,
+    "trace_integrity_verified":  true,
+    "applied_candidate_matches":  false,
+    "summary":  ""
+}

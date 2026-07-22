@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "expected_trials": 12,
+  "retained_trials": 12,
+  "retries": 0,
+  "replacement_samples": 0,
+  "gold_graders_valid": 3,
+  "gold_graders_total": 3,
+  "pactrail_source_isolation_verified": 6,
+  "pactrail_trace_integrity_verified": 6,
+  "pactrail_production_mutation_tool_calls": 0,
+  "pactrail_turn_limit_failures": 5,
+  "pactrail_repeated_read_stall_failures": 1,
+  "pactrail_failed_tool_calls": 1,
+  "opencode_failed_tool_calls": 0,
+  "raw_artifact_files": 138,
+  "raw_artifact_bytes": 3824506,
+  "manual_patch_audit": {
+    "opencode_http_flash": "focused src/header/map.rs patch, +2/-1, hidden and regression tests passed",
+    "opencode_http_pro": "focused src/header/map.rs patch, +9/-7, hidden and regression tests passed",
+    "opencode_ripgrep_flash": "intended file changed but hidden test failed; +1549/-1542 includes newline churn",
+    "opencode_ripgrep_pro": "focused +1/-1 intended-file patch but hidden test failed",
+    "regex": "neither harness changed production source"
+  },
+  "known_artifact_confounds": [
+    "Windows archive/symlink materialization adds unrelated binary deletions to regex candidate.patch files; changed_paths and behavioral scores are authoritative.",
+    "Flash OpenCode ripgrep patch size includes CRLF-to-LF normalization.",
+    "Cargo.lock appears as a Pactrail candidate delta in four no-source-edit trials even though traces contain no mutation tool call; it is not scored as a solution."
+  ],
+  "leading_failure_diagnosis": "Across both models, Pactrail spent every available turn on list/search/read operations and never invoked a production mutation tool. Its loop controller only detects identical repeated calls, so varied read-only investigation can consume the full turn budget without progress steering."
+}
