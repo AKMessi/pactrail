@@ -155,7 +155,8 @@ The production registry currently provides:
 - `search_code_graph` for project definitions and bounded reference evidence;
 - `search_change_impact` for bounded one-hop definition/reference relationships;
 - `git_status`, `git_diff`, and `git_history` for process-free source repository evidence;
-- `write_file`, `replace_text`, atomic `edit_file`, and `remove_file`;
+- `write_file`, `replace_text`, strict `apply_patch`, atomic `edit_file`, and
+  `remove_file`;
 - `workspace_changes` and `recall_memory`;
 - capability-gated `run_process` for detected verification.
 
@@ -189,12 +190,21 @@ candidate inspection remains transaction-owned. `git_history` is newest-first,
 bounded, and omits email addresses. Huge trees, indexes, files, histories, and
 outputs either truncate visibly or become explicit inconclusive evidence.
 
+`apply_patch` is an in-process single-file unified-diff interpreter, not a Git
+command. It bounds bytes, lines, hunks, source, and result before mutation;
+validates header counts and exact old/new positions; and requires every context
+and removed line to match without offset fuzz. Add/delete use `/dev/null`,
+renames are rejected, an optional current-file BLAKE3 digest prevents stale
+application, and consistent source CRLF is preserved. Parsing and application
+complete in memory before the isolated transaction receives its one file
+effect.
+
 Each tool result is normalized, output-bounded, and compared against transaction
 manifests before and after execution. The event record contains a digest of the
 arguments rather than raw potentially sensitive inputs, plus duration, risk,
 call ID, output size/truncation, declared capability, and observed effects.
 
-Successful write and exact-edit results additionally contain bounded post-edit
+Successful write, patch, and exact-edit results additionally contain bounded post-edit
 evidence derived from the current isolated candidate: final content digest and
 size, the first and last changed line, and line-numbered source windows with
 per-line truncation labels. Nearby changes use one window; distant changes use

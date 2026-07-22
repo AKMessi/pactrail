@@ -350,6 +350,8 @@ pub enum ToolError {
         tool: &'static str,
         source: serde_json::Error,
     },
+    #[error("patch rejected: {0}")]
+    InvalidPatch(String),
     #[error("tool output serialization failed: {0}")]
     Serialization(serde_json::Error),
     #[error("tool effect was denied: {0}")]

@@ -854,8 +854,15 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
     let tools = tools
         .as_array()
         .unwrap_or_else(|| unreachable!("tool descriptors were not an array"));
-    assert_eq!(tools.len(), 16);
+    assert_eq!(tools.len(), 17);
     assert!(tools.iter().any(|tool| tool["name"] == "run_process"));
+    let patch = tools
+        .iter()
+        .find(|tool| tool["name"] == "apply_patch")
+        .unwrap_or_else(|| unreachable!("strict patch tool was not registered"));
+    assert_eq!(patch["required_capability"], "file_write");
+    assert_eq!(patch["annotations"]["risk"], "workspace_mutation");
+    assert_eq!(patch["annotations"]["parallel_safe"], false);
     let graph = tools
         .iter()
         .find(|tool| tool["name"] == "search_code_graph")
