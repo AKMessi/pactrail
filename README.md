@@ -97,8 +97,15 @@ pactrail ❯ Fix the parser regression and add a test.
   fence, output bound, cancellation path, and durable trace.
 - **Weak models degrade gracefully.** Broad questions receive bounded current
   anchor previews and a deterministic ecosystem/entrypoint profile. Repeated
-  successful read-only loops get one tool-free synthesis turn; invalid loops
-  still fail closed, while coherent candidate edits remain reviewable.
+  successful read-only loops get one tool-free synthesis turn. Change tasks get
+  a fixed discovery allowance, then a kernel-enforced implementation tool set;
+  varied calls returning equivalent evidence still count as stalled progress.
+  Invalid loops fail closed, while coherent candidate edits remain reviewable.
+- **Verification interrupts mistakes, not just completion.** With authorized
+  process isolation, the controller checks a changed candidate before the next
+  model turn. One repairable failure returns bounded, untrusted diagnostics to
+  the model; a passing digest-bound gate is reused as final evidence if no later
+  edit invalidates it.
 
 ## Shipped foundation
 
@@ -177,10 +184,10 @@ pactrail ❯ Fix the parser regression and add a test.
   immediate crash recovery, exclusive OS/SQLite run leases, and write-ahead
   effect fences visible in both human and JSON traces.
 - Automatic Rust, Go, Python, and JavaScript verification discovery.
-- One bounded validation-repair cycle when an authorized deterministic check
-  rejects a candidate and a model turn remains. Diagnostics are byte-budgeted
-  to the configured context window, labelled as untrusted process output, and
-  digest-bound; the final candidate is independently verified again.
+- Up to two proactive candidate checks, with one bounded validation-repair
+  cycle when an authorized deterministic check fails. Diagnostics are
+  byte-budgeted to the configured context window, labelled as untrusted process
+  output, and bound to the exact candidate digest; later edits invalidate them.
 
 ### Model portability
 

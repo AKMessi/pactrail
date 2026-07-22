@@ -429,18 +429,29 @@ Each required obligation receives a grade and status; missing process permission
 creates explicit inconclusive evidence and an unresolved risk rather than a
 fictional pass.
 
-When a model first declares a changed candidate complete, authorized discovered
-checks run as a repair probe if at least one model turn remains. A non-zero
-process exit can trigger exactly one automatic repair cycle. Pactrail returns a
-model-window-sized preview of structured stdout/stderr diagnostics, its full
-BLAKE3 digest and byte count, and an authoritative warning that repository
-process output is untrusted data. Tool-launch, authorization, and infrastructure
-errors do not trigger source repair. A successful gate on an unchanged candidate
-becomes final evidence directly, avoiding a duplicate test run. After a repair
-attempt, normal final verification runs again in a fresh disposable snapshot and
-is the only result that becomes receipt evidence. Gate and final verifier actions
-carry explicit `completion_gate` and `final` trace phases; the controller
-decision records the candidate and diagnostics digests.
+When a tool turn first changes the isolated candidate and another model turn is
+available, the controller runs the discovered checks immediately. Proactive
+verification is bounded to two distinct candidate digests. Each attempt emits a
+live controller lane, a `controller_gate` verifier phase, and a hash-linked
+decision binding status and command count to the complete candidate digest.
+Checkpointed system markers retain the attempt count and last checked digest,
+so restart cannot silently exceed the bound or treat a later edit as checked.
+
+A non-zero process exit can trigger exactly one automatic repair cycle.
+Pactrail returns a model-window-sized preview of structured stdout/stderr
+diagnostics, its full BLAKE3 digest and byte count, and an authoritative warning
+that repository process output is untrusted data. Tool-launch, authorization,
+and infrastructure errors do not trigger source repair. The model therefore
+sees a real failure before it can spend a turn claiming completion.
+
+A successful gate on an unchanged candidate becomes final evidence directly,
+avoiding a duplicate test run. A later mutation invalidates it by changing the
+candidate digest and may consume the second proactive attempt. If no accepted
+gate matches at completion, normal final verification runs in a fresh
+disposable snapshot and is the only result that becomes receipt evidence.
+Verifier actions carry explicit `controller_gate`, `completion_gate`, and
+`final` trace phases; controller actions record candidate and diagnostics
+digests without retaining raw process output.
 
 Native processes start from a cleared environment. Pactrail inherits an
 explicit toolchain/operating-system allowlist rather than arbitrary variables;

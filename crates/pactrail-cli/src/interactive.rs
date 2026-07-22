@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use pactrail_core::{
-    ActionRecord, ApprovalDecision, ApprovalRequest, ChangeReceipt, EventEnvelope, FileChange,
-    ReceiptOutcome, RunEvent, RunId, RunState,
+    ActionRecord, ApprovalDecision, ApprovalRequest, ChangeReceipt, EventEnvelope, EvidenceStatus,
+    FileChange, ReceiptOutcome, RunEvent, RunId, RunState,
 };
 use pactrail_engine::{RunObserver, RunProgress};
 use pactrail_memory::{MemoryDraft, MemoryKind};
@@ -676,6 +676,58 @@ impl RunActivity {
         }
     }
 
+    fn on_controller_verification_progress(&self, progress: &RunProgress) {
+        match progress {
+            RunProgress::ControllerVerificationStarted {
+                attempt,
+                max_attempts,
+                candidate_digest,
+                commands,
+            } => {
+                self.row(
+                    "◈",
+                    "control",
+                    &format!(
+                        "candidate {} · proactive check {attempt}/{max_attempts} · {commands} {}",
+                        truncate(candidate_digest, 12),
+                        plural(*commands, "command", "commands")
+                    ),
+                    TimelineTone::Brand,
+                );
+                self.set_message("controller is checking the changed candidate");
+            }
+            RunProgress::ControllerVerificationCompleted {
+                attempt,
+                candidate_digest,
+                status,
+                repair_feedback,
+            } => {
+                let feedback = if *repair_feedback {
+                    " · repair feedback queued"
+                } else {
+                    ""
+                };
+                let (status_label, marker, tone) = match status {
+                    EvidenceStatus::Passed => ("passed", "✓", TimelineTone::Success),
+                    EvidenceStatus::Failed => ("failed", "!", TimelineTone::Danger),
+                    EvidenceStatus::Inconclusive => ("inconclusive", "◇", TimelineTone::Warning),
+                    EvidenceStatus::Skipped => ("skipped", "◇", TimelineTone::Muted),
+                };
+                self.row(
+                    marker,
+                    "control",
+                    &format!(
+                        "candidate {} · proactive check {attempt} {status_label}{feedback}",
+                        truncate(candidate_digest, 12)
+                    ),
+                    tone,
+                );
+                self.set_message(format!("candidate verification {status_label}"));
+            }
+            _ => {}
+        }
+    }
+
     fn on_model_progress(&self, progress: &RunProgress) {
         match progress {
             RunProgress::ModelTurnStarted { turn, max_turns } => {
@@ -944,6 +996,10 @@ impl RunObserver for RunActivity {
             | RunProgress::ControllerProgressAssessed { .. }
             | RunProgress::ControllerIntervened { .. } => {
                 self.on_controller_progress(progress);
+            }
+            RunProgress::ControllerVerificationStarted { .. }
+            | RunProgress::ControllerVerificationCompleted { .. } => {
+                self.on_controller_verification_progress(progress);
             }
             RunProgress::ModelTurnStarted { .. }
             | RunProgress::ModelStreamStarted { .. }
