@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-post-upgrade-real-issue-regression",
+  "artifact_audit": {
+    "expected_trials": 12,
+    "observed_trials": 12,
+    "protocol_mismatches": 0,
+    "manifest_hash_mismatches": 0,
+    "runner_hash_mismatches": 0,
+    "model_config_hash_mismatches": 0,
+    "harness_hash_mismatches": 0,
+    "gold_validated_graders": 3,
+    "gold_validation_total": 3,
+    "rerun_trials": 0,
+    "replaced_trials": 0,
+    "secret_bearing_files": 0,
+    "files_scanned_for_secrets": 2986
+  },
+  "pactrail_assurance": {
+    "source_isolation_preserved": 6,
+    "source_isolation_total": 6,
+    "trace_integrity_verified": 6,
+    "trace_integrity_total": 6,
+    "ready_to_apply": 0,
+    "applied_candidate_matches": 0
+  },
+  "pactrail_failure_cluster": {
+    "runs_with_recovery_stop": 6,
+    "runs_total": 6,
+    "production_mutation_tool_calls": 0,
+    "controller_tool_rejections": 20,
+    "rejected_tools": [
+      "read_file",
+      "search",
+      "search_code_graph"
+    ],
+    "common_terminal_message": "model recovery stopped after 3 consecutive tool turns because every tool request failed",
+    "diagnosis": "The deterministic controller moved into implementing and restricted read-only discovery after a single focused-read allowance. Both DeepSeek models continued requesting evidence tools, those requests were rejected, and recovery terminated before any production mutation."
+  },
+  "opencode_observations": {
+    "production_mutation_tool_calls": 3,
+    "mutated_trials": 3,
+    "strict_passes_from_mutated_trials": 2,
+    "strict_failures_from_mutated_trials": 1,
+    "trials_without_mutation": 3,
+    "trials_reporting_18_model_calls_despite_16_configured_steps": 2
+  },
+  "metric_caveats": [
+    "The raw Pactrail result field provider_errors is 1 on each failed run because the runner maps any non-zero Pactrail process exit to that field. Trace inspection shows model transport calls succeeded; the failures were controller tool rejections.",
+    "Pactrail's lower tokens, cost, and wall time are caused by early termination and must not be presented as useful-work efficiency.",
+    "Regex candidate.patch files contain unrelated deleted binary entries caused by Windows archive or symlink materialization. changed_paths and behavioral grading are authoritative.",
+    "Cargo.lock appeared in several failed Pactrail solution snapshots after allowed process execution; no reviewed transaction was applied to the source workspace.",
+    "OpenCode emitted 18 step_finish events in two regex trials even though its agent configuration specified 16 steps. The raw streams are retained, and no runner-side retry occurred."
+  ]
+}

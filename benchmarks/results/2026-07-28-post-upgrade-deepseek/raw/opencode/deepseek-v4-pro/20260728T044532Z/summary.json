@@ -1,0 +1,98 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-post-upgrade-real-issue-regression",
+    "harness":  "opencode",
+    "harness_version":  "1.18.7",
+    "model":  "deepseek-v4-pro",
+    "started_at":  "20260728T044532Z",
+    "cases":  1,
+    "functional_passed":  0,
+    "task_passed":  0,
+    "strict_passed":  0,
+    "median_duration_ms":  96583,
+    "total_duration_ms":  96583,
+    "total_input_tokens":  193555,
+    "total_cached_input_tokens":  119808,
+    "total_output_tokens":  5592,
+    "total_tokens":  199147,
+    "estimated_cost_usd":  0.037379,
+    "balance_before_usd":  "1.25",
+    "balance_after_usd":  "1.25",
+    "protocol":  {
+                     "manifest_sha256":  "c7796137fc08f19da6d0f1c5e149155608bb981a019c87b777c37b60071d4036",
+                     "runner_sha256":  "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+                     "opencode_config_sha256":  "726ecf020603ee19e77585f2b180194be1786896bb07e404dd3088197868e0ae",
+                     "harness_executable_sha256":  "7dc7f9e963b88bbfb7a529a82d1922adf642d386f096fc250e891e374884ee8e",
+                     "context_tokens":  16384,
+                     "max_output_tokens":  2048,
+                     "max_steps":  16,
+                     "temperature":  0,
+                     "thinking":  "disabled"
+                 },
+    "results":  [
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-post-upgrade-real-issue-regression",
+                        "case_id":  "ripgrep-early-termination-byte-stats",
+                        "repository":  "BurntSushi/ripgrep",
+                        "difficulty":  "stream-accounting-regression",
+                        "source_base_commit":  "6244e635a1a5aa4d401826b1e970d59a3f6cbf7c",
+                        "reference_commit":  "4ab1862dc04783b6615807d4b4511388c6b30364",
+                        "prompt_sha256":  "282a3bd23beb61c3fa96e2d916a952b375fd234dd0394103acae80da722bcd2e",
+                        "harness":  "opencode",
+                        "harness_version":  "1.18.7",
+                        "model":  "deepseek-v4-pro",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "completed",
+                        "exit_code":  0,
+                        "timed_out":  false,
+                        "duration_ms":  96583,
+                        "grading_duration_ms":  20077,
+                        "run_id":  "",
+                        "changed_paths":  [
+
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  0,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  0
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test --test integration pactrail_hidden_early_termination_byte_stats",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  14000,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test -p grep-searcher --lib",
+                                                "exit_code":  0,
+                                                "timed_out":  false,
+                                                "duration_ms":  6077,
+                                                "passed":  true
+                                            },
+                        "input_tokens":  193555,
+                        "cached_input_tokens":  119808,
+                        "output_tokens":  5592,
+                        "total_tokens":  199147,
+                        "estimated_cost_usd":  0.037379,
+                        "model_calls":  16,
+                        "tool_calls":  26,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  0,
+                        "source_isolation_preserved":  false,
+                        "trace_integrity_verified":  false,
+                        "applied_candidate_matches":  false,
+                        "summary":  "I\u0027ll start by understanding the codebase structure and the issue.\nNow let me look at the `LineBufferReader` to understand how `absolute_byte_offset` and `consume` work:\n## Objective\n- Fix ripgrep issue #2944: when a buffered search stops early (e.g., after `--max-count` is reached), the reported \"bytes searched\" statistic omits bytes already consumed from the reader\u0027s current buffer. Ensure early termination accounts for the consumed portion of the buffer without changing match output or normal end-of-input accounting.\n\n## Important Details\n- Work offline; do not inspect git history or any remote.\n- Do not modify tests, documentation, changelogs, or manifests.\n- Make a focused production-quality fix.\n- Relevant code lives in `crates/searcher/src/searcher/glue.rs` (the `ReadByLine` runner) and related searcher internals.\n- The `ReadByLine::run` method calls `self.core.finish(self.rdr.absolute_byte_offset(), self.rdr.binary_byte_offset())` — this reports total bytes consumed from the reader. The early termination path likely needs to report the same offset.\n\n## Work State\n### Completed\n- Located the searcher crate structure and key files (`glue.rs`, `core.rs`, `mod.rs`).\n- Found the `ReadByLine::run` loop and the `finish` call that passes `absolute_byte_offset`.\n- Located all references to `bytes_searched`, `max_count`, `byte_count`, and related stats plumbing across the codebase.\n\n### Active\n- Investigating how `ReadByLine::run` handles early termination (when `match_by_line` returns `false`) and whether `absolute_byte_offset` at that point includes bytes consumed from the current buffer.\n\n### Blocked\n- (none)\n\n## Next Move\n1. Read the full `glue.rs` file (especially the `run`, `fill`, and match loop) to understand exactly how the byte offset is tracked and what `absolute_byte_offset` reports when the loop breaks early.\n2. Examine `Core::finish` and `Core::roll` to see how consumed bytes are accounted for and whether the early-termination path needs to compute the correct consumed-byte count from `self.rdr` before calling `finish`.\n\n## Relevant Files\n- `workspace/crates/searcher/src/searcher/glue.rs`: Contains `ReadByLine::run`, `fill`, and the match loop — main area for the fix.\n- `workspace/crates/searcher/src/searcher/core.rs`: Contains `Core::finish`, `Core::roll`, and position tracking.\n- `workspace/crates/searcher/src/searcher/mod.rs`: Searcher struct, `BinaryDetection`, and `Config` line buffer setup.\n- `workspace/crates/printer/src/stats.rs`: Aggregates `bytes_searched` from sink finishes.\n- `workspace/crates/printer/src/summary.rs`: Calls `stats.add_bytes_searched(finish.byte_count())`.\n- `workspace/crates/printer/src/json.rs`: Calls `self.stats.add_bytes_searched(finish.byte_count())`.\n- `workspace/crates/core/main.rs`: Reports `bytes_searched` in output.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nNow I have a clear picture of the bug. Let me trace through the logic:\n\n**The Bug:**\n\nIn `ReadByLine::run()` (glue.rs:38-47):\n```rust\nwhile self.fill()? \u0026\u0026 self.core.match_by_line(self.rdr.buffer())? {\n}\nself.core.finish(\n    self.rdr.absolute_byte_offset(),\n    self.rdr.binary_byte_offset(),\n)\n```\n\nWhen `match_by_line` returns `false` (early termination, e.g., `--max-count` reached), the loop breaks. At that point, `self.rdr.absolute_byte_offset()` only reflects bytes that have been **consumed** from the `LineBufferReader` via `consume()`. But the `LineBufferReader` still has unconsumed bytes in its buffer — bytes that were read from the underlying reader and searched (they were passed to `match_by_line`). Those bytes haven\u0027t been consumed yet, so `absolute_byte_offset` doesn\u0027t include them.\n\nIn contrast, when the loop ends normally (EOF), `fill()` returns `false`, and by that point all bytes have been consumed (the buffer is empty), so `absolute_byte_offset` correctly reflects all bytes read.\n\n**The Fix:**\n\nBefore calling `self.core.finish(...)`, we need to consume the remaining unconsumed bytes in the buffer so that `absolute_byte_offset` includes them. The unconsumed portion is everything from `self.core.pos()` to the end of `self.rdr.buffer()`.\n\nLet me look at how `core.pos()` relates to the buffer:\n## Objective\n- Fix ripgrep issue #2944: when a buffered search stops early (e.g., after `--max-count` is reached), the reported \"bytes searched\" statistic omits bytes already consumed from the reader\u0027s current buffer. Ensure early termination accounts for the consumed portion of the buffer without changing match output or normal end-of-input accounting.\n\n## Important Details\n- Work offline; do not inspect git history or any remote.\n- Do not modify tests, documentation, changelogs, or manifests.\n- Make a focused production-quality fix.\n- Relevant code lives in `crates/searcher/src/searcher/glue.rs` (the `ReadByLine` runner) and related searcher internals.\n- The `ReadByLine::run` method calls `self.core.finish(self.rdr.absolute_byte_offset(), self.rdr.binary_byte_offset())` — this reports total bytes consumed from the reader. The early termination path likely needs to report the same offset.\n\n## Work State\n### Completed\n- Located the searcher crate structure and key files (`glue.rs`, `core.rs`, `mod.rs`).\n- Found the `ReadByLine::run` loop and the `finish` call that passes `absolute_byte_offset`.\n- Located all references to `bytes_searched`, `max_count`, `byte_count`, and related stats plumbing across the codebase.\n- Read the full `glue.rs`, `core.rs`, and `line_buffer.rs` files.\n- Understood that `Core` tracks `absolute_byte_offset` internally (initialized to 0), and updates it via `roll()` which advances `pos` and increments `absolute_byte_offset` by consumed bytes.\n- `ReadByLine::run` calls `self.core.begin()` then loops `fill()` + `match_by_line()`. When `match_by_line` returns `false`, the loop breaks without accounting for bytes between `self.core.pos()` and the end of the buffer. The `finish` call unconditionally uses `self.rdr.absolute_byte_offset()`, which reflects bytes consumed from the reader but not bytes advanced through by `core.pos()`.\n- The fix: in the early-termination path, compute the correct offset as `rdr.absolute_byte_offset() - (rdr.buffer().len() - core.pos())` and pass that to `finish`.\n\n### Active\n- Preparing to implement the fix in `ReadByLine::run`.\n- Key insight: `absolute_byte_offset` is incremented in `Core::roll` (core.rs line ~363): `self.absolute_byte_offset += nread;` where `nread` is `consumed - old_pos - rolled_bytes`. So `Core`\u0027s internal `absolute_byte_offset` lags the reader\u0027s by `buffer.len() - pos()` bytes. The `finish` call must pass `self.core.absolute_byte_offset() + self.core.pos()` to account for all bytes consumed through the buffer, or equivalently `rdr.absolute_byte_offset() - unprocessed_bytes`.\n\n### Blocked\n- (none)\n\n## Next Move\n1. Add a public method (e.g., `absolute_byte_offset`) to `Core` that returns the current byte position the searcher has consumed through (internal offset + pos), so the glue code can use it for both normal and early-exit paths.\n2. In `ReadByLine::run`, compute the early-exit offset from `self.core.absolute_byte_offset() + self.core.pos()` and pass it to `finish`.\n\n## Relevant Files\n- `workspace/crates/searcher/src/searcher/glue.rs`: The `ReadByLine::run` method — needs to detect early exit and pass correct offset.\n- `workspace/crates/searcher/src/searcher/core.rs`: `Core` struct — tracks `pos` and `absolute_byte_offset`; needs a public method to report combined consumed bytes.\n- `workspace/crates/searcher/src/line_buffer.rs`: `LineBufferReader` — provides `absolute_byte_offset()` (bytes consumed from underlying reader) and `consume()`.\n- `workspace/crates/printer/src/stats.rs`: Aggregates `bytes_searched` from sink finishes.\n- `workspace/crates/printer/src/summary.rs`: Calls `stats.add_bytes_searched(finish.byte_count())`.\n- `workspace/crates/printer/src/json.rs`: Calls `self.stats.add_bytes_searched(finish.byte_count())`.\n- `workspace/crates/core/main.rs`: Reports `bytes_searched` in output.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nNow I understand the full picture. Let me also check how `roll` works to confirm the byte offset tracking:\nMaximum steps reached. Here\u0027s a summary:\n\n## Accomplished\n\n- **Identified the bug**: In `ReadByLine::run()` (`glue.rs:38-47`), when `match_by_line` returns `false` (early termination, e.g. `--max-count`), the loop breaks and `finish` is called with `self.rdr.absolute_byte_offset()`. This offset only reflects bytes **consumed** from the reader via `consume()`, not bytes that were read into the buffer and searched but not yet consumed. The unconsumed portion is `buffer.len() - core.pos()` bytes.\n\n- **Traced the byte-offset plumbing**: `Core::roll()` increments `absolute_byte_offset` by `consumed` bytes and sets `pos = buf.len() - consumed`. So `Core`\u0027s internal `absolute_byte_offset` lags the reader\u0027s by exactly `buffer.len() - pos()` bytes.\n\n- **Confirmed the fix approach**: Before calling `finish`, consume the remaining unconsumed bytes in the buffer so `absolute_byte_offset` includes them. The unconsumed portion is `self.rdr.buffer().len() - self.core.pos()`.\n\n## Remaining\n\n1. **Implement the fix** in `glue.rs:38-47`: After the `while` loop, before `self.core.finish(...)`, call `self.rdr.consume(self.rdr.buffer().len() - self.core.pos())` to flush the remaining buffer bytes so `absolute_byte_offset` is correct.\n\n2. **Verify**: Build and run tests to confirm the fix doesn\u0027t break anything.\n\n## Recommendation\n\nThe fix is a one-line addition in `glue.rs` right before the `self.core.finish(...)` call. Consume the remaining buffer bytes so the reader\u0027s `absolute_byte_offset` reflects all bytes that were actually searched."
+                    }
+                ]
+}

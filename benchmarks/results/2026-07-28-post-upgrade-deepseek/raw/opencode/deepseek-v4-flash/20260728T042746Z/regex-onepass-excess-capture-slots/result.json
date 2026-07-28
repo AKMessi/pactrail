@@ -1,0 +1,64 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-post-upgrade-real-issue-regression",
+    "case_id":  "regex-onepass-excess-capture-slots",
+    "repository":  "rust-lang/regex",
+    "difficulty":  "public-api-panic-regression",
+    "source_base_commit":  "5ea3eb1e95f0338e283f5f0b4681f0891a1cd836",
+    "reference_commit":  "4733e28ba4f281f643ce93e4089eccbb9a9d5a5a",
+    "prompt_sha256":  "195c75246d018bcc54bcf08390bc9f539fffb20d09c4fed9781a3f39f85bd499",
+    "harness":  "opencode",
+    "harness_version":  "1.18.7",
+    "model":  "deepseek-v4-flash",
+    "functional_passed":  false,
+    "instructions_passed":  true,
+    "task_passed":  false,
+    "strict_passed":  false,
+    "outcome":  "completed",
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  61651,
+    "grading_duration_ms":  24925,
+    "run_id":  "",
+    "changed_paths":  [
+                          "regex-automata/src/dfa/onepass.rs"
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  7,
+                  "additions":  4,
+                  "deletions":  6,
+                  "bytes":  4999
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test -p regex-automata --lib pactrail_hidden_onepass_slots::too_many_slots_are_accepted",
+                          "exit_code":  101,
+                          "timed_out":  false,
+                          "duration_ms":  24753,
+                          "passed":  false
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test -p regex-automata --lib",
+                            "exit_code":  101,
+                            "timed_out":  false,
+                            "duration_ms":  172,
+                            "passed":  false
+                        },
+    "input_tokens":  166085,
+    "cached_input_tokens":  136704,
+    "output_tokens":  4519,
+    "total_tokens":  170604,
+    "estimated_cost_usd":  0.005761,
+    "model_calls":  16,
+    "tool_calls":  16,
+    "failed_tool_calls":  0,
+    "provider_errors":  0,
+    "source_isolation_preserved":  false,
+    "trace_integrity_verified":  false,
+    "applied_candidate_matches":  false,
+    "summary":  "Let me start by understanding the issue and the codebase.\nNow let me look at the `search_imp` function to see where the panic occurs:\nNow I see the issue. Let me look at the `try_search_slots` method more carefully. The problem is that when `slots.len()` is larger than what the regex needs, `try_search_slots_imp` is called directly (line 1981 or 1986), and inside `search_imp`, the code at line 2111-2117 iterates over patterns and writes to `slots[i]` where `i = pid * 2`. If the caller provides more slots than the regex uses, this is fine because of the `if i \u003e= slots.len() { break; }` guard.\n\nBut the real issue is in `find_match` at line 2217-2223: `slots[self.explicit_slot_start..].copy_from_slice(cache.explicit_slots())` — this will panic if `cache.explicit_slots()` is longer than `slots[self.explicit_slot_start..]`.\n\nLet me check how `cache.explicit_slots()` is sized:\nNow I understand the issue clearly. Let me trace through the code:\n\n1. In `search_imp` (line 2096-2099), `explicit_slots_len` is computed as `min(Slots::LIMIT, slots.len() - explicit_slot_start)`. This caps the cache\u0027s explicit slots to the caller\u0027s slot slice length.\n\n2. In `find_match` (line 2217-2223), when `explicit_slot_start \u003c slots.len()`, it does:\n   - `slots[self.explicit_slot_start..].copy_from_slice(cache.explicit_slots())` — this copies from cache\u0027s explicit slots into the caller\u0027s slots.\n   - `epsilons.slots().apply(at, \u0026mut slots[self.explicit_slot_start..])` — this applies epsilon slots.\n\nThe `copy_from_slice` requires both slices to be the same length. Since `cache.explicit_slots()` returns `\u0026mut self.explicit_slots[..self.explicit_slot_len]` and `self.explicit_slot_len` was set to `min(Slots::LIMIT, slots.len() - explicit_slot_start)`, the lengths should match.\n\nWait, let me re-check. The issue is about the case where `slots.len()` is **larger** than what the regex needs. Let me look at `try_search_slots` again:\n\nLine 1980-1981: if `!utf8empty`, it calls `try_search_slots_imp` directly with the caller\u0027s slots. This is fine because `search_imp` handles arbitrary slot lengths.\n\nLine 1984-1986: if `utf8empty` and `slots.len() \u003e= min`, it calls `try_search_slots_imp` directly. This is also fine.\n\nSo the issue must be in `try_search_slots_imp` → `search_imp` → `find_match`. Let me look more carefully at the `copy_from_slice` at line 2221-2222.\n\nThe cache\u0027s explicit_slots length is set to `explicit_slots_len = min(Slots::LIMIT, slots.len() - explicit_slot_start)`. And `slots[self.explicit_slot_start..]` has length `slots.len() - explicit_slot_start`. So the lengths should match.\n\nWait — `Slots::LIMIT` could be smaller than `slots.len() - explicit_slot_start`. In that case, `cache.explicit_slots()` returns a slice of length `Slots::LIMIT`, but `slots[self.explicit_slot_start..]` has length `slots.len() - explicit_slot_start` which is larger. So `copy_from_slice` would panic because the source is shorter than the destination.\n\nActually, `copy_from_slice` requires both slices to be the **same** length. If `slots.len() - explicit_slot_start \u003e Slots::LIMIT`, then `cache.explicit_slots()` has length `Slots::LIMIT` but the destination slice is longer → panic.\n\nLet me verify by checking `Slots::LIMIT`:\n## Objective\n- Fix rust-lang/regex issue #1327 in regex-automata\u0027s one-pass DFA: `try_search_slots` panics when caller-provided slot slice has more slots than the compiled regex uses, but its contract promises to accept any length.\n\n## Important Details\n- Must preserve captures in slots the regex owns, leave surplus slots valid (unmodified), keep existing behavior for smaller slices.\n- Do not modify tests, documentation, changelogs, or manifests; work offline, no git history or remote.\n- The panic likely originates inside `try_search_slots_imp` or its callees (e.g., `find_match`, slot writes) when indexing beyond the compiled regex\u0027s slot count.\n- The fix must be production-quality and focused solely on the one-pass DFA code in `regex-automata/src/dfa/onepass.rs`.\n\n## Work State\n### Completed\n- Located the `try_search_slots` (line 1973) and `try_search_slots_imp` (line 2005) methods in `regex-automata/src/dfa/onepass.rs`.\n- Confirmed the doc comment (line 1947+) and public API signature; the method currently passes `slots` directly to `try_search_slots_imp`.\n\n### Active\n- (none)\n\n### Blocked\n- (none)\n\n## Next Move\n1. Read the full implementation of `try_search_slots_imp` and its inner `find_match` / slot-writing logic to identify where the out-of-bounds index/panic occurs when `slots.len()` exceeds the regex\u0027s slot count.\n2. Determine the compiled regex\u0027s actual slot length and add a guard or slice the slots to that length before passing to inner routines, returning surplus slots unmodified.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nLet me look at the `Slots` type and its `LIMIT`:\nNow I see the full picture. `Slots::LIMIT = 32`. The `explicit_slot_start` is the number of implicit slots (2 per pattern). So if a regex has 1 pattern, `explicit_slot_start = 2`. If the caller provides 100 slots, then `slots.len() - explicit_slot_start = 98`, but `min(Slots::LIMIT, 98) = 32`. So `cache.explicit_slots()` returns a slice of length 32, but `slots[self.explicit_slot_start..]` has length 98. The `copy_from_slice` at line 2221 will panic because the slices have different lengths.\n\nLet me verify by reading the exact code around line 2217-2223:\nNow let me check how `explicit_slot_start` is set and how `explicit_slots_len` is computed in `search_imp`:\nNow I see the bug clearly. At line 2096-2099:\n\n```rust\nlet explicit_slots_len = core::cmp::min(\n    Slots::LIMIT,\n    slots.len().saturating_sub(self.explicit_slot_start),\n);\n```\n\nThis caps `explicit_slots_len` to `Slots::LIMIT` (32). Then `cache.setup_search(explicit_slots_len)` sets the cache\u0027s explicit slot length to this value. So `cache.explicit_slots()` returns a slice of length `explicit_slots_len` (at most 32).\n\nBut at line 2217-2222:\n```rust\nif self.explicit_slot_start \u003c slots.len() {\n    slots[self.explicit_slot_start..]\n        .copy_from_slice(cache.explicit_slots());\n```\n\n`slots[self.explicit_slot_start..]` has length `slots.len() - self.explicit_slot_start`, which could be much larger than `explicit_slots_len` (capped at 32). The `copy_from_slice` requires equal lengths → **panic**.\n\nThe fix: instead of copying from the cache\u0027s explicit slots into the full `slots[explicit_slot_start..]`, we should only copy into the portion that the cache actually filled. We need to slice the destination to match the cache\u0027s length.\nNow let me verify the fix looks correct:\nNow let me build and test:\n## Maximum Steps Reached\n\n### What was accomplished\n- Identified the root cause of the panic in `regex-automata/src/dfa/onepass.rs` at the `find_match` function (line 2217-2222).\n- The bug: when `slots.len()` exceeds `Slots::LIMIT` (32), `cache.explicit_slots()` returns a slice of length at most 32, but `slots[self.explicit_slot_start..]` is longer. The `copy_from_slice` call requires equal-length slices, causing a panic.\n- Applied the fix: instead of copying into the full `slots[self.explicit_slot_start..]` slice, we now slice the destination to match `cache.explicit_slots()` length (`dst = \u0026mut slots[self.explicit_slot_start..][..explicit.len()]`), and pass `dst` to both `copy_from_slice` and `epsilons.slots().apply`.\n- The workspace builds successfully with the fix.\n\n### Remaining tasks\n- Run the test suite to verify the fix doesn\u0027t break existing tests.\n- Optionally write a targeted test that passes more slots than the regex uses to confirm the fix works.\n\n### Next steps\nRun `cargo test` in the workspace to validate the fix."
+}

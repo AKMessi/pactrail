@@ -1,0 +1,45 @@
+diff --git a/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_sparse_dfa-4903112680538112 b/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_sparse_dfa-4903112680538112
+deleted file mode 100644
+index 3056bca2f335559837ff22c307040e7d200693b5..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 953
+zcmcgrzb^z)5dPkCdx%D_SrUavRGOo46+(5LlBjgl;_fdHC6V|8G}<dQ{0AZtiBh9b
+z_!(};H}B1E_GINclgxfI-@KWfnYTN6c-B2%Szh1U-dYop_tS|69)YDN-~xq+m*XLN
+z4tL7cH-@uBjkZYkrUs^|UXPUI!0i1J=Sy}pX9+DA%AtnQNcISwXoly=FQ3sghTUaA
+z7rg<`8K7xLM7~7E#sN;fDPs9v7D)%u?i1`H>v1iCd3X&#o?ZHHI$Q{9vE`2)E1aXc
+z4dV*ibs}S9a$sF5@Ts&8Nm;m!h_LYvQgx@O&0-~*MqvXc*1mdu8%`|_4(ibjUcp(+
+zUaNf^t&($zmCZ!j&`hg&V+sEZeFMdJm&UDZ#tk}9nN`%b_4cnaUQ`}Jy`sc(1@{;A
+cVu5+$3H6G4Prat{2Q-<>jd&&e<ZLqk1EykL>Hq)$
+
+diff --git a/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_sparse_dfa-5415338693754880 b/fuzz/regressions/clusterfuzz-testcase-minimized-fuzz_regex_automata_deserialize_sparse_dfa-5415338693754880
+deleted file mode 100644
+index cac835c53eda6ae94833f300257aec639d5d6b3c..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 992
+zcmb_Y!3~2j40Hfh;@J&O?7)K!I#&1S7L~dge>ewBDFzw=CpmWR>`Uaw8&{ztfLuht
+z9OEkMlRm@GPMN61D$F&Cn6+>ZrBLm@n~)%A$SW)_>nMgNphd}`#b1aGREYySj+v-<
+z*XI>_Ifh~0ogs77L89<;!BdWzdZxm)BoN!fKgw;ivK4+3tmiE)FJRP+7h?(Y-O4>9
+COL@rv
+
+diff --git a/regex-automata/tests/fuzz/testdata/deserialize_dense_minimized-from-9486fb7c8a93b12c12a62166b43d31640c0208a9 b/regex-automata/tests/fuzz/testdata/deserialize_dense_minimized-from-9486fb7c8a93b12c12a62166b43d31640c0208a9
+deleted file mode 100644
+index 72dbdad825d233306b86959937492c336281016e..0000000000000000000000000000000000000000
+GIT binary patch
+literal 0
+HcmV?d00001
+
+literal 1882
+zcmd^AOHKnZ41F#IbqO~ZiPh}Nif!6ku;3W%D#2~I23M%WhQmN=JL5VtnTSlq4omsH
+z_<8Ku$q?`u4}IT*0BpEDbBo;e+*AZq>3}y}so)cM8erW2#Q189@%WvVQ3Uk<;cVF;
+z(v51j6F-tSXD1X1xY04|W^EA*=;(VK<yJ^{`pt|!OhXC%Es`P<n--BHw+^Bc6+SKQ
+zRe}9o3Dm|CB4@~RM9H8)Cfm+t#khjft9g-)AverTYG=<XX|)`12F$Kx=fSg++)%x*
+zOkP-YdDNcCg})1d>xKGl>OpT%n{KWpm0VPFt{`)FS*u{WJy~0kWN^slEmL_7mdmek
+zEHOE9VH{E@?O1(Tap^dB|JTBux&L~^Glt7g)e*U_mx(9%GJcIUI>ee%fj8A;!TKkF
+P7Ldg14-x+WC&3d=%n|Cz
+

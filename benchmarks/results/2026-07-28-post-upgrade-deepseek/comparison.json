@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-post-upgrade-real-issue-regression",
+  "date": "2026-07-28",
+  "primary_metric": "strict_passed",
+  "headline": {
+    "pactrail_strict_passed": 0,
+    "pactrail_trials": 6,
+    "opencode_strict_passed": 2,
+    "opencode_trials": 6,
+    "winner_on_this_suite": "opencode",
+    "broad_superiority_claim_supported": false
+  },
+  "aggregates": [
+    {
+      "harness": "pactrail",
+      "version": "1.0.0",
+      "model": "deepseek-v4-flash",
+      "trials": 3,
+      "functional_passed": 0,
+      "strict_passed": 0,
+      "agent_duration_ms": 42690,
+      "grading_duration_ms": 48535,
+      "input_tokens": 164460,
+      "cached_input_tokens": 75776,
+      "output_tokens": 2049,
+      "total_tokens": 166509,
+      "estimated_cost_usd": 0.013202,
+      "model_calls": 17,
+      "tool_calls": 15,
+      "production_mutation_tool_calls": 0,
+      "controller_tool_rejections": 10,
+      "recovery_stops": 3
+    },
+    {
+      "harness": "opencode",
+      "version": "1.18.7",
+      "model": "deepseek-v4-flash",
+      "trials": 3,
+      "functional_passed": 1,
+      "strict_passed": 1,
+      "agent_duration_ms": 223171,
+      "grading_duration_ms": 50199,
+      "input_tokens": 541292,
+      "cached_input_tokens": 350208,
+      "output_tokens": 15295,
+      "total_tokens": 556587,
+      "estimated_cost_usd": 0.032015,
+      "model_calls": 50,
+      "tool_calls": 54,
+      "production_mutation_tool_calls": 2,
+      "controller_tool_rejections": 0,
+      "recovery_stops": 0
+    },
+    {
+      "harness": "pactrail",
+      "version": "1.0.0",
+      "model": "deepseek-v4-pro",
+      "trials": 3,
+      "functional_passed": 0,
+      "strict_passed": 0,
+      "agent_duration_ms": 64684,
+      "grading_duration_ms": 55905,
+      "input_tokens": 166183,
+      "cached_input_tokens": 65792,
+      "output_tokens": 2487,
+      "total_tokens": 168670,
+      "estimated_cost_usd": 0.046072,
+      "model_calls": 17,
+      "tool_calls": 14,
+      "production_mutation_tool_calls": 0,
+      "controller_tool_rejections": 10,
+      "recovery_stops": 3
+    },
+    {
+      "harness": "opencode",
+      "version": "1.18.7",
+      "model": "deepseek-v4-pro",
+      "trials": 3,
+      "functional_passed": 1,
+      "strict_passed": 1,
+      "agent_duration_ms": 460787,
+      "grading_duration_ms": 54968,
+      "input_tokens": 549786,
+      "cached_input_tokens": 373376,
+      "output_tokens": 16025,
+      "total_tokens": 565811,
+      "estimated_cost_usd": 0.092033,
+      "model_calls": 50,
+      "tool_calls": 57,
+      "production_mutation_tool_calls": 1,
+      "controller_tool_rejections": 0,
+      "recovery_stops": 0
+    }
+  ],
+  "combined": [
+    {
+      "harness": "pactrail",
+      "version": "1.0.0",
+      "trials": 6,
+      "functional_passed": 0,
+      "strict_passed": 0,
+      "agent_duration_ms": 107374,
+      "grading_duration_ms": 104440,
+      "input_tokens": 330643,
+      "cached_input_tokens": 141568,
+      "output_tokens": 4536,
+      "total_tokens": 335179,
+      "estimated_cost_usd": 0.059274,
+      "model_calls": 34,
+      "tool_calls": 29,
+      "production_mutation_tool_calls": 0,
+      "controller_tool_rejections": 20,
+      "recovery_stops": 6,
+      "source_isolation_preserved": 6,
+      "trace_integrity_verified": 6,
+      "applied_candidate_matches": 0
+    },
+    {
+      "harness": "opencode",
+      "version": "1.18.7",
+      "trials": 6,
+      "functional_passed": 2,
+      "strict_passed": 2,
+      "agent_duration_ms": 683958,
+      "grading_duration_ms": 105167,
+      "input_tokens": 1091078,
+      "cached_input_tokens": 723584,
+      "output_tokens": 31320,
+      "total_tokens": 1122398,
+      "estimated_cost_usd": 0.124048,
+      "model_calls": 100,
+      "tool_calls": 111,
+      "production_mutation_tool_calls": 3
+    }
+  ],
+  "per_task": [
+    {
+      "case_id": "regex-onepass-excess-capture-slots",
+      "deepseek-v4-flash": {
+        "pactrail": "fail",
+        "opencode": "fail"
+      },
+      "deepseek-v4-pro": {
+        "pactrail": "fail",
+        "opencode": "fail"
+      }
+    },
+    {
+      "case_id": "http-header-map-reserve-capacity",
+      "deepseek-v4-flash": {
+        "pactrail": "fail",
+        "opencode": "pass"
+      },
+      "deepseek-v4-pro": {
+        "pactrail": "fail",
+        "opencode": "pass"
+      }
+    },
+    {
+      "case_id": "ripgrep-early-termination-byte-stats",
+      "deepseek-v4-flash": {
+        "pactrail": "fail",
+        "opencode": "fail"
+      },
+      "deepseek-v4-pro": {
+        "pactrail": "fail",
+        "opencode": "fail"
+      }
+    }
+  ],
+  "efficiency_observation": {
+    "pactrail_total_token_reduction_percent": 70.1,
+    "pactrail_estimated_cost_reduction_percent": 52.2,
+    "pactrail_agent_time_reduction_percent": 84.3,
+    "interpretation": "These are early-abort effects, not useful-work efficiency gains, because Pactrail completed zero coding tasks."
+  }
+}
