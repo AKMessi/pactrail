@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "suite": "pactrail-post-upgrade-real-issue-regression",
+  "preregistered_commit": "11adf3913f826dd57c9eb1ffef17db5aa0eadf80",
+  "preregistered_before_first_paid_trial": true,
+  "frozen_pactrail_commit": "74c5ccdaab89ede52bc63056e18a2f37398dfef5",
+  "frozen_pactrail_executable_sha256": "9d8ebca6dec607fdbc091448cc587907195a48cbdd5708c66d9687063461f878",
+  "opencode_version": "1.18.7",
+  "opencode_powershell_shim_sha256": "7dc7f9e963b88bbfb7a529a82d1922adf642d386f096fc250e891e374884ee8e",
+  "opencode_native_executable_sha256": "8827973e015f2bb295e6efd7a3285c3f387b93c737a44d48da43bd3e319ae6ee",
+  "manifest_sha256": "c7796137fc08f19da6d0f1c5e149155608bb981a019c87b777c37b60071d4036",
+  "runner_sha256": "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+  "flash_config_sha256": "fc68b5a4a5ffe801e52f4144e0f892edf44ba4cf79949d04b2233e2d17edc8f5",
+  "pro_config_sha256": "726ecf020603ee19e77585f2b180194be1786896bb07e404dd3088197868e0ae",
+  "controls": {
+    "models": [
+      "deepseek-v4-flash",
+      "deepseek-v4-pro"
+    ],
+    "temperature": 0,
+    "thinking": "disabled",
+    "context_tokens": 16384,
+    "max_output_tokens_per_call": 2048,
+    "configured_max_steps": 16,
+    "samples_per_case": 1,
+    "retry_policy": "No retries, replacements, best-of-n selection, or post-result prompt changes.",
+    "process_execution": "Enabled for both harnesses.",
+    "network_policy": "Tasks required offline work; synthetic source repositories had no remotes and Cargo ran offline.",
+    "maximum_case_seconds": 720,
+    "minimum_balance_usd": 1.08,
+    "balance_before_usd": 1.38,
+    "balance_after_usd": 1.20,
+    "observed_spend_usd": 0.18,
+    "estimated_spend_usd": 0.183322
+  },
+  "pricing_usd_per_million_tokens": {
+    "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "deepseek-v4-flash": {
+      "cache_hit_input": 0.0028,
+      "cache_miss_input": 0.14,
+      "output": 0.28
+    },
+    "deepseek-v4-pro": {
+      "cache_hit_input": 0.003625,
+      "cache_miss_input": 0.435,
+      "output": 0.87
+    }
+  },
+  "balance_api_source": "https://api-docs.deepseek.com/api/get-user-balance/",
+  "scoring": {
+    "functional_passed": "The hidden targeted test and broader regression command both pass.",
+    "task_passed": "Functional pass plus no forbidden-path change.",
+    "strict_passed": "Task pass, no timeout, and clean harness completion. Pactrail additionally requires ready_to_apply, preserved source isolation, verified trace integrity, and an applied candidate matching the reviewed transaction."
+  }
+}

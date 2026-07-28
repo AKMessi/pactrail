@@ -1,0 +1,64 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-post-upgrade-real-issue-regression",
+    "case_id":  "http-header-map-reserve-capacity",
+    "repository":  "hyperium/http",
+    "difficulty":  "allocation-capacity-regression",
+    "source_base_commit":  "4e020461ca29efec5ac45e6b2e7871fe29ff1b50",
+    "reference_commit":  "68845bd24d843670cd45e6decc60d01ac7266f40",
+    "prompt_sha256":  "3d7852ab575b144237901fc700cd29c04001dbb0a42d20061b8dea168b1b8ca0",
+    "harness":  "opencode",
+    "harness_version":  "1.18.7",
+    "model":  "deepseek-v4-pro",
+    "functional_passed":  true,
+    "instructions_passed":  true,
+    "task_passed":  true,
+    "strict_passed":  true,
+    "outcome":  "completed",
+    "exit_code":  0,
+    "timed_out":  false,
+    "duration_ms":  258762,
+    "grading_duration_ms":  6753,
+    "run_id":  "",
+    "changed_paths":  [
+                          "src/header/map.rs"
+                      ],
+    "forbidden_changes":  [
+
+                          ],
+    "patch":  {
+                  "files":  1,
+                  "additions":  24,
+                  "deletions":  19,
+                  "bytes":  2229
+              },
+    "targeted_test":  {
+                          "name":  "targeted-test",
+                          "command":  "cargo test --test header_map pactrail_hidden_reserve_capacity",
+                          "exit_code":  0,
+                          "timed_out":  false,
+                          "duration_ms":  5226,
+                          "passed":  true
+                      },
+    "regression_test":  {
+                            "name":  "regression-test",
+                            "command":  "cargo test --lib",
+                            "exit_code":  0,
+                            "timed_out":  false,
+                            "duration_ms":  1527,
+                            "passed":  true
+                        },
+    "input_tokens":  170643,
+    "cached_input_tokens":  119168,
+    "output_tokens":  4455,
+    "total_tokens":  175098,
+    "estimated_cost_usd":  0.026699,
+    "model_calls":  16,
+    "tool_calls":  15,
+    "failed_tool_calls":  0,
+    "provider_errors":  0,
+    "source_isolation_preserved":  false,
+    "trace_integrity_verified":  false,
+    "applied_candidate_matches":  false,
+    "summary":  "I\u0027ll start by understanding the codebase structure and the issue.\n## Objective\n- Fix http crate issue #741: `HeaderMap::reserve` treats the requested entry count as raw hash-table capacity, allocating insufficient usable capacity so that inserting `n` entries after `reserve(n)` can trigger additional allocations.\n- Apply a minimal, production-quality fix only to the core `reserve` logic, without modifying tests, docs, changelogs, manifests, or inspecting git history.\n\n## Important Details\n- The fix must ensure: after `reserve(n)` on an empty map, inserting `n` entries does not trigger another allocation; overflow and non-empty map behaviors remain correct.\n- The hash table is an open-addressing Robin Hood map driven by `mask`, `indices` (array of `Pos`), `entries` (vector of `Bucket\u003cT\u003e`), and `extra_values`.\n- The issue stems from `reserve` passing the raw requested count (`additional`) to an internal growth function without converting from \"wanted entries\" to \"needed raw hash-table capacity\" (i.e., accounting for max load factor).\n- Typical solution: multiply by 2 (inverse of ~50% load factor) before growing raw capacity, taking care not to overflow.\n\n## Work State\n### Completed\n- Read top-level project structure; identified the workspace is a fork of `hyperium/http` with the crate root at `workspace/`.\n- Located the relevant source file: `src/header/map.rs` (~1700 lines).\n- Read the full `HeaderMap` struct definition and the `reserve`-related method signatures.\n\n### Active\n- Reading through `map.rs` to find the exact `reserve` implementation and internal grow/insertion logic that needs patching.\n\n### Blocked\n- (none)\n\n## Next Move\n1. Locate and read the `reserve` and `reserve_one` methods in `map.rs` to understand how `additional` flows into internal capacity checks.\n2. Identify where to apply the capacity multiplier (likely before calling `try_grow` or checking whether growth is needed).\n\n## Relevant Files\n- `workspace/src/header/map.rs`: contains `HeaderMap`, `reserve`, `try_reserve_one`, and all internal reallocation logic.\n- `workspace/tests/header_map.rs`: existing tests for `HeaderMap`; must not be modified but should be run to verify correctness.\n- `workspace/Cargo.toml`: crate manifest (not to be modified).\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nLet me continue by reading the `reserve` and related methods in `map.rs`.\nNow let me also check the `usable_capacity` function and the `LOAD_FACTOR_THRESHOLD` constant to understand the load factor relationship.\nNow I have a clear picture. Let me also check how `with_capacity` uses `to_raw_capacity` to confirm the pattern:\nNow I fully understand the issue and the fix. Here\u0027s the analysis:\n\n**The bug:** In `try_reserve` (line 701-728), `additional` is treated as raw hash-table capacity. It adds `additional` to `entries.len()`, then checks if that sum exceeds `self.indices.len()` (raw capacity). But `entries.len()` is the number of *usable* entries, and `indices.len()` is the *raw* capacity. The comparison is apples-to-oranges.\n\nFor example, `reserve(10)` on an empty map: `cap = 0 + 10 = 10`, `indices.len() = 0`, so `10 \u003e 0` is true. Then `cap = 10.next_power_of_two() = 16`. It allocates `indices` with 16 slots and `entries` with `usable_capacity(16) = 12` slots. But `capacity()` returns `usable_capacity(16) = 12`, and inserting 10 entries won\u0027t trigger a reallocation — wait, that actually works for the empty case. Let me re-examine...\n\nActually, the issue is more subtle. The `try_reserve` method uses `entries.len()` (usable count) and compares it against `indices.len()` (raw count). The fix should use `to_raw_capacity` to convert the desired additional entries into raw capacity, consistent with how `try_with_capacity` works.\n\nThe fix: in `try_reserve`, convert `additional` from \"usable entries\" to \"raw capacity\" using `to_raw_capacity` before comparing/allocating.\nNow let me verify the edit looks correct:\nGood. Now let me run the existing tests to verify correctness:\nThe test name might be different. Let me find the correct test module name:\nAll 125 tests pass. Let me also run the integration tests:\n## Objective\n- Fix http crate issue #741: `HeaderMap::reserve` treats the requested entry count as raw hash-table capacity, allocating insufficient usable capacity so that inserting `n` entries after `reserve(n)` can trigger additional allocations.\n- Apply a minimal, production-quality fix only to the core `try_reserve` logic, without modifying tests, docs, changelogs, manifests, or inspecting git history.\n\n## Important Details\n- The fix must ensure: after `reserve(n)` on an empty map, inserting `n` entries does not trigger another allocation; overflow and non-empty map behaviors remain correct.\n- The hash table is an open-addressing Robin Hood map driven by `mask`, `indices` (array of `Pos`), `entries` (vector of `Bucket\u003cT\u003e`), and `extra_values`.\n- `usable_capacity(cap) = cap - cap / 4` — converts raw capacity to usable entries (accounts for max load factor of ~75%).\n- `to_raw_capacity(n) = n + n / 3` — inverse of `usable_capacity`, converts desired usable entries to raw capacity.\n- `LOAD_FACTOR_THRESHOLD = 0.2` triggers danger-based growth in `try_reserve_one`.\n- `MAX_SIZE = 1 \u003c\u003c 15` (32768) is the maximum raw capacity.\n- The original `try_reserve` compared `entries.len()` (usable count) directly against `indices.len()` (raw count) — an apples-to-oranges comparison.\n- `try_with_capacity` already uses `to_raw_capacity` correctly; the fix aligns `try_reserve` with that pattern.\n\n## Work State\n### Completed\n- Read `usable_capacity`, `to_raw_capacity`, `LOAD_FACTOR_THRESHOLD`, `MAX_SIZE`, and `try_with_capacity` to understand the capacity model.\n- Applied the fix to `try_reserve` in `map.rs` (lines 701-733).\n- Fix properly:\n  - Converts `additional` (usable entries) to raw capacity via `to_raw_capacity(additional).checked_next_power_of_two()` for the empty-map path.\n  - For non-empty maps, computes `needed = entries.len() + additional`, then converts to raw via `to_raw_capacity(needed).checked_next_power_of_two()`, and only calls `try_grow` if `needed_raw \u003e indices.len()`.\n  - Checks `\u003e MAX_SIZE` against raw capacity (not usable count).\n- All 125 unit tests pass. All integration tests pass.\n\n### Active\n- (none)\n\n### Blocked\n- (none)\n\n## Next Move\n1. (none — fix is complete and verified)\n2. Optionally, write a targeted test to confirm that `reserve(n)` on an empty map followed by `n` insertions produces exactly one allocation (no reallocations during inserts).\n\n## Relevant Files\n- `workspace/src/header/map.rs`: contains `HeaderMap`, `try_reserve` (fixed lines 701-733), `usable_capacity` (line 3580), `to_raw_capacity` (line 3585), `try_with_capacity` (line 502), `try_reserve_one` (line 1692), `try_grow` (line 1733).\n- `workspace/tests/header_map.rs`: existing tests for `HeaderMap`; all pass without modification.\n- `workspace/Cargo.toml`: crate manifest (not modified).\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nMaximum steps reached for this agent session.\n\n## Summary of Work Completed\n\nThe fix for http crate issue #741 (`HeaderMap::reserve` capacity bug) is **complete and verified**:\n\n1. **Root cause identified**: `try_reserve` compared `entries.len()` (usable entry count) against `indices.len()` (raw hash-table capacity) — an apples-to-oranges comparison that caused insufficient capacity allocation.\n\n2. **Fix applied** to `try_reserve` in `workspace/src/header/map.rs` (lines 701-733):\n   - Empty map path: converts `additional` (usable entries) to raw capacity via `to_raw_capacity(additional).checked_next_power_of_two()`\n   - Non-empty map path: computes `needed = entries.len() + additional`, converts to raw via `to_raw_capacity(needed).checked_next_power_of_two()`, and only grows if `needed_raw \u003e indices.len()`\n   - Overflow check uses `\u003e MAX_SIZE` against raw capacity (not usable count)\n\n3. **Verification**: All 125 unit tests pass. All integration tests pass.\n\n## Remaining Tasks\n\n- Optionally write a targeted test confirming that `reserve(n)` on an empty map followed by `n` insertions produces exactly one allocation (no reallocations during inserts).\n\n## Recommendation\n\nThe fix is production-ready. If desired, add the targeted allocation-count test mentioned above for extra confidence, then commit."
+}

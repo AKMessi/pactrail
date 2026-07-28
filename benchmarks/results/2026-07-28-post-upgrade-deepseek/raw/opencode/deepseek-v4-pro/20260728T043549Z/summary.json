@@ -1,0 +1,98 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-post-upgrade-real-issue-regression",
+    "harness":  "opencode",
+    "harness_version":  "1.18.7",
+    "model":  "deepseek-v4-pro",
+    "started_at":  "20260728T043549Z",
+    "cases":  1,
+    "functional_passed":  0,
+    "task_passed":  0,
+    "strict_passed":  0,
+    "median_duration_ms":  105442,
+    "total_duration_ms":  105442,
+    "total_input_tokens":  185588,
+    "total_cached_input_tokens":  134400,
+    "total_output_tokens":  5978,
+    "total_tokens":  191566,
+    "estimated_cost_usd":  0.027955,
+    "balance_before_usd":  "1.35",
+    "balance_after_usd":  "1.34",
+    "protocol":  {
+                     "manifest_sha256":  "c7796137fc08f19da6d0f1c5e149155608bb981a019c87b777c37b60071d4036",
+                     "runner_sha256":  "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+                     "opencode_config_sha256":  "726ecf020603ee19e77585f2b180194be1786896bb07e404dd3088197868e0ae",
+                     "harness_executable_sha256":  "7dc7f9e963b88bbfb7a529a82d1922adf642d386f096fc250e891e374884ee8e",
+                     "context_tokens":  16384,
+                     "max_output_tokens":  2048,
+                     "max_steps":  16,
+                     "temperature":  0,
+                     "thinking":  "disabled"
+                 },
+    "results":  [
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-post-upgrade-real-issue-regression",
+                        "case_id":  "regex-onepass-excess-capture-slots",
+                        "repository":  "rust-lang/regex",
+                        "difficulty":  "public-api-panic-regression",
+                        "source_base_commit":  "5ea3eb1e95f0338e283f5f0b4681f0891a1cd836",
+                        "reference_commit":  "4733e28ba4f281f643ce93e4089eccbb9a9d5a5a",
+                        "prompt_sha256":  "195c75246d018bcc54bcf08390bc9f539fffb20d09c4fed9781a3f39f85bd499",
+                        "harness":  "opencode",
+                        "harness_version":  "1.18.7",
+                        "model":  "deepseek-v4-pro",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "completed",
+                        "exit_code":  0,
+                        "timed_out":  false,
+                        "duration_ms":  105442,
+                        "grading_duration_ms":  28138,
+                        "run_id":  "",
+                        "changed_paths":  [
+
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  3,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  2273
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test -p regex-automata --lib pactrail_hidden_onepass_slots::too_many_slots_are_accepted",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  27926,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test -p regex-automata --lib",
+                                                "exit_code":  101,
+                                                "timed_out":  false,
+                                                "duration_ms":  212,
+                                                "passed":  false
+                                            },
+                        "input_tokens":  185588,
+                        "cached_input_tokens":  134400,
+                        "output_tokens":  5978,
+                        "total_tokens":  191566,
+                        "estimated_cost_usd":  0.027955,
+                        "model_calls":  18,
+                        "tool_calls":  16,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  0,
+                        "source_isolation_preserved":  false,
+                        "trace_integrity_verified":  false,
+                        "applied_candidate_matches":  false,
+                        "summary":  "I\u0027ll start by understanding the codebase structure and the issue.\nNow let me read the key file - the one-pass DFA implementation:\n## Objective\n- Fix rust-lang/regex issue #1327: `DFA::try_search_slots` in regex-automata\u0027s one-pass DFA panics when the caller-provided slot slice has more slots than the compiled regex uses.\n- Preserve captures in the slots the regex owns, leave surplus slots valid (unchanged), and keep existing behavior for smaller slices.\n\n## Important Details\n- Work offline, do not inspect git history or any remote.\n- Do not modify tests, documentation, changelogs, or manifests.\n- Make a focused production-quality fix.\n- Run relevant tests before finishing.\n\n## Work State\n### Completed\n- Located the workspace at `D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\post-upgrade-v1\\20260728T043549Z-opencode-deepseek-v4-pro\\regex-onepass-excess-capture-slots\\workspace\\`\n- Found `regex-automata` crate with relevant source files.\n- Identified `try_search_slots` is implemented in `src/nfa/thompson/backtrack.rs` and referenced in `src/meta/wrappers.rs`, `src/meta/strategy.rs`, and other files.\n- Key implementation file: `regex-automata/src/nfa/thompson/backtrack.rs` (lines 1293+ for `try_search_slots`, with `try_search_slots_imp` at line 1331).\n- The one-pass DFA should be in a separate file — need to locate it.\n\n### Active\n- Searching for the one-pass DFA `try_search_slots` implementation (the actual panic site).\n\n### Blocked\n- (none)\n\n## Next Move\n1. Find the one-pass DFA source file (likely `src/nfa/thompson/onepass.rs` or similar) containing `try_search_slots` for the one-pass DFA.\n2. Read the implementation to understand the panic when slots slice exceeds expected size.\n3. Implement the fix, then run relevant tests.\n\n## Relevant Files\n- `regex-automata/src/nfa/thompson/backtrack.rs`: backtracking NFA `try_search_slots` implementation (reference for expected behavior pattern).\n- `regex-automata/src/meta/wrappers.rs`: calls `try_search_slots` on one-pass engine wrapper.\n- `regex-automata/tests/`: test suites for regex engines.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nNow I can see the issue clearly. Let me look at the `search_imp` function more carefully, specifically the slot clearing and the `find_match` function.\n\nThe problem is in `search_imp` at line 2096-2106 and in `find_match` at line 2217-2223. When `slots.len()` is larger than the number of slots the regex actually uses, the code at line 2096-2098 computes `explicit_slots_len` using `slots.len().saturating_sub(self.explicit_slot_start)`, which could exceed `Slots::LIMIT`. Then `cache.setup_search(explicit_slots_len)` could panic or behave incorrectly.\n\nBut more importantly, in `find_match` at line 2217-2223, when `self.explicit_slot_start \u003c slots.len()`, it does `slots[self.explicit_slot_start..].copy_from_slice(cache.explicit_slots())`. The `cache.explicit_slots()` slice length is set up in `setup_search` based on `explicit_slots_len`. If `explicit_slots_len` was clamped to `Slots::LIMIT` but `slots[self.explicit_slot_start..]` is longer, this `copy_from_slice` will panic.\n\nLet me check `Slots::LIMIT` and the `Cache` setup:\nNow I understand the issue. Let me also check the `Cache` struct to see `explicit_slots` and `explicit_slot_len`:\n## Objective\n- Fix rust-lang/regex issue #1327: `DFA::try_search_slots` in regex-automata\u0027s one-pass DFA panics when the caller-provided slot slice has more slots than the compiled regex uses.\n- Preserve captures in the slots the regex owns, leave surplus slots valid (unchanged), and keep existing behavior for smaller slices.\n\n## Important Details\n- Work offline, do not inspect git history or any remote.\n- Do not modify tests, documentation, changelogs, or manifests.\n- Make a focused production-quality fix.\n- Run relevant tests before finishing.\n- The one-pass DFA implementation is in `regex-automata/src/dfa/onepass.rs` (NOT in `nfa/thompson/`).\n\n## Work State\n### Completed\n- Located the workspace at `D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\post-upgrade-v1\\20260728T043549Z-opencode-deepseek-v4-pro\\regex-onepass-excess-capture-slots\\workspace\\`\n- Found the one-pass DFA source file: `regex-automata/src/dfa/onepass.rs`\n- Identified `try_search_slots` at line 1973, which calls `try_search_slots_imp` at line 1981.\n- Found `try_search_slots_imp` (the `search_imp` method) at line 2066+.\n- Identified the slot-clearing code at lines 2096-2106 which computes `explicit_slots_len` using `slots.len().saturating_sub(self.explicit_slot_start)` and clamps it to `Slots::LIMIT`.\n- Found `find_match` at line 2217-2223 where `slots[self.explicit_slot_start..].copy_from_slice(cache.explicit_slots())` is called — this is the panic site when `slots[self.explicit_slot_start..]` is longer than `cache.explicit_slots()`.\n- `Slots::LIMIT` is referenced at line 599 (check during compilation) and line 2097 (clamp in search).\n- `Cache::setup_search(explicit_slot_len: usize)` sets up the internal explicit slot buffer at line 2579.\n- `Cache::explicit_slots()` returns `\u0026mut [Option\u003cNonMaxUsize\u003e]` at line 2575.\n\n### Active\n- Analyzing the mismatch: when `slots.len()` \u003e regex\u0027s actual explicit slots, `explicit_slots_len` at line 2096 may exceed `Slots::LIMIT`, get clamped, but then `copy_from_slice` at line 2223 tries to copy from a shorter `cache.explicit_slots()` into a longer `slots[self.explicit_slot_start..]` slice, causing a panic.\n- Need to determine the correct fix: clamp `explicit_slots_len` to `min(self.explicit_slot_end - self.explicit_slot_start, ...)` or min with actual configured slot count from NFA, not just `Slots::LIMIT`.\n\n### Blocked\n- (none)\n\n## Next Move\n1. Read the NFA\u0027s group info to find how many explicit slots this DFA was configured with (`self.explicit_slot_len` or similar field on the DFA struct).\n2. Apply the fix: compute `explicit_slots_len` as the minimum of what the caller provides (from `self.explicit_slot_start`) and what the DFA actually needs (stored in DFA config), so `copy_from_slice` always operates on matching lengths.\n3. Run the regex-automata test suite to verify the fix.\n\n## Relevant Files\n- `regex-automata/src/dfa/onepass.rs`: core one-pass DFA implementation containing `search_imp` (line 2066+) and `find_match` (line 2150+) with the panic at line 2223, plus `Cache` (line 2575-2579).\n- `regex-automata/src/nfa/thompson/backtrack.rs`: backtracking engine\u0027s `try_search_slots` as reference for expected behavior.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nNow let me read the critical section around lines 2090-2110 and 2210-2230 to see the exact code:\nNow I have a clear picture. Let me also check the `explicit_slot_start` field on the DFA struct:\nNow I understand the full picture. The bug is:\n\n1. At line 2096-2099, `explicit_slots_len` is computed as `min(Slots::LIMIT, slots.len() - self.explicit_slot_start)`. This can be larger than the actual number of explicit slots the DFA was compiled with (which is `nfa.group_info().explicit_slot_len()`).\n\n2. At line 2100, `cache.setup_search(explicit_slots_len)` sets `cache.explicit_slot_len` to this potentially-too-large value.\n\n3. At line 2221-2222, `slots[self.explicit_slot_start..].copy_from_slice(cache.explicit_slots())` panics because `cache.explicit_slots()` returns `\u0026mut self.explicit_slots[..self.explicit_slot_len]` which is longer than the actual allocated `explicit_slots` vec.\n\nThe fix: clamp `explicit_slots_len` to the actual number of explicit slots the DFA knows about. The DFA\u0027s NFA has `group_info().explicit_slot_len()` which is the true count. Let me check how to access it:\nMaximum steps reached. Here\u0027s a summary:\n\n## What We\u0027ve Done\n\nWe thoroughly analyzed the bug in `regex-automata/src/dfa/onepass.rs` where `try_search_slots` panics when the caller provides more slots than the compiled regex uses.\n\n### Root Cause Identified\n\nThe panic occurs at **line 2222** in `find_match`:\n```rust\nslots[self.explicit_slot_start..]\n    .copy_from_slice(cache.explicit_slots());\n```\n\nThe mismatch happens because:\n\n1. **Line 2096-2099**: `explicit_slots_len` is computed as `min(Slots::LIMIT, slots.len() - self.explicit_slot_start)`. This can be **larger** than the actual number of explicit slots the DFA was compiled with.\n\n2. **Line 2100**: `cache.setup_search(explicit_slots_len)` sets `cache.explicit_slot_len` to this potentially-too-large value.\n\n3. **Line 2575-2576**: `cache.explicit_slots()` returns `\u0026mut self.explicit_slots[..self.explicit_slot_len]` — but the underlying `Vec` was only resized to `nfa.group_info().explicit_slot_len()` (line 2562-2563), which is smaller.\n\n4. **Line 2222**: `copy_from_slice` panics because the source slice (`cache.explicit_slots()`) is longer than the allocated `Vec`.\n\n### Fix Identified\n\nThe `explicit_slots_len` at line 2096 needs an additional clamp to the DFA\u0027s actual explicit slot count: `self.nfa.group_info().explicit_slot_len()`. The fix is a one-line change:\n\n```rust\nlet explicit_slots_len = core::cmp::min(\n    Slots::LIMIT,\n    core::cmp::min(\n        self.nfa.group_info().explicit_slot_len(),\n        slots.len().saturating_sub(self.explicit_slot_start),\n    ),\n);\n```\n\n## Remaining Tasks\n\n1. Apply the fix to line 2096-2099 in `onepass.rs`\n2. Run the regex-automata test suite to verify the fix\n## Objective\n- Fix rust-lang/regex issue #1327: `DFA::try_search_slots` in regex-automata\u0027s one-pass DFA panics when the caller-provided slot slice has more slots than the compiled regex uses.\n- Preserve captures in the slots the regex owns, leave surplus slots valid (unchanged), and keep existing behavior for smaller slices.\n\n## Important Details\n- Work offline, do not inspect git history or any remote.\n- Do not modify tests, documentation, changelogs, or manifests.\n- Make a focused production-quality fix.\n- Run relevant tests before finishing.\n- The one-pass DFA implementation is in `regex-automata/src/dfa/onepass.rs` (NOT in `nfa/thompson/`).\n\n## Work State\n### Completed\n- Located the workspace at `D:\\AKMESSI\\CODING\\AI\\Projects\\pactrail-benchmark-work\\post-upgrade-v1\\20260728T043549Z-opencode-deepseek-v4-pro\\regex-onepass-excess-capture-slots\\workspace\\`\n- Found the one-pass DFA source file: `regex-automata/src/dfa/onepass.rs`\n- Identified `try_search_slots` at line 1973, which calls `try_search_slots_imp` at line 1981.\n- Identified `try_search_slots_imp` (the `search_imp` method) at line 2066+.\n- Identified the slot-clearing code at lines 2096-2106: computes `explicit_slots_len` as `min(Slots::LIMIT, slots.len().saturating_sub(self.explicit_slot_start))`.\n- Found `find_match` at line 2217-2223 where `slots[self.explicit_slot_start..].copy_from_slice(cache.explicit_slots())` panics when source and destination lengths mismatch.\n- `DFA` struct has fields `explicit_slot_start: usize` (line 1988) and `explicit_slot_end: usize` (line 1989) representing the range of explicit slots this DFA was compiled with.\n- `Cache.explicit_slots` is a `Vec\u003cOption\u003cNonMaxUsize\u003e\u003e`, resized to the full NFA slot count via `Cache::reset()` (line 2562-2564).\n- `Cache.setup_search(explicit_slot_len)` (line 2579) sets `Cache.explicit_slot_len`, which controls the length returned by `Cache.explicit_slots()` (line 2575-2577).\n- Root cause: `explicit_slots_len` computed at line 2096 uses `slots.len()` (caller-provided) clamped only to `Slots::LIMIT` (32-bit bitmap limit), NOT to `self.explicit_slot_end - self.explicit_slot_start` (actual slots compiled into DFA). So when caller provides more slots than the DFA has, `setup_search` sets a longer slice than the DFA can actually fill, and later `copy_from_slice` fails.\n\n### Active\n- Applying the fix: change `explicit_slots_len` computation at line 2096 to also clamp to `self.explicit_slot_end - self.explicit_slot_start` so the slice lengths always match.\n\n### Blocked\n- (none)\n\n## Next Move\n1. Apply fix to lines 2096-2099: compute `explicit_slots_len` as `min(Slots::LIMIT, self.explicit_slot_end - self.explicit_slot_start, slots.len().saturating_sub(self.explicit_slot_start))`.\n2. Run `cargo test -p regex-automata` to verify no regressions and the panic is fixed.\n3. Consider edge cases: what if caller provides fewer slots than `self.explicit_slot_start`? Verify `saturating_sub` handles that.\n\n## Relevant Files\n- `regex-automata/src/dfa/onepass.rs`: core one-pass DFA implementation; key locations: DFA struct fields at lines 1988-1989, `search_imp` slot setup at lines 2096-2106, `find_match` copy at lines 2217-2223, `Cache` at lines 2492-2581.\nContinue if you have next steps, or stop and ask for clarification if you are unsure how to proceed.\nMaximum steps reached for this agent.\n\n## Summary of Work Done\n\nWe fully analyzed the bug in `regex-automata/src/dfa/onepass.rs` where `try_search_slots` panics when the caller provides more capture slots than the compiled regex uses.\n\n### Root Cause\nThe `explicit_slots_len` computation at **line 2096** only clamps to `Slots::LIMIT` and `slots.len()`, but not to the DFA\u0027s actual explicit slot count (`self.nfa.group_info().explicit_slot_len()`). This causes `cache.setup_search()` to set a slice length larger than the underlying `Vec`, and `copy_from_slice` at **line 2222** panics on the mismatch.\n\n### Fix Identified (Not Yet Applied)\nAt line 2096, add an additional `min()` clamp to `self.nfa.group_info().explicit_slot_len()`:\n\n```rust\nlet explicit_slots_len = core::cmp::min(\n    Slots::LIMIT,\n    core::cmp::min(\n        self.nfa.group_info().explicit_slot_len(),\n        slots.len().saturating_sub(self.explicit_slot_start),\n    ),\n);\n```\n\n## Remaining Tasks\n1. Apply the one-line fix to lines 2096-2099 in `regex-automata/src/dfa/onepass.rs`\n2. Run `cargo test -p regex-automata` to verify no regressions and the panic is fixed"
+                    }
+                ]
+}

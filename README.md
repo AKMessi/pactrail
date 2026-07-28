@@ -500,6 +500,18 @@ production edit. Every failure is retained. This result rejects a current
 capability-superiority claim and records the loop behavior as a release
 blocker.
 
+A [post-upgrade regression](benchmarks/results/2026-07-28-post-upgrade-deepseek/README.md)
+repeated those three tasks with the frozen upgraded Pactrail commit and current
+OpenCode 1.18.7. OpenCode again passed **2/6** and Pactrail passed **0/6**.
+Every Pactrail trace converged on the same new failure mode: the phase
+controller rejected 20 additional evidence requests after entering
+implementation, then stopped recovery before any production mutation. Source
+isolation and trace integrity still held in **6/6** runs. The preregistration,
+hidden-grader validation, raw model streams, traces, patches, token accounting,
+spend, and checksums are public; the report treats the controller policy as a
+measurable release blocker rather than presenting early-abort savings as an
+efficiency win.
+
 ## Architecture at a glance
 
 ```text

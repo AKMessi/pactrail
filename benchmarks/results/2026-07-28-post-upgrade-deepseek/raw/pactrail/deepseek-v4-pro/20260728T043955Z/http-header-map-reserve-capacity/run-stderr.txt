@@ -1,0 +1,4 @@
+warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run
+2026-07-28T04:40:12.161302Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=process backend failed: process "grep" could not be started: program not found
+error: engine failed for run 019fa705-b506-7773-8250-8bc8d68d5671: model stalled for 3 consecutive tool turns because every tool request failed
+Portable trace: \\?\D:\AKMESSI\CODING\AI\Projects\pactrail-benchmark-work\post-upgrade-v1\20260728T043955Z-pactrail-deepseek-v4-pro\http-header-map-reserve-capacity\workspace\.pactrail\runs\019fa705-b506-7773-8250-8bc8d68d5671\trace.jsonl

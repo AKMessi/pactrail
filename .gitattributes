@@ -9,3 +9,5 @@
 # Benchmark evidence is immutable and its SHA-256 manifest authenticates bytes.
 benchmarks/results/2026-07-22-v1-confirmation/** -text
 benchmarks/results/2026-07-22-v1-confirmation/SHA256SUMS text eol=lf
+benchmarks/results/2026-07-28-post-upgrade-deepseek/** -text
+benchmarks/results/2026-07-28-post-upgrade-deepseek/SHA256SUMS text eol=lf

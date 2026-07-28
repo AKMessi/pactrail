@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-07-28T04:51:42.2944756Z",
+  "host": {
+    "os": "Microsoft Windows 11 Home Single Language",
+    "os_version": "10.0.26200",
+    "architecture": "ARM64",
+    "powershell": "5.1.26100.8894"
+  },
+  "toolchain": {
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+    "git": "git version 2.53.0.windows.2",
+    "node": "v24.13.1"
+  },
+  "harnesses": {
+    "pactrail": {
+      "version": "pactrail 1.0.0",
+      "commit": "74c5ccdaab89ede52bc63056e18a2f37398dfef5",
+      "executable_sha256": "9d8ebca6dec607fdbc091448cc587907195a48cbdd5708c66d9687063461f878"
+    },
+    "opencode": {
+      "version": "1.18.7",
+      "powershell_shim_sha256": "7dc7f9e963b88bbfb7a529a82d1922adf642d386f096fc250e891e374884ee8e",
+      "native_executable_sha256": "8827973e015f2bb295e6efd7a3285c3f387b93c737a44d48da43bd3e319ae6ee"
+    }
+  }
+}

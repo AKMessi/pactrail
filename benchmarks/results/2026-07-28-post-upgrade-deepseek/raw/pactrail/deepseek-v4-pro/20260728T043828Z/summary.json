@@ -1,0 +1,98 @@
+{
+    "schema_version":  1,
+    "suite":  "pactrail-post-upgrade-real-issue-regression",
+    "harness":  "pactrail",
+    "harness_version":  "pactrail 1.0.0",
+    "model":  "deepseek-v4-pro",
+    "started_at":  "20260728T043828Z",
+    "cases":  1,
+    "functional_passed":  0,
+    "task_passed":  0,
+    "strict_passed":  0,
+    "median_duration_ms":  29405,
+    "total_duration_ms":  29405,
+    "total_input_tokens":  64480,
+    "total_cached_input_tokens":  25472,
+    "total_output_tokens":  1022,
+    "total_tokens":  65502,
+    "estimated_cost_usd":  0.01795,
+    "balance_before_usd":  "1.34",
+    "balance_after_usd":  "1.31",
+    "protocol":  {
+                     "manifest_sha256":  "c7796137fc08f19da6d0f1c5e149155608bb981a019c87b777c37b60071d4036",
+                     "runner_sha256":  "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+                     "opencode_config_sha256":  "726ecf020603ee19e77585f2b180194be1786896bb07e404dd3088197868e0ae",
+                     "harness_executable_sha256":  "9d8ebca6dec607fdbc091448cc587907195a48cbdd5708c66d9687063461f878",
+                     "context_tokens":  16384,
+                     "max_output_tokens":  2048,
+                     "max_steps":  16,
+                     "temperature":  0,
+                     "thinking":  "disabled"
+                 },
+    "results":  [
+                    {
+                        "schema_version":  1,
+                        "suite":  "pactrail-post-upgrade-real-issue-regression",
+                        "case_id":  "regex-onepass-excess-capture-slots",
+                        "repository":  "rust-lang/regex",
+                        "difficulty":  "public-api-panic-regression",
+                        "source_base_commit":  "5ea3eb1e95f0338e283f5f0b4681f0891a1cd836",
+                        "reference_commit":  "4733e28ba4f281f643ce93e4089eccbb9a9d5a5a",
+                        "prompt_sha256":  "195c75246d018bcc54bcf08390bc9f539fffb20d09c4fed9781a3f39f85bd499",
+                        "harness":  "pactrail",
+                        "harness_version":  "pactrail 1.0.0",
+                        "model":  "deepseek-v4-pro",
+                        "functional_passed":  false,
+                        "instructions_passed":  true,
+                        "task_passed":  false,
+                        "strict_passed":  false,
+                        "outcome":  "process_error",
+                        "exit_code":  1,
+                        "timed_out":  false,
+                        "duration_ms":  29405,
+                        "grading_duration_ms":  28907,
+                        "run_id":  "019fa704-70f5-7373-aa85-2646b8d0e072",
+                        "changed_paths":  [
+                                              "Cargo.lock"
+                                          ],
+                        "forbidden_changes":  [
+
+                                              ],
+                        "patch":  {
+                                      "files":  3,
+                                      "additions":  0,
+                                      "deletions":  0,
+                                      "bytes":  2273
+                                  },
+                        "targeted_test":  {
+                                              "name":  "targeted-test",
+                                              "command":  "cargo test -p regex-automata --lib pactrail_hidden_onepass_slots::too_many_slots_are_accepted",
+                                              "exit_code":  101,
+                                              "timed_out":  false,
+                                              "duration_ms":  28712,
+                                              "passed":  false
+                                          },
+                        "regression_test":  {
+                                                "name":  "regression-test",
+                                                "command":  "cargo test -p regex-automata --lib",
+                                                "exit_code":  101,
+                                                "timed_out":  false,
+                                                "duration_ms":  195,
+                                                "passed":  false
+                                            },
+                        "input_tokens":  64480,
+                        "cached_input_tokens":  25472,
+                        "output_tokens":  1022,
+                        "total_tokens":  65502,
+                        "estimated_cost_usd":  0.01795,
+                        "model_calls":  6,
+                        "tool_calls":  4,
+                        "failed_tool_calls":  0,
+                        "provider_errors":  1,
+                        "source_isolation_preserved":  true,
+                        "trace_integrity_verified":  true,
+                        "applied_candidate_matches":  false,
+                        "summary":  ""
+                    }
+                ]
+}
