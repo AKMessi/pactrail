@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "experiment": "pactrail-post-upgrade-real-issue-regression",
+  "preregistered_at": "2026-07-28T04:16:41Z",
+  "implementation": {
+    "pactrail_commit": "74c5ccdaab89ede52bc63056e18a2f37398dfef5",
+    "pactrail_version": "1.0.0",
+    "pactrail_executable_sha256": "9d8ebca6dec607fdbc091448cc587907195a48cbdd5708c66d9687063461f878",
+    "opencode_version": "1.18.7",
+    "opencode_executable_sha256": "8827973e015f2bb295e6efd7a3285c3f387b93c737a44d48da43bd3e319ae6ee",
+    "opencode_package_json_sha256": "7b91fff010d2bf4d9db4366dd4b510864e0f702e4f0434baeb5a1052702da0e9"
+  },
+  "files": {
+    "manifest_sha256": "c7796137fc08f19da6d0f1c5e149155608bb981a019c87b777c37b60071d4036",
+    "runner_sha256": "49222b7aa3080fb646810690c542c1fa11535a9dfaeccd5ed416eda531ac0bca",
+    "flash_opencode_config_sha256": "fc68b5a4a5ffe801e52f4144e0f892edf44ba4cf79949d04b2233e2d17edc8f5",
+    "pro_opencode_config_sha256": "726ecf020603ee19e77585f2b180194be1786896bb07e404dd3088197868e0ae",
+    "gold_validation_sha256": "f93f55a11655285369a3d9a1bedc565cfe6ad0efeeb00780c981a37c5c00c8f9",
+    "regex_grader_sha256": "14664adb0340b9f6c7139c17dd72541263757bca97c45a4320fba3b4c0f9f0d5",
+    "http_grader_sha256": "02abf1afaa6499fdc79c6a317d18d9fd29d5a62e4adf771383fe9c69615d578b",
+    "ripgrep_grader_sha256": "ca8cda7f04f629c051a21496b85b526b72155b7d63a5b1762a2276ad97be83ef"
+  },
+  "controls": {
+    "models": ["deepseek-v4-flash", "deepseek-v4-pro"],
+    "temperature": 0,
+    "thinking": "disabled",
+    "context_tokens": 16384,
+    "max_output_tokens": 2048,
+    "max_steps": 16,
+    "pass_at_k": 1,
+    "retries": 0,
+    "process_execution": "enabled for both harnesses",
+    "network": "offline task workspaces with prefetched Cargo dependencies",
+    "minimum_balance_usd": 1.08,
+    "starting_balance_usd": 1.38,
+    "maximum_declared_trials": 12,
+    "flash_order": [
+      "regex/Pactrail", "regex/OpenCode",
+      "http/OpenCode", "http/Pactrail",
+      "ripgrep/Pactrail", "ripgrep/OpenCode"
+    ],
+    "pro_order": [
+      "regex/OpenCode", "regex/Pactrail",
+      "http/Pactrail", "http/OpenCode",
+      "ripgrep/OpenCode", "ripgrep/Pactrail"
+    ]
+  },
+  "scoring": {
+    "functional": "hidden targeted test and broader regression command both pass",
+    "task": "functional passes and no forbidden path changes",
+    "strict": "task passes, no timeout/provider error, and harness completes cleanly; Pactrail additionally requires ready-to-apply outcome, source isolation, trace verification, and exact applied-candidate match"
+  },
+  "pricing_usd_per_million_tokens": {
+    "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "checked_at": "2026-07-28",
+    "deepseek-v4-flash": {
+      "cached_input": 0.0028,
+      "uncached_input": 0.14,
+      "output": 0.28
+    },
+    "deepseek-v4-pro": {
+      "cached_input": 0.003625,
+      "uncached_input": 0.435,
+      "output": 0.87
+    }
+  },
+  "interpretation": {
+    "supported": "Whether the architectural upgrade repairs Pactrail's previously measured investigation-without-editing failure and how it compares with OpenCode on the same regression suite.",
+    "not_supported": "Broad coding-agent superiority; these tasks are known regressions that informed the upgrade."
+  }
+}
