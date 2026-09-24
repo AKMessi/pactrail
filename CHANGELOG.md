@@ -8,6 +8,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Repeated large tool observations now become digest-bound references to the
+  first identical result, reducing repeated prompt bytes while preserving the
+  earlier request prefix and journaling the savings.
+
 - The Anthropic native adapter now enables automatic ephemeral prompt caching
   when `--prompt-caching on` is declared, with cache usage reflected in
   explicit cost accounting.

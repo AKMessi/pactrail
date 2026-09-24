@@ -36,7 +36,9 @@ use tracing::{info, warn};
 use crate::checkpoint::{
     CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint, contract_digest,
 };
-use crate::context_window::{CompactionReport, ContextWindow};
+use crate::context_window::{
+    CompactionReport, ContextWindow, DeduplicationReport, append_deduplicated_result,
+};
 use crate::controller::{ControllerKernel, GoalIntent, classify_goal};
 use crate::text_actions::{catalog_prompt, parse_action, transport_conversation};
 use crate::{
@@ -1554,7 +1556,12 @@ impl<'a> RunEngine<'a> {
                     if let Some(error) = execution.fatal_error {
                         return Err(EngineError::ProcessCleanup(error));
                     }
-                    conversation.push(ConversationItem::ToolResult(execution.result));
+                    if let Some(report) =
+                        append_deduplicated_result(&mut conversation, execution.result)
+                            .map_err(|error| EngineError::ContextWindow(error.to_string()))?
+                    {
+                        journal.append(RunEvent::ActionCompleted(deduplication_action(&report)))?;
+                    }
                 }
             }
             let progress_assessment = controller.observe_turn(&controller_results);
@@ -3583,6 +3590,37 @@ fn compact_model_context(
         reclaimed_bytes: report.reclaimed_bytes,
     });
     journal.append(RunEvent::ActionCompleted(compaction_action(&report)))
+}
+
+fn deduplication_action(report: &DeduplicationReport) -> ActionRecord {
+    ActionRecord {
+        actor: "context".to_owned(),
+        action: "deduplicate_tool_result".to_owned(),
+        summary: format!(
+            "reused identical tool evidence, reclaiming {} model-context bytes",
+            report.original_bytes.saturating_sub(report.reference_bytes)
+        ),
+        declared_effects: Vec::new(),
+        observed_effects: Vec::new(),
+        succeeded: true,
+        duration_ms: 0,
+        attributes: BTreeMap::from([
+            ("source_call_id".to_owned(), report.source_call_id.clone()),
+            (
+                "duplicate_call_id".to_owned(),
+                report.duplicate_call_id.clone(),
+            ),
+            ("content_digest".to_owned(), report.content_digest.clone()),
+            (
+                "original_bytes".to_owned(),
+                report.original_bytes.to_string(),
+            ),
+            (
+                "reference_bytes".to_owned(),
+                report.reference_bytes.to_string(),
+            ),
+        ]),
+    }
 }
 
 fn compaction_action(report: &CompactionReport) -> ActionRecord {

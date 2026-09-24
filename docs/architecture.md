@@ -234,6 +234,13 @@ JSON representation of the conversation and tool descriptors. Its conservative
 high-water and target marks are derived from declared context and output token
 limits; provider token accounting remains authoritative.
 
+When a new tool observation exactly repeats an earlier large result from the
+same tool, the conversation keeps the first result intact and substitutes a
+small reference for the new copy. The reference names the original call and
+binds the bytes with a BLAKE3 digest. This preserves the stable request prefix
+and avoids rebilling repeated output as prompt input. The run journal records
+the reclaimed bytes and digest; it does not record raw tool content.
+
 When the high-water mark is crossed, older tool results are replaced in place
 with deterministic compaction envelopes. Each envelope retains the tool name,
 call ID, error state, original byte count and BLAKE3 digest, bounded scalar

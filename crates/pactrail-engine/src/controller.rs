@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use pactrail_models::{ConversationItem, Role, ToolResult};
 use pactrail_tools::ToolDescriptor;
+use serde_json::Value;
 
 const MAX_DISCOVERY_TURNS: u16 = 6;
 const MIN_RESERVED_ACTION_TURNS: u16 = 4;
@@ -348,7 +349,28 @@ fn parse_phase_marker(content: &str) -> Option<ControllerPhase> {
     }
 }
 
-fn tool_result_digest(result: &ToolResult) -> String {
+pub(crate) fn tool_result_digest(result: &ToolResult) -> String {
+    if (result
+        .content
+        .get("pactrail_compacted")
+        .and_then(Value::as_bool)
+        == Some(true)
+        || result
+            .content
+            .get("pactrail_duplicate")
+            .and_then(Value::as_bool)
+            == Some(true))
+        && let Some(digest) = result
+            .content
+            .get("semantic_digest")
+            .and_then(Value::as_str)
+        && digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return digest.to_owned();
+    }
     let mut hasher = blake3::Hasher::new();
     hash_field(&mut hasher, result.name.as_bytes());
     let bytes = serde_json::to_vec(&result.content).unwrap_or_default();
