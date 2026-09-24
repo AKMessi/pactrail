@@ -17,9 +17,9 @@ use pactrail_core::{
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
     CapabilitySource, ConversationItem, FinishReason, ImageArtifact,
-    MAX_INLINE_MODEL_REQUEST_BYTES, Message, ModelDriver, ModelError, ModelPricing, ModelRequest,
-    ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, ToolResult, Usage,
-    UserContent, validate_image_set,
+    MAX_INLINE_MODEL_REQUEST_BYTES, Message, ModelDriver, ModelError, ModelPhase, ModelPricing,
+    ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, ToolResult,
+    Usage, UserContent, validate_image_set,
 };
 use pactrail_store::{EventStore, StoreError};
 use pactrail_tools::{
@@ -1156,6 +1156,12 @@ impl<'a> RunEngine<'a> {
                 },
                 max_output_tokens: runtime_profile.turn_output_tokens,
                 temperature: Some(0.0),
+                phase: Some(match control.phase {
+                    ControllerPhase::Investigating => ModelPhase::Investigation,
+                    ControllerPhase::Implementing => ModelPhase::Implementation,
+                    ControllerPhase::Validating => ModelPhase::Validation,
+                    ControllerPhase::Synthesizing => ModelPhase::Synthesis,
+                }),
             };
             let model_started = Instant::now();
             let mut response = match self.invoke_model(&request, observer).await {
@@ -1949,6 +1955,7 @@ impl<'a> RunEngine<'a> {
             tools: Vec::new(),
             max_output_tokens: turn_output_tokens,
             temperature: Some(0.0),
+            phase: Some(ModelPhase::Recovery),
         };
         let model_started = Instant::now();
         let response = self.invoke_model(&request, observer).await?;
@@ -3670,11 +3677,13 @@ fn extend_provider_trace_attributes(
     attributes: &mut BTreeMap<String, String>,
     extensions: &serde_json::Map<String, Value>,
 ) {
-    const SAFE_KEYS: [&str; 7] = [
+    const SAFE_KEYS: [&str; 9] = [
         "created",
         "model",
         "modelVersion",
+        "provider",
         "responseId",
+        "route",
         "streaming",
         "system_fingerprint",
         "time_to_first_byte_ms",

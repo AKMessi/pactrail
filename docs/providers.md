@@ -35,6 +35,25 @@ Pactrail does not assume that model listing is available. `GET /models` is a UX
 convenience; a configured model ID remains usable when discovery returns 404 or
 another unsupported response.
 
+## Opt-in investigation routing
+
+Set `--investigation-model` to route only controller investigation turns to a
+second model. `--investigation-provider` defaults to the primary provider;
+`--investigation-base-url` and `--investigation-api-key-env` override its
+endpoint and key variable. Implementation, validation, synthesis, recovery,
+and model probes use the primary model. Pactrail does not silently fall back
+to another route after a provider error. The route, provider, and model are
+recorded in the model trace, and both model identities are bound to resume.
+
+```console
+pactrail run --provider anthropic --model PRIMARY_MODEL --investigation-provider open-ai-compatible --investigation-model INVESTIGATION_MODEL --investigation-base-url https://models.example.com/v1 "Fix the parser"
+```
+
+The router advertises only capabilities supported by both models and uses the
+smaller declared context and output limits. Set `--context-tokens` and
+`--max-output-tokens` to values valid for both configured models. Routing is
+opt-in for a run; interactive settings continue to use one model.
+
 ## Explicit cost accounting
 
 Provide all four current rates in micro-US dollars per million tokens. For
@@ -52,6 +71,13 @@ Gemini thinking tokens are included in output. The cap is checked after each
 response, so one response can exceed it. A cost-capped run fails if a provider
 omits usage. Tiered pricing and separately billed provider features are outside
 this estimate; set rates conservatively when a hard spending ceiling matters.
+
+For investigation routing, provide all four `--investigation-*-price` rates
+as well as the primary rates. Pactrail uses the larger rate for each token
+category across the two models. This is a conservative estimate that can
+overstate actual routed cost; it cannot understate cost from choosing a cheaper
+route when the declared rate cards are accurate. Without two complete cards,
+cost accounting is unavailable and cost-capped runs are rejected.
 
 ## Interactive configuration
 

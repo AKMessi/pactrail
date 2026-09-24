@@ -23,10 +23,10 @@ pub mod model {
         ImageArtifactError, ImageMediaType, ImageSetSummary, MAX_INLINE_MODEL_REQUEST_BYTES,
         MAX_INPUT_IMAGE_BYTES, MAX_INPUT_IMAGE_DIMENSION, MAX_INPUT_IMAGES,
         MAX_TOTAL_INPUT_IMAGE_BYTES, Message, ModelCapabilities, ModelDriver, ModelError,
-        ModelPricing, ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver,
-        OpenAiCompatibleConfig, OpenAiCompatibleDriver, OpenAiResponsesConfig,
-        OpenAiResponsesDriver, ProbeObservation, Role, ToolCall, ToolResult, Usage, UserContent,
-        probe_capabilities, validate_image_set,
+        ModelPhase, ModelPricing, ModelRequest, ModelResponse, ModelStreamEvent,
+        ModelStreamObserver, OpenAiCompatibleConfig, OpenAiCompatibleDriver, OpenAiResponsesConfig,
+        OpenAiResponsesDriver, PhaseModelRouter, ProbeObservation, Role, ToolCall, ToolResult,
+        Usage, UserContent, probe_capabilities, validate_image_set,
     };
 }
 

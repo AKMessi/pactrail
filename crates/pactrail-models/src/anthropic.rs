@@ -1142,6 +1142,7 @@ mod tests {
             tools,
             max_output_tokens: 512,
             temperature: Some(0.0),
+            phase: None,
         };
         let body = request_body(&config(), &request, true)
             .unwrap_or_else(|error| unreachable!("native request: {error}"));
@@ -1167,6 +1168,7 @@ mod tests {
             tools: Vec::new(),
             max_output_tokens: 128,
             temperature: Some(0.0),
+            phase: None,
         };
         let mut config = config();
         config.capabilities.vision = true;
@@ -1329,6 +1331,7 @@ mod tests {
                     tools: Vec::new(),
                     max_output_tokens: 32,
                     temperature: None,
+                    phase: None,
                 },
                 &RecordingObserver::default(),
             )

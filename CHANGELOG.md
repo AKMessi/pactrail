@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- An opt-in investigation model router selects a second model only during
+  controller investigation. Provider/model/route are trace-visible, both
+  model identities bind resume, and cost caps use conservative prices from
+  complete rate cards for both models.
+
 - An opt-in native OpenAI Responses adapter uses stateless requests and replays
   encrypted reasoning, function calls, and tool outputs through the normalized
   model driver. Buffered responses are bounded and parsed before tool effects.

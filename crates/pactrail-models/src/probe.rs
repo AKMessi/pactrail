@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::{
-    ConversationItem, FinishReason, Message, ModelDriver, ModelError, ModelRequest,
+    ConversationItem, FinishReason, Message, ModelDriver, ModelError, ModelPhase, ModelRequest,
     ModelStreamEvent, ModelStreamObserver, Usage,
 };
 
@@ -83,6 +83,7 @@ pub async fn probe_capabilities(
         tools: vec![probe_descriptor()],
         max_output_tokens: driver.capabilities().max_output_tokens.clamp(1, 256),
         temperature: Some(0.0),
+        phase: Some(ModelPhase::Probe),
     };
     let response = driver.invoke_with_observer(&request, &observer).await?;
     if response.finish_reason == FinishReason::ContentFilter {

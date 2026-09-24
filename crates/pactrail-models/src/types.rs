@@ -688,6 +688,20 @@ pub struct ModelRequest {
     pub tools: Vec<ToolDescriptor>,
     pub max_output_tokens: u64,
     pub temperature: Option<f32>,
+    /// Engine-owned turn phase; providers ignore it, opt-in routers may use it.
+    pub phase: Option<ModelPhase>,
+}
+
+/// Provider-neutral purpose of one model request.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelPhase {
+    Investigation,
+    Implementation,
+    Validation,
+    Synthesis,
+    Recovery,
+    Probe,
 }
 
 /// Reason a model stopped producing output.

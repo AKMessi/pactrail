@@ -21,7 +21,8 @@ use pactrail_models::{
     AnthropicConfig, AnthropicDriver, CapabilityProbeReport, CapabilitySource, GeminiConfig,
     GeminiDriver, ImageArtifact, MAX_INPUT_IMAGE_BYTES, ModelCapabilities, ModelDriver, ModelError,
     ModelPricing, OpenAiCompatibleConfig, OpenAiCompatibleDriver, OpenAiResponsesConfig,
-    OpenAiResponsesDriver, probe_capabilities as run_capability_probe, validate_image_set,
+    OpenAiResponsesDriver, PhaseModelRouter, probe_capabilities as run_capability_probe,
+    validate_image_set,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
@@ -211,6 +212,10 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         images: Vec::new(),
         provider: args.provider,
         model: Some(args.model),
+        investigation_model: None,
+        investigation_provider: None,
+        investigation_base_url: None,
+        investigation_api_key_env: None,
         base_url: args.base_url,
         api_key_env: args.api_key_env,
         write_paths: vec![".".to_owned()],
@@ -233,6 +238,10 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         cached_input_price: None,
         cache_creation_price: None,
         output_price: None,
+        investigation_input_price: None,
+        investigation_cached_input_price: None,
+        investigation_cache_creation_price: None,
+        investigation_output_price: None,
         context_tokens: args.context_tokens,
         max_output_tokens: args.max_output_tokens,
         request_timeout_seconds: args.request_timeout_seconds,
@@ -304,6 +313,7 @@ impl RunManifest {
             ));
         }
         validate_model_limits(&self.args)?;
+        validate_model_options(&self.args)?;
         let pricing = configured_pricing(&self.args)?;
         if self.contract.budget.cost_microusd != 0 && pricing.is_none() {
             return Err(CliError::Argument(
@@ -656,6 +666,7 @@ fn prepare_run_contract(
     process_backend: ProcessBackendArg,
     mcp_approval: McpApprovalArg,
 ) -> Result<(TaskContract, PathBuf, PathBuf, McpRuntime), CliError> {
+    validate_model_options(args)?;
     let (mut contract, workspace) = load_contract(cli_workspace, args)?;
     let pricing = configured_pricing(args)?;
     if contract.budget.cost_microusd != 0 && pricing.is_none() {
@@ -1091,10 +1102,53 @@ fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn Model
     let model = configured_model(contract, args)?;
     validate_model_options(args)?;
     let capabilities = configured_capabilities(args);
-    build_driver_for_provider(model, capabilities, args)
+    let primary = build_driver_for_provider(model, capabilities, args)?;
+    let Some(investigation_model) = &args.investigation_model else {
+        return Ok(primary);
+    };
+    let mut investigation_args = args.clone();
+    investigation_args.model = Some(investigation_model.clone());
+    investigation_args.provider = args.investigation_provider.unwrap_or(args.provider);
+    investigation_args.base_url = args.investigation_base_url.clone().or_else(|| {
+        (investigation_args.provider == args.provider)
+            .then(|| args.base_url.clone())
+            .flatten()
+    });
+    investigation_args.api_key_env = args.investigation_api_key_env.clone().unwrap_or_else(|| {
+        if investigation_args.provider == args.provider {
+            args.api_key_env.clone()
+        } else {
+            "OPENAI_API_KEY".to_owned()
+        }
+    });
+    validate_model_options(&investigation_args)?;
+    let secondary = build_driver_for_provider(
+        investigation_model.clone(),
+        configured_capabilities(&investigation_args),
+        &investigation_args,
+    )?;
+    Ok(Box::new(PhaseModelRouter::new(primary, secondary)))
 }
 
 fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
+    if args.investigation_model.is_none()
+        && (args.investigation_provider.is_some()
+            || args.investigation_base_url.is_some()
+            || args.investigation_api_key_env.is_some()
+            || args.investigation_input_price.is_some()
+            || args.investigation_cached_input_price.is_some()
+            || args.investigation_cache_creation_price.is_some()
+            || args.investigation_output_price.is_some())
+    {
+        return Err(CliError::Argument(
+            "investigation options require --investigation-model".to_owned(),
+        ));
+    }
+    if args.investigation_model.as_deref() == Some("") {
+        return Err(CliError::Argument(
+            "--investigation-model must not be empty".to_owned(),
+        ));
+    }
     if args.native_tools == crate::cli::CapabilitySetting::Off
         && args.parallel_tools == crate::cli::CapabilitySetting::On
     {
@@ -1115,6 +1169,18 @@ fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
     {
         return Err(CliError::Argument(
             "--disable-thinking is an OpenAI-compatible Chat Completions extension and is not valid for this native adapter"
+                .to_owned(),
+        ));
+    }
+    if args.disable_thinking
+        && args.investigation_model.is_some()
+        && matches!(
+            args.investigation_provider.unwrap_or(args.provider),
+            ProviderKind::Anthropic | ProviderKind::Gemini | ProviderKind::OpenAiResponses
+        )
+    {
+        return Err(CliError::Argument(
+            "--disable-thinking is not valid for the investigation provider's native adapter"
                 .to_owned(),
         ));
     }
@@ -1301,12 +1367,53 @@ fn effective_process_backend(args: &RunArgs) -> Result<ProcessBackendArg, CliErr
 }
 
 fn configured_pricing(args: &RunArgs) -> Result<Option<ModelPricing>, CliError> {
-    match (
+    let primary = price_card(
         args.input_price,
         args.cached_input_price,
         args.cache_creation_price,
         args.output_price,
-    ) {
+        "model",
+    )?;
+    if args.investigation_model.is_none() {
+        return Ok(primary);
+    }
+    let secondary = price_card(
+        args.investigation_input_price,
+        args.investigation_cached_input_price,
+        args.investigation_cache_creation_price,
+        args.investigation_output_price,
+        "investigation model",
+    )?;
+    match (primary, secondary) {
+        (None, None) => Ok(None),
+        (Some(primary), Some(secondary)) => Ok(Some(ModelPricing {
+            input_microusd_per_million: primary
+                .input_microusd_per_million
+                .max(secondary.input_microusd_per_million),
+            cached_input_microusd_per_million: primary
+                .cached_input_microusd_per_million
+                .max(secondary.cached_input_microusd_per_million),
+            cache_creation_microusd_per_million: primary
+                .cache_creation_microusd_per_million
+                .max(secondary.cache_creation_microusd_per_million),
+            output_microusd_per_million: primary
+                .output_microusd_per_million
+                .max(secondary.output_microusd_per_million),
+        })),
+        _ => Err(CliError::Argument(
+            "routing with pricing requires complete rate cards for both models".to_owned(),
+        )),
+    }
+}
+
+fn price_card(
+    input: Option<u64>,
+    cached_input: Option<u64>,
+    cache_creation: Option<u64>,
+    output: Option<u64>,
+    label: &str,
+) -> Result<Option<ModelPricing>, CliError> {
+    match (input, cached_input, cache_creation, output) {
         (None, None, None, None) => Ok(None),
         (Some(input), Some(cached_input), Some(cache_creation), Some(output)) => {
             Ok(Some(ModelPricing {
@@ -1316,9 +1423,9 @@ fn configured_pricing(args: &RunArgs) -> Result<Option<ModelPricing>, CliError> 
                 output_microusd_per_million: output,
             }))
         }
-        _ => Err(CliError::Argument(
-            "model pricing requires --input-price, --cached-input-price, --cache-creation-price, and --output-price together".to_owned(),
-        )),
+        _ => Err(CliError::Argument(format!(
+            "{label} pricing requires input, cached-input, cache-creation, and output prices together"
+        ))),
     }
 }
 
@@ -3419,6 +3526,54 @@ mod tests {
                 .cached_input_microusd_per_million,
             20_000
         );
+    }
+
+    #[test]
+    fn investigation_routing_requires_a_model_and_two_complete_rate_cards() {
+        let mut args = probe_run_args(ProbeArgs {
+            provider: ProviderKind::Ollama,
+            model: "primary".to_owned(),
+            base_url: None,
+            api_key_env: "OPENAI_API_KEY".to_owned(),
+            context_tokens: 32_768,
+            max_output_tokens: 4_096,
+            request_timeout_seconds: 300,
+            no_stream: false,
+            disable_thinking: false,
+            native_tools: crate::cli::CapabilitySetting::Auto,
+            parallel_tools: crate::cli::CapabilitySetting::Auto,
+            structured_output: crate::cli::CapabilitySetting::Auto,
+            vision: crate::cli::CapabilitySetting::Auto,
+            prompt_caching: crate::cli::CapabilitySetting::Auto,
+            reasoning_controls: crate::cli::CapabilitySetting::Auto,
+            output: OutputFormat::Human,
+        });
+        args.investigation_provider = Some(ProviderKind::OpenAi);
+        assert!(validate_model_options(&args).is_err());
+        args.investigation_model = Some("economical".to_owned());
+        assert!(validate_model_options(&args).is_ok());
+        args.input_price = Some(200_000);
+        args.cached_input_price = Some(20_000);
+        args.cache_creation_price = Some(250_000);
+        args.output_price = Some(1_000_000);
+        assert!(configured_pricing(&args).is_err());
+        args.investigation_input_price = Some(100_000);
+        args.investigation_cached_input_price = Some(30_000);
+        args.investigation_cache_creation_price = Some(100_000);
+        args.investigation_output_price = Some(800_000);
+        let pricing = configured_pricing(&args)
+            .unwrap_or_else(|error| unreachable!("pricing: {error}"))
+            .unwrap_or_else(|| unreachable!("missing rates"));
+        assert_eq!(pricing.input_microusd_per_million, 200_000);
+        assert_eq!(pricing.cached_input_microusd_per_million, 30_000);
+        assert_eq!(pricing.output_microusd_per_million, 1_000_000);
+        args.investigation_provider = None;
+        let contract = TaskContract::new("inspect", ".");
+        let driver =
+            build_driver(&contract, &args).unwrap_or_else(|error| unreachable!("router: {error}"));
+        assert_eq!(driver.name(), "phase-router");
+        assert!(driver.model().contains("primary=ollama/primary"));
+        assert!(driver.model().contains("investigation=ollama/economical"));
     }
 
     #[test]

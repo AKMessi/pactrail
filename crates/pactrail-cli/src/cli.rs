@@ -349,6 +349,26 @@ pub struct RunArgs {
     #[arg(long, env = "PACTRAIL_MODEL")]
     pub model: Option<String>,
 
+    /// Opt-in model used only for investigation turns.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_model: Option<String>,
+
+    /// Provider for the investigation model; defaults to the primary provider.
+    #[arg(long, value_enum)]
+    #[serde(default)]
+    pub investigation_provider: Option<ProviderKind>,
+
+    /// Optional endpoint for the investigation model.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_base_url: Option<String>,
+
+    /// Environment variable containing the investigation provider API key.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_api_key_env: Option<String>,
+
     /// Provider API base URL, or `PACTRAIL_BASE_URL`.
     #[arg(long, env = "PACTRAIL_BASE_URL")]
     pub base_url: Option<String>,
@@ -445,6 +465,26 @@ pub struct RunArgs {
     #[arg(long)]
     #[serde(default)]
     pub output_price: Option<u64>,
+
+    /// Investigation input price in micro-USD per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_input_price: Option<u64>,
+
+    /// Investigation cached input read price in micro-USD per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_cached_input_price: Option<u64>,
+
+    /// Investigation cache creation price in micro-USD per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_cache_creation_price: Option<u64>,
+
+    /// Investigation output price in micro-USD per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_output_price: Option<u64>,
 
     /// Declared model context capacity.
     #[arg(long, default_value_t = 32_768)]

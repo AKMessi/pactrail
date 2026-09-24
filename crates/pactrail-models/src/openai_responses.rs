@@ -475,6 +475,7 @@ mod tests {
             tools: Vec::new(),
             max_output_tokens: 128,
             temperature: Some(0.0),
+            phase: None,
         };
         let body = request_body(&config(), &request)
             .unwrap_or_else(|error| unreachable!("request: {error}"));
@@ -532,6 +533,7 @@ mod tests {
                 tools: Vec::new(),
                 max_output_tokens: 128,
                 temperature: None,
+                phase: None,
             })
             .await
             .unwrap_or_else(|error| unreachable!("response: {error}"));
