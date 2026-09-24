@@ -171,6 +171,14 @@ unknown tool, or host-execution call closes the read batch; later calls cannot
 overtake it. Results are journaled in the model's original call order, keeping
 replay deterministic.
 
+For endpoints without native function calls, the engine gives the model an
+explicit tool catalog and accepts one exact `<pactrail_action>` JSON envelope per
+turn. It converts the envelope into a normal typed tool call, then uses the same
+registry, capability checks, effect fences, and receipts. Prior tool calls and
+results are rendered as ordinary conversation messages for those endpoints;
+provider requests contain no native tool declarations. Malformed envelopes are
+rejected rather than executed.
+
 `search_code_graph` rebuilds the evidence graph from the current isolated
 candidate on each call. This avoids serving a stale pre-edit graph and keeps
 cache invalidation outside the trust boundary. The output carries the current

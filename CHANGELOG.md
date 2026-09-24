@@ -8,6 +8,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Models declared with `--native-tools off` can now use one exact, bounded text
+  action per turn. Pactrail parses the action into the same typed tool kernel,
+  policy checks, effect journal, and receipt path as native function calls.
+
 - An opt-in `--allow-shell` exposes `run_shell` only through the restricted OCI
   backend, using existing exact process approvals and bounded execution.
 
