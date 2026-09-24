@@ -38,6 +38,9 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Candidate manifest comparison now rejects changes outside the task's write
+  scope even when an authorized process, rather than a typed file tool, wrote
+  them. Such a candidate cannot produce an applicable change set.
 - Controller phases now keep a stable advertised tool catalog. Focused read and
   search remain available during implementation and validation, repairing the
   benchmarked failure where phase narrowing prevented any candidate edit.

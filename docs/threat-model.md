@@ -32,6 +32,8 @@ validation.
 - Safe-path parsing rejects absolute paths, drive/UNC prefixes, parent traversal,
   symlinks, and special files.
 - Writes additionally require an allowed workspace-relative prefix.
+- Candidate manifest comparison rechecks every changed path against the write
+  prefixes, including files modified by an authorized process.
 - The source tree is untouched before explicit apply unless a trusted native
   process escapes the candidate directory.
 - Apply binds the receipt to the exact candidate change set and refuses a source

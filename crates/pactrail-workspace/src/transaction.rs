@@ -305,6 +305,10 @@ impl WorkspaceTransaction {
             if before == after {
                 continue;
             }
+            let relative = SafeRelativePath::new(path)?;
+            if !self.is_write_allowed(&relative) {
+                return Err(TransactionError::WriteOutsideScope(relative.portable()));
+            }
             changes.push(FileChange {
                 path: path.clone(),
                 before_digest: before.map(|item| item.digest.clone()),
@@ -1156,6 +1160,26 @@ mod tests {
             transaction.write_file("README.md", b"no"),
             Err(TransactionError::WriteOutsideScope(_))
         ));
+    }
+
+    #[test]
+    fn external_candidate_mutation_cannot_bypass_write_scope() {
+        let (source, _control, transaction) = fixture();
+        fs::write(
+            transaction.workspace_root().join("README.md"),
+            "out of scope\n",
+        )
+        .unwrap_or_else(|error| unreachable!("external write: {error}"));
+
+        assert!(matches!(
+            transaction.changes(),
+            Err(TransactionError::WriteOutsideScope(path)) if path == "README.md"
+        ));
+        assert!(matches!(
+            transaction.apply(),
+            Err(TransactionError::WriteOutsideScope(path)) if path == "README.md"
+        ));
+        assert!(!source.path().join("README.md").exists());
     }
 
     #[test]
