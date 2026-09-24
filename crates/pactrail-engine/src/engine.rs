@@ -308,6 +308,9 @@ pub struct RunEngine<'a> {
     input_images: Vec<ImageArtifact>,
     max_turns: u16,
     pricing: Option<ModelPricing>,
+    investigation_pricing: Option<ModelPricing>,
+    price_provenance: Option<(String, String)>,
+    investigation_price_provenance: Option<(String, String)>,
 }
 
 impl<'a> RunEngine<'a> {
@@ -332,6 +335,9 @@ impl<'a> RunEngine<'a> {
             input_images: Vec::new(),
             max_turns: DEFAULT_MAX_TURNS,
             pricing: None,
+            investigation_pricing: None,
+            price_provenance: None,
+            investigation_price_provenance: None,
         }
     }
 
@@ -344,8 +350,34 @@ impl<'a> RunEngine<'a> {
 
     /// Enables explicit provider-neutral cost accounting and contract limits.
     #[must_use]
-    pub const fn with_pricing(mut self, pricing: ModelPricing) -> Self {
+    pub fn with_pricing(mut self, pricing: ModelPricing) -> Self {
         self.pricing = Some(pricing);
+        self.investigation_pricing = None;
+        self.investigation_price_provenance = None;
+        self
+    }
+
+    /// Prices investigation turns at their own explicit rate card.
+    #[must_use]
+    pub const fn with_routed_pricing(
+        mut self,
+        primary: ModelPricing,
+        investigation: ModelPricing,
+    ) -> Self {
+        self.pricing = Some(primary);
+        self.investigation_pricing = Some(investigation);
+        self
+    }
+
+    /// Associates source and effective date with the explicit rate cards.
+    #[must_use]
+    pub fn with_price_provenance(
+        mut self,
+        primary: Option<(String, String)>,
+        investigation: Option<(String, String)>,
+    ) -> Self {
+        self.price_provenance = primary;
+        self.investigation_price_provenance = investigation;
         self
     }
 
@@ -675,6 +707,7 @@ impl<'a> RunEngine<'a> {
             context_digest,
             mut conversation,
             mut usage,
+            mut cost_spent,
             mut call_ids,
             mut final_text,
             mut previous_tool_signature,
@@ -696,6 +729,7 @@ impl<'a> RunEngine<'a> {
                 &checkpoint,
                 max_turns,
             )?;
+            let cost_spent = self.resume_cost_spent(store, run_id, checkpoint.usage)?;
             let mut journal = Journal::resume(run_id, store)?;
             journal.append(RunEvent::NoteRecorded {
                 message: format!(
@@ -710,6 +744,7 @@ impl<'a> RunEngine<'a> {
                 checkpoint.context_digest.clone(),
                 checkpoint.conversation.clone(),
                 checkpoint.usage,
+                cost_spent,
                 checkpoint.call_ids.clone(),
                 checkpoint.final_text.clone(),
                 checkpoint.previous_tool_signature.clone(),
@@ -969,6 +1004,7 @@ impl<'a> RunEngine<'a> {
                 context_pack.repository_digest,
                 conversation,
                 Usage::default(),
+                self.pricing.map(|_| 0),
                 BTreeSet::new(),
                 String::new(),
                 None,
@@ -1061,6 +1097,13 @@ impl<'a> RunEngine<'a> {
             self.check_cancelled()?;
             let candidate_present = !transaction.changes()?.is_empty();
             let control = controller.before_turn(turn, candidate_present, &tool_descriptors);
+            let model_phase = match control.phase {
+                ControllerPhase::Investigating => ModelPhase::Investigation,
+                ControllerPhase::Implementing => ModelPhase::Implementation,
+                ControllerPhase::Validating => ModelPhase::Validation,
+                ControllerPhase::Synthesizing => ModelPhase::Synthesis,
+            };
+            let turn_native_tools = self.model.capabilities_for_phase(model_phase).native_tools;
             if control.phase_changed {
                 observer.on_progress(&RunProgress::ControllerPhaseChanged {
                     phase: control.phase,
@@ -1107,7 +1150,7 @@ impl<'a> RunEngine<'a> {
             compact_model_context(
                 context_window,
                 &mut conversation,
-                if model_capabilities.native_tools {
+                if turn_native_tools {
                     &control.tools
                 } else {
                     &[]
@@ -1139,30 +1182,32 @@ impl<'a> RunEngine<'a> {
                     recovery_risk: recovery_risk.as_deref(),
                 },
             )?;
-            observer.on_progress(&RunProgress::ModelTurnStarted {
-                turn: turn + 1,
-                max_turns,
-            });
             let request = ModelRequest {
-                conversation: if model_capabilities.native_tools {
+                conversation: if turn_native_tools {
                     conversation.clone()
                 } else {
                     transport_conversation(&conversation).map_err(EngineError::Protocol)?
                 },
-                tools: if model_capabilities.native_tools {
+                tools: if turn_native_tools {
                     control.tools.clone()
                 } else {
                     Vec::new()
                 },
                 max_output_tokens: runtime_profile.turn_output_tokens,
                 temperature: Some(0.0),
-                phase: Some(match control.phase {
-                    ControllerPhase::Investigating => ModelPhase::Investigation,
-                    ControllerPhase::Implementing => ModelPhase::Implementation,
-                    ControllerPhase::Validating => ModelPhase::Validation,
-                    ControllerPhase::Synthesizing => ModelPhase::Synthesis,
-                }),
+                phase: Some(model_phase),
             };
+            let cost_reservation = match self.reserve_cost_budget(&contract, cost_spent, &request) {
+                Ok(reservation) => reservation,
+                Err(error) => {
+                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                    return Err(error);
+                }
+            };
+            observer.on_progress(&RunProgress::ModelTurnStarted {
+                turn: turn + 1,
+                max_turns,
+            });
             let model_started = Instant::now();
             let mut response = match self.invoke_model(&request, observer).await {
                 Ok(response) => response,
@@ -1172,7 +1217,7 @@ impl<'a> RunEngine<'a> {
                     return Err(error);
                 }
             };
-            if !model_capabilities.native_tools {
+            if !turn_native_tools {
                 if !response.tool_calls.is_empty() {
                     transition(&mut journal, &mut state, RunState::Failed, observer)?;
                     return Err(EngineError::Protocol(
@@ -1215,7 +1260,12 @@ impl<'a> RunEngine<'a> {
                     "cost budget requires provider-reported usage on every turn".to_owned(),
                 ));
             }
-            let cost_microusd = match self.check_cost_budget(&contract, usage) {
+            let cost_microusd = match self.charge_model_turn(
+                &contract,
+                &mut cost_spent,
+                model_phase,
+                response.usage,
+            ) {
                 Ok(cost) => cost,
                 Err(error) => {
                     transition(&mut journal, &mut state, RunState::Failed, observer)?;
@@ -1267,8 +1317,22 @@ impl<'a> RunEngine<'a> {
                     response.usage.cache_creation_input_tokens.to_string(),
                 ),
             ]);
-            if let Some(cost) = cost_microusd {
-                model_attributes.insert("cumulative_cost_microusd".to_owned(), cost.to_string());
+            if let Some((turn_cost, cumulative_cost)) = cost_microusd {
+                model_attributes.insert("turn_cost_microusd".to_owned(), turn_cost.to_string());
+                model_attributes.insert(
+                    "cumulative_cost_microusd".to_owned(),
+                    cumulative_cost.to_string(),
+                );
+            }
+            if let Some((source, date)) = self.price_provenance_for_phase(model_phase) {
+                model_attributes.insert("price_source".to_owned(), bounded_trace_value(source));
+                model_attributes.insert("price_effective_date".to_owned(), date.clone());
+            }
+            if let Some(reservation) = cost_reservation {
+                model_attributes.insert(
+                    "pre_request_reservation_microusd".to_owned(),
+                    reservation.to_string(),
+                );
             }
             if let Some(request_id) = &response.provider_request_id {
                 model_attributes.insert(
@@ -1690,6 +1754,7 @@ impl<'a> RunEngine<'a> {
                                 &contract,
                                 &mut conversation,
                                 &mut usage,
+                                &mut cost_spent,
                                 &mut journal,
                                 observer,
                                 recovery_turn,
@@ -1897,9 +1962,7 @@ impl<'a> RunEngine<'a> {
             final_text,
             receipt,
             usage,
-            cost_microusd: self
-                .pricing
-                .and_then(|pricing| pricing.estimate_microusd(usage)),
+            cost_microusd: cost_spent,
             context_digest,
             event_count: journal.sequence,
         })
@@ -1911,6 +1974,7 @@ impl<'a> RunEngine<'a> {
         contract: &TaskContract,
         conversation: &mut Vec<ConversationItem>,
         usage: &mut Usage,
+        cost_spent: &mut Option<u64>,
         journal: &mut Journal<'_>,
         observer: &dyn RunObserver,
         turn: u16,
@@ -1945,18 +2009,9 @@ impl<'a> RunEngine<'a> {
             journal,
             observer,
         )?;
+        let request = self.recovery_request(conversation, turn_output_tokens)?;
+        let reservation = self.reserve_cost_budget(contract, *cost_spent, &request)?;
         observer.on_progress(&RunProgress::ModelTurnStarted { turn, max_turns });
-        let request = ModelRequest {
-            conversation: if self.model.capabilities().native_tools {
-                conversation.clone()
-            } else {
-                transport_conversation(conversation).map_err(EngineError::Protocol)?
-            },
-            tools: Vec::new(),
-            max_output_tokens: turn_output_tokens,
-            temperature: Some(0.0),
-            phase: Some(ModelPhase::Recovery),
-        };
         let model_started = Instant::now();
         let response = self.invoke_model(&request, observer).await?;
         let duration_ms = elapsed_millis(model_started);
@@ -1975,7 +2030,8 @@ impl<'a> RunEngine<'a> {
                 "cost budget requires provider-reported usage on every turn".to_owned(),
             ));
         }
-        self.check_cost_budget(contract, *usage)?;
+        let cost =
+            self.charge_model_turn(contract, cost_spent, ModelPhase::Recovery, response.usage)?;
         if contract.budget.model_tokens != 0 && usage.total() > contract.budget.model_tokens {
             return Err(EngineError::BudgetExceeded {
                 used: usage.total(),
@@ -1986,6 +2042,8 @@ impl<'a> RunEngine<'a> {
             &response,
             turn,
             duration_ms,
+            reservation,
+            cost,
         )))?;
         if response.finish_reason == FinishReason::ContentFilter {
             return Err(EngineError::Protocol(
@@ -2018,11 +2076,35 @@ impl<'a> RunEngine<'a> {
         Ok(final_text)
     }
 
+    fn recovery_request(
+        &self,
+        conversation: &[ConversationItem],
+        turn_output_tokens: u64,
+    ) -> Result<ModelRequest, EngineError> {
+        let native_tools = self
+            .model
+            .capabilities_for_phase(ModelPhase::Recovery)
+            .native_tools;
+        Ok(ModelRequest {
+            conversation: if native_tools {
+                conversation.to_vec()
+            } else {
+                transport_conversation(conversation).map_err(EngineError::Protocol)?
+            },
+            tools: Vec::new(),
+            max_output_tokens: turn_output_tokens,
+            temperature: Some(0.0),
+            phase: Some(ModelPhase::Recovery),
+        })
+    }
+
     fn recovery_action(
         &self,
         response: &ModelResponse,
         turn: u16,
         duration_ms: u64,
+        reservation: Option<u64>,
+        cost: Option<(u64, u64)>,
     ) -> ActionRecord {
         let mut attributes = BTreeMap::from([
             ("adapter".to_owned(), bounded_trace_value(self.model.name())),
@@ -2064,6 +2146,23 @@ impl<'a> RunEngine<'a> {
                 "provider_request_id".to_owned(),
                 bounded_trace_value(request_id),
             );
+        }
+        if let Some(reservation) = reservation {
+            attributes.insert(
+                "pre_request_reservation_microusd".to_owned(),
+                reservation.to_string(),
+            );
+        }
+        if let Some((turn, cumulative)) = cost {
+            attributes.insert("turn_cost_microusd".to_owned(), turn.to_string());
+            attributes.insert(
+                "cumulative_cost_microusd".to_owned(),
+                cumulative.to_string(),
+            );
+        }
+        if let Some((source, date)) = self.price_provenance_for_phase(ModelPhase::Recovery) {
+            attributes.insert("price_source".to_owned(), bounded_trace_value(source));
+            attributes.insert("price_effective_date".to_owned(), date.clone());
         }
         extend_provider_trace_attributes(&mut attributes, &response.extensions);
         ActionRecord {
@@ -2654,8 +2753,17 @@ impl RunEngine<'_> {
                 contract.budget.model_tokens
             )));
         }
-        self.check_cost_budget(contract, checkpoint.usage)
-            .map_err(|error| reject(error.to_string()))?;
+        if let Some(spent) = self
+            .resume_cost_spent(events, run_id, checkpoint.usage)
+            .map_err(|error| reject(error.to_string()))?
+            && contract.budget.cost_microusd != 0
+            && spent > contract.budget.cost_microusd
+        {
+            return Err(reject(format!(
+                "checkpoint cost ledger used {spent} micro-USD, exceeding the {} micro-USD task budget",
+                contract.budget.cost_microusd
+            )));
+        }
         match checkpoint.phase {
             ResumePhase::BeforeModel => {}
             ResumePhase::BeforeVerification if !checkpoint.final_text.trim().is_empty() => {}
@@ -2674,24 +2782,119 @@ impl RunEngine<'_> {
         Ok(())
     }
 
-    fn check_cost_budget(
+    fn price_for_phase(&self, phase: ModelPhase) -> Option<ModelPricing> {
+        if phase == ModelPhase::Investigation {
+            self.investigation_pricing.or(self.pricing)
+        } else {
+            self.pricing
+        }
+    }
+
+    fn price_provenance_for_phase(&self, phase: ModelPhase) -> Option<&(String, String)> {
+        if phase == ModelPhase::Investigation {
+            self.investigation_price_provenance
+                .as_ref()
+                .or(self.price_provenance.as_ref())
+        } else {
+            self.price_provenance.as_ref()
+        }
+    }
+
+    fn resume_cost_spent(
         &self,
-        contract: &TaskContract,
+        events: &EventStore,
+        run_id: RunId,
         usage: Usage,
     ) -> Result<Option<u64>, EngineError> {
-        let Some(pricing) = self.pricing else {
+        let Some(primary) = self.pricing else {
             return Ok(None);
         };
-        let cost = pricing.estimate_microusd(usage).ok_or_else(|| {
+        let mut latest = None;
+        for event in events.load(run_id)? {
+            let RunEvent::ActionCompleted(action) = event.event else {
+                continue;
+            };
+            if !action.actor.starts_with("model:") {
+                continue;
+            }
+            if let Some(value) = action.attributes.get("cumulative_cost_microusd") {
+                let cumulative = value.parse::<u64>().map_err(|_| {
+                    EngineError::Protocol("durable model cost ledger is invalid".to_owned())
+                })?;
+                if latest.is_some_and(|previous| cumulative < previous) {
+                    return Err(EngineError::Protocol(
+                        "durable model cost ledger decreased".to_owned(),
+                    ));
+                }
+                latest = Some(cumulative);
+            }
+        }
+        let fallback = primary.estimate_microusd(usage).ok_or_else(|| {
             EngineError::Protocol("provider cache usage exceeds total input tokens".to_owned())
         })?;
-        if contract.budget.cost_microusd != 0 && cost > contract.budget.cost_microusd {
+        Ok(Some(latest.unwrap_or(fallback)))
+    }
+
+    fn charge_model_turn(
+        &self,
+        contract: &TaskContract,
+        spent: &mut Option<u64>,
+        phase: ModelPhase,
+        usage: Usage,
+    ) -> Result<Option<(u64, u64)>, EngineError> {
+        let Some(pricing) = self.price_for_phase(phase) else {
+            return Ok(None);
+        };
+        let turn = pricing.estimate_microusd(usage).ok_or_else(|| {
+            EngineError::Protocol("provider cache usage exceeds total input tokens".to_owned())
+        })?;
+        let cumulative = spent
+            .unwrap_or(0)
+            .checked_add(turn)
+            .ok_or_else(|| EngineError::Protocol("model cost ledger overflowed".to_owned()))?;
+        if contract.budget.cost_microusd != 0 && cumulative > contract.budget.cost_microusd {
             return Err(EngineError::CostBudgetExceeded {
-                used: cost,
+                used: cumulative,
                 limit: contract.budget.cost_microusd,
             });
         }
-        Ok(Some(cost))
+        *spent = Some(cumulative);
+        Ok(Some((turn, cumulative)))
+    }
+
+    fn reserve_cost_budget(
+        &self,
+        contract: &TaskContract,
+        spent: Option<u64>,
+        request: &ModelRequest,
+    ) -> Result<Option<u64>, EngineError> {
+        if contract.budget.cost_microusd == 0 {
+            return Ok(None);
+        }
+        let pricing = self
+            .price_for_phase(request.phase.unwrap_or(ModelPhase::Implementation))
+            .ok_or_else(|| {
+                EngineError::InvalidConfiguration("cost budget requires model pricing".to_owned())
+            })?;
+        let used = spent.unwrap_or(0);
+        let input_bound = self
+            .model
+            .capabilities()
+            .context_tokens
+            .saturating_sub(request.max_output_tokens);
+        let reserved = pricing.reserve_microusd(input_bound, request.max_output_tokens);
+        if reserved == u64::MAX
+            || used
+                .checked_add(reserved)
+                .is_none_or(|required| required > contract.budget.cost_microusd)
+        {
+            return Err(EngineError::CostReservationExceeded {
+                used,
+                reserved,
+                limit: contract.budget.cost_microusd,
+            });
+        }
+        Ok(Some(reserved))
     }
 
     fn checkpoint_profile_digests(
@@ -2705,6 +2908,12 @@ impl RunEngine<'_> {
             capabilities: &'a pactrail_models::ModelCapabilities,
             #[serde(skip_serializing_if = "Option::is_none")]
             pricing: Option<ModelPricing>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            investigation_pricing: Option<ModelPricing>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            price_provenance: Option<&'a (String, String)>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            investigation_price_provenance: Option<&'a (String, String)>,
             max_turns: u16,
             runtime_identity: Option<&'a str>,
         }
@@ -2714,6 +2923,9 @@ impl RunEngine<'_> {
             model: self.model.model(),
             capabilities: self.model.capabilities(),
             pricing: self.pricing,
+            investigation_pricing: self.investigation_pricing,
+            price_provenance: self.price_provenance.as_ref(),
+            investigation_price_provenance: self.investigation_price_provenance.as_ref(),
             max_turns: self.max_turns,
             runtime_identity: self.runtime_identity.as_deref(),
         })
@@ -3787,6 +3999,14 @@ pub enum EngineError {
         "model cost estimate reached {used} micro-USD, exceeding the {limit} micro-USD task budget"
     )]
     CostBudgetExceeded { used: u64, limit: u64 },
+    #[error(
+        "model request requires a conservative {reserved} micro-USD reservation in addition to {used} micro-USD already used, exceeding the {limit} micro-USD task budget"
+    )]
+    CostReservationExceeded {
+        used: u64,
+        reserved: u64,
+        limit: u64,
+    },
     #[error("run exceeded its {wall_time_seconds}-second wall-time budget")]
     WallTimeExceeded { wall_time_seconds: u64 },
     #[error("run was cancelled")]
@@ -3825,6 +4045,7 @@ mod tests {
         responses: Mutex<VecDeque<ModelResponse>>,
         requests: Mutex<Vec<ModelRequest>>,
         capabilities: ModelCapabilities,
+        non_investigation_capabilities: Option<ModelCapabilities>,
     }
 
     struct SlowModel {
@@ -3922,6 +4143,16 @@ mod tests {
 
         fn capabilities(&self) -> &ModelCapabilities {
             &self.capabilities
+        }
+
+        fn capabilities_for_phase(&self, phase: ModelPhase) -> &ModelCapabilities {
+            if phase == ModelPhase::Investigation {
+                &self.capabilities
+            } else {
+                self.non_investigation_capabilities
+                    .as_ref()
+                    .unwrap_or(&self.capabilities)
+            }
         }
 
         async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
@@ -4264,13 +4495,21 @@ mod tests {
         let registry = pactrail_tools::builtin_registry()
             .unwrap_or_else(|error| unreachable!("tools: {error}"));
         let policy = PolicyEngine::local_default();
+        let pricing = ModelPricing {
+            input_microusd_per_million: 1_000_000,
+            cached_input_microusd_per_million: 1_000_000,
+            cache_creation_microusd_per_million: 1_000_000,
+            output_microusd_per_million: 1_000_000,
+        };
         let suspended_engine = RunEngine::new(&suspended_model, &registry, &policy)
-            .with_checkpoint_store(&checkpoints);
+            .with_checkpoint_store(&checkpoints)
+            .with_pricing(pricing);
         let mut store =
             EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
         let mut contract = TaskContract::new("Explain this workspace", ".");
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);
+        contract.budget.cost_microusd = 32_780;
         let run_id = RunId::new();
 
         let interrupted = tokio::time::timeout(
@@ -4320,8 +4559,9 @@ mod tests {
             }])),
             capabilities: ModelCapabilities::default(),
         };
-        let resumed_engine =
-            RunEngine::new(&resumed_model, &registry, &policy).with_checkpoint_store(&checkpoints);
+        let resumed_engine = RunEngine::new(&resumed_model, &registry, &policy)
+            .with_checkpoint_store(&checkpoints)
+            .with_pricing(pricing);
         let outcome = resumed_engine
             .resume_with_observer(
                 run_id,
@@ -4336,6 +4576,7 @@ mod tests {
 
         assert_eq!(outcome.run_id, run_id);
         assert_eq!(outcome.usage.total(), 12);
+        assert_eq!(outcome.cost_microusd, Some(12));
         assert_eq!(outcome.receipt.outcome, ReceiptOutcome::Answered);
         let events = store
             .load(run_id)
@@ -4752,7 +4993,8 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::too_many_lines)]
     async fn text_only_model_can_edit_through_the_policy_kernel() {
-        let responses = VecDeque::from([
+        for native_after_investigation in [false, true] {
+            let responses = VecDeque::from([
             ModelResponse {
                 text: "<pactrail_action>{\"name\":\"write_file\",\"arguments\":{\"path\":\"RESULT.md\",\"content\":\"done\\n\"}}</pactrail_action>".to_owned(),
                 tool_calls: Vec::new(),
@@ -4770,56 +5012,62 @@ mod tests {
                 extensions: serde_json::Map::new(),
             },
         ]);
-        let model = InspectingModel {
-            responses: Mutex::new(responses),
-            requests: Mutex::new(Vec::new()),
-            capabilities: ModelCapabilities {
-                native_tools: false,
-                ..ModelCapabilities::default()
-            },
-        };
-        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
-        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
-        let transaction = WorkspaceTransaction::create(
-            source.path(),
-            control.path().join("run"),
-            &[".".to_owned()],
-        )
-        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
-        let registry = pactrail_tools::builtin_registry()
-            .unwrap_or_else(|error| unreachable!("tools: {error}"));
-        let mut contract = TaskContract::new("Create RESULT.md", ".");
-        contract.permissions.allow.insert(Capability::FileRead);
-        contract.permissions.allow.insert(Capability::FileWrite);
-        let policy = PolicyEngine::new(contract.permissions.clone());
-        let engine = RunEngine::new(&model, &registry, &policy);
-        let mut store =
-            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
-        let outcome = engine
-            .execute_with_id(RunId::new(), contract, &transaction, &mut store)
-            .await
-            .unwrap_or_else(|error| unreachable!("run: {error}"));
-        assert_eq!(outcome.receipt.outcome, ReceiptOutcome::ReadyToApply);
-        assert_eq!(outcome.receipt.changes[0].path, "RESULT.md");
-        assert!(!source.path().join("RESULT.md").exists());
-        let requests = model
-            .requests
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        assert_eq!(requests.len(), 2);
-        assert!(requests.iter().all(|request| request.tools.is_empty()));
-        assert!(requests[0].conversation.iter().any(|item| matches!(
+            let model = InspectingModel {
+                responses: Mutex::new(responses),
+                requests: Mutex::new(Vec::new()),
+                capabilities: ModelCapabilities {
+                    native_tools: false,
+                    ..ModelCapabilities::default()
+                },
+                non_investigation_capabilities: native_after_investigation
+                    .then(ModelCapabilities::default),
+            };
+            let source =
+                tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+            let control =
+                tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+            let transaction = WorkspaceTransaction::create(
+                source.path(),
+                control.path().join("run"),
+                &[".".to_owned()],
+            )
+            .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+            let registry = pactrail_tools::builtin_registry()
+                .unwrap_or_else(|error| unreachable!("tools: {error}"));
+            let mut contract = TaskContract::new("Create RESULT.md", ".");
+            contract.permissions.allow.insert(Capability::FileRead);
+            contract.permissions.allow.insert(Capability::FileWrite);
+            let policy = PolicyEngine::new(contract.permissions.clone());
+            let engine = RunEngine::new(&model, &registry, &policy);
+            let mut store =
+                EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+            let outcome = engine
+                .execute_with_id(RunId::new(), contract, &transaction, &mut store)
+                .await
+                .unwrap_or_else(|error| unreachable!("run: {error}"));
+            assert_eq!(outcome.receipt.outcome, ReceiptOutcome::ReadyToApply);
+            assert_eq!(outcome.receipt.changes[0].path, "RESULT.md");
+            assert!(!source.path().join("RESULT.md").exists());
+            let requests = model
+                .requests
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            assert_eq!(requests.len(), 2);
+            assert!(requests[0].tools.is_empty());
+            assert_eq!(!requests[1].tools.is_empty(), native_after_investigation);
+            assert!(requests[0].conversation.iter().any(|item| matches!(
             item,
             ConversationItem::Message(Message { content, .. }) if content.contains("Pactrail text action protocol")
         )));
-        assert!(requests[1].conversation.iter().any(|item| matches!(
+            assert_eq!(requests[1].conversation.iter().any(|item| matches!(
             item,
             ConversationItem::Message(Message { content, .. }) if content.contains("Pactrail tool result:")
-        )));
+        )), !native_after_investigation);
+        }
     }
 
     #[tokio::test]
-    async fn cost_budget_requires_pricing_and_stops_after_reported_overspend() {
+    async fn cost_budget_requires_pricing_and_reserves_before_model_io() {
         let model = ScriptedModel {
             name: "scripted".to_owned(),
             model: "priced-test".to_owned(),
@@ -4868,12 +5116,24 @@ mod tests {
         let run_id = RunId::new();
         let spent = RunEngine::new(&model, &registry, &policy)
             .with_pricing(pricing)
-            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .execute_with_id(run_id, contract.clone(), &transaction, &mut store)
             .await;
         assert!(matches!(
             spent,
-            Err(EngineError::CostBudgetExceeded { used: 10, limit: 1 })
+            Err(EngineError::CostReservationExceeded {
+                used: 0,
+                reserved: 32_768,
+                limit: 1
+            })
         ));
+        assert_eq!(
+            model
+                .responses
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .len(),
+            1
+        );
         assert_eq!(
             store
                 .snapshot(run_id)
@@ -4881,6 +5141,131 @@ mod tests {
                 .state,
             RunState::Failed
         );
+        contract.budget.cost_microusd = 32_768;
+        let accepted_id = RunId::new();
+        let accepted = RunEngine::new(&model, &registry, &policy)
+            .with_pricing(pricing)
+            .execute_with_id(accepted_id, contract, &transaction, &mut store)
+            .await
+            .unwrap_or_else(|error| unreachable!("accepted run: {error}"));
+        assert_eq!(accepted.cost_microusd, Some(10));
+        let actions = store
+            .load(accepted_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"));
+        assert!(actions.into_iter().any(|event| matches!(
+            event.event,
+            RunEvent::ActionCompleted(ActionRecord { attributes, .. })
+                if attributes.get("pre_request_reservation_microusd") == Some(&"32768".to_owned())
+        )));
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn routed_cost_ledger_prices_each_phase_and_reconstructs_from_events() {
+        let usage = Usage {
+            input_tokens: 10,
+            ..Usage::default()
+        };
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "routed-pricing-test".to_owned(),
+            responses: Mutex::new(VecDeque::from([
+                ModelResponse {
+                    text: String::new(),
+                    tool_calls: vec![ToolCall {
+                        id: "list-1".to_owned(),
+                        name: "list_files".to_owned(),
+                        arguments: json!({"path": "."}),
+                        extensions: serde_json::Map::new(),
+                    }],
+                    finish_reason: FinishReason::ToolCalls,
+                    usage,
+                    provider_request_id: None,
+                    extensions: serde_json::Map::new(),
+                },
+                ModelResponse {
+                    text: "The workspace is empty.".to_owned(),
+                    tool_calls: Vec::new(),
+                    finish_reason: FinishReason::Complete,
+                    usage,
+                    provider_request_id: None,
+                    extensions: serde_json::Map::new(),
+                },
+            ])),
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let mut contract = TaskContract::new("What files are in this workspace?", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        contract.budget.cost_microusd = 32_770;
+        let primary = ModelPricing {
+            input_microusd_per_million: 1_000_000,
+            cached_input_microusd_per_million: 1_000_000,
+            cache_creation_microusd_per_million: 1_000_000,
+            output_microusd_per_million: 1_000_000,
+        };
+        let investigation = ModelPricing {
+            input_microusd_per_million: 100_000,
+            cached_input_microusd_per_million: 100_000,
+            cache_creation_microusd_per_million: 100_000,
+            output_microusd_per_million: 100_000,
+        };
+        let engine = RunEngine::new(&model, &registry, &policy)
+            .with_routed_pricing(primary, investigation)
+            .with_price_provenance(
+                Some(("primary-rates".to_owned(), "2026-09-01".to_owned())),
+                Some(("investigation-rates".to_owned(), "2026-09-02".to_owned())),
+            )
+            .with_max_turns(2);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let run_id = RunId::new();
+        let outcome = engine
+            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .await
+            .unwrap_or_else(|error| unreachable!("routed run: {error}"));
+        assert_eq!(outcome.cost_microusd, Some(11));
+        assert_eq!(
+            engine
+                .resume_cost_spent(&store, run_id, outcome.usage)
+                .unwrap_or_else(|error| unreachable!("ledger: {error}")),
+            Some(11)
+        );
+        let charges = store
+            .load(run_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"))
+            .into_iter()
+            .filter_map(|event| match event.event {
+                RunEvent::ActionCompleted(action) if action.action == "invoke" => {
+                    action.attributes.get("turn_cost_microusd").cloned()
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(charges, ["1", "10"]);
+        let sources = store
+            .load(run_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"))
+            .into_iter()
+            .filter_map(|event| match event.event {
+                RunEvent::ActionCompleted(action) if action.action == "invoke" => {
+                    action.attributes.get("price_source").cloned()
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(sources, ["investigation-rates", "primary-rates"]);
     }
 
     #[tokio::test]
@@ -5060,6 +5445,7 @@ mod tests {
             responses: Mutex::new(responses),
             requests: Mutex::new(Vec::new()),
             capabilities: ModelCapabilities::default(),
+            non_investigation_capabilities: None,
         };
         let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
         fs::write(source.path().join("a.txt"), "first fixture\n")

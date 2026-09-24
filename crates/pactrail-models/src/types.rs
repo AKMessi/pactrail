@@ -759,6 +759,23 @@ pub struct ModelPricing {
 }
 
 impl ModelPricing {
+    /// Maximum estimated charge for a bounded request, even when every input
+    /// token falls into the most expensive cache category.
+    #[must_use]
+    pub fn reserve_microusd(self, input_bound: u64, output_bound: u64) -> u64 {
+        let input_rate = self
+            .input_microusd_per_million
+            .max(self.cached_input_microusd_per_million)
+            .max(self.cache_creation_microusd_per_million);
+        let units = u128::from(input_bound)
+            .saturating_mul(u128::from(input_rate))
+            .saturating_add(
+                u128::from(output_bound)
+                    .saturating_mul(u128::from(self.output_microusd_per_million)),
+            );
+        u64::try_from(units.saturating_add(999_999) / 1_000_000).unwrap_or(u64::MAX)
+    }
+
     /// Computes a conservatively rounded cost from normalized provider usage.
     /// Returns `None` when cache counters exceed the reported input total.
     #[must_use]
@@ -846,6 +863,15 @@ mod tests {
             output_tokens: 5,
         };
         assert_eq!(pricing.estimate_microusd(usage), Some(110));
+        assert_eq!(pricing.reserve_microusd(100, 5), 150);
+        assert_eq!(
+            ModelPricing {
+                cache_creation_microusd_per_million: 2_000_000,
+                ..pricing
+            }
+            .reserve_microusd(100, 5),
+            225
+        );
         assert_eq!(
             pricing.estimate_microusd(Usage {
                 cached_input_tokens: 101,

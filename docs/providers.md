@@ -23,6 +23,12 @@ The Chat Completions, Anthropic, and Gemini transports support explicit bounded 
 contradictory, oversized, or disconnected stream fails the turn; partial text
 and tool arguments never reach durable conversation or tool execution.
 
+For the native Anthropic adapter, `--prompt-caching on` adds the documented
+top-level ephemeral cache control to each Messages request. The default
+leaves caching disabled. The API determines whether a prompt is long enough
+to cache; Pactrail records cache reads and writes from reported usage.
+See [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+
 The opt-in `open-ai-responses` adapter uses `store: false` and replays the
 provider's exact output items, including encrypted reasoning, function calls,
 and function outputs across tool turns. It currently uses a bounded buffered
@@ -44,6 +50,10 @@ endpoint and key variable. Implementation, validation, synthesis, recovery,
 and model probes use the primary model. Pactrail does not silently fall back
 to another route after a provider error. The route, provider, and model are
 recorded in the model trace, and both model identities are bound to resume.
+At a route change, prior tool calls and results are rendered as labeled text
+evidence with their IDs and arguments. This keeps provider-specific opaque
+reasoning continuations and signed function calls on the route that produced
+them. Same-route turns retain their exact native continuation state.
 
 ```console
 pactrail run --provider anthropic --model PRIMARY_MODEL --investigation-provider open-ai-compatible --investigation-model INVESTIGATION_MODEL --investigation-base-url https://models.example.com/v1 "Fix the parser"
@@ -52,7 +62,10 @@ pactrail run --provider anthropic --model PRIMARY_MODEL --investigation-provider
 The router advertises only capabilities supported by both models and uses the
 smaller declared context and output limits. Set `--context-tokens` and
 `--max-output-tokens` to values valid for both configured models. Routing is
-opt-in for a run; interactive settings continue to use one model.
+opt-in for a run; interactive settings continue to use one model. Native tool
+calls or text actions are selected for each phase from that route's declared
+capabilities, so a text-only investigation model does not disable native
+tools on the primary route.
 
 ## Explicit cost accounting
 
@@ -65,19 +78,34 @@ generated task; a task file may set `budget.cost_microusd` instead.
 pactrail run "Fix the parser" --model MODEL_ID --input-price 200000 --cached-input-price 20000 --cache-creation-price 250000 --output-price 1000000 --max-cost-microusd 500000
 ```
 
+Use `--price-source` and `--price-effective-date YYYY-MM-DD` together to
+record where and when the declared rates came from. For routed runs, the
+investigation card has its own `--investigation-price-source` and
+`--investigation-price-effective-date`. These values appear on priced model
+actions and are bound to the checkpoint profile, so a resumed run cannot
+silently change them. Existing runs without provenance remain resumable.
+
 The estimate uses provider-reported input, cache-read, cache-creation, and
 output tokens. Anthropic cache tokens are added to its uncached input count;
-Gemini thinking tokens are included in output. The cap is checked after each
-response, so one response can exceed it. A cost-capped run fails if a provider
-omits usage. Tiered pricing and separately billed provider features are outside
-this estimate; set rates conservatively when a hard spending ceiling matters.
+Gemini thinking tokens are included in output. Before each cost-capped request,
+Pactrail reserves the declared input context capacity plus the requested
+maximum output at the most expensive applicable input rate. It refuses the
+request if the reservation exceeds the remaining cap, then reconciles the
+provider's reported usage afterward. A cost-capped run fails if a provider
+omits usage. The reservation can be deliberately conservative; reduce declared
+context or output limits when a smaller bound is valid for the model and task.
+Tiered pricing, inaccurate declared limits, and separately billed provider
+features are outside this estimate, so the cap is not a guarantee of the
+provider's final invoice.
 
 For investigation routing, provide all four `--investigation-*-price` rates
-as well as the primary rates. Pactrail uses the larger rate for each token
-category across the two models. This is a conservative estimate that can
-overstate actual routed cost; it cannot understate cost from choosing a cheaper
-route when the declared rate cards are accurate. Without two complete cards,
-cost accounting is unavailable and cost-capped runs are rejected.
+as well as the primary rates. Each completed turn is charged to a durable
+cost ledger at its selected route's declared rate. Pre-request reservation
+uses that same route's rate card and the shared declared context bound. The
+ledger is reconstructed from hash-linked model actions when a run resumes;
+older single-rate runs retain their conservative recorded cost. Without two
+complete cards, cost accounting is unavailable and cost-capped runs are
+rejected.
 
 ## Interactive configuration
 

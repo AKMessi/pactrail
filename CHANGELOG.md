@@ -8,6 +8,17 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The Anthropic native adapter now enables automatic ephemeral prompt caching
+  when `--prompt-caching on` is declared, with cache usage reflected in
+  explicit cost accounting.
+
+- Investigation routing renders foreign tool history as labeled text evidence
+  while keeping provider-specific opaque continuation fields and signed
+  function calls on their originating route.
+- Routed turns now select native tools or text actions from the active model's
+  capability profile, preserving native tools on a primary model paired with
+  a text-only investigation model.
+
 - An opt-in investigation model router selects a second model only during
   controller investigation. Provider/model/route are trace-visible, both
   model identities bind resume, and cost caps use conservative prices from
@@ -21,6 +32,15 @@ follow [Semantic Versioning](https://semver.org/).
   including cache reads and writes. A task cost budget can stop further work
   after a reported overrun; pricing is bound to resumable checkpoints and
   shown in traces and run output.
+- Cost-capped runs now reserve a conservative maximum request cost before each
+  model call, including read-only recovery, and reconcile it against reported
+  usage afterward.
+- Routed model turns now use their own declared rate cards for reservation and
+  a journal-backed per-run cost ledger. Resume restores the last hash-linked
+  cumulative charge instead of repricing all tokens at the most expensive
+  route.
+- Explicit rate cards can now carry a source and effective date. The model
+  action trace records this provenance and resume binds it to the checkpoint.
 
 - Models declared with `--native-tools off` can now use one exact, bounded text
   action per turn. Pactrail parses the action into the same typed tool kernel,
@@ -58,6 +78,10 @@ follow [Semantic Versioning](https://semver.org/).
   retain tool output size plus multi-file mutation counts.
 
 ### Changed
+
+- Primary and investigation model configurations are validated before a new
+  run directory is created, so a bad endpoint or missing key leaves no empty
+  durable run.
 
 - Candidate manifest comparison now rejects changes outside the task's write
   scope even when an authorized process, rather than a typed file tool, wrote

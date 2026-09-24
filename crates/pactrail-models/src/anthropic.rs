@@ -238,6 +238,9 @@ fn request_body(
         "max_tokens": request.max_output_tokens,
         "stream": stream,
     });
+    if config.capabilities.prompt_caching {
+        body["cache_control"] = json!({"type": "ephemeral"});
+    }
     if !system.is_empty() {
         body["system"] = Value::String(system);
     }
@@ -1151,6 +1154,28 @@ mod tests {
         assert_eq!(body["messages"][1]["content"][0]["type"], "tool_use");
         assert_eq!(body["messages"][2]["content"][0]["type"], "tool_result");
         assert_eq!(body["tool_choice"]["disable_parallel_tool_use"], false);
+        assert!(body.get("cache_control").is_none());
+    }
+
+    #[test]
+    fn prompt_caching_is_explicit_and_preserves_request_shape() {
+        let mut config = config();
+        config.capabilities.prompt_caching = true;
+        let request = ModelRequest {
+            conversation: vec![ConversationItem::Message(Message::user("inspect"))],
+            tools: Vec::new(),
+            max_output_tokens: 256,
+            temperature: None,
+            phase: None,
+        };
+        let cached = request_body(&config, &request, false)
+            .unwrap_or_else(|error| unreachable!("cached request: {error}"));
+        assert_eq!(cached["cache_control"], json!({"type": "ephemeral"}));
+        config.capabilities.prompt_caching = false;
+        let uncached = request_body(&config, &request, false)
+            .unwrap_or_else(|error| unreachable!("uncached request: {error}"));
+        assert!(uncached.get("cache_control").is_none());
+        assert_eq!(cached["messages"], uncached["messages"]);
     }
 
     #[test]

@@ -1213,6 +1213,31 @@ fn incomplete_oci_configuration_fails_without_creating_run_state() {
 }
 
 #[test]
+fn invalid_investigation_endpoint_fails_without_creating_run_state() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let output = pactrail(
+        workspace.path(),
+        [
+            "run",
+            "Inspect the parser",
+            "--provider",
+            "ollama",
+            "--model",
+            "primary",
+            "--investigation-provider",
+            "open-ai-compatible",
+            "--investigation-model",
+            "secondary",
+            "--investigation-base-url",
+            "http://models.example.com/v1",
+        ],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("must use HTTPS"));
+    assert!(!workspace.path().join(".pactrail").exists());
+}
+
+#[test]
 fn noninteractive_process_approval_is_explicit_and_durable() {
     let allowed_workspace =
         tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));

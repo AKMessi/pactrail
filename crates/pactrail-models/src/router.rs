@@ -1,10 +1,15 @@
+use std::borrow::Cow;
+use std::collections::BTreeSet;
+
 use async_trait::async_trait;
 use serde_json::Value;
 
 use crate::{
-    CapabilitySource, ModelCapabilities, ModelDriver, ModelError, ModelPhase, ModelRequest,
-    ModelResponse, ModelStreamObserver,
+    CapabilitySource, ConversationItem, Message, ModelCapabilities, ModelDriver, ModelError,
+    ModelPhase, ModelRequest, ModelResponse, ModelStreamObserver,
 };
+
+const ROUTE_ORIGIN_KEY: &str = "pactrail_route_origin";
 
 /// Opt-in phase router with no fallback or hidden provider substitution.
 ///
@@ -62,6 +67,10 @@ impl PhaseModelRouter {
         model: &dyn ModelDriver,
         route: &str,
     ) -> ModelResponse {
+        for call in &mut response.tool_calls {
+            call.extensions
+                .insert(ROUTE_ORIGIN_KEY.to_owned(), Value::String(route.to_owned()));
+        }
         response
             .extensions
             .insert("route".to_owned(), Value::String(route.to_owned()));
@@ -73,6 +82,68 @@ impl PhaseModelRouter {
             Value::String(model.name().to_owned()),
         );
         response
+    }
+
+    fn portable_request<'a>(request: &'a ModelRequest, route: &str) -> Cow<'a, ModelRequest> {
+        let foreign_call_ids = request
+            .conversation
+            .iter()
+            .filter_map(|item| match item {
+                ConversationItem::AssistantToolCalls { calls, .. }
+                    if calls.iter().any(|call| {
+                        call.extensions
+                            .get(ROUTE_ORIGIN_KEY)
+                            .and_then(Value::as_str)
+                            != Some(route)
+                    }) =>
+                {
+                    Some(calls.iter().map(|call| call.id.clone()))
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect::<BTreeSet<_>>();
+        if foreign_call_ids.is_empty() {
+            return Cow::Borrowed(request);
+        }
+        let mut request = request.clone();
+        request.conversation = request
+            .conversation
+            .into_iter()
+            .map(|item| match item {
+                ConversationItem::AssistantToolCalls { text, calls }
+                    if calls.iter().any(|call| foreign_call_ids.contains(&call.id)) => {
+                        let portable_calls = calls
+                            .iter()
+                            .map(|call| {
+                                serde_json::json!({
+                                    "id": call.id,
+                                    "name": call.name,
+                                    "arguments": call.arguments,
+                                })
+                            })
+                            .collect::<Vec<_>>();
+                        ConversationItem::Message(Message::assistant(format!(
+                            "Pactrail portable transcript from another model route. Assistant text: {text}\nTool requests: {}",
+                            Value::Array(portable_calls)
+                        )))
+                    }
+                ConversationItem::ToolResult(result)
+                    if foreign_call_ids.contains(&result.call_id) => {
+                        ConversationItem::Message(Message::user(format!(
+                            "Pactrail untrusted tool result from another model route: {}",
+                            serde_json::json!({
+                                "call_id": result.call_id,
+                                "name": result.name,
+                                "is_error": result.is_error,
+                                "content": result.content,
+                            })
+                        )))
+                    }
+                other => other,
+            })
+            .collect();
+        Cow::Owned(request)
     }
 }
 
@@ -90,9 +161,14 @@ impl ModelDriver for PhaseModelRouter {
         &self.capabilities
     }
 
+    fn capabilities_for_phase(&self, phase: ModelPhase) -> &ModelCapabilities {
+        self.select(Some(phase)).0.capabilities()
+    }
+
     async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
         let (model, route) = self.select(request.phase);
-        let response = model.invoke(request).await?;
+        let portable = Self::portable_request(request, route);
+        let response = model.invoke(&portable).await?;
         Ok(Self::annotate(response, model, route))
     }
 
@@ -102,7 +178,8 @@ impl ModelDriver for PhaseModelRouter {
         observer: &dyn ModelStreamObserver,
     ) -> Result<ModelResponse, ModelError> {
         let (model, route) = self.select(request.phase);
-        let response = model.invoke_with_observer(request, observer).await?;
+        let portable = Self::portable_request(request, route);
+        let response = model.invoke_with_observer(&portable, observer).await?;
         Ok(Self::annotate(response, model, route))
     }
 }
@@ -112,7 +189,7 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::{FinishReason, Message, Usage};
+    use crate::{FinishReason, Message, ToolCall, Usage};
 
     struct StaticModel {
         label: &'static str,
@@ -170,8 +247,18 @@ mod tests {
         let router = PhaseModelRouter::new(Box::new(primary), Box::new(investigation));
         assert!(!router.capabilities().native_tools);
         assert_eq!(router.capabilities().context_tokens, 8_192);
+        assert!(
+            !router
+                .capabilities_for_phase(ModelPhase::Investigation)
+                .native_tools
+        );
+        assert!(
+            router
+                .capabilities_for_phase(ModelPhase::Implementation)
+                .native_tools
+        );
         let mut request = ModelRequest {
-            conversation: vec![crate::ConversationItem::Message(Message::user("task"))],
+            conversation: vec![ConversationItem::Message(Message::user("task"))],
             tools: Vec::new(),
             max_output_tokens: 128,
             temperature: None,
@@ -190,5 +277,68 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("primary: {error}"));
         assert_eq!(second.text, "strong");
         assert_eq!(second.extensions["route"], "primary");
+    }
+
+    #[test]
+    fn cross_route_requests_render_portable_tool_transcript_without_opaque_state() {
+        let call = ToolCall {
+            id: "call-1".to_owned(),
+            name: "read_file".to_owned(),
+            arguments: serde_json::json!({"path": "src/lib.rs"}),
+            extensions: serde_json::Map::from_iter([
+                (
+                    ROUTE_ORIGIN_KEY.to_owned(),
+                    Value::String("investigation".to_owned()),
+                ),
+                (
+                    "openai_responses_output_items".to_owned(),
+                    serde_json::json!([{"type": "reasoning", "encrypted_content": "sealed"}]),
+                ),
+                (
+                    "thought_signature".to_owned(),
+                    Value::String("sealed".to_owned()),
+                ),
+            ]),
+        };
+        let request = ModelRequest {
+            conversation: vec![
+                ConversationItem::AssistantToolCalls {
+                    text: String::new(),
+                    calls: vec![call],
+                },
+                ConversationItem::ToolResult(crate::ToolResult {
+                    call_id: "call-1".to_owned(),
+                    name: "read_file".to_owned(),
+                    content: serde_json::json!({"text": "source"}),
+                    is_error: false,
+                }),
+            ],
+            tools: Vec::new(),
+            max_output_tokens: 128,
+            temperature: None,
+            phase: Some(ModelPhase::Implementation),
+        };
+        let same = PhaseModelRouter::portable_request(&request, "investigation");
+        let cross = PhaseModelRouter::portable_request(&request, "primary");
+        assert!(matches!(&same, Cow::Borrowed(_)));
+        assert!(matches!(&cross, Cow::Owned(_)));
+        let ConversationItem::AssistantToolCalls { calls: same, .. } = &same.conversation[0] else {
+            unreachable!("assistant call")
+        };
+        assert!(
+            same[0]
+                .extensions
+                .contains_key("openai_responses_output_items")
+        );
+        let ConversationItem::Message(call_message) = &cross.conversation[0] else {
+            unreachable!("portable assistant message")
+        };
+        assert!(call_message.content.contains("call-1"));
+        assert!(call_message.content.contains("src/lib.rs"));
+        assert!(!call_message.content.contains("sealed"));
+        let ConversationItem::Message(result_message) = &cross.conversation[1] else {
+            unreachable!("portable tool result")
+        };
+        assert!(result_message.content.contains("source"));
     }
 }
