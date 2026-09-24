@@ -39,6 +39,8 @@ follow [Semantic Versioning](https://semver.org/).
   a journal-backed per-run cost ledger. Resume restores the last hash-linked
   cumulative charge instead of repricing all tokens at the most expensive
   route.
+- Explicit rate cards can now carry a source and effective date. The model
+  action trace records this provenance and resume binds it to the checkpoint.
 
 - Models declared with `--native-tools off` can now use one exact, bounded text
   action per turn. Pactrail parses the action into the same typed tool kernel,

@@ -78,6 +78,13 @@ generated task; a task file may set `budget.cost_microusd` instead.
 pactrail run "Fix the parser" --model MODEL_ID --input-price 200000 --cached-input-price 20000 --cache-creation-price 250000 --output-price 1000000 --max-cost-microusd 500000
 ```
 
+Use `--price-source` and `--price-effective-date YYYY-MM-DD` together to
+record where and when the declared rates came from. For routed runs, the
+investigation card has its own `--investigation-price-source` and
+`--investigation-price-effective-date`. These values appear on priced model
+actions and are bound to the checkpoint profile, so a resumed run cannot
+silently change them. Existing runs without provenance remain resumable.
+
 The estimate uses provider-reported input, cache-read, cache-creation, and
 output tokens. Anthropic cache tokens are added to its uncached input count;
 Gemini thinking tokens are included in output. Before each cost-capped request,

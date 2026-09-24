@@ -309,6 +309,8 @@ pub struct RunEngine<'a> {
     max_turns: u16,
     pricing: Option<ModelPricing>,
     investigation_pricing: Option<ModelPricing>,
+    price_provenance: Option<(String, String)>,
+    investigation_price_provenance: Option<(String, String)>,
 }
 
 impl<'a> RunEngine<'a> {
@@ -334,6 +336,8 @@ impl<'a> RunEngine<'a> {
             max_turns: DEFAULT_MAX_TURNS,
             pricing: None,
             investigation_pricing: None,
+            price_provenance: None,
+            investigation_price_provenance: None,
         }
     }
 
@@ -346,9 +350,10 @@ impl<'a> RunEngine<'a> {
 
     /// Enables explicit provider-neutral cost accounting and contract limits.
     #[must_use]
-    pub const fn with_pricing(mut self, pricing: ModelPricing) -> Self {
+    pub fn with_pricing(mut self, pricing: ModelPricing) -> Self {
         self.pricing = Some(pricing);
         self.investigation_pricing = None;
+        self.investigation_price_provenance = None;
         self
     }
 
@@ -361,6 +366,18 @@ impl<'a> RunEngine<'a> {
     ) -> Self {
         self.pricing = Some(primary);
         self.investigation_pricing = Some(investigation);
+        self
+    }
+
+    /// Associates source and effective date with the explicit rate cards.
+    #[must_use]
+    pub fn with_price_provenance(
+        mut self,
+        primary: Option<(String, String)>,
+        investigation: Option<(String, String)>,
+    ) -> Self {
+        self.price_provenance = primary;
+        self.investigation_price_provenance = investigation;
         self
     }
 
@@ -1307,6 +1324,10 @@ impl<'a> RunEngine<'a> {
                     cumulative_cost.to_string(),
                 );
             }
+            if let Some((source, date)) = self.price_provenance_for_phase(model_phase) {
+                model_attributes.insert("price_source".to_owned(), bounded_trace_value(source));
+                model_attributes.insert("price_effective_date".to_owned(), date.clone());
+            }
             if let Some(reservation) = cost_reservation {
                 model_attributes.insert(
                     "pre_request_reservation_microusd".to_owned(),
@@ -2139,6 +2160,10 @@ impl<'a> RunEngine<'a> {
                 cumulative.to_string(),
             );
         }
+        if let Some((source, date)) = self.price_provenance_for_phase(ModelPhase::Recovery) {
+            attributes.insert("price_source".to_owned(), bounded_trace_value(source));
+            attributes.insert("price_effective_date".to_owned(), date.clone());
+        }
         extend_provider_trace_attributes(&mut attributes, &response.extensions);
         ActionRecord {
             actor: format!("model:{}/{}", self.model.name(), self.model.model()),
@@ -2765,6 +2790,16 @@ impl RunEngine<'_> {
         }
     }
 
+    fn price_provenance_for_phase(&self, phase: ModelPhase) -> Option<&(String, String)> {
+        if phase == ModelPhase::Investigation {
+            self.investigation_price_provenance
+                .as_ref()
+                .or(self.price_provenance.as_ref())
+        } else {
+            self.price_provenance.as_ref()
+        }
+    }
+
     fn resume_cost_spent(
         &self,
         events: &EventStore,
@@ -2875,6 +2910,10 @@ impl RunEngine<'_> {
             pricing: Option<ModelPricing>,
             #[serde(skip_serializing_if = "Option::is_none")]
             investigation_pricing: Option<ModelPricing>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            price_provenance: Option<&'a (String, String)>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            investigation_price_provenance: Option<&'a (String, String)>,
             max_turns: u16,
             runtime_identity: Option<&'a str>,
         }
@@ -2885,6 +2924,8 @@ impl RunEngine<'_> {
             capabilities: self.model.capabilities(),
             pricing: self.pricing,
             investigation_pricing: self.investigation_pricing,
+            price_provenance: self.price_provenance.as_ref(),
+            investigation_price_provenance: self.investigation_price_provenance.as_ref(),
             max_turns: self.max_turns,
             runtime_identity: self.runtime_identity.as_deref(),
         })
@@ -5182,6 +5223,10 @@ mod tests {
         };
         let engine = RunEngine::new(&model, &registry, &policy)
             .with_routed_pricing(primary, investigation)
+            .with_price_provenance(
+                Some(("primary-rates".to_owned(), "2026-09-01".to_owned())),
+                Some(("investigation-rates".to_owned(), "2026-09-02".to_owned())),
+            )
             .with_max_turns(2);
         let mut store =
             EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
@@ -5209,6 +5254,18 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert_eq!(charges, ["1", "10"]);
+        let sources = store
+            .load(run_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"))
+            .into_iter()
+            .filter_map(|event| match event.event {
+                RunEvent::ActionCompleted(action) if action.action == "invoke" => {
+                    action.attributes.get("price_source").cloned()
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(sources, ["investigation-rates", "primary-rates"]);
     }
 
     #[tokio::test]

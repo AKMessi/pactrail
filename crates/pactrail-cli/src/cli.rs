@@ -466,6 +466,16 @@ pub struct RunArgs {
     #[serde(default)]
     pub output_price: Option<u64>,
 
+    /// Source URL or identifier for the primary model rate card.
+    #[arg(long)]
+    #[serde(default)]
+    pub price_source: Option<String>,
+
+    /// Effective date (YYYY-MM-DD) of the primary model rate card.
+    #[arg(long)]
+    #[serde(default)]
+    pub price_effective_date: Option<String>,
+
     /// Investigation input price in micro-USD per million tokens.
     #[arg(long)]
     #[serde(default)]
@@ -485,6 +495,16 @@ pub struct RunArgs {
     #[arg(long)]
     #[serde(default)]
     pub investigation_output_price: Option<u64>,
+
+    /// Source URL or identifier for the investigation model rate card.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_price_source: Option<String>,
+
+    /// Effective date (YYYY-MM-DD) of the investigation model rate card.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_price_effective_date: Option<String>,
 
     /// Declared model context capacity.
     #[arg(long, default_value_t = 32_768)]

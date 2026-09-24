@@ -238,10 +238,14 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         cached_input_price: None,
         cache_creation_price: None,
         output_price: None,
+        price_source: None,
+        price_effective_date: None,
         investigation_input_price: None,
         investigation_cached_input_price: None,
         investigation_cache_creation_price: None,
         investigation_output_price: None,
+        investigation_price_source: None,
+        investigation_price_effective_date: None,
         context_tokens: args.context_tokens,
         max_output_tokens: args.max_output_tokens,
         request_timeout_seconds: args.request_timeout_seconds,
@@ -315,6 +319,7 @@ impl RunManifest {
         validate_model_limits(&self.args)?;
         validate_model_options(&self.args)?;
         let pricing = configured_pricing(&self.args)?;
+        validate_price_provenance(&self.args)?;
         if self.contract.budget.cost_microusd != 0 && pricing.is_none() {
             return Err(CliError::Argument(
                 "cost budget requires all four explicit model prices".to_owned(),
@@ -450,7 +455,7 @@ async fn execute_resume_inner(
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
-    let mut engine = RunEngine::new(driver.as_ref(), &registry, &policy)
+    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(mcp_runtime.context_fragments())
         .with_repository_cache(state.join("artifacts").join("repository-index"))
@@ -458,12 +463,7 @@ async fn execute_resume_inner(
         .with_runtime_identity(runtime_identity)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
-    if let Some(pricing) = configured_pricing(&args)? {
-        engine = engine.with_pricing(pricing);
-    }
-    if let Some((primary, investigation)) = configured_route_pricing(&args)? {
-        engine = engine.with_routed_pricing(primary, investigation);
-    }
+    let engine = configure_engine_pricing(engine, &args)?;
     let approval_resolver = ConfiguredApprovalResolver {
         process: process_approval,
         mcp: mcp_approval,
@@ -612,7 +612,7 @@ async fn execute_run_inner(
     let policy = PolicyEngine::new(contract.permissions.clone());
     let mut context_fragments = memory_context_fragments(&contract, &memory, &transaction)?;
     context_fragments.extend(mcp_runtime.context_fragments());
-    let mut engine = RunEngine::new(driver.as_ref(), &registry, &policy)
+    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
         .with_repository_cache(state.join("artifacts").join("repository-index"))
@@ -621,12 +621,7 @@ async fn execute_run_inner(
         .with_input_images(input_images)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
-    if let Some(pricing) = configured_pricing(&args)? {
-        engine = engine.with_pricing(pricing);
-    }
-    if let Some((primary, investigation)) = configured_route_pricing(&args)? {
-        engine = engine.with_routed_pricing(primary, investigation);
-    }
+    let engine = configure_engine_pricing(engine, &args)?;
     let approval_resolver = ConfiguredApprovalResolver {
         process: process_approval,
         mcp: mcp_approval,
@@ -1137,6 +1132,7 @@ fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn Model
 }
 
 fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
+    validate_price_provenance(args)?;
     if args.investigation_model.is_none()
         && (args.investigation_provider.is_some()
             || args.investigation_base_url.is_some()
@@ -1144,7 +1140,9 @@ fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
             || args.investigation_input_price.is_some()
             || args.investigation_cached_input_price.is_some()
             || args.investigation_cache_creation_price.is_some()
-            || args.investigation_output_price.is_some())
+            || args.investigation_output_price.is_some()
+            || args.investigation_price_source.is_some()
+            || args.investigation_price_effective_date.is_some())
     {
         return Err(CliError::Argument(
             "investigation options require --investigation-model".to_owned(),
@@ -1372,6 +1370,30 @@ fn effective_process_backend(args: &RunArgs) -> Result<ProcessBackendArg, CliErr
     Ok(backend)
 }
 
+fn configure_engine_pricing<'a>(
+    mut engine: RunEngine<'a>,
+    args: &RunArgs,
+) -> Result<RunEngine<'a>, CliError> {
+    if let Some(pricing) = configured_pricing(args)? {
+        engine = engine.with_pricing(pricing);
+    }
+    if let Some((primary, investigation)) = configured_route_pricing(args)? {
+        engine = engine.with_routed_pricing(primary, investigation);
+    }
+    Ok(engine.with_price_provenance(
+        price_provenance(
+            args.price_source.as_deref(),
+            args.price_effective_date.as_deref(),
+            "model",
+        )?,
+        price_provenance(
+            args.investigation_price_source.as_deref(),
+            args.investigation_price_effective_date.as_deref(),
+            "investigation model",
+        )?,
+    ))
+}
+
 fn configured_pricing(args: &RunArgs) -> Result<Option<ModelPricing>, CliError> {
     let primary = price_card(
         args.input_price,
@@ -1439,6 +1461,80 @@ fn configured_route_pricing(
             "routing with pricing requires complete rate cards for both models".to_owned(),
         )),
     }
+}
+
+fn validate_price_provenance(args: &RunArgs) -> Result<(), CliError> {
+    let primary = price_provenance(
+        args.price_source.as_deref(),
+        args.price_effective_date.as_deref(),
+        "model",
+    )?;
+    let investigation = price_provenance(
+        args.investigation_price_source.as_deref(),
+        args.investigation_price_effective_date.as_deref(),
+        "investigation model",
+    )?;
+    if primary.is_some() && args.input_price.is_none() {
+        return Err(CliError::Argument(
+            "model price provenance requires a complete rate card".to_owned(),
+        ));
+    }
+    if investigation.is_some() && args.investigation_input_price.is_none() {
+        return Err(CliError::Argument(
+            "investigation model price provenance requires a complete rate card".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn price_provenance(
+    source: Option<&str>,
+    effective_date: Option<&str>,
+    label: &str,
+) -> Result<Option<(String, String)>, CliError> {
+    match (source, effective_date) {
+        (None, None) => Ok(None),
+        (Some(source), Some(date))
+            if !source.trim().is_empty()
+                && source.len() <= 2_048
+                && !source.chars().any(char::is_control)
+                && valid_iso_date(date) =>
+        {
+            Ok(Some((source.trim().to_owned(), date.to_owned())))
+        }
+        _ => Err(CliError::Argument(format!(
+            "{label} price provenance requires a nonempty source of at most 2048 characters without control characters and an effective date in YYYY-MM-DD format"
+        ))),
+    }
+}
+
+fn valid_iso_date(date: &str) -> bool {
+    let bytes = date.as_bytes();
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes[..4].iter().all(u8::is_ascii_digit)
+        || !bytes[5..7].iter().all(u8::is_ascii_digit)
+        || !bytes[8..].iter().all(u8::is_ascii_digit)
+    {
+        return false;
+    }
+    let (Ok(year), Ok(month), Ok(day)) = (
+        date[..4].parse::<u16>(),
+        date[5..7].parse::<u8>(),
+        date[8..].parse::<u8>(),
+    ) else {
+        return false;
+    };
+    let leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    year > 0 && (1..=days).contains(&day)
 }
 
 fn price_card(
@@ -3534,6 +3630,21 @@ mod tests {
     use pactrail_core::{ActionRecord, Evidence, EvidenceKind};
 
     use super::*;
+
+    #[test]
+    fn rate_card_provenance_requires_valid_paired_metadata() {
+        assert!(price_provenance(Some("provider pricing"), None, "model").is_err());
+        assert!(price_provenance(Some(" "), Some("2026-09-24"), "model").is_err());
+        assert!(price_provenance(Some("provider pricing"), Some("2026-02-29"), "model").is_err());
+        assert!(
+            price_provenance(Some("provider pricing"), Some("２０２６-09-24"), "model").is_err()
+        );
+        assert_eq!(
+            price_provenance(Some(" provider pricing "), Some("2024-02-29"), "model")
+                .unwrap_or_else(|error| unreachable!("provenance: {error}")),
+            Some(("provider pricing".to_owned(), "2024-02-29".to_owned()))
+        );
+    }
 
     #[test]
     fn model_pricing_requires_a_complete_explicit_rate_card() {
