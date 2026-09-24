@@ -62,7 +62,10 @@ pactrail run --provider anthropic --model PRIMARY_MODEL --investigation-provider
 The router advertises only capabilities supported by both models and uses the
 smaller declared context and output limits. Set `--context-tokens` and
 `--max-output-tokens` to values valid for both configured models. Routing is
-opt-in for a run; interactive settings continue to use one model.
+opt-in for a run; interactive settings continue to use one model. Native tool
+calls or text actions are selected for each phase from that route's declared
+capabilities, so a text-only investigation model does not disable native
+tools on the primary route.
 
 ## Explicit cost accounting
 

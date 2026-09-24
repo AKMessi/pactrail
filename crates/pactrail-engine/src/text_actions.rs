@@ -63,16 +63,22 @@ pub(crate) fn transport_conversation(
         .iter()
         .map(|item| match item {
             ConversationItem::AssistantToolCalls { text, calls } => {
-                if calls.len() != 1 {
-                    return Err("text action conversation requires one call per turn".to_owned());
-                }
-                let call = calls
-                    .first()
-                    .ok_or_else(|| "empty tool call batch".to_owned())?;
-                let action = json!({"name": call.name, "arguments": call.arguments});
-                let serialized =
-                    serde_json::to_string(&action).map_err(|error| error.to_string())?;
-                let mut content = format!("{OPEN}{serialized}{CLOSE}");
+                let mut content = if let [call] = calls.as_slice() {
+                    let action = json!({"name": call.name, "arguments": call.arguments});
+                    let serialized =
+                        serde_json::to_string(&action).map_err(|error| error.to_string())?;
+                    format!("{OPEN}{serialized}{CLOSE}")
+                } else if calls.is_empty() {
+                    return Err("empty tool call batch".to_owned());
+                } else {
+                    let portable = calls
+                        .iter()
+                        .map(|call| {
+                            json!({"id": call.id, "name": call.name, "arguments": call.arguments})
+                        })
+                        .collect::<Vec<_>>();
+                    format!("Pactrail prior native tool requests: {}", json!(portable))
+                };
                 if !text.is_empty() {
                     content.push('\n');
                     content.push_str(text);
@@ -121,5 +127,30 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn prior_parallel_calls_are_portable_to_a_text_only_turn() {
+        let calls = ["one", "two"]
+            .into_iter()
+            .map(|id| ToolCall {
+                id: id.to_owned(),
+                name: "read_file".to_owned(),
+                arguments: json!({"path": format!("{id}.rs")}),
+                extensions: serde_json::Map::new(),
+            })
+            .collect();
+        let conversation = vec![ConversationItem::AssistantToolCalls {
+            text: String::new(),
+            calls,
+        }];
+        let transported = transport_conversation(&conversation)
+            .unwrap_or_else(|error| unreachable!("portable conversation: {error}"));
+        let ConversationItem::Message(message) = &transported[0] else {
+            unreachable!("text transcript")
+        };
+        assert!(message.content.contains("one.rs"));
+        assert!(message.content.contains("two.rs"));
+        assert!(!message.content.contains(OPEN));
     }
 }

@@ -161,6 +161,10 @@ impl ModelDriver for PhaseModelRouter {
         &self.capabilities
     }
 
+    fn capabilities_for_phase(&self, phase: ModelPhase) -> &ModelCapabilities {
+        self.select(Some(phase)).0.capabilities()
+    }
+
     async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
         let (model, route) = self.select(request.phase);
         let portable = Self::portable_request(request, route);
@@ -243,6 +247,16 @@ mod tests {
         let router = PhaseModelRouter::new(Box::new(primary), Box::new(investigation));
         assert!(!router.capabilities().native_tools);
         assert_eq!(router.capabilities().context_tokens, 8_192);
+        assert!(
+            !router
+                .capabilities_for_phase(ModelPhase::Investigation)
+                .native_tools
+        );
+        assert!(
+            router
+                .capabilities_for_phase(ModelPhase::Implementation)
+                .native_tools
+        );
         let mut request = ModelRequest {
             conversation: vec![ConversationItem::Message(Message::user("task"))],
             tools: Vec::new(),

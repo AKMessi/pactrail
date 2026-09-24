@@ -15,6 +15,9 @@ follow [Semantic Versioning](https://semver.org/).
 - Investigation routing renders foreign tool history as labeled text evidence
   while keeping provider-specific opaque continuation fields and signed
   function calls on their originating route.
+- Routed turns now select native tools or text actions from the active model's
+  capability profile, preserving native tools on a primary model paired with
+  a text-only investigation model.
 
 - An opt-in investigation model router selects a second model only during
   controller investigation. Provider/model/route are trace-visible, both
