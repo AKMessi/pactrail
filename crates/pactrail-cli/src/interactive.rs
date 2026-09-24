@@ -3340,7 +3340,9 @@ async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>,
                 .header("x-api-key", api_key)
                 .header("anthropic-version", "2023-06-01"),
             ProviderKind::Gemini => request.header("x-goog-api-key", api_key),
-            ProviderKind::OpenAi | ProviderKind::OpenAiCompatible => request.bearer_auth(api_key),
+            ProviderKind::OpenAi
+            | ProviderKind::OpenAiResponses
+            | ProviderKind::OpenAiCompatible => request.bearer_auth(api_key),
         };
     }
     let response = request.send().await?;
@@ -3429,7 +3431,10 @@ fn models_endpoint(base_url: &str, provider: ProviderKind) -> Result<Url, ModelL
     let suffix = match provider {
         ProviderKind::Anthropic => "/v1/models",
         ProviderKind::Gemini => "/v1beta/models",
-        ProviderKind::Ollama | ProviderKind::OpenAi | ProviderKind::OpenAiCompatible => "/models",
+        ProviderKind::Ollama
+        | ProviderKind::OpenAi
+        | ProviderKind::OpenAiResponses
+        | ProviderKind::OpenAiCompatible => "/models",
     };
     Url::parse(&format!("{}{suffix}", base_url.trim_end_matches('/')))
         .map_err(|error| ModelListError::InvalidEndpoint(error.to_string()))
@@ -3466,7 +3471,9 @@ fn provider_base_url(settings: &InteractiveSettings) -> Option<String> {
         .effective_base_url()
         .or_else(|| match settings.provider {
             ProviderKind::Ollama => Some("http://127.0.0.1:11434/v1".to_owned()),
-            ProviderKind::OpenAi => Some("https://api.openai.com/v1".to_owned()),
+            ProviderKind::OpenAi | ProviderKind::OpenAiResponses => {
+                Some("https://api.openai.com/v1".to_owned())
+            }
             ProviderKind::OpenAiCompatible => None,
             ProviderKind::Anthropic => Some("https://api.anthropic.com".to_owned()),
             ProviderKind::Gemini => Some("https://generativelanguage.googleapis.com".to_owned()),
@@ -3501,6 +3508,7 @@ fn parse_provider(value: &str) -> Option<ProviderKind> {
     match value {
         "ollama" => Some(ProviderKind::Ollama),
         "openai" | "open-ai" => Some(ProviderKind::OpenAi),
+        "open-ai-responses" | "openai-responses" => Some(ProviderKind::OpenAiResponses),
         "compatible" | "openai-compatible" | "open-ai-compatible" => {
             Some(ProviderKind::OpenAiCompatible)
         }
@@ -3514,6 +3522,7 @@ fn provider_label(provider: ProviderKind) -> &'static str {
     match provider {
         ProviderKind::Ollama => "ollama",
         ProviderKind::OpenAi => "open-ai",
+        ProviderKind::OpenAiResponses => "open-ai-responses",
         ProviderKind::OpenAiCompatible => "open-ai-compatible",
         ProviderKind::Anthropic => "anthropic",
         ProviderKind::Gemini => "gemini",
@@ -3618,11 +3627,16 @@ fn run_args_from_settings(
         images: Vec::new(),
         provider: settings.provider,
         model: Some(model),
+        investigation_model: None,
+        investigation_provider: None,
+        investigation_base_url: None,
+        investigation_api_key_env: None,
         base_url: settings.effective_base_url(),
         api_key_env: settings.api_key_env.clone(),
         write_paths: vec![".".to_owned()],
         process_backend: Some(settings.process_backend),
         allow_process: false,
+        allow_shell: false,
         process_approval: Some(ProcessApprovalArg::Prompt),
         mcp_approval: Some(crate::cli::McpApprovalArg::Prompt),
         sandbox_runtime: settings.sandbox_runtime,
@@ -3637,6 +3651,15 @@ fn run_args_from_settings(
         sandbox_tmpfs_mib: settings.sandbox_tmpfs_mib,
         apply: false,
         max_turns: settings.max_turns,
+        max_cost_microusd: 0,
+        input_price: None,
+        cached_input_price: None,
+        cache_creation_price: None,
+        output_price: None,
+        investigation_input_price: None,
+        investigation_cached_input_price: None,
+        investigation_cache_creation_price: None,
+        investigation_output_price: None,
         context_tokens: settings.context_tokens,
         max_output_tokens: settings.max_output_tokens,
         request_timeout_seconds: 300,

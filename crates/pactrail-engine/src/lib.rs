@@ -5,6 +5,7 @@ mod checkpoint;
 mod context_window;
 mod controller;
 mod engine;
+mod text_actions;
 mod verification;
 
 pub use adaptive::{AdaptiveRuntimeClass, AdaptiveRuntimeProfile};

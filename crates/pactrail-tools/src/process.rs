@@ -26,6 +26,7 @@ const MAX_AGGREGATE_ARGUMENT_BYTES: usize = 2 * 1024 * 1024;
 const MAX_ENVIRONMENT_ENTRIES: usize = 256;
 const MAX_ENVIRONMENT_VALUE_BYTES: usize = 256 * 1024;
 const MAX_AGGREGATE_ENVIRONMENT_BYTES: usize = 2 * 1024 * 1024;
+const MAX_SHELL_COMMAND_BYTES: usize = 64 * 1024;
 pub(crate) const SAFE_ENVIRONMENT_NAMES: &[&str] = &[
     "PATH",
     "PATHEXT",
@@ -81,6 +82,17 @@ struct RunProcessInput {
     environment: BTreeMap<String, String>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct RunShellInput {
+    /// Shell script to execute inside the isolated OCI candidate workspace.
+    command: String,
+    #[serde(default = "default_timeout")]
+    timeout_seconds: u64,
+    #[serde(default = "default_output_limit")]
+    max_output_bytes: usize,
+}
+
 const fn default_timeout() -> u64 {
     DEFAULT_TIMEOUT_SECONDS
 }
@@ -121,6 +133,74 @@ impl RunProcessTool {
 impl Default for RunProcessTool {
     fn default() -> Self {
         Self::disabled()
+    }
+}
+
+/// Opt-in shell entry point that cannot execute through a native host backend.
+pub struct RunShellTool {
+    process: RunProcessTool,
+}
+
+impl RunShellTool {
+    #[must_use]
+    pub fn new(backend: Arc<dyn ProcessBackend>, cancellation: CancellationToken) -> Self {
+        Self {
+            process: RunProcessTool::new(backend, cancellation),
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for RunShellTool {
+    fn descriptor(&self) -> ToolDescriptor {
+        ToolDescriptor {
+            name: "run_shell".to_owned(),
+            description: "Run a bounded POSIX shell command inside the restricted OCI candidate workspace. No host files, network, or ambient credentials are available. Use this for focused repository commands and checks."
+                .to_owned(),
+            input_schema: serde_json::to_value(schema_for!(RunShellInput))
+                .unwrap_or_else(|_| json!({})),
+            required_capability: Capability::ProcessSpawn,
+            annotations: ToolAnnotations::RESTRICTED_EXECUTION,
+        }
+    }
+
+    async fn execute(
+        &self,
+        context: &ToolContext<'_>,
+        value: Value,
+    ) -> Result<ToolOutput, ToolError> {
+        if self.process.backend.descriptor().kind != ProcessBackendKind::OciRestricted {
+            return Err(ToolError::Denied(
+                "run_shell requires an explicitly selected restricted OCI backend".to_owned(),
+            ));
+        }
+        let request: RunShellInput =
+            serde_json::from_value(value).map_err(|source| ToolError::InvalidInput {
+                tool: "run_shell",
+                source,
+            })?;
+        if request.command.trim().is_empty()
+            || request.command.len() > MAX_SHELL_COMMAND_BYTES
+            || request.command.contains('\0')
+        {
+            return Err(ToolError::InvalidRange(format!(
+                "shell command must be non-empty, at most {MAX_SHELL_COMMAND_BYTES} bytes, and contain no NUL byte"
+            )));
+        }
+        let mut result = self
+            .process
+            .execute(
+                context,
+                json!({
+                    "program": "/bin/sh",
+                    "args": ["-c", request.command],
+                    "timeout_seconds": request.timeout_seconds,
+                    "max_output_bytes": request.max_output_bytes,
+                }),
+            )
+            .await?;
+        result.summary = result.summary.replacen("process", "shell", 1);
+        Ok(result)
     }
 }
 
@@ -353,8 +433,42 @@ fn valid_environment_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PolicyEngine;
+    use crate::{PolicyEngine, ProcessBackendError, ProcessExecution};
+    use pactrail_core::PermissionSet;
     use pactrail_workspace::WorkspaceTransaction;
+
+    struct RecordingOciBackend {
+        requests: std::sync::Mutex<Vec<ProcessRequest>>,
+    }
+
+    #[async_trait]
+    impl ProcessBackend for RecordingOciBackend {
+        fn descriptor(&self) -> ProcessBackendDescriptor {
+            let mut descriptor = NativeProcessBackend.descriptor();
+            descriptor.kind = ProcessBackendKind::OciRestricted;
+            descriptor
+        }
+
+        async fn execute(
+            &self,
+            _workspace: &std::path::Path,
+            request: &ProcessRequest,
+            _cancellation: &CancellationToken,
+        ) -> Result<ProcessExecution, ProcessBackendError> {
+            self.requests
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(request.clone());
+            Ok(ProcessExecution {
+                exit_code: Some(0),
+                stdout: b"ok\n".to_vec(),
+                stderr: Vec::new(),
+                stdout_truncated: false,
+                stderr_truncated: false,
+                backend: self.descriptor(),
+            })
+        }
+    }
 
     #[tokio::test]
     async fn process_requires_explicit_capability() {
@@ -372,6 +486,59 @@ mod tests {
             .execute(&context, json!({"program":"cargo"}))
             .await;
         assert!(matches!(result, Err(ToolError::ApprovalRequired { .. })));
+    }
+
+    #[tokio::test]
+    async fn shell_rejects_native_execution_before_invoking_process() {
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let policy = PolicyEngine::local_default();
+        let context = ToolContext::new(&transaction, &policy, None);
+        let result = RunShellTool::new(Arc::new(NativeProcessBackend), CancellationToken::new())
+            .execute(&context, json!({"command": "pwd"}))
+            .await;
+        assert!(matches!(result, Err(ToolError::Denied(_))));
+    }
+
+    #[tokio::test]
+    async fn shell_uses_only_the_restricted_process_backend() {
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let permissions = PermissionSet {
+            allow: [Capability::ProcessSpawn].into(),
+            ..PermissionSet::default()
+        };
+        let policy = PolicyEngine::new(permissions);
+        let context = ToolContext::new(&transaction, &policy, None);
+        let backend = Arc::new(RecordingOciBackend {
+            requests: std::sync::Mutex::new(Vec::new()),
+        });
+        let tool = RunShellTool::new(backend.clone(), CancellationToken::new());
+        let result = tool
+            .execute(&context, json!({"command": "pwd"}))
+            .await
+            .unwrap_or_else(|error| unreachable!("shell: {error}"));
+        assert!(result.succeeded);
+        let requests = backend
+            .requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].program, "/bin/sh");
+        assert_eq!(requests[0].args, ["-c", "pwd"]);
+        assert!(requests[0].environment.is_empty());
     }
 
     #[test]

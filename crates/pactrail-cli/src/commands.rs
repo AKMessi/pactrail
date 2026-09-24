@@ -20,14 +20,15 @@ use pactrail_memory::{
 use pactrail_models::{
     AnthropicConfig, AnthropicDriver, CapabilityProbeReport, CapabilitySource, GeminiConfig,
     GeminiDriver, ImageArtifact, MAX_INPUT_IMAGE_BYTES, ModelCapabilities, ModelDriver, ModelError,
-    OpenAiCompatibleConfig, OpenAiCompatibleDriver, probe_capabilities as run_capability_probe,
+    ModelPricing, OpenAiCompatibleConfig, OpenAiCompatibleDriver, OpenAiResponsesConfig,
+    OpenAiResponsesDriver, PhaseModelRouter, probe_capabilities as run_capability_probe,
     validate_image_set,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
     ApprovalResolver, DisabledProcessBackend, NativeProcessBackend, OciProcessBackend,
     OciProcessConfig, OciRuntimeKind, OciSandboxProfile, PolicyEngine, ProcessBackend,
-    RunProcessTool, ToolError, ToolRisk, builtin_registry_with_process,
+    RunProcessTool, RunShellTool, ToolError, ToolRegistry, ToolRisk, builtin_registry_with_process,
 };
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
@@ -53,7 +54,7 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
     match cli.command.ok_or_else(|| {
         CliError::Argument("a command is required outside interactive mode".to_owned())
     })? {
-        Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), args).await,
+        Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), *args).await,
         Command::Resume(args) => resume(&cli.workspace, cli.state_dir.as_deref(), args).await,
         Command::Probe(args) => probe(args).await,
         Command::Inspect(args) => {
@@ -140,6 +141,7 @@ pub(crate) struct CompletedRun {
     pub model_summary: String,
     pub receipt: ChangeReceipt,
     pub tokens: u64,
+    pub cost_microusd: Option<u64>,
 }
 
 async fn execute_mcp_command(
@@ -210,11 +212,16 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         images: Vec::new(),
         provider: args.provider,
         model: Some(args.model),
+        investigation_model: None,
+        investigation_provider: None,
+        investigation_base_url: None,
+        investigation_api_key_env: None,
         base_url: args.base_url,
         api_key_env: args.api_key_env,
         write_paths: vec![".".to_owned()],
         process_backend: Some(ProcessBackendArg::Disabled),
         allow_process: false,
+        allow_shell: false,
         process_approval: Some(ProcessApprovalArg::Deny),
         mcp_approval: Some(McpApprovalArg::Deny),
         sandbox_runtime: OciRuntimeArg::Docker,
@@ -226,6 +233,15 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         sandbox_tmpfs_mib: 512,
         apply: false,
         max_turns: 1,
+        max_cost_microusd: 0,
+        input_price: None,
+        cached_input_price: None,
+        cache_creation_price: None,
+        output_price: None,
+        investigation_input_price: None,
+        investigation_cached_input_price: None,
+        investigation_cache_creation_price: None,
+        investigation_output_price: None,
         context_tokens: args.context_tokens,
         max_output_tokens: args.max_output_tokens,
         request_timeout_seconds: args.request_timeout_seconds,
@@ -297,6 +313,13 @@ impl RunManifest {
             ));
         }
         validate_model_limits(&self.args)?;
+        validate_model_options(&self.args)?;
+        let pricing = configured_pricing(&self.args)?;
+        if self.contract.budget.cost_microusd != 0 && pricing.is_none() {
+            return Err(CliError::Argument(
+                "cost budget requires all four explicit model prices".to_owned(),
+            ));
+        }
         let _backend = effective_process_backend(&self.args)?;
         let _approval = effective_process_approval(&self.args)?;
         let _mcp_approval = effective_mcp_approval(&self.args);
@@ -340,6 +363,7 @@ async fn run(
         &completed.model_summary,
         &completed.receipt,
         completed.tokens,
+        completed.cost_microusd,
         output,
     )
 }
@@ -374,6 +398,7 @@ async fn resume(
         &completed.model_summary,
         &completed.receipt,
         completed.tokens,
+        completed.cost_microusd,
         output,
     )
 }
@@ -421,12 +446,11 @@ async fn execute_resume_inner(
         .load_head(&store, run_id)
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
-    let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
-    let mut registry = builtin_registry_with_process(process_tool)?;
+    let mut registry = run_tool_registry(process_backend, cancellation.clone(), args.allow_shell)?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
-    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
+    let mut engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(mcp_runtime.context_fragments())
         .with_repository_cache(state.join("artifacts").join("repository-index"))
@@ -434,6 +458,9 @@ async fn execute_resume_inner(
         .with_runtime_identity(runtime_identity)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
+    if let Some(pricing) = configured_pricing(&args)? {
+        engine = engine.with_pricing(pricing);
+    }
     let approval_resolver = ConfiguredApprovalResolver {
         process: process_approval,
         mcp: mcp_approval,
@@ -519,6 +546,7 @@ pub(crate) async fn execute_resume_with_observer_and_cancellation(
     .await
 }
 
+#[allow(clippy::too_many_lines)]
 async fn execute_run_inner(
     cli_workspace: &Path,
     state_override: Option<&Path>,
@@ -575,14 +603,13 @@ async fn execute_run_inner(
     let checkpoints = CheckpointStore::open(state.join("artifacts").join("checkpoints"))
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
-    let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
-    let mut registry = builtin_registry_with_process(process_tool)?;
+    let mut registry = run_tool_registry(process_backend, cancellation.clone(), args.allow_shell)?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
     let mut context_fragments = memory_context_fragments(&contract, &memory, &transaction)?;
     context_fragments.extend(mcp_runtime.context_fragments());
-    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
+    let mut engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
         .with_repository_cache(state.join("artifacts").join("repository-index"))
@@ -591,6 +618,9 @@ async fn execute_run_inner(
         .with_input_images(input_images)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
+    if let Some(pricing) = configured_pricing(&args)? {
+        engine = engine.with_pricing(pricing);
+    }
     let approval_resolver = ConfiguredApprovalResolver {
         process: process_approval,
         mcp: mcp_approval,
@@ -636,7 +666,14 @@ fn prepare_run_contract(
     process_backend: ProcessBackendArg,
     mcp_approval: McpApprovalArg,
 ) -> Result<(TaskContract, PathBuf, PathBuf, McpRuntime), CliError> {
+    validate_model_options(args)?;
     let (mut contract, workspace) = load_contract(cli_workspace, args)?;
+    let pricing = configured_pricing(args)?;
+    if contract.budget.cost_microusd != 0 && pricing.is_none() {
+        return Err(CliError::Argument(
+            "cost budget requires all four explicit model prices".to_owned(),
+        ));
+    }
     let state = if let Some(override_path) = state_override {
         absolute_or_join(cli_workspace, override_path)?
     } else {
@@ -879,6 +916,7 @@ fn finish_run(
         model_summary: outcome.final_text,
         receipt,
         tokens: outcome.usage.total(),
+        cost_microusd: outcome.cost_microusd,
     })
 }
 
@@ -967,6 +1005,7 @@ fn cancelled_run(
                 .to_owned(),
         receipt,
         tokens: 0,
+        cost_microusd: None,
     })
 }
 
@@ -1022,6 +1061,11 @@ fn load_contract(
     args: &RunArgs,
 ) -> Result<(TaskContract, PathBuf), CliError> {
     if let Some(path) = &args.task {
+        if args.max_cost_microusd != 0 {
+            return Err(CliError::Argument(
+                "--max-cost-microusd cannot override a task file budget".to_owned(),
+            ));
+        }
         let task_path = absolute_or_join(cli_workspace, path)?;
         let text = fs::read_to_string(&task_path).map_err(|source| CliError::Io {
             path: task_path.clone(),
@@ -1042,6 +1086,7 @@ fn load_contract(
     })?;
     let mut contract = TaskContract::new(goal, workspace.display().to_string());
     contract.budget.max_model_attempts = args.max_turns;
+    contract.budget.cost_microusd = args.max_cost_microusd;
     contract.budget.model_tokens =
         generated_model_token_budget(args.context_tokens, args.max_output_tokens, args.max_turns);
     Ok((contract, workspace))
@@ -1057,10 +1102,53 @@ fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn Model
     let model = configured_model(contract, args)?;
     validate_model_options(args)?;
     let capabilities = configured_capabilities(args);
-    build_driver_for_provider(model, capabilities, args)
+    let primary = build_driver_for_provider(model, capabilities, args)?;
+    let Some(investigation_model) = &args.investigation_model else {
+        return Ok(primary);
+    };
+    let mut investigation_args = args.clone();
+    investigation_args.model = Some(investigation_model.clone());
+    investigation_args.provider = args.investigation_provider.unwrap_or(args.provider);
+    investigation_args.base_url = args.investigation_base_url.clone().or_else(|| {
+        (investigation_args.provider == args.provider)
+            .then(|| args.base_url.clone())
+            .flatten()
+    });
+    investigation_args.api_key_env = args.investigation_api_key_env.clone().unwrap_or_else(|| {
+        if investigation_args.provider == args.provider {
+            args.api_key_env.clone()
+        } else {
+            "OPENAI_API_KEY".to_owned()
+        }
+    });
+    validate_model_options(&investigation_args)?;
+    let secondary = build_driver_for_provider(
+        investigation_model.clone(),
+        configured_capabilities(&investigation_args),
+        &investigation_args,
+    )?;
+    Ok(Box::new(PhaseModelRouter::new(primary, secondary)))
 }
 
 fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
+    if args.investigation_model.is_none()
+        && (args.investigation_provider.is_some()
+            || args.investigation_base_url.is_some()
+            || args.investigation_api_key_env.is_some()
+            || args.investigation_input_price.is_some()
+            || args.investigation_cached_input_price.is_some()
+            || args.investigation_cache_creation_price.is_some()
+            || args.investigation_output_price.is_some())
+    {
+        return Err(CliError::Argument(
+            "investigation options require --investigation-model".to_owned(),
+        ));
+    }
+    if args.investigation_model.as_deref() == Some("") {
+        return Err(CliError::Argument(
+            "--investigation-model must not be empty".to_owned(),
+        ));
+    }
     if args.native_tools == crate::cli::CapabilitySetting::Off
         && args.parallel_tools == crate::cli::CapabilitySetting::On
     {
@@ -1076,11 +1164,23 @@ fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
     if args.disable_thinking
         && matches!(
             args.provider,
-            ProviderKind::Anthropic | ProviderKind::Gemini
+            ProviderKind::Anthropic | ProviderKind::Gemini | ProviderKind::OpenAiResponses
         )
     {
         return Err(CliError::Argument(
-            "--disable-thinking is an OpenAI-compatible extension and is not valid for native Anthropic or Gemini adapters"
+            "--disable-thinking is an OpenAI-compatible Chat Completions extension and is not valid for this native adapter"
+                .to_owned(),
+        ));
+    }
+    if args.disable_thinking
+        && args.investigation_model.is_some()
+        && matches!(
+            args.investigation_provider.unwrap_or(args.provider),
+            ProviderKind::Anthropic | ProviderKind::Gemini | ProviderKind::OpenAiResponses
+        )
+    {
+        return Err(CliError::Argument(
+            "--disable-thinking is not valid for the investigation provider's native adapter"
                 .to_owned(),
         ));
     }
@@ -1125,6 +1225,7 @@ fn build_driver_for_provider(
             })
             .map_err(CliError::Model)?,
         ),
+        ProviderKind::OpenAiResponses => build_responses_driver(model, capabilities, args)?,
         ProviderKind::OpenAiCompatible => Box::new(
             OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
                 name: "openai-compatible".to_owned(),
@@ -1177,6 +1278,28 @@ fn build_driver_for_provider(
     Ok(driver)
 }
 
+fn build_responses_driver(
+    model: String,
+    mut capabilities: ModelCapabilities,
+    args: &RunArgs,
+) -> Result<Box<dyn ModelDriver>, CliError> {
+    capabilities.streaming = false;
+    Ok(Box::new(
+        OpenAiResponsesDriver::new(OpenAiResponsesConfig {
+            name: "openai-responses".to_owned(),
+            base_url: args
+                .base_url
+                .clone()
+                .unwrap_or_else(|| "https://api.openai.com/v1".to_owned()),
+            model,
+            api_key: api_key_from_env(&args.api_key_env)?,
+            timeout: Duration::from_secs(args.request_timeout_seconds),
+            capabilities,
+        })
+        .map_err(CliError::Model)?,
+    ))
+}
+
 fn configured_model(contract: &TaskContract, args: &RunArgs) -> Result<String, CliError> {
     args.model
         .clone()
@@ -1227,14 +1350,96 @@ fn api_key_from_env(name: &str) -> Result<SecretString, CliError> {
 }
 
 fn effective_process_backend(args: &RunArgs) -> Result<ProcessBackendArg, CliError> {
-    match (args.process_backend, args.allow_process) {
+    let backend = match (args.process_backend, args.allow_process) {
         (Some(ProcessBackendArg::Native) | None, true) => Ok(ProcessBackendArg::Native),
         (Some(mode), true) => Err(CliError::Argument(format!(
             "--allow-process is a deprecated alias for --process-backend native and conflicts with --process-backend {mode:?}"
         ))),
         (Some(mode), false) => Ok(mode),
         (None, false) => Ok(ProcessBackendArg::Disabled),
+    }?;
+    if args.allow_shell && backend != ProcessBackendArg::Oci {
+        return Err(CliError::Argument(
+            "--allow-shell requires --process-backend oci".to_owned(),
+        ));
     }
+    Ok(backend)
+}
+
+fn configured_pricing(args: &RunArgs) -> Result<Option<ModelPricing>, CliError> {
+    let primary = price_card(
+        args.input_price,
+        args.cached_input_price,
+        args.cache_creation_price,
+        args.output_price,
+        "model",
+    )?;
+    if args.investigation_model.is_none() {
+        return Ok(primary);
+    }
+    let secondary = price_card(
+        args.investigation_input_price,
+        args.investigation_cached_input_price,
+        args.investigation_cache_creation_price,
+        args.investigation_output_price,
+        "investigation model",
+    )?;
+    match (primary, secondary) {
+        (None, None) => Ok(None),
+        (Some(primary), Some(secondary)) => Ok(Some(ModelPricing {
+            input_microusd_per_million: primary
+                .input_microusd_per_million
+                .max(secondary.input_microusd_per_million),
+            cached_input_microusd_per_million: primary
+                .cached_input_microusd_per_million
+                .max(secondary.cached_input_microusd_per_million),
+            cache_creation_microusd_per_million: primary
+                .cache_creation_microusd_per_million
+                .max(secondary.cache_creation_microusd_per_million),
+            output_microusd_per_million: primary
+                .output_microusd_per_million
+                .max(secondary.output_microusd_per_million),
+        })),
+        _ => Err(CliError::Argument(
+            "routing with pricing requires complete rate cards for both models".to_owned(),
+        )),
+    }
+}
+
+fn price_card(
+    input: Option<u64>,
+    cached_input: Option<u64>,
+    cache_creation: Option<u64>,
+    output: Option<u64>,
+    label: &str,
+) -> Result<Option<ModelPricing>, CliError> {
+    match (input, cached_input, cache_creation, output) {
+        (None, None, None, None) => Ok(None),
+        (Some(input), Some(cached_input), Some(cache_creation), Some(output)) => {
+            Ok(Some(ModelPricing {
+                input_microusd_per_million: input,
+                cached_input_microusd_per_million: cached_input,
+                cache_creation_microusd_per_million: cache_creation,
+                output_microusd_per_million: output,
+            }))
+        }
+        _ => Err(CliError::Argument(format!(
+            "{label} pricing requires input, cached-input, cache-creation, and output prices together"
+        ))),
+    }
+}
+
+fn run_tool_registry(
+    backend: Arc<dyn ProcessBackend>,
+    cancellation: CancellationToken,
+    allow_shell: bool,
+) -> Result<ToolRegistry, ToolError> {
+    let mut registry =
+        builtin_registry_with_process(RunProcessTool::new(backend.clone(), cancellation.clone()))?;
+    if allow_shell {
+        registry.register(RunShellTool::new(backend, cancellation))?;
+    }
+    Ok(registry)
 }
 
 fn effective_process_approval(args: &RunArgs) -> Result<ProcessApprovalArg, CliError> {
@@ -2814,6 +3019,7 @@ fn render_run(
     model_summary: &str,
     receipt: &ChangeReceipt,
     tokens: u64,
+    cost_microusd: Option<u64>,
     output: OutputFormat,
 ) -> Result<(), CliError> {
     match output {
@@ -2826,6 +3032,7 @@ fn render_run(
             "approvals": receipt.approvals,
             "risks": receipt.unresolved_risks,
             "tokens": tokens,
+            "cost_microusd": cost_microusd,
             "receipt": run_root.join("receipt.json"),
             "trace": run_root.join("trace.jsonl"),
         })),
@@ -2845,8 +3052,11 @@ fn render_run(
             } else {
                 "not applicable".to_owned()
             };
+            let cost_line = cost_microusd.map_or_else(String::new, |cost| {
+                format!("Estimated cost: {cost} micro-USD\n")
+            });
             write_human_stdout(&format!(
-                "Run: {}\nOutcome: {:?}\n\n{}\n\nChanged files:\n{}\n\nEvidence: {} passed, {} failed, {} inconclusive\nTokens: {}\nReceipt: {}\nTrace: {}\nApply: {}\n",
+                "Run: {}\nOutcome: {:?}\n\n{}\n\nChanged files:\n{}\n\nEvidence: {} passed, {} failed, {} inconclusive\nTokens: {}\n{}Receipt: {}\nTrace: {}\nApply: {}\n",
                 receipt.run_id,
                 receipt.outcome,
                 model_summary,
@@ -2855,6 +3065,7 @@ fn render_run(
                 receipt.verification.failed,
                 receipt.verification.inconclusive,
                 tokens,
+                cost_line,
                 run_root.join("receipt.json").display(),
                 run_root.join("trace.jsonl").display(),
                 apply_hint,
@@ -3284,9 +3495,127 @@ impl CliError {
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
     use pactrail_core::{ActionRecord, Evidence, EvidenceKind};
 
     use super::*;
+
+    #[test]
+    fn model_pricing_requires_a_complete_explicit_rate_card() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--model",
+            "test",
+            "--input-price",
+            "200000",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("CLI: {error}"));
+        let Some(Command::Run(mut args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert!(configured_pricing(&args).is_err());
+        args.cached_input_price = Some(20_000);
+        args.cache_creation_price = Some(250_000);
+        args.output_price = Some(1_000_000);
+        assert_eq!(
+            configured_pricing(&args)
+                .unwrap_or_else(|error| unreachable!("pricing: {error}"))
+                .unwrap_or_else(|| unreachable!("missing rates"))
+                .cached_input_microusd_per_million,
+            20_000
+        );
+    }
+
+    #[test]
+    fn investigation_routing_requires_a_model_and_two_complete_rate_cards() {
+        let mut args = probe_run_args(ProbeArgs {
+            provider: ProviderKind::Ollama,
+            model: "primary".to_owned(),
+            base_url: None,
+            api_key_env: "OPENAI_API_KEY".to_owned(),
+            context_tokens: 32_768,
+            max_output_tokens: 4_096,
+            request_timeout_seconds: 300,
+            no_stream: false,
+            disable_thinking: false,
+            native_tools: crate::cli::CapabilitySetting::Auto,
+            parallel_tools: crate::cli::CapabilitySetting::Auto,
+            structured_output: crate::cli::CapabilitySetting::Auto,
+            vision: crate::cli::CapabilitySetting::Auto,
+            prompt_caching: crate::cli::CapabilitySetting::Auto,
+            reasoning_controls: crate::cli::CapabilitySetting::Auto,
+            output: OutputFormat::Human,
+        });
+        args.investigation_provider = Some(ProviderKind::OpenAi);
+        assert!(validate_model_options(&args).is_err());
+        args.investigation_model = Some("economical".to_owned());
+        assert!(validate_model_options(&args).is_ok());
+        args.input_price = Some(200_000);
+        args.cached_input_price = Some(20_000);
+        args.cache_creation_price = Some(250_000);
+        args.output_price = Some(1_000_000);
+        assert!(configured_pricing(&args).is_err());
+        args.investigation_input_price = Some(100_000);
+        args.investigation_cached_input_price = Some(30_000);
+        args.investigation_cache_creation_price = Some(100_000);
+        args.investigation_output_price = Some(800_000);
+        let pricing = configured_pricing(&args)
+            .unwrap_or_else(|error| unreachable!("pricing: {error}"))
+            .unwrap_or_else(|| unreachable!("missing rates"));
+        assert_eq!(pricing.input_microusd_per_million, 200_000);
+        assert_eq!(pricing.cached_input_microusd_per_million, 30_000);
+        assert_eq!(pricing.output_microusd_per_million, 1_000_000);
+        args.investigation_provider = None;
+        let contract = TaskContract::new("inspect", ".");
+        let driver =
+            build_driver(&contract, &args).unwrap_or_else(|error| unreachable!("router: {error}"));
+        assert_eq!(driver.name(), "phase-router");
+        assert!(driver.model().contains("primary=ollama/primary"));
+        assert!(driver.model().contains("investigation=ollama/economical"));
+    }
+
+    #[test]
+    fn shell_requires_explicit_oci_backend() {
+        let args = probe_run_args(ProbeArgs {
+            provider: ProviderKind::Ollama,
+            model: "test".to_owned(),
+            base_url: None,
+            api_key_env: "OPENAI_API_KEY".to_owned(),
+            context_tokens: 32_768,
+            max_output_tokens: 4_096,
+            request_timeout_seconds: 300,
+            no_stream: false,
+            disable_thinking: false,
+            native_tools: crate::cli::CapabilitySetting::Auto,
+            parallel_tools: crate::cli::CapabilitySetting::Auto,
+            structured_output: crate::cli::CapabilitySetting::Auto,
+            vision: crate::cli::CapabilitySetting::Auto,
+            prompt_caching: crate::cli::CapabilitySetting::Auto,
+            reasoning_controls: crate::cli::CapabilitySetting::Auto,
+            output: OutputFormat::Human,
+        });
+        let mut args = RunArgs {
+            allow_shell: true,
+            ..args
+        };
+        assert!(matches!(
+            effective_process_backend(&args),
+            Err(CliError::Argument(_))
+        ));
+        args.process_backend = Some(ProcessBackendArg::Native);
+        assert!(matches!(
+            effective_process_backend(&args),
+            Err(CliError::Argument(_))
+        ));
+        args.process_backend = Some(ProcessBackendArg::Oci);
+        assert_eq!(
+            effective_process_backend(&args)
+                .unwrap_or_else(|error| unreachable!("OCI backend: {error}")),
+            ProcessBackendArg::Oci
+        );
+    }
 
     #[test]
     fn state_layout_rejects_non_directory_control_roots() {

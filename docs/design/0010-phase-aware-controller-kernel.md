@@ -1,6 +1,6 @@
 # Design 0010: phase-aware controller kernel
 
-Status: implemented for the next 1.x release
+Status: superseded by design 0015 after the post-upgrade benchmark
 
 ## Problem
 

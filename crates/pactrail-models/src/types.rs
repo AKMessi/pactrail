@@ -688,6 +688,20 @@ pub struct ModelRequest {
     pub tools: Vec<ToolDescriptor>,
     pub max_output_tokens: u64,
     pub temperature: Option<f32>,
+    /// Engine-owned turn phase; providers ignore it, opt-in routers may use it.
+    pub phase: Option<ModelPhase>,
+}
+
+/// Provider-neutral purpose of one model request.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelPhase {
+    Investigation,
+    Implementation,
+    Validation,
+    Synthesis,
+    Recovery,
+    Probe,
 }
 
 /// Reason a model stopped producing output.
@@ -707,6 +721,8 @@ pub struct Usage {
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub cached_input_tokens: u64,
+    #[serde(default)]
+    pub cache_creation_input_tokens: u64,
 }
 
 impl Usage {
@@ -719,6 +735,9 @@ impl Usage {
             cached_input_tokens: self
                 .cached_input_tokens
                 .saturating_add(other.cached_input_tokens),
+            cache_creation_input_tokens: self
+                .cache_creation_input_tokens
+                .saturating_add(other.cache_creation_input_tokens),
         }
     }
 
@@ -726,6 +745,43 @@ impl Usage {
     #[must_use]
     pub const fn total(self) -> u64 {
         self.input_tokens.saturating_add(self.output_tokens)
+    }
+}
+
+/// Explicit rates in micro-US dollars per million tokens. No provider price is assumed.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelPricing {
+    pub input_microusd_per_million: u64,
+    pub cached_input_microusd_per_million: u64,
+    pub cache_creation_microusd_per_million: u64,
+    pub output_microusd_per_million: u64,
+}
+
+impl ModelPricing {
+    /// Computes a conservatively rounded cost from normalized provider usage.
+    /// Returns `None` when cache counters exceed the reported input total.
+    #[must_use]
+    pub fn estimate_microusd(self, usage: Usage) -> Option<u64> {
+        let cached = usage
+            .cached_input_tokens
+            .checked_add(usage.cache_creation_input_tokens)?;
+        let uncached = usage.input_tokens.checked_sub(cached)?;
+        let units = u128::from(uncached)
+            .saturating_mul(u128::from(self.input_microusd_per_million))
+            .saturating_add(
+                u128::from(usage.cached_input_tokens)
+                    .saturating_mul(u128::from(self.cached_input_microusd_per_million)),
+            )
+            .saturating_add(
+                u128::from(usage.cache_creation_input_tokens)
+                    .saturating_mul(u128::from(self.cache_creation_microusd_per_million)),
+            )
+            .saturating_add(
+                u128::from(usage.output_tokens)
+                    .saturating_mul(u128::from(self.output_microusd_per_million)),
+            );
+        Some(u64::try_from(units.saturating_add(999_999) / 1_000_000).unwrap_or(u64::MAX))
     }
 }
 
@@ -774,6 +830,30 @@ mod tests {
 
     use super::*;
     use crate::test_support::tiny_png;
+
+    #[test]
+    fn pricing_separates_read_and_write_cache_tokens_without_float_rounding() {
+        let pricing = ModelPricing {
+            input_microusd_per_million: 1_000_000,
+            cached_input_microusd_per_million: 100_000,
+            cache_creation_microusd_per_million: 1_250_000,
+            output_microusd_per_million: 5_000_000,
+        };
+        let usage = Usage {
+            input_tokens: 100,
+            cached_input_tokens: 20,
+            cache_creation_input_tokens: 10,
+            output_tokens: 5,
+        };
+        assert_eq!(pricing.estimate_microusd(usage), Some(110));
+        assert_eq!(
+            pricing.estimate_microusd(Usage {
+                cached_input_tokens: 101,
+                ..usage
+            }),
+            None
+        );
+    }
 
     fn tiny_jpeg(width: u16, height: u16) -> Vec<u8> {
         let mut bytes = vec![0xff, 0xd8, 0xff, 0xc0, 0x00, 0x0b, 8];

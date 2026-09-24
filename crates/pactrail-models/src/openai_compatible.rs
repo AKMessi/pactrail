@@ -359,6 +359,7 @@ impl OpenAiStreamAccumulator {
                 input_tokens: number(usage, "prompt_tokens"),
                 output_tokens: number(usage, "completion_tokens"),
                 cached_input_tokens: cached_input_tokens(usage),
+                cache_creation_input_tokens: 0,
             };
             if self.usage_seen
                 && (next.input_tokens < self.usage.input_tokens
@@ -824,6 +825,7 @@ fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResp
             input_tokens: number(usage, "prompt_tokens"),
             output_tokens: number(usage, "completion_tokens"),
             cached_input_tokens: cached_input_tokens(usage),
+            cache_creation_input_tokens: 0,
         });
     let mut extensions = serde_json::Map::new();
     for key in ["id", "created", "system_fingerprint"] {
@@ -1103,6 +1105,7 @@ mod tests {
             tools: Vec::new(),
             max_output_tokens: 128,
             temperature: Some(0.0),
+            phase: None,
         };
         let mut vision = config("https://api.example.com/v1");
         vision.capabilities.vision = true;
@@ -1126,6 +1129,7 @@ mod tests {
             tools: Vec::new(),
             max_output_tokens: 128,
             temperature: Some(0.0),
+            phase: None,
         };
         let default_body = request_body(&config("https://api.example.com/v1"), &request, false)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
@@ -1145,6 +1149,7 @@ mod tests {
             tools: Vec::new(),
             max_output_tokens: 128,
             temperature: None,
+            phase: None,
         };
         let mut streaming = config("https://api.example.com/v1");
         streaming.stream = true;
@@ -1478,6 +1483,7 @@ mod tests {
                     tools: Vec::new(),
                     max_output_tokens: 32,
                     temperature: None,
+                    phase: None,
                 },
                 &observer,
             )

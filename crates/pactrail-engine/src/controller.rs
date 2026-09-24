@@ -162,7 +162,10 @@ impl ControllerKernel {
         self.phase = Some(phase);
         let phase_turn = self.phase_turn;
         let phase_limit = self.phase_limit(phase);
-        let tools = select_tools(all_tools, phase, phase_turn, self.no_progress_turns);
+        // Keep the advertised catalog stable. Removing read tools at a phase
+        // boundary both invalidates provider prefix caches and prevents a model
+        // from collecting the final evidence it needs before a safe edit.
+        let tools = all_tools.to_vec();
         let allowed_tool_names = tools.iter().map(|tool| tool.name.clone()).collect();
         let prompt = if self.announced_phases.contains(&phase) {
             None
@@ -210,7 +213,7 @@ impl ControllerKernel {
         (self.no_progress_turns >= SEMANTIC_STEERING_THRESHOLD).then(|| {
             if self.intent == GoalIntent::Change {
                 format!(
-                    "Pactrail progress controller: {turns} consecutive tool turns produced neither new evidence nor a candidate change. Stop repeating equivalent observations. State the concrete defect hypothesis internally, then make the smallest supported candidate change or finish with a precise blocker. Do not resume broad exploration.",
+                "Pactrail progress controller: {turns} consecutive tool turns produced neither new evidence nor a candidate change. Stop repeating equivalent observations. Make the smallest supported candidate change, request one specifically justified missing fact, or finish with a precise blocker.",
                     turns = self.no_progress_turns
                 )
             } else {
@@ -270,11 +273,12 @@ impl ControllerKernel {
                 self.max_turns.saturating_sub(self.discovery_limit)
             ),
             ControllerPhase::Implementing if self.no_progress_turns > 0 => format!(
-                "semantic progress stalled for {} turn(s); broad discovery is disabled",
+                "semantic progress stalled for {} turn(s); focus on one missing fact or a supported edit",
                 self.no_progress_turns
             ),
             ControllerPhase::Implementing => {
-                "discovery budget exhausted; broad discovery is disabled".to_owned()
+                "discovery allowance reached; focus on implementation and targeted evidence"
+                    .to_owned()
             }
             ControllerPhase::Validating if candidate_present => {
                 "an isolated candidate exists; tools are focused on review, checks, and repair"
@@ -297,31 +301,6 @@ fn discovery_turn_limit(max_turns: u16, discovery_turn_cap: u16) -> u16 {
         .min(max_turns.saturating_sub(MIN_RESERVED_ACTION_TURNS))
 }
 
-fn select_tools(
-    all_tools: &[ToolDescriptor],
-    phase: ControllerPhase,
-    phase_turn: u16,
-    no_progress_turns: u16,
-) -> Vec<ToolDescriptor> {
-    if phase == ControllerPhase::Investigating {
-        return all_tools.to_vec();
-    }
-    if phase == ControllerPhase::Synthesizing {
-        return Vec::new();
-    }
-
-    let focused_read_available = phase_turn == 1 && no_progress_turns == 0;
-    all_tools
-        .iter()
-        .filter(|tool| {
-            !tool.annotations.read_only
-                || tool.name == "workspace_changes"
-                || (focused_read_available && tool.name == "read_file")
-        })
-        .cloned()
-        .collect()
-}
-
 fn finish_tool_turn(pending: &mut Option<bool>, no_progress_turns: &mut u16) {
     if let Some(novel) = pending.take() {
         if novel {
@@ -336,16 +315,16 @@ fn phase_prompt(phase: ControllerPhase, phase_turn: u16, turns_remaining: u16) -
     let instruction = match phase {
         ControllerPhase::Investigating => "Gather only task-relevant evidence.",
         ControllerPhase::Implementing if phase_turn == 1 => {
-            "The bounded discovery phase is complete. Broad listing, search, history, and memory tools are unavailable. Use at most one focused read if indispensable, then make the smallest coherent candidate change supported by the evidence. If no safe change can be identified, return a precise blocker instead of continuing to browse."
+            "The initial discovery allowance is complete. Make the smallest coherent candidate change supported by the evidence. If a specific fact is missing, use a focused read or search before editing. Avoid repeating equivalent observations; report a precise blocker if no safe change can be identified."
         }
         ControllerPhase::Implementing => {
-            "The focused-read allowance is exhausted. Make the smallest coherent candidate change now, or return a precise blocker. Do not request unavailable discovery tools."
+            "Prioritize a supported candidate change. Read or search only for a specific missing fact, and avoid repeated equivalent observations. Return a precise blocker if the available evidence cannot support an edit."
         }
         ControllerPhase::Validating => {
-            "An isolated candidate now exists. Inspect the candidate, run the most relevant available checks, and repair failures. Broad discovery is unavailable because verification and finalization turns are reserved."
+            "An isolated candidate now exists. Inspect it, run relevant checks, and repair failures. Use focused reads when diagnostics identify a missing fact; keep the remaining turn budget for verification and finalization."
         }
         ControllerPhase::Synthesizing => {
-            "Tool access is disabled for this bounded synthesis turn. Answer the original informational request using only evidence already present. Distinguish observed facts from inference and state any remaining uncertainty."
+            "Answer the original informational request from the evidence already present. Distinguish observed facts from inference and state any remaining uncertainty."
         }
     };
     format!(
@@ -483,29 +462,25 @@ mod tests {
     }
 
     #[test]
-    fn implementation_phase_removes_broad_discovery_tools() {
+    fn every_phase_preserves_the_advertised_tool_catalog() {
         let tools = vec![
             descriptor("search", ToolAnnotations::READ_ONLY),
             descriptor("read_file", ToolAnnotations::READ_ONLY),
             descriptor("workspace_changes", ToolAnnotations::READ_ONLY),
             descriptor("edit_file", ToolAnnotations::WORKSPACE_MUTATION),
         ];
-        let first = select_tools(&tools, ControllerPhase::Implementing, 1, 0);
-        assert_eq!(
-            first
-                .iter()
-                .map(|tool| tool.name.as_str())
-                .collect::<Vec<_>>(),
-            ["read_file", "workspace_changes", "edit_file"]
-        );
-        let later = select_tools(&tools, ControllerPhase::Implementing, 2, 0);
-        assert_eq!(
-            later
-                .iter()
-                .map(|tool| tool.name.as_str())
-                .collect::<Vec<_>>(),
-            ["workspace_changes", "edit_file"]
-        );
+        let mut kernel = ControllerKernel::restore("fix the parser", 16, &[]);
+        for turn in 0..16 {
+            let controlled = kernel.before_turn(turn, turn >= 8, &tools);
+            assert_eq!(
+                controlled
+                    .tools
+                    .iter()
+                    .map(|tool| tool.name.as_str())
+                    .collect::<Vec<_>>(),
+                ["search", "read_file", "workspace_changes", "edit_file"]
+            );
+        }
     }
 
     #[test]
@@ -555,12 +530,12 @@ mod tests {
         );
         let controlled = kernel.before_turn(5, false, &tools);
         assert_eq!(controlled.phase, ControllerPhase::Implementing);
-        assert!(controlled.tools.iter().all(|tool| tool.name != "search"));
+        assert!(controlled.tools.iter().any(|tool| tool.name == "search"));
         assert!(controlled.prompt.is_some());
     }
 
     #[test]
-    fn an_early_intervention_never_reopens_broad_discovery() {
+    fn an_early_intervention_preserves_targeted_discovery() {
         let tools = vec![
             descriptor("search", ToolAnnotations::READ_ONLY),
             descriptor("read_file", ToolAnnotations::READ_ONLY),
@@ -594,7 +569,7 @@ mod tests {
         kernel.observe_turn(&[(evidence, false)]);
         let next = kernel.before_turn(3, false, &tools);
         assert_eq!(next.phase, ControllerPhase::Implementing);
-        assert!(next.tools.iter().all(|tool| tool.name != "search"));
+        assert!(next.tools.iter().any(|tool| tool.name == "search"));
     }
 
     #[test]
@@ -632,6 +607,6 @@ mod tests {
         assert_eq!(controlled.phase_turn, 2);
         assert_eq!(restored.no_progress_turns, 1);
         assert!(controlled.prompt.is_none());
-        assert!(controlled.tools.iter().all(|tool| tool.name != "search"));
+        assert!(controlled.tools.iter().any(|tool| tool.name == "search"));
     }
 }

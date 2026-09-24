@@ -17,7 +17,7 @@ pub use builtins::{
 pub use git::{GitDiffTool, GitHistoryTool, GitStatusTool};
 pub use patch::ApplyPatchTool;
 pub use policy::PolicyEngine;
-pub use process::RunProcessTool;
+pub use process::{RunProcessTool, RunShellTool};
 pub use process_backend::{
     DisabledProcessBackend, NativeProcessBackend, OciProcessBackend, OciProcessConfig,
     OciRuntimeKind, OciSandboxProfile, ProcessBackend, ProcessBackendDescriptor,

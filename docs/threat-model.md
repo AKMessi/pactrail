@@ -32,6 +32,8 @@ validation.
 - Safe-path parsing rejects absolute paths, drive/UNC prefixes, parent traversal,
   symlinks, and special files.
 - Writes additionally require an allowed workspace-relative prefix.
+- Candidate manifest comparison rechecks every changed path against the write
+  prefixes, including files modified by an authorized process.
 - The source tree is untouched before explicit apply unless a trusted native
   process escapes the candidate directory.
 - Apply binds the receipt to the exact candidate change set and refuses a source
@@ -200,6 +202,13 @@ a backend does not itself approve a request. Non-interactive approvals deny by
 default; interactive approvals show and bind the exact request.
 
 ### Restricted OCI
+
+`--allow-shell` exposes a bounded `run_shell` tool only with
+`--process-backend oci`. The tool delegates to the same process policy,
+approval binding, output limits, and trace as `run_process`; it passes the
+script as an argument to `/bin/sh -c` inside the candidate container. The
+shell is absent from default and native runs. External process edits to the
+candidate are checked against the task's write scope before a receipt or apply.
 
 `--process-backend oci` or `/process sandbox <image>` runs each approved command
 through a locally attested Docker or Podman executable and a locally resolved

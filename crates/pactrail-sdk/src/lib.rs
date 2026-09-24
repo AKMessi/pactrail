@@ -23,9 +23,10 @@ pub mod model {
         ImageArtifactError, ImageMediaType, ImageSetSummary, MAX_INLINE_MODEL_REQUEST_BYTES,
         MAX_INPUT_IMAGE_BYTES, MAX_INPUT_IMAGE_DIMENSION, MAX_INPUT_IMAGES,
         MAX_TOTAL_INPUT_IMAGE_BYTES, Message, ModelCapabilities, ModelDriver, ModelError,
-        ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, OpenAiCompatibleConfig,
-        OpenAiCompatibleDriver, ProbeObservation, Role, ToolCall, ToolResult, Usage, UserContent,
-        probe_capabilities, validate_image_set,
+        ModelPhase, ModelPricing, ModelRequest, ModelResponse, ModelStreamEvent,
+        ModelStreamObserver, OpenAiCompatibleConfig, OpenAiCompatibleDriver, OpenAiResponsesConfig,
+        OpenAiResponsesDriver, PhaseModelRouter, ProbeObservation, Role, ToolCall, ToolResult,
+        Usage, UserContent, probe_capabilities, validate_image_set,
     };
 }
 
@@ -37,10 +38,10 @@ pub mod tool {
         OciProcessConfig, OciRuntimeKind, OciSandboxProfile, PolicyAuditEntry, PolicyAuditLog,
         PolicyEngine, ProcessBackend, ProcessBackendDescriptor, ProcessBackendError,
         ProcessBackendKind, ProcessExecution, ProcessRequest, ReadFileTool, ReadManyFilesTool,
-        RecallMemoryTool, RemoveFileTool, ReplaceTextTool, RunProcessTool, SearchChangeImpactTool,
-        SearchCodeGraphTool, SearchTool, Tool, ToolAnnotations, ToolContext, ToolDescriptor,
-        ToolError, ToolOutput, ToolRegistry, ToolRisk, WorkspaceChangesTool, WriteFileTool,
-        builtin_registry, builtin_registry_with_process,
+        RecallMemoryTool, RemoveFileTool, ReplaceTextTool, RunProcessTool, RunShellTool,
+        SearchChangeImpactTool, SearchCodeGraphTool, SearchTool, Tool, ToolAnnotations,
+        ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry, ToolRisk,
+        WorkspaceChangesTool, WriteFileTool, builtin_registry, builtin_registry_with_process,
     };
 }
 

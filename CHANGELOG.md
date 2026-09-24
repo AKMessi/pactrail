@@ -8,6 +8,27 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- An opt-in investigation model router selects a second model only during
+  controller investigation. Provider/model/route are trace-visible, both
+  model identities bind resume, and cost caps use conservative prices from
+  complete rate cards for both models.
+
+- An opt-in native OpenAI Responses adapter uses stateless requests and replays
+  encrypted reasoning, function calls, and tool outputs through the normalized
+  model driver. Buffered responses are bounded and parsed before tool effects.
+
+- Explicit four-rate model pricing now estimates cost from normalized usage,
+  including cache reads and writes. A task cost budget can stop further work
+  after a reported overrun; pricing is bound to resumable checkpoints and
+  shown in traces and run output.
+
+- Models declared with `--native-tools off` can now use one exact, bounded text
+  action per turn. Pactrail parses the action into the same typed tool kernel,
+  policy checks, effect journal, and receipt path as native function calls.
+
+- An opt-in `--allow-shell` exposes `run_shell` only through the restricted OCI
+  backend, using existing exact process approvals and bounded execution.
+
 - A deterministic, phase-aware controller kernel now reserves implementation
   and validation turns, measures semantic evidence progress, narrows advertised
   tools after bounded discovery, and exposes every phase decision and
@@ -38,6 +59,12 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Candidate manifest comparison now rejects changes outside the task's write
+  scope even when an authorized process, rather than a typed file tool, wrote
+  them. Such a candidate cannot produce an applicable change set.
+- Controller phases now keep a stable advertised tool catalog. Focused read and
+  search remain available during implementation and validation, repairing the
+  benchmarked failure where phase narrowing prevented any candidate edit.
 - Change tasks that return a summary without producing an isolated candidate
   now fail explicitly instead of exposing an empty ready-to-apply receipt.
 

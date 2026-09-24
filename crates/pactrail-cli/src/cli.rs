@@ -31,7 +31,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Execute a task in an isolated transaction.
-    Run(RunArgs),
+    Run(Box<RunArgs>),
     /// Continue an interrupted run from its latest safe checkpoint.
     Resume(ResumeArgs),
     /// Probe positive model capabilities without executing returned tools.
@@ -349,6 +349,26 @@ pub struct RunArgs {
     #[arg(long, env = "PACTRAIL_MODEL")]
     pub model: Option<String>,
 
+    /// Opt-in model used only for investigation turns.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_model: Option<String>,
+
+    /// Provider for the investigation model; defaults to the primary provider.
+    #[arg(long, value_enum)]
+    #[serde(default)]
+    pub investigation_provider: Option<ProviderKind>,
+
+    /// Optional endpoint for the investigation model.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_base_url: Option<String>,
+
+    /// Environment variable containing the investigation provider API key.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_api_key_env: Option<String>,
+
     /// Provider API base URL, or `PACTRAIL_BASE_URL`.
     #[arg(long, env = "PACTRAIL_BASE_URL")]
     pub base_url: Option<String>,
@@ -370,6 +390,11 @@ pub struct RunArgs {
     /// Deprecated alias for `--process-backend native`.
     #[arg(long)]
     pub allow_process: bool,
+
+    /// Expose a POSIX shell tool inside an explicitly selected restricted OCI backend.
+    #[arg(long)]
+    #[serde(default)]
+    pub allow_shell: bool,
 
     /// How scoped process approval requests are resolved.
     #[arg(long, value_enum)]
@@ -415,6 +440,51 @@ pub struct RunArgs {
     /// Maximum model turns.
     #[arg(long, default_value_t = 24)]
     pub max_turns: u16,
+
+    /// Maximum estimated model cost in micro-US dollars (zero disables the cap).
+    #[arg(long, default_value_t = 0)]
+    #[serde(default)]
+    pub max_cost_microusd: u64,
+
+    /// Standard input price in micro-US dollars per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub input_price: Option<u64>,
+
+    /// Cached input read price in micro-US dollars per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub cached_input_price: Option<u64>,
+
+    /// Cache creation price in micro-US dollars per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub cache_creation_price: Option<u64>,
+
+    /// Output price in micro-US dollars per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub output_price: Option<u64>,
+
+    /// Investigation input price in micro-USD per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_input_price: Option<u64>,
+
+    /// Investigation cached input read price in micro-USD per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_cached_input_price: Option<u64>,
+
+    /// Investigation cache creation price in micro-USD per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_cache_creation_price: Option<u64>,
+
+    /// Investigation output price in micro-USD per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub investigation_output_price: Option<u64>,
 
     /// Declared model context capacity.
     #[arg(long, default_value_t = 32_768)]
@@ -485,6 +555,7 @@ pub struct RunArgs {
 pub enum ProviderKind {
     Ollama,
     OpenAi,
+    OpenAiResponses,
     OpenAiCompatible,
     Anthropic,
     Gemini,
@@ -563,6 +634,24 @@ mod tests {
             unreachable!("run command")
         };
         assert_eq!(args.request_timeout_seconds, 300);
+    }
+
+    #[test]
+    fn native_responses_provider_is_an_explicit_selection() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--provider",
+            "open-ai-responses",
+            "--model",
+            "test-model",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Run(args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert_eq!(args.provider, super::ProviderKind::OpenAiResponses);
     }
 
     #[test]
