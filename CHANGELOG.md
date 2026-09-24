@@ -8,6 +8,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- The Anthropic native adapter now enables automatic ephemeral prompt caching
+  when `--prompt-caching on` is declared, with cache usage reflected in
+  explicit cost accounting.
+
 - An opt-in investigation model router selects a second model only during
   controller investigation. Provider/model/route are trace-visible, both
   model identities bind resume, and cost caps use conservative prices from

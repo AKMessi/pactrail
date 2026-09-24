@@ -23,6 +23,12 @@ The Chat Completions, Anthropic, and Gemini transports support explicit bounded 
 contradictory, oversized, or disconnected stream fails the turn; partial text
 and tool arguments never reach durable conversation or tool execution.
 
+For the native Anthropic adapter, `--prompt-caching on` adds the documented
+top-level ephemeral cache control to each Messages request. The default
+leaves caching disabled. The API determines whether a prompt is long enough
+to cache; Pactrail records cache reads and writes from reported usage.
+See [Anthropic prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+
 The opt-in `open-ai-responses` adapter uses `store: false` and replays the
 provider's exact output items, including encrypted reasoning, function calls,
 and function outputs across tool turns. It currently uses a bounded buffered
