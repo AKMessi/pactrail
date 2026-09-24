@@ -308,6 +308,7 @@ pub struct RunEngine<'a> {
     input_images: Vec<ImageArtifact>,
     max_turns: u16,
     pricing: Option<ModelPricing>,
+    investigation_pricing: Option<ModelPricing>,
 }
 
 impl<'a> RunEngine<'a> {
@@ -332,6 +333,7 @@ impl<'a> RunEngine<'a> {
             input_images: Vec::new(),
             max_turns: DEFAULT_MAX_TURNS,
             pricing: None,
+            investigation_pricing: None,
         }
     }
 
@@ -346,6 +348,19 @@ impl<'a> RunEngine<'a> {
     #[must_use]
     pub const fn with_pricing(mut self, pricing: ModelPricing) -> Self {
         self.pricing = Some(pricing);
+        self.investigation_pricing = None;
+        self
+    }
+
+    /// Prices investigation turns at their own explicit rate card.
+    #[must_use]
+    pub const fn with_routed_pricing(
+        mut self,
+        primary: ModelPricing,
+        investigation: ModelPricing,
+    ) -> Self {
+        self.pricing = Some(primary);
+        self.investigation_pricing = Some(investigation);
         self
     }
 
@@ -675,6 +690,7 @@ impl<'a> RunEngine<'a> {
             context_digest,
             mut conversation,
             mut usage,
+            mut cost_spent,
             mut call_ids,
             mut final_text,
             mut previous_tool_signature,
@@ -696,6 +712,7 @@ impl<'a> RunEngine<'a> {
                 &checkpoint,
                 max_turns,
             )?;
+            let cost_spent = self.resume_cost_spent(store, run_id, checkpoint.usage)?;
             let mut journal = Journal::resume(run_id, store)?;
             journal.append(RunEvent::NoteRecorded {
                 message: format!(
@@ -710,6 +727,7 @@ impl<'a> RunEngine<'a> {
                 checkpoint.context_digest.clone(),
                 checkpoint.conversation.clone(),
                 checkpoint.usage,
+                cost_spent,
                 checkpoint.call_ids.clone(),
                 checkpoint.final_text.clone(),
                 checkpoint.previous_tool_signature.clone(),
@@ -969,6 +987,7 @@ impl<'a> RunEngine<'a> {
                 context_pack.repository_digest,
                 conversation,
                 Usage::default(),
+                self.pricing.map(|_| 0),
                 BTreeSet::new(),
                 String::new(),
                 None,
@@ -1161,7 +1180,7 @@ impl<'a> RunEngine<'a> {
                 temperature: Some(0.0),
                 phase: Some(model_phase),
             };
-            let cost_reservation = match self.reserve_cost_budget(&contract, usage, &request) {
+            let cost_reservation = match self.reserve_cost_budget(&contract, cost_spent, &request) {
                 Ok(reservation) => reservation,
                 Err(error) => {
                     transition(&mut journal, &mut state, RunState::Failed, observer)?;
@@ -1224,7 +1243,12 @@ impl<'a> RunEngine<'a> {
                     "cost budget requires provider-reported usage on every turn".to_owned(),
                 ));
             }
-            let cost_microusd = match self.check_cost_budget(&contract, usage) {
+            let cost_microusd = match self.charge_model_turn(
+                &contract,
+                &mut cost_spent,
+                model_phase,
+                response.usage,
+            ) {
                 Ok(cost) => cost,
                 Err(error) => {
                     transition(&mut journal, &mut state, RunState::Failed, observer)?;
@@ -1276,8 +1300,12 @@ impl<'a> RunEngine<'a> {
                     response.usage.cache_creation_input_tokens.to_string(),
                 ),
             ]);
-            if let Some(cost) = cost_microusd {
-                model_attributes.insert("cumulative_cost_microusd".to_owned(), cost.to_string());
+            if let Some((turn_cost, cumulative_cost)) = cost_microusd {
+                model_attributes.insert("turn_cost_microusd".to_owned(), turn_cost.to_string());
+                model_attributes.insert(
+                    "cumulative_cost_microusd".to_owned(),
+                    cumulative_cost.to_string(),
+                );
             }
             if let Some(reservation) = cost_reservation {
                 model_attributes.insert(
@@ -1705,6 +1733,7 @@ impl<'a> RunEngine<'a> {
                                 &contract,
                                 &mut conversation,
                                 &mut usage,
+                                &mut cost_spent,
                                 &mut journal,
                                 observer,
                                 recovery_turn,
@@ -1912,9 +1941,7 @@ impl<'a> RunEngine<'a> {
             final_text,
             receipt,
             usage,
-            cost_microusd: self
-                .pricing
-                .and_then(|pricing| pricing.estimate_microusd(usage)),
+            cost_microusd: cost_spent,
             context_digest,
             event_count: journal.sequence,
         })
@@ -1926,6 +1953,7 @@ impl<'a> RunEngine<'a> {
         contract: &TaskContract,
         conversation: &mut Vec<ConversationItem>,
         usage: &mut Usage,
+        cost_spent: &mut Option<u64>,
         journal: &mut Journal<'_>,
         observer: &dyn RunObserver,
         turn: u16,
@@ -1961,7 +1989,7 @@ impl<'a> RunEngine<'a> {
             observer,
         )?;
         let request = self.recovery_request(conversation, turn_output_tokens)?;
-        let reservation = self.reserve_cost_budget(contract, *usage, &request)?;
+        let reservation = self.reserve_cost_budget(contract, *cost_spent, &request)?;
         observer.on_progress(&RunProgress::ModelTurnStarted { turn, max_turns });
         let model_started = Instant::now();
         let response = self.invoke_model(&request, observer).await?;
@@ -1981,7 +2009,8 @@ impl<'a> RunEngine<'a> {
                 "cost budget requires provider-reported usage on every turn".to_owned(),
             ));
         }
-        self.check_cost_budget(contract, *usage)?;
+        let cost =
+            self.charge_model_turn(contract, cost_spent, ModelPhase::Recovery, response.usage)?;
         if contract.budget.model_tokens != 0 && usage.total() > contract.budget.model_tokens {
             return Err(EngineError::BudgetExceeded {
                 used: usage.total(),
@@ -1993,6 +2022,7 @@ impl<'a> RunEngine<'a> {
             turn,
             duration_ms,
             reservation,
+            cost,
         )))?;
         if response.finish_reason == FinishReason::ContentFilter {
             return Err(EngineError::Protocol(
@@ -2053,6 +2083,7 @@ impl<'a> RunEngine<'a> {
         turn: u16,
         duration_ms: u64,
         reservation: Option<u64>,
+        cost: Option<(u64, u64)>,
     ) -> ActionRecord {
         let mut attributes = BTreeMap::from([
             ("adapter".to_owned(), bounded_trace_value(self.model.name())),
@@ -2099,6 +2130,13 @@ impl<'a> RunEngine<'a> {
             attributes.insert(
                 "pre_request_reservation_microusd".to_owned(),
                 reservation.to_string(),
+            );
+        }
+        if let Some((turn, cumulative)) = cost {
+            attributes.insert("turn_cost_microusd".to_owned(), turn.to_string());
+            attributes.insert(
+                "cumulative_cost_microusd".to_owned(),
+                cumulative.to_string(),
             );
         }
         extend_provider_trace_attributes(&mut attributes, &response.extensions);
@@ -2690,8 +2728,17 @@ impl RunEngine<'_> {
                 contract.budget.model_tokens
             )));
         }
-        self.check_cost_budget(contract, checkpoint.usage)
-            .map_err(|error| reject(error.to_string()))?;
+        if let Some(spent) = self
+            .resume_cost_spent(events, run_id, checkpoint.usage)
+            .map_err(|error| reject(error.to_string()))?
+            && contract.budget.cost_microusd != 0
+            && spent > contract.budget.cost_microusd
+        {
+            return Err(reject(format!(
+                "checkpoint cost ledger used {spent} micro-USD, exceeding the {} micro-USD task budget",
+                contract.budget.cost_microusd
+            )));
+        }
         match checkpoint.phase {
             ResumePhase::BeforeModel => {}
             ResumePhase::BeforeVerification if !checkpoint.final_text.trim().is_empty() => {}
@@ -2710,41 +2757,91 @@ impl RunEngine<'_> {
         Ok(())
     }
 
-    fn check_cost_budget(
+    fn price_for_phase(&self, phase: ModelPhase) -> Option<ModelPricing> {
+        if phase == ModelPhase::Investigation {
+            self.investigation_pricing.or(self.pricing)
+        } else {
+            self.pricing
+        }
+    }
+
+    fn resume_cost_spent(
         &self,
-        contract: &TaskContract,
+        events: &EventStore,
+        run_id: RunId,
         usage: Usage,
     ) -> Result<Option<u64>, EngineError> {
-        let Some(pricing) = self.pricing else {
+        let Some(primary) = self.pricing else {
             return Ok(None);
         };
-        let cost = pricing.estimate_microusd(usage).ok_or_else(|| {
+        let mut latest = None;
+        for event in events.load(run_id)? {
+            let RunEvent::ActionCompleted(action) = event.event else {
+                continue;
+            };
+            if !action.actor.starts_with("model:") {
+                continue;
+            }
+            if let Some(value) = action.attributes.get("cumulative_cost_microusd") {
+                let cumulative = value.parse::<u64>().map_err(|_| {
+                    EngineError::Protocol("durable model cost ledger is invalid".to_owned())
+                })?;
+                if latest.is_some_and(|previous| cumulative < previous) {
+                    return Err(EngineError::Protocol(
+                        "durable model cost ledger decreased".to_owned(),
+                    ));
+                }
+                latest = Some(cumulative);
+            }
+        }
+        let fallback = primary.estimate_microusd(usage).ok_or_else(|| {
             EngineError::Protocol("provider cache usage exceeds total input tokens".to_owned())
         })?;
-        if contract.budget.cost_microusd != 0 && cost > contract.budget.cost_microusd {
+        Ok(Some(latest.unwrap_or(fallback)))
+    }
+
+    fn charge_model_turn(
+        &self,
+        contract: &TaskContract,
+        spent: &mut Option<u64>,
+        phase: ModelPhase,
+        usage: Usage,
+    ) -> Result<Option<(u64, u64)>, EngineError> {
+        let Some(pricing) = self.price_for_phase(phase) else {
+            return Ok(None);
+        };
+        let turn = pricing.estimate_microusd(usage).ok_or_else(|| {
+            EngineError::Protocol("provider cache usage exceeds total input tokens".to_owned())
+        })?;
+        let cumulative = spent
+            .unwrap_or(0)
+            .checked_add(turn)
+            .ok_or_else(|| EngineError::Protocol("model cost ledger overflowed".to_owned()))?;
+        if contract.budget.cost_microusd != 0 && cumulative > contract.budget.cost_microusd {
             return Err(EngineError::CostBudgetExceeded {
-                used: cost,
+                used: cumulative,
                 limit: contract.budget.cost_microusd,
             });
         }
-        Ok(Some(cost))
+        *spent = Some(cumulative);
+        Ok(Some((turn, cumulative)))
     }
 
     fn reserve_cost_budget(
         &self,
         contract: &TaskContract,
-        usage: Usage,
+        spent: Option<u64>,
         request: &ModelRequest,
     ) -> Result<Option<u64>, EngineError> {
         if contract.budget.cost_microusd == 0 {
             return Ok(None);
         }
-        let pricing = self.pricing.ok_or_else(|| {
-            EngineError::InvalidConfiguration("cost budget requires model pricing".to_owned())
-        })?;
-        let used = pricing.estimate_microusd(usage).ok_or_else(|| {
-            EngineError::Protocol("provider cache usage exceeds total input tokens".to_owned())
-        })?;
+        let pricing = self
+            .price_for_phase(request.phase.unwrap_or(ModelPhase::Implementation))
+            .ok_or_else(|| {
+                EngineError::InvalidConfiguration("cost budget requires model pricing".to_owned())
+            })?;
+        let used = spent.unwrap_or(0);
         let input_bound = self
             .model
             .capabilities()
@@ -2776,6 +2873,8 @@ impl RunEngine<'_> {
             capabilities: &'a pactrail_models::ModelCapabilities,
             #[serde(skip_serializing_if = "Option::is_none")]
             pricing: Option<ModelPricing>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            investigation_pricing: Option<ModelPricing>,
             max_turns: u16,
             runtime_identity: Option<&'a str>,
         }
@@ -2785,6 +2884,7 @@ impl RunEngine<'_> {
             model: self.model.model(),
             capabilities: self.model.capabilities(),
             pricing: self.pricing,
+            investigation_pricing: self.investigation_pricing,
             max_turns: self.max_turns,
             runtime_identity: self.runtime_identity.as_deref(),
         })
@@ -4354,13 +4454,21 @@ mod tests {
         let registry = pactrail_tools::builtin_registry()
             .unwrap_or_else(|error| unreachable!("tools: {error}"));
         let policy = PolicyEngine::local_default();
+        let pricing = ModelPricing {
+            input_microusd_per_million: 1_000_000,
+            cached_input_microusd_per_million: 1_000_000,
+            cache_creation_microusd_per_million: 1_000_000,
+            output_microusd_per_million: 1_000_000,
+        };
         let suspended_engine = RunEngine::new(&suspended_model, &registry, &policy)
-            .with_checkpoint_store(&checkpoints);
+            .with_checkpoint_store(&checkpoints)
+            .with_pricing(pricing);
         let mut store =
             EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
         let mut contract = TaskContract::new("Explain this workspace", ".");
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);
+        contract.budget.cost_microusd = 32_780;
         let run_id = RunId::new();
 
         let interrupted = tokio::time::timeout(
@@ -4410,8 +4518,9 @@ mod tests {
             }])),
             capabilities: ModelCapabilities::default(),
         };
-        let resumed_engine =
-            RunEngine::new(&resumed_model, &registry, &policy).with_checkpoint_store(&checkpoints);
+        let resumed_engine = RunEngine::new(&resumed_model, &registry, &policy)
+            .with_checkpoint_store(&checkpoints)
+            .with_pricing(pricing);
         let outcome = resumed_engine
             .resume_with_observer(
                 run_id,
@@ -4426,6 +4535,7 @@ mod tests {
 
         assert_eq!(outcome.run_id, run_id);
         assert_eq!(outcome.usage.total(), 12);
+        assert_eq!(outcome.cost_microusd, Some(12));
         assert_eq!(outcome.receipt.outcome, ReceiptOutcome::Answered);
         let events = store
             .load(run_id)
@@ -5006,6 +5116,99 @@ mod tests {
             RunEvent::ActionCompleted(ActionRecord { attributes, .. })
                 if attributes.get("pre_request_reservation_microusd") == Some(&"32768".to_owned())
         )));
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn routed_cost_ledger_prices_each_phase_and_reconstructs_from_events() {
+        let usage = Usage {
+            input_tokens: 10,
+            ..Usage::default()
+        };
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "routed-pricing-test".to_owned(),
+            responses: Mutex::new(VecDeque::from([
+                ModelResponse {
+                    text: String::new(),
+                    tool_calls: vec![ToolCall {
+                        id: "list-1".to_owned(),
+                        name: "list_files".to_owned(),
+                        arguments: json!({"path": "."}),
+                        extensions: serde_json::Map::new(),
+                    }],
+                    finish_reason: FinishReason::ToolCalls,
+                    usage,
+                    provider_request_id: None,
+                    extensions: serde_json::Map::new(),
+                },
+                ModelResponse {
+                    text: "The workspace is empty.".to_owned(),
+                    tool_calls: Vec::new(),
+                    finish_reason: FinishReason::Complete,
+                    usage,
+                    provider_request_id: None,
+                    extensions: serde_json::Map::new(),
+                },
+            ])),
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let mut contract = TaskContract::new("What files are in this workspace?", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        contract.budget.cost_microusd = 32_770;
+        let primary = ModelPricing {
+            input_microusd_per_million: 1_000_000,
+            cached_input_microusd_per_million: 1_000_000,
+            cache_creation_microusd_per_million: 1_000_000,
+            output_microusd_per_million: 1_000_000,
+        };
+        let investigation = ModelPricing {
+            input_microusd_per_million: 100_000,
+            cached_input_microusd_per_million: 100_000,
+            cache_creation_microusd_per_million: 100_000,
+            output_microusd_per_million: 100_000,
+        };
+        let engine = RunEngine::new(&model, &registry, &policy)
+            .with_routed_pricing(primary, investigation)
+            .with_max_turns(2);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let run_id = RunId::new();
+        let outcome = engine
+            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .await
+            .unwrap_or_else(|error| unreachable!("routed run: {error}"));
+        assert_eq!(outcome.cost_microusd, Some(11));
+        assert_eq!(
+            engine
+                .resume_cost_spent(&store, run_id, outcome.usage)
+                .unwrap_or_else(|error| unreachable!("ledger: {error}")),
+            Some(11)
+        );
+        let charges = store
+            .load(run_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"))
+            .into_iter()
+            .filter_map(|event| match event.event {
+                RunEvent::ActionCompleted(action) if action.action == "invoke" => {
+                    action.attributes.get("turn_cost_microusd").cloned()
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(charges, ["1", "10"]);
     }
 
     #[tokio::test]

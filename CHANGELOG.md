@@ -35,6 +35,10 @@ follow [Semantic Versioning](https://semver.org/).
 - Cost-capped runs now reserve a conservative maximum request cost before each
   model call, including read-only recovery, and reconcile it against reported
   usage afterward.
+- Routed model turns now use their own declared rate cards for reservation and
+  a journal-backed per-run cost ledger. Resume restores the last hash-linked
+  cumulative charge instead of repricing all tokens at the most expensive
+  route.
 
 - Models declared with `--native-tools off` can now use one exact, bounded text
   action per turn. Pactrail parses the action into the same typed tool kernel,

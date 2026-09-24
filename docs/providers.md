@@ -92,11 +92,13 @@ features are outside this estimate, so the cap is not a guarantee of the
 provider's final invoice.
 
 For investigation routing, provide all four `--investigation-*-price` rates
-as well as the primary rates. Pactrail uses the larger rate for each token
-category across the two models. This is a conservative estimate that can
-overstate actual routed cost; it cannot understate cost from choosing a cheaper
-route when the declared rate cards are accurate. Without two complete cards,
-cost accounting is unavailable and cost-capped runs are rejected.
+as well as the primary rates. Each completed turn is charged to a durable
+cost ledger at its selected route's declared rate. Pre-request reservation
+uses that same route's rate card and the shared declared context bound. The
+ledger is reconstructed from hash-linked model actions when a run resumes;
+older single-rate runs retain their conservative recorded cost. Without two
+complete cards, cost accounting is unavailable and cost-capped runs are
+rejected.
 
 ## Interactive configuration
 

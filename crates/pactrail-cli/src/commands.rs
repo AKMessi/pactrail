@@ -461,6 +461,9 @@ async fn execute_resume_inner(
     if let Some(pricing) = configured_pricing(&args)? {
         engine = engine.with_pricing(pricing);
     }
+    if let Some((primary, investigation)) = configured_route_pricing(&args)? {
+        engine = engine.with_routed_pricing(primary, investigation);
+    }
     let approval_resolver = ConfiguredApprovalResolver {
         process: process_approval,
         mcp: mcp_approval,
@@ -620,6 +623,9 @@ async fn execute_run_inner(
         .with_cancellation(cancellation);
     if let Some(pricing) = configured_pricing(&args)? {
         engine = engine.with_pricing(pricing);
+    }
+    if let Some((primary, investigation)) = configured_route_pricing(&args)? {
+        engine = engine.with_routed_pricing(primary, investigation);
     }
     let approval_resolver = ConfiguredApprovalResolver {
         process: process_approval,
@@ -1400,6 +1406,35 @@ fn configured_pricing(args: &RunArgs) -> Result<Option<ModelPricing>, CliError> 
                 .output_microusd_per_million
                 .max(secondary.output_microusd_per_million),
         })),
+        _ => Err(CliError::Argument(
+            "routing with pricing requires complete rate cards for both models".to_owned(),
+        )),
+    }
+}
+
+fn configured_route_pricing(
+    args: &RunArgs,
+) -> Result<Option<(ModelPricing, ModelPricing)>, CliError> {
+    if args.investigation_model.is_none() {
+        return Ok(None);
+    }
+    let primary = price_card(
+        args.input_price,
+        args.cached_input_price,
+        args.cache_creation_price,
+        args.output_price,
+        "model",
+    )?;
+    let investigation = price_card(
+        args.investigation_input_price,
+        args.investigation_cached_input_price,
+        args.investigation_cache_creation_price,
+        args.investigation_output_price,
+        "investigation model",
+    )?;
+    match (primary, investigation) {
+        (None, None) => Ok(None),
+        (Some(primary), Some(investigation)) => Ok(Some((primary, investigation))),
         _ => Err(CliError::Argument(
             "routing with pricing requires complete rate cards for both models".to_owned(),
         )),
@@ -3567,6 +3602,11 @@ mod tests {
         assert_eq!(pricing.input_microusd_per_million, 200_000);
         assert_eq!(pricing.cached_input_microusd_per_million, 30_000);
         assert_eq!(pricing.output_microusd_per_million, 1_000_000);
+        let (primary_rate, investigation_rate) = configured_route_pricing(&args)
+            .unwrap_or_else(|error| unreachable!("route pricing: {error}"))
+            .unwrap_or_else(|| unreachable!("missing route rates"));
+        assert_eq!(primary_rate.input_microusd_per_million, 200_000);
+        assert_eq!(investigation_rate.input_microusd_per_million, 100_000);
         args.investigation_provider = None;
         let contract = TaskContract::new("inspect", ".");
         let driver =
