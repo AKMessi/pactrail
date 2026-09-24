@@ -541,8 +541,10 @@ fn append_text(target: &mut String, delta: &str) -> Result<(), ModelError> {
 fn gemini_usage(value: &Value) -> Usage {
     Usage {
         input_tokens: number(value, "promptTokenCount"),
-        output_tokens: number(value, "candidatesTokenCount"),
+        output_tokens: number(value, "candidatesTokenCount")
+            .saturating_add(number(value, "thoughtsTokenCount")),
         cached_input_tokens: number(value, "cachedContentTokenCount"),
+        cache_creation_input_tokens: 0,
     }
 }
 

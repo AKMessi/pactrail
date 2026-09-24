@@ -359,6 +359,7 @@ impl OpenAiStreamAccumulator {
                 input_tokens: number(usage, "prompt_tokens"),
                 output_tokens: number(usage, "completion_tokens"),
                 cached_input_tokens: cached_input_tokens(usage),
+                cache_creation_input_tokens: 0,
             };
             if self.usage_seen
                 && (next.input_tokens < self.usage.input_tokens
@@ -824,6 +825,7 @@ fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResp
             input_tokens: number(usage, "prompt_tokens"),
             output_tokens: number(usage, "completion_tokens"),
             cached_input_tokens: cached_input_tokens(usage),
+            cache_creation_input_tokens: 0,
         });
     let mut extensions = serde_json::Map::new();
     for key in ["id", "created", "system_fingerprint"] {

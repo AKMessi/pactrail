@@ -20,8 +20,8 @@ use pactrail_memory::{
 use pactrail_models::{
     AnthropicConfig, AnthropicDriver, CapabilityProbeReport, CapabilitySource, GeminiConfig,
     GeminiDriver, ImageArtifact, MAX_INPUT_IMAGE_BYTES, ModelCapabilities, ModelDriver, ModelError,
-    OpenAiCompatibleConfig, OpenAiCompatibleDriver, probe_capabilities as run_capability_probe,
-    validate_image_set,
+    ModelPricing, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
+    probe_capabilities as run_capability_probe, validate_image_set,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
@@ -53,7 +53,7 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
     match cli.command.ok_or_else(|| {
         CliError::Argument("a command is required outside interactive mode".to_owned())
     })? {
-        Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), args).await,
+        Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), *args).await,
         Command::Resume(args) => resume(&cli.workspace, cli.state_dir.as_deref(), args).await,
         Command::Probe(args) => probe(args).await,
         Command::Inspect(args) => {
@@ -140,6 +140,7 @@ pub(crate) struct CompletedRun {
     pub model_summary: String,
     pub receipt: ChangeReceipt,
     pub tokens: u64,
+    pub cost_microusd: Option<u64>,
 }
 
 async fn execute_mcp_command(
@@ -227,6 +228,11 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         sandbox_tmpfs_mib: 512,
         apply: false,
         max_turns: 1,
+        max_cost_microusd: 0,
+        input_price: None,
+        cached_input_price: None,
+        cache_creation_price: None,
+        output_price: None,
         context_tokens: args.context_tokens,
         max_output_tokens: args.max_output_tokens,
         request_timeout_seconds: args.request_timeout_seconds,
@@ -298,6 +304,12 @@ impl RunManifest {
             ));
         }
         validate_model_limits(&self.args)?;
+        let pricing = configured_pricing(&self.args)?;
+        if self.contract.budget.cost_microusd != 0 && pricing.is_none() {
+            return Err(CliError::Argument(
+                "cost budget requires all four explicit model prices".to_owned(),
+            ));
+        }
         let _backend = effective_process_backend(&self.args)?;
         let _approval = effective_process_approval(&self.args)?;
         let _mcp_approval = effective_mcp_approval(&self.args);
@@ -341,6 +353,7 @@ async fn run(
         &completed.model_summary,
         &completed.receipt,
         completed.tokens,
+        completed.cost_microusd,
         output,
     )
 }
@@ -375,6 +388,7 @@ async fn resume(
         &completed.model_summary,
         &completed.receipt,
         completed.tokens,
+        completed.cost_microusd,
         output,
     )
 }
@@ -426,7 +440,7 @@ async fn execute_resume_inner(
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
-    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
+    let mut engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(mcp_runtime.context_fragments())
         .with_repository_cache(state.join("artifacts").join("repository-index"))
@@ -434,6 +448,9 @@ async fn execute_resume_inner(
         .with_runtime_identity(runtime_identity)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
+    if let Some(pricing) = configured_pricing(&args)? {
+        engine = engine.with_pricing(pricing);
+    }
     let approval_resolver = ConfiguredApprovalResolver {
         process: process_approval,
         mcp: mcp_approval,
@@ -519,6 +536,7 @@ pub(crate) async fn execute_resume_with_observer_and_cancellation(
     .await
 }
 
+#[allow(clippy::too_many_lines)]
 async fn execute_run_inner(
     cli_workspace: &Path,
     state_override: Option<&Path>,
@@ -581,7 +599,7 @@ async fn execute_run_inner(
     let driver = build_driver(&contract, &args)?;
     let mut context_fragments = memory_context_fragments(&contract, &memory, &transaction)?;
     context_fragments.extend(mcp_runtime.context_fragments());
-    let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
+    let mut engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
         .with_repository_cache(state.join("artifacts").join("repository-index"))
@@ -590,6 +608,9 @@ async fn execute_run_inner(
         .with_input_images(input_images)
         .with_max_turns(args.max_turns)
         .with_cancellation(cancellation);
+    if let Some(pricing) = configured_pricing(&args)? {
+        engine = engine.with_pricing(pricing);
+    }
     let approval_resolver = ConfiguredApprovalResolver {
         process: process_approval,
         mcp: mcp_approval,
@@ -636,6 +657,12 @@ fn prepare_run_contract(
     mcp_approval: McpApprovalArg,
 ) -> Result<(TaskContract, PathBuf, PathBuf, McpRuntime), CliError> {
     let (mut contract, workspace) = load_contract(cli_workspace, args)?;
+    let pricing = configured_pricing(args)?;
+    if contract.budget.cost_microusd != 0 && pricing.is_none() {
+        return Err(CliError::Argument(
+            "cost budget requires all four explicit model prices".to_owned(),
+        ));
+    }
     let state = if let Some(override_path) = state_override {
         absolute_or_join(cli_workspace, override_path)?
     } else {
@@ -878,6 +905,7 @@ fn finish_run(
         model_summary: outcome.final_text,
         receipt,
         tokens: outcome.usage.total(),
+        cost_microusd: outcome.cost_microusd,
     })
 }
 
@@ -966,6 +994,7 @@ fn cancelled_run(
                 .to_owned(),
         receipt,
         tokens: 0,
+        cost_microusd: None,
     })
 }
 
@@ -1021,6 +1050,11 @@ fn load_contract(
     args: &RunArgs,
 ) -> Result<(TaskContract, PathBuf), CliError> {
     if let Some(path) = &args.task {
+        if args.max_cost_microusd != 0 {
+            return Err(CliError::Argument(
+                "--max-cost-microusd cannot override a task file budget".to_owned(),
+            ));
+        }
         let task_path = absolute_or_join(cli_workspace, path)?;
         let text = fs::read_to_string(&task_path).map_err(|source| CliError::Io {
             path: task_path.clone(),
@@ -1041,6 +1075,7 @@ fn load_contract(
     })?;
     let mut contract = TaskContract::new(goal, workspace.display().to_string());
     contract.budget.max_model_attempts = args.max_turns;
+    contract.budget.cost_microusd = args.max_cost_microusd;
     contract.budget.model_tokens =
         generated_model_token_budget(args.context_tokens, args.max_output_tokens, args.max_turns);
     Ok((contract, workspace))
@@ -1240,6 +1275,28 @@ fn effective_process_backend(args: &RunArgs) -> Result<ProcessBackendArg, CliErr
         ));
     }
     Ok(backend)
+}
+
+fn configured_pricing(args: &RunArgs) -> Result<Option<ModelPricing>, CliError> {
+    match (
+        args.input_price,
+        args.cached_input_price,
+        args.cache_creation_price,
+        args.output_price,
+    ) {
+        (None, None, None, None) => Ok(None),
+        (Some(input), Some(cached_input), Some(cache_creation), Some(output)) => {
+            Ok(Some(ModelPricing {
+                input_microusd_per_million: input,
+                cached_input_microusd_per_million: cached_input,
+                cache_creation_microusd_per_million: cache_creation,
+                output_microusd_per_million: output,
+            }))
+        }
+        _ => Err(CliError::Argument(
+            "model pricing requires --input-price, --cached-input-price, --cache-creation-price, and --output-price together".to_owned(),
+        )),
+    }
 }
 
 fn run_tool_registry(
@@ -2832,6 +2889,7 @@ fn render_run(
     model_summary: &str,
     receipt: &ChangeReceipt,
     tokens: u64,
+    cost_microusd: Option<u64>,
     output: OutputFormat,
 ) -> Result<(), CliError> {
     match output {
@@ -2844,6 +2902,7 @@ fn render_run(
             "approvals": receipt.approvals,
             "risks": receipt.unresolved_risks,
             "tokens": tokens,
+            "cost_microusd": cost_microusd,
             "receipt": run_root.join("receipt.json"),
             "trace": run_root.join("trace.jsonl"),
         })),
@@ -2863,8 +2922,11 @@ fn render_run(
             } else {
                 "not applicable".to_owned()
             };
+            let cost_line = cost_microusd.map_or_else(String::new, |cost| {
+                format!("Estimated cost: {cost} micro-USD\n")
+            });
             write_human_stdout(&format!(
-                "Run: {}\nOutcome: {:?}\n\n{}\n\nChanged files:\n{}\n\nEvidence: {} passed, {} failed, {} inconclusive\nTokens: {}\nReceipt: {}\nTrace: {}\nApply: {}\n",
+                "Run: {}\nOutcome: {:?}\n\n{}\n\nChanged files:\n{}\n\nEvidence: {} passed, {} failed, {} inconclusive\nTokens: {}\n{}Receipt: {}\nTrace: {}\nApply: {}\n",
                 receipt.run_id,
                 receipt.outcome,
                 model_summary,
@@ -2873,6 +2935,7 @@ fn render_run(
                 receipt.verification.failed,
                 receipt.verification.inconclusive,
                 tokens,
+                cost_line,
                 run_root.join("receipt.json").display(),
                 run_root.join("trace.jsonl").display(),
                 apply_hint,
@@ -3302,9 +3365,38 @@ impl CliError {
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
     use pactrail_core::{ActionRecord, Evidence, EvidenceKind};
 
     use super::*;
+
+    #[test]
+    fn model_pricing_requires_a_complete_explicit_rate_card() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--model",
+            "test",
+            "--input-price",
+            "200000",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("CLI: {error}"));
+        let Some(Command::Run(mut args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert!(configured_pricing(&args).is_err());
+        args.cached_input_price = Some(20_000);
+        args.cache_creation_price = Some(250_000);
+        args.output_price = Some(1_000_000);
+        assert_eq!(
+            configured_pricing(&args)
+                .unwrap_or_else(|error| unreachable!("pricing: {error}"))
+                .unwrap_or_else(|| unreachable!("missing rates"))
+                .cached_input_microusd_per_million,
+            20_000
+        );
+    }
 
     #[test]
     fn shell_requires_explicit_oci_backend() {

@@ -31,7 +31,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Execute a task in an isolated transaction.
-    Run(RunArgs),
+    Run(Box<RunArgs>),
     /// Continue an interrupted run from its latest safe checkpoint.
     Resume(ResumeArgs),
     /// Probe positive model capabilities without executing returned tools.
@@ -420,6 +420,31 @@ pub struct RunArgs {
     /// Maximum model turns.
     #[arg(long, default_value_t = 24)]
     pub max_turns: u16,
+
+    /// Maximum estimated model cost in micro-US dollars (zero disables the cap).
+    #[arg(long, default_value_t = 0)]
+    #[serde(default)]
+    pub max_cost_microusd: u64,
+
+    /// Standard input price in micro-US dollars per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub input_price: Option<u64>,
+
+    /// Cached input read price in micro-US dollars per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub cached_input_price: Option<u64>,
+
+    /// Cache creation price in micro-US dollars per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub cache_creation_price: Option<u64>,
+
+    /// Output price in micro-US dollars per million tokens.
+    #[arg(long)]
+    #[serde(default)]
+    pub output_price: Option<u64>,
 
     /// Declared model context capacity.
     #[arg(long, default_value_t = 32_768)]

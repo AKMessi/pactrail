@@ -17,9 +17,9 @@ use pactrail_core::{
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
     CapabilitySource, ConversationItem, FinishReason, ImageArtifact,
-    MAX_INLINE_MODEL_REQUEST_BYTES, Message, ModelDriver, ModelError, ModelRequest, ModelResponse,
-    ModelStreamEvent, ModelStreamObserver, Role, ToolCall, ToolResult, Usage, UserContent,
-    validate_image_set,
+    MAX_INLINE_MODEL_REQUEST_BYTES, Message, ModelDriver, ModelError, ModelPricing, ModelRequest,
+    ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, ToolResult, Usage,
+    UserContent, validate_image_set,
 };
 use pactrail_store::{EventStore, StoreError};
 use pactrail_tools::{
@@ -288,6 +288,7 @@ pub struct RunOutcome {
     pub final_text: String,
     pub receipt: ChangeReceipt,
     pub usage: Usage,
+    pub cost_microusd: Option<u64>,
     pub context_digest: String,
     pub event_count: u64,
 }
@@ -306,6 +307,7 @@ pub struct RunEngine<'a> {
     runtime_identity: Option<String>,
     input_images: Vec<ImageArtifact>,
     max_turns: u16,
+    pricing: Option<ModelPricing>,
 }
 
 impl<'a> RunEngine<'a> {
@@ -329,6 +331,7 @@ impl<'a> RunEngine<'a> {
             runtime_identity: None,
             input_images: Vec::new(),
             max_turns: DEFAULT_MAX_TURNS,
+            pricing: None,
         }
     }
 
@@ -336,6 +339,13 @@ impl<'a> RunEngine<'a> {
     #[must_use]
     pub const fn with_max_turns(mut self, max_turns: u16) -> Self {
         self.max_turns = max_turns;
+        self
+    }
+
+    /// Enables explicit provider-neutral cost accounting and contract limits.
+    #[must_use]
+    pub const fn with_pricing(mut self, pricing: ModelPricing) -> Self {
+        self.pricing = Some(pricing);
         self
     }
 
@@ -575,6 +585,11 @@ impl<'a> RunEngine<'a> {
         if self.max_turns == 0 {
             return Err(EngineError::InvalidConfiguration(
                 "max_turns must be greater than zero".to_owned(),
+            ));
+        }
+        if contract.budget.cost_microusd != 0 && self.pricing.is_none() {
+            return Err(EngineError::InvalidConfiguration(
+                "nonzero cost budget requires explicit model pricing".to_owned(),
             ));
         }
         if resume.is_some() && !self.input_images.is_empty() {
@@ -1188,6 +1203,19 @@ impl<'a> RunEngine<'a> {
                 cached_input_tokens: response.usage.cached_input_tokens,
             });
             usage = usage.saturating_add(response.usage);
+            if contract.budget.cost_microusd != 0 && response.usage.total() == 0 {
+                transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                return Err(EngineError::Protocol(
+                    "cost budget requires provider-reported usage on every turn".to_owned(),
+                ));
+            }
+            let cost_microusd = match self.check_cost_budget(&contract, usage) {
+                Ok(cost) => cost,
+                Err(error) => {
+                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                    return Err(error);
+                }
+            };
             if contract.budget.model_tokens != 0 && usage.total() > contract.budget.model_tokens {
                 transition(&mut journal, &mut state, RunState::Failed, observer)?;
                 return Err(EngineError::BudgetExceeded {
@@ -1228,7 +1256,14 @@ impl<'a> RunEngine<'a> {
                     "cached_input_tokens".to_owned(),
                     response.usage.cached_input_tokens.to_string(),
                 ),
+                (
+                    "cache_creation_input_tokens".to_owned(),
+                    response.usage.cache_creation_input_tokens.to_string(),
+                ),
             ]);
+            if let Some(cost) = cost_microusd {
+                model_attributes.insert("cumulative_cost_microusd".to_owned(), cost.to_string());
+            }
             if let Some(request_id) = &response.provider_request_id {
                 model_attributes.insert(
                     "provider_request_id".to_owned(),
@@ -1856,6 +1891,9 @@ impl<'a> RunEngine<'a> {
             final_text,
             receipt,
             usage,
+            cost_microusd: self
+                .pricing
+                .and_then(|pricing| pricing.estimate_microusd(usage)),
             context_digest,
             event_count: journal.sequence,
         })
@@ -1903,7 +1941,11 @@ impl<'a> RunEngine<'a> {
         )?;
         observer.on_progress(&RunProgress::ModelTurnStarted { turn, max_turns });
         let request = ModelRequest {
-            conversation: conversation.clone(),
+            conversation: if self.model.capabilities().native_tools {
+                conversation.clone()
+            } else {
+                transport_conversation(conversation).map_err(EngineError::Protocol)?
+            },
             tools: Vec::new(),
             max_output_tokens: turn_output_tokens,
             temperature: Some(0.0),
@@ -1921,6 +1963,12 @@ impl<'a> RunEngine<'a> {
             cached_input_tokens: response.usage.cached_input_tokens,
         });
         *usage = usage.saturating_add(response.usage);
+        if contract.budget.cost_microusd != 0 && response.usage.total() == 0 {
+            return Err(EngineError::Protocol(
+                "cost budget requires provider-reported usage on every turn".to_owned(),
+            ));
+        }
+        self.check_cost_budget(contract, *usage)?;
         if contract.budget.model_tokens != 0 && usage.total() > contract.budget.model_tokens {
             return Err(EngineError::BudgetExceeded {
                 used: usage.total(),
@@ -2599,6 +2647,8 @@ impl RunEngine<'_> {
                 contract.budget.model_tokens
             )));
         }
+        self.check_cost_budget(contract, checkpoint.usage)
+            .map_err(|error| reject(error.to_string()))?;
         match checkpoint.phase {
             ResumePhase::BeforeModel => {}
             ResumePhase::BeforeVerification if !checkpoint.final_text.trim().is_empty() => {}
@@ -2617,6 +2667,26 @@ impl RunEngine<'_> {
         Ok(())
     }
 
+    fn check_cost_budget(
+        &self,
+        contract: &TaskContract,
+        usage: Usage,
+    ) -> Result<Option<u64>, EngineError> {
+        let Some(pricing) = self.pricing else {
+            return Ok(None);
+        };
+        let cost = pricing.estimate_microusd(usage).ok_or_else(|| {
+            EngineError::Protocol("provider cache usage exceeds total input tokens".to_owned())
+        })?;
+        if contract.budget.cost_microusd != 0 && cost > contract.budget.cost_microusd {
+            return Err(EngineError::CostBudgetExceeded {
+                used: cost,
+                limit: contract.budget.cost_microusd,
+            });
+        }
+        Ok(Some(cost))
+    }
+
     fn checkpoint_profile_digests(
         &self,
         tools: &[ToolDescriptor],
@@ -2626,6 +2696,8 @@ impl RunEngine<'_> {
             provider: &'a str,
             model: &'a str,
             capabilities: &'a pactrail_models::ModelCapabilities,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pricing: Option<ModelPricing>,
             max_turns: u16,
             runtime_identity: Option<&'a str>,
         }
@@ -2634,6 +2706,7 @@ impl RunEngine<'_> {
             provider: self.model.name(),
             model: self.model.model(),
             capabilities: self.model.capabilities(),
+            pricing: self.pricing,
             max_turns: self.max_turns,
             runtime_identity: self.runtime_identity.as_deref(),
         })
@@ -3701,6 +3774,10 @@ pub enum EngineError {
     ContextWindow(String),
     #[error("model used {used} tokens, exceeding the {limit}-token task budget")]
     BudgetExceeded { used: u64, limit: u64 },
+    #[error(
+        "model cost estimate reached {used} micro-USD, exceeding the {limit} micro-USD task budget"
+    )]
+    CostBudgetExceeded { used: u64, limit: u64 },
     #[error("run exceeded its {wall_time_seconds}-second wall-time budget")]
     WallTimeExceeded { wall_time_seconds: u64 },
     #[error("run was cancelled")]
@@ -4227,6 +4304,7 @@ mod tests {
                     input_tokens: 7,
                     output_tokens: 5,
                     cached_input_tokens: 0,
+                    cache_creation_input_tokens: 0,
                 },
                 provider_request_id: None,
                 extensions: serde_json::Map::new(),
@@ -4732,6 +4810,71 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cost_budget_requires_pricing_and_stops_after_reported_overspend() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "priced-test".to_owned(),
+            responses: Mutex::new(VecDeque::from([ModelResponse {
+                text: "A result".to_owned(),
+                tool_calls: Vec::new(),
+                finish_reason: FinishReason::Complete,
+                usage: Usage {
+                    input_tokens: 10,
+                    output_tokens: 0,
+                    cached_input_tokens: 0,
+                    cache_creation_input_tokens: 0,
+                },
+                provider_request_id: None,
+                extensions: serde_json::Map::new(),
+            }])),
+            capabilities: ModelCapabilities::default(),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let policy = PolicyEngine::local_default();
+        let mut contract = TaskContract::new("Explain this workspace", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        contract.budget.cost_microusd = 1;
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let missing = RunEngine::new(&model, &registry, &policy)
+            .execute_with_id(RunId::new(), contract.clone(), &transaction, &mut store)
+            .await;
+        assert!(matches!(missing, Err(EngineError::InvalidConfiguration(_))));
+        let pricing = ModelPricing {
+            input_microusd_per_million: 1_000_000,
+            cached_input_microusd_per_million: 1_000_000,
+            cache_creation_microusd_per_million: 1_000_000,
+            output_microusd_per_million: 1_000_000,
+        };
+        let run_id = RunId::new();
+        let spent = RunEngine::new(&model, &registry, &policy)
+            .with_pricing(pricing)
+            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .await;
+        assert!(matches!(
+            spent,
+            Err(EngineError::CostBudgetExceeded { used: 10, limit: 1 })
+        ));
+        assert_eq!(
+            store
+                .snapshot(run_id)
+                .unwrap_or_else(|error| unreachable!("snapshot: {error}"))
+                .state,
+            RunState::Failed
+        );
+    }
+
+    #[tokio::test]
     #[allow(clippy::too_many_lines)]
     async fn tool_loop_produces_isolated_change_receipt() {
         let responses = VecDeque::from([
@@ -4748,6 +4891,7 @@ mod tests {
                     input_tokens: 10,
                     output_tokens: 5,
                     cached_input_tokens: 0,
+                    cache_creation_input_tokens: 0,
                 },
                 provider_request_id: None,
                 extensions: serde_json::Map::new(),
@@ -4760,6 +4904,7 @@ mod tests {
                     input_tokens: 12,
                     output_tokens: 6,
                     cached_input_tokens: 0,
+                    cache_creation_input_tokens: 0,
                 },
                 provider_request_id: None,
                 extensions: serde_json::Map::new(),
@@ -5417,6 +5562,7 @@ mod tests {
                     input_tokens: 40,
                     output_tokens: 20,
                     cached_input_tokens: 0,
+                    cache_creation_input_tokens: 0,
                 },
                 provider_request_id: None,
                 extensions: serde_json::Map::new(),

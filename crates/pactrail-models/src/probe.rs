@@ -232,6 +232,7 @@ mod tests {
                     input_tokens: 20,
                     output_tokens: 8,
                     cached_input_tokens: 5,
+                    cache_creation_input_tokens: 0,
                 },
                 provider_request_id: None,
                 extensions: Map::from_iter([("streaming".to_owned(), Value::Bool(false))]),

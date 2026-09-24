@@ -8,6 +8,11 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Explicit four-rate model pricing now estimates cost from normalized usage,
+  including cache reads and writes. A task cost budget can stop further work
+  after a reported overrun; pricing is bound to resumable checkpoints and
+  shown in traces and run output.
+
 - Models declared with `--native-tools off` can now use one exact, bounded text
   action per turn. Pactrail parses the action into the same typed tool kernel,
   policy checks, effect journal, and receipt path as native function calls.

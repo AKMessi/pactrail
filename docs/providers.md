@@ -26,6 +26,24 @@ Pactrail does not assume that model listing is available. `GET /models` is a UX
 convenience; a configured model ID remains usable when discovery returns 404 or
 another unsupported response.
 
+## Explicit cost accounting
+
+Provide all four current rates in micro-US dollars per million tokens. For
+example, a rate of $0.20 per million tokens is `200000`. Pactrail never
+guesses prices from a model name. `--max-cost-microusd` sets a cap for a
+generated task; a task file may set `budget.cost_microusd` instead.
+
+```console
+pactrail run "Fix the parser" --model MODEL_ID --input-price 200000 --cached-input-price 20000 --cache-creation-price 250000 --output-price 1000000 --max-cost-microusd 500000
+```
+
+The estimate uses provider-reported input, cache-read, cache-creation, and
+output tokens. Anthropic cache tokens are added to its uncached input count;
+Gemini thinking tokens are included in output. The cap is checked after each
+response, so one response can exceed it. A cost-capped run fails if a provider
+omits usage. Tiered pricing and separately billed provider features are outside
+this estimate; set rates conservatively when a hard spending ceiling matters.
+
 ## Interactive configuration
 
 Running `pactrail` without a subcommand opens the interactive session. The

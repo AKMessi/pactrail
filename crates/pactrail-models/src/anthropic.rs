@@ -476,10 +476,15 @@ fn append_text(target: &mut String, delta: &str) -> Result<(), ModelError> {
 }
 
 fn anthropic_usage(value: &Value) -> Usage {
+    let cached_input_tokens = number(value, "cache_read_input_tokens");
+    let cache_creation_input_tokens = number(value, "cache_creation_input_tokens");
     Usage {
-        input_tokens: number(value, "input_tokens"),
+        input_tokens: number(value, "input_tokens")
+            .saturating_add(cached_input_tokens)
+            .saturating_add(cache_creation_input_tokens),
         output_tokens: number(value, "output_tokens"),
-        cached_input_tokens: number(value, "cache_read_input_tokens"),
+        cached_input_tokens,
+        cache_creation_input_tokens,
     }
 }
 
@@ -773,6 +778,7 @@ impl AnthropicStreamAccumulator {
                 input_tokens: self.usage.input_tokens,
                 output_tokens: number(usage, "output_tokens"),
                 cached_input_tokens: self.usage.cached_input_tokens,
+                cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
             };
             self.merge_usage(next, observer)?;
         }
@@ -1195,6 +1201,7 @@ mod tests {
         assert_eq!(response.tool_calls[0].name, "read_file");
         assert_eq!(response.finish_reason, FinishReason::ToolCalls);
         assert_eq!(response.usage.cached_input_tokens, 5);
+        assert_eq!(response.usage.input_tokens, 25);
     }
 
     #[test]
