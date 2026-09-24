@@ -371,6 +371,11 @@ pub struct RunArgs {
     #[arg(long)]
     pub allow_process: bool,
 
+    /// Expose a POSIX shell tool inside an explicitly selected restricted OCI backend.
+    #[arg(long)]
+    #[serde(default)]
+    pub allow_shell: bool,
+
     /// How scoped process approval requests are resolved.
     #[arg(long, value_enum)]
     pub process_approval: Option<ProcessApprovalArg>,

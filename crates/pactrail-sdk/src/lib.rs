@@ -37,10 +37,10 @@ pub mod tool {
         OciProcessConfig, OciRuntimeKind, OciSandboxProfile, PolicyAuditEntry, PolicyAuditLog,
         PolicyEngine, ProcessBackend, ProcessBackendDescriptor, ProcessBackendError,
         ProcessBackendKind, ProcessExecution, ProcessRequest, ReadFileTool, ReadManyFilesTool,
-        RecallMemoryTool, RemoveFileTool, ReplaceTextTool, RunProcessTool, SearchChangeImpactTool,
-        SearchCodeGraphTool, SearchTool, Tool, ToolAnnotations, ToolContext, ToolDescriptor,
-        ToolError, ToolOutput, ToolRegistry, ToolRisk, WorkspaceChangesTool, WriteFileTool,
-        builtin_registry, builtin_registry_with_process,
+        RecallMemoryTool, RemoveFileTool, ReplaceTextTool, RunProcessTool, RunShellTool,
+        SearchChangeImpactTool, SearchCodeGraphTool, SearchTool, Tool, ToolAnnotations,
+        ToolContext, ToolDescriptor, ToolError, ToolOutput, ToolRegistry, ToolRisk,
+        WorkspaceChangesTool, WriteFileTool, builtin_registry, builtin_registry_with_process,
     };
 }
 

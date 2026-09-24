@@ -422,6 +422,7 @@ No-subcommand mode intentionally requires a terminal. Use subcommands in scripts
 ```console
 pactrail run "Fix the parser" --model qwen3-coder --output json
 pactrail run "Fix the parser" --model qwen3-coder --output json --process-backend oci --sandbox-image pactrail-rust:local --process-approval allow-run
+pactrail run "Fix the parser" --model qwen3-coder --output json --process-backend oci --sandbox-image pactrail-rust:local --allow-shell --process-approval allow-run
 pactrail resume <RUN_ID> --output json
 pactrail trace <RUN_ID> --json
 pactrail inspect <RUN_ID> --json

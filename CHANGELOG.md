@@ -8,6 +8,9 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- An opt-in `--allow-shell` exposes `run_shell` only through the restricted OCI
+  backend, using existing exact process approvals and bounded execution.
+
 - A deterministic, phase-aware controller kernel now reserves implementation
   and validation turns, measures semantic evidence progress, narrows advertised
   tools after bounded discovery, and exposes every phase decision and

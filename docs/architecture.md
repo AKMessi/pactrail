@@ -163,7 +163,8 @@ The production registry currently provides:
 - `write_file`, `replace_text`, strict `apply_patch`, atomic `edit_file`, and
   `remove_file`;
 - `workspace_changes` and `recall_memory`;
-- capability-gated `run_process` for detected verification.
+- capability-gated `run_process` for detected verification; `run_shell` is
+  available only when explicitly requested with a restricted OCI backend.
 
 The engine executes consecutive parallel-safe calls concurrently. A mutation,
 unknown tool, or host-execution call closes the read batch; later calls cannot

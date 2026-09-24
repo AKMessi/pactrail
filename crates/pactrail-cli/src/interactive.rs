@@ -3623,6 +3623,7 @@ fn run_args_from_settings(
         write_paths: vec![".".to_owned()],
         process_backend: Some(settings.process_backend),
         allow_process: false,
+        allow_shell: false,
         process_approval: Some(ProcessApprovalArg::Prompt),
         mcp_approval: Some(crate::cli::McpApprovalArg::Prompt),
         sandbox_runtime: settings.sandbox_runtime,

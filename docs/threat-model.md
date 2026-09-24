@@ -203,6 +203,13 @@ default; interactive approvals show and bind the exact request.
 
 ### Restricted OCI
 
+`--allow-shell` exposes a bounded `run_shell` tool only with
+`--process-backend oci`. The tool delegates to the same process policy,
+approval binding, output limits, and trace as `run_process`; it passes the
+script as an argument to `/bin/sh -c` inside the candidate container. The
+shell is absent from default and native runs. External process edits to the
+candidate are checked against the task's write scope before a receipt or apply.
+
 `--process-backend oci` or `/process sandbox <image>` runs each approved command
 through a locally attested Docker or Podman executable and a locally resolved
 immutable image identity. Pactrail never pulls during a run or silently falls

@@ -27,7 +27,7 @@ use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
     ApprovalResolver, DisabledProcessBackend, NativeProcessBackend, OciProcessBackend,
     OciProcessConfig, OciRuntimeKind, OciSandboxProfile, PolicyEngine, ProcessBackend,
-    RunProcessTool, ToolError, ToolRisk, builtin_registry_with_process,
+    RunProcessTool, RunShellTool, ToolError, ToolRegistry, ToolRisk, builtin_registry_with_process,
 };
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
@@ -215,6 +215,7 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         write_paths: vec![".".to_owned()],
         process_backend: Some(ProcessBackendArg::Disabled),
         allow_process: false,
+        allow_shell: false,
         process_approval: Some(ProcessApprovalArg::Deny),
         mcp_approval: Some(McpApprovalArg::Deny),
         sandbox_runtime: OciRuntimeArg::Docker,
@@ -421,8 +422,7 @@ async fn execute_resume_inner(
         .load_head(&store, run_id)
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
-    let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
-    let mut registry = builtin_registry_with_process(process_tool)?;
+    let mut registry = run_tool_registry(process_backend, cancellation.clone(), args.allow_shell)?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
@@ -575,8 +575,7 @@ async fn execute_run_inner(
     let checkpoints = CheckpointStore::open(state.join("artifacts").join("checkpoints"))
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
-    let process_tool = RunProcessTool::new(process_backend, cancellation.clone());
-    let mut registry = builtin_registry_with_process(process_tool)?;
+    let mut registry = run_tool_registry(process_backend, cancellation.clone(), args.allow_shell)?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
@@ -1227,14 +1226,33 @@ fn api_key_from_env(name: &str) -> Result<SecretString, CliError> {
 }
 
 fn effective_process_backend(args: &RunArgs) -> Result<ProcessBackendArg, CliError> {
-    match (args.process_backend, args.allow_process) {
+    let backend = match (args.process_backend, args.allow_process) {
         (Some(ProcessBackendArg::Native) | None, true) => Ok(ProcessBackendArg::Native),
         (Some(mode), true) => Err(CliError::Argument(format!(
             "--allow-process is a deprecated alias for --process-backend native and conflicts with --process-backend {mode:?}"
         ))),
         (Some(mode), false) => Ok(mode),
         (None, false) => Ok(ProcessBackendArg::Disabled),
+    }?;
+    if args.allow_shell && backend != ProcessBackendArg::Oci {
+        return Err(CliError::Argument(
+            "--allow-shell requires --process-backend oci".to_owned(),
+        ));
     }
+    Ok(backend)
+}
+
+fn run_tool_registry(
+    backend: Arc<dyn ProcessBackend>,
+    cancellation: CancellationToken,
+    allow_shell: bool,
+) -> Result<ToolRegistry, ToolError> {
+    let mut registry =
+        builtin_registry_with_process(RunProcessTool::new(backend.clone(), cancellation.clone()))?;
+    if allow_shell {
+        registry.register(RunShellTool::new(backend, cancellation))?;
+    }
+    Ok(registry)
 }
 
 fn effective_process_approval(args: &RunArgs) -> Result<ProcessApprovalArg, CliError> {
@@ -3287,6 +3305,47 @@ mod tests {
     use pactrail_core::{ActionRecord, Evidence, EvidenceKind};
 
     use super::*;
+
+    #[test]
+    fn shell_requires_explicit_oci_backend() {
+        let args = probe_run_args(ProbeArgs {
+            provider: ProviderKind::Ollama,
+            model: "test".to_owned(),
+            base_url: None,
+            api_key_env: "OPENAI_API_KEY".to_owned(),
+            context_tokens: 32_768,
+            max_output_tokens: 4_096,
+            request_timeout_seconds: 300,
+            no_stream: false,
+            disable_thinking: false,
+            native_tools: crate::cli::CapabilitySetting::Auto,
+            parallel_tools: crate::cli::CapabilitySetting::Auto,
+            structured_output: crate::cli::CapabilitySetting::Auto,
+            vision: crate::cli::CapabilitySetting::Auto,
+            prompt_caching: crate::cli::CapabilitySetting::Auto,
+            reasoning_controls: crate::cli::CapabilitySetting::Auto,
+            output: OutputFormat::Human,
+        });
+        let mut args = RunArgs {
+            allow_shell: true,
+            ..args
+        };
+        assert!(matches!(
+            effective_process_backend(&args),
+            Err(CliError::Argument(_))
+        ));
+        args.process_backend = Some(ProcessBackendArg::Native);
+        assert!(matches!(
+            effective_process_backend(&args),
+            Err(CliError::Argument(_))
+        ));
+        args.process_backend = Some(ProcessBackendArg::Oci);
+        assert_eq!(
+            effective_process_backend(&args)
+                .unwrap_or_else(|error| unreachable!("OCI backend: {error}")),
+            ProcessBackendArg::Oci
+        );
+    }
 
     #[test]
     fn state_layout_rejects_non_directory_control_roots() {
