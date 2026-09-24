@@ -12,6 +12,10 @@ follow [Semantic Versioning](https://semver.org/).
   when `--prompt-caching on` is declared, with cache usage reflected in
   explicit cost accounting.
 
+- Investigation routing renders foreign tool history as labeled text evidence
+  while keeping provider-specific opaque continuation fields and signed
+  function calls on their originating route.
+
 - An opt-in investigation model router selects a second model only during
   controller investigation. Provider/model/route are trace-visible, both
   model identities bind resume, and cost caps use conservative prices from

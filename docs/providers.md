@@ -50,6 +50,10 @@ endpoint and key variable. Implementation, validation, synthesis, recovery,
 and model probes use the primary model. Pactrail does not silently fall back
 to another route after a provider error. The route, provider, and model are
 recorded in the model trace, and both model identities are bound to resume.
+At a route change, prior tool calls and results are rendered as labeled text
+evidence with their IDs and arguments. This keeps provider-specific opaque
+reasoning continuations and signed function calls on the route that produced
+them. Same-route turns retain their exact native continuation state.
 
 ```console
 pactrail run --provider anthropic --model PRIMARY_MODEL --investigation-provider open-ai-compatible --investigation-model INVESTIGATION_MODEL --investigation-base-url https://models.example.com/v1 "Fix the parser"
