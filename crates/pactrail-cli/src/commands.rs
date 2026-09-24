@@ -20,8 +20,8 @@ use pactrail_memory::{
 use pactrail_models::{
     AnthropicConfig, AnthropicDriver, CapabilityProbeReport, CapabilitySource, GeminiConfig,
     GeminiDriver, ImageArtifact, MAX_INPUT_IMAGE_BYTES, ModelCapabilities, ModelDriver, ModelError,
-    ModelPricing, OpenAiCompatibleConfig, OpenAiCompatibleDriver,
-    probe_capabilities as run_capability_probe, validate_image_set,
+    ModelPricing, OpenAiCompatibleConfig, OpenAiCompatibleDriver, OpenAiResponsesConfig,
+    OpenAiResponsesDriver, probe_capabilities as run_capability_probe, validate_image_set,
 };
 use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
@@ -1110,11 +1110,11 @@ fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
     if args.disable_thinking
         && matches!(
             args.provider,
-            ProviderKind::Anthropic | ProviderKind::Gemini
+            ProviderKind::Anthropic | ProviderKind::Gemini | ProviderKind::OpenAiResponses
         )
     {
         return Err(CliError::Argument(
-            "--disable-thinking is an OpenAI-compatible extension and is not valid for native Anthropic or Gemini adapters"
+            "--disable-thinking is an OpenAI-compatible Chat Completions extension and is not valid for this native adapter"
                 .to_owned(),
         ));
     }
@@ -1159,6 +1159,7 @@ fn build_driver_for_provider(
             })
             .map_err(CliError::Model)?,
         ),
+        ProviderKind::OpenAiResponses => build_responses_driver(model, capabilities, args)?,
         ProviderKind::OpenAiCompatible => Box::new(
             OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
                 name: "openai-compatible".to_owned(),
@@ -1209,6 +1210,28 @@ fn build_driver_for_provider(
         ),
     };
     Ok(driver)
+}
+
+fn build_responses_driver(
+    model: String,
+    mut capabilities: ModelCapabilities,
+    args: &RunArgs,
+) -> Result<Box<dyn ModelDriver>, CliError> {
+    capabilities.streaming = false;
+    Ok(Box::new(
+        OpenAiResponsesDriver::new(OpenAiResponsesConfig {
+            name: "openai-responses".to_owned(),
+            base_url: args
+                .base_url
+                .clone()
+                .unwrap_or_else(|| "https://api.openai.com/v1".to_owned()),
+            model,
+            api_key: api_key_from_env(&args.api_key_env)?,
+            timeout: Duration::from_secs(args.request_timeout_seconds),
+            capabilities,
+        })
+        .map_err(CliError::Model)?,
+    ))
 }
 
 fn configured_model(contract: &TaskContract, args: &RunArgs) -> Result<String, CliError> {

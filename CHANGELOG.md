@@ -8,6 +8,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- An opt-in native OpenAI Responses adapter uses stateless requests and replays
+  encrypted reasoning, function calls, and tool outputs through the normalized
+  model driver. Buffered responses are bounded and parsed before tool effects.
+
 - Explicit four-rate model pricing now estimates cost from normalized usage,
   including cache reads and writes. A task cost budget can stop further work
   after a reported overrun; pricing is bound to resumable checkpoints and

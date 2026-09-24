@@ -2,7 +2,7 @@
 
 ## Built-in transports
 
-Pactrail normalizes three protocol families through one provider-neutral
+Pactrail normalizes four protocol families through one provider-neutral
 `ModelDriver` contract. Native adapters are used where compatibility layers
 would lose tool IDs, cache usage, finish semantics, or continuation state.
 
@@ -10,6 +10,7 @@ would lose tool IDs, cache usage, finish semantics, or continuation state.
 |---|---|---|---|---|
 | Ollama `/v1` | `ollama` | OpenAI Chat Completions | None | First-class local default |
 | OpenAI API | `open-ai` | OpenAI Chat Completions | `OPENAI_API_KEY` | Supported |
+| OpenAI Responses API | `open-ai-responses` | Native Responses, buffered | `OPENAI_API_KEY` | Supported |
 | Anthropic API | `anthropic` | Native Messages | `ANTHROPIC_API_KEY` | Supported |
 | Gemini API | `gemini` | Native GenerateContent | `GEMINI_API_KEY` | Supported |
 | vLLM, llama.cpp, SGLang, LM Studio, LocalAI | `open-ai-compatible` | OpenAI Chat Completions | Optional environment key | Supported |
@@ -18,9 +19,17 @@ would lose tool IDs, cache usage, finish semantics, or continuation state.
 Endpoint URLs containing credentials are rejected. Non-loopback HTTP is rejected.
 Responses are capped at 16 MiB, malformed tool arguments fail explicitly, and
 rate-limit/server failures use bounded retries only before response acceptance.
-All three transports support explicit bounded streaming. A malformed,
+The Chat Completions, Anthropic, and Gemini transports support explicit bounded streaming. A malformed,
 contradictory, oversized, or disconnected stream fails the turn; partial text
 and tool arguments never reach durable conversation or tool execution.
+
+The opt-in `open-ai-responses` adapter uses `store: false` and replays the
+provider's exact output items, including encrypted reasoning, function calls,
+and function outputs across tool turns. It currently uses a bounded buffered
+response; live text deltas are unavailable for this adapter. Other OpenAI
+protocol selections retain their existing streaming behavior. See the
+[official OpenAI function calling guide](https://developers.openai.com/api/docs/guides/function-calling)
+and [conversation state guide](https://developers.openai.com/api/docs/guides/conversation-state).
 
 Pactrail does not assume that model listing is available. `GET /models` is a UX
 convenience; a configured model ID remains usable when discovery returns 404 or

@@ -4,6 +4,7 @@ mod anthropic;
 mod driver;
 mod gemini;
 mod openai_compatible;
+mod openai_responses;
 mod probe;
 mod sse;
 #[cfg(test)]
@@ -14,6 +15,7 @@ pub use anthropic::{AnthropicConfig, AnthropicDriver};
 pub use driver::{ModelDriver, ModelError, ModelStreamObserver};
 pub use gemini::{GeminiConfig, GeminiDriver};
 pub use openai_compatible::{OpenAiCompatibleConfig, OpenAiCompatibleDriver};
+pub use openai_responses::{OpenAiResponsesConfig, OpenAiResponsesDriver};
 pub use probe::{
     CAPABILITY_PROBE_SCHEMA_VERSION, CapabilityProbeReport, ProbeObservation, probe_capabilities,
 };

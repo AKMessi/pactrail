@@ -515,6 +515,7 @@ pub struct RunArgs {
 pub enum ProviderKind {
     Ollama,
     OpenAi,
+    OpenAiResponses,
     OpenAiCompatible,
     Anthropic,
     Gemini,
@@ -593,6 +594,24 @@ mod tests {
             unreachable!("run command")
         };
         assert_eq!(args.request_timeout_seconds, 300);
+    }
+
+    #[test]
+    fn native_responses_provider_is_an_explicit_selection() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--provider",
+            "open-ai-responses",
+            "--model",
+            "test-model",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Run(args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert_eq!(args.provider, super::ProviderKind::OpenAiResponses);
     }
 
     #[test]
