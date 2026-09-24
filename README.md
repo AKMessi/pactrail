@@ -104,9 +104,10 @@ pactrail ❯ Fix the parser regression and add a test.
   fence, output bound, cancellation path, and durable trace.
 - **Weak models degrade gracefully.** Broad questions receive bounded current
   anchor previews and a deterministic ecosystem/entrypoint profile. Repeated
-  successful read-only loops get one tool-free synthesis turn. Change tasks get
-  a fixed discovery allowance, then a kernel-enforced implementation tool set;
-  varied calls returning equivalent evidence still count as stalled progress.
+  successful read-only loops receive synthesis guidance. Change tasks get
+  implementation guidance after bounded discovery while focused reads and
+  searches remain available; varied calls returning equivalent evidence still
+  count as stalled progress.
   Invalid loops fail closed, while coherent candidate edits remain reviewable.
 - **Verification interrupts mistakes, not just completion.** With authorized
   process isolation, the controller checks a changed candidate before the next

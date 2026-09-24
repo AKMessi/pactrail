@@ -1075,7 +1075,7 @@ impl<'a> RunEngine<'a> {
                 conversation.push(ConversationItem::Message(Message::system(prompt)));
                 journal.append(RunEvent::NoteRecorded {
                     message: format!(
-                        "controller announced {} phase and narrowed the model action space",
+                        "controller announced {} phase with a stable tool catalog",
                         control.phase.label()
                     ),
                 })?;
@@ -4762,7 +4762,7 @@ mod tests {
 
     #[tokio::test]
     #[allow(clippy::too_many_lines)]
-    async fn controller_reserves_action_turns_and_enforces_the_advertised_tool_set() {
+    async fn controller_preserves_focused_search_through_implementation() {
         let responses = VecDeque::from([
             tool_response(
                 "read-a",
@@ -4841,20 +4841,37 @@ mod tests {
         assert_eq!(requests.len(), 5);
         assert!(requests[0].tools.iter().any(|tool| tool.name == "search"));
         assert!(requests[1].tools.iter().any(|tool| tool.name == "search"));
-        assert!(requests[2].tools.iter().all(|tool| tool.name != "search"));
-        assert!(requests[3].tools.iter().all(|tool| tool.name != "search"));
+        assert!(requests[2].tools.iter().any(|tool| tool.name == "search"));
+        assert!(requests[3].tools.iter().any(|tool| tool.name == "search"));
+        assert!(requests.windows(2).all(|pair| {
+            pair[0]
+                .tools
+                .iter()
+                .map(|tool| &tool.name)
+                .collect::<Vec<_>>()
+                == pair[1]
+                    .tools
+                    .iter()
+                    .map(|tool| &tool.name)
+                    .collect::<Vec<_>>()
+        }));
         drop(requests);
 
         let snapshot = store
             .snapshot(outcome.run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
-        let rejection = snapshot
-            .actions
-            .iter()
-            .find(|action| action.action == "reject_unavailable_tool")
-            .unwrap_or_else(|| unreachable!("controller rejection"));
-        assert_eq!(rejection.actor, "controller");
-        assert_eq!(rejection.attributes["controller_phase"], "implementing");
+        assert!(
+            snapshot
+                .actions
+                .iter()
+                .all(|action| action.action != "reject_unavailable_tool")
+        );
+        assert!(
+            snapshot
+                .actions
+                .iter()
+                .any(|action| action.actor == "tool:search" && action.succeeded)
+        );
         assert!(observer.events().iter().any(|event| matches!(
             event,
             RunProgress::ControllerPhaseChanged {

@@ -38,6 +38,9 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Controller phases now keep a stable advertised tool catalog. Focused read and
+  search remain available during implementation and validation, repairing the
+  benchmarked failure where phase narrowing prevented any candidate edit.
 - Change tasks that return a summary without producing an isolated candidate
   now fail explicitly instead of exposing an empty ready-to-apply receipt.
 
