@@ -70,6 +70,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Primary and investigation model configurations are validated before a new
+  run directory is created, so a bad endpoint or missing key leaves no empty
+  durable run.
+
 - Candidate manifest comparison now rejects changes outside the task's write
   scope even when an authorized process, rather than a typed file tool, wrote
   them. Such a candidate cannot produce an applicable change set.

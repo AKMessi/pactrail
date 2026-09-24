@@ -575,6 +575,7 @@ async fn execute_run_inner(
     // Resolve and attest the execution boundary before creating durable run state. Invalid
     // sandbox configuration must fail without leaving an empty run behind for users to diagnose.
     let process_backend = build_process_backend(process_backend, &args, &workspace).await?;
+    let driver = build_driver(&contract, &args)?;
 
     fs::create_dir_all(state.join("runs")).map_err(|source| CliError::Io {
         path: state.clone(),
@@ -606,7 +607,6 @@ async fn execute_run_inner(
     let mut registry = run_tool_registry(process_backend, cancellation.clone(), args.allow_shell)?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
-    let driver = build_driver(&contract, &args)?;
     let mut context_fragments = memory_context_fragments(&contract, &memory, &transaction)?;
     context_fragments.extend(mcp_runtime.context_fragments());
     let mut engine = RunEngine::new(driver.as_ref(), &registry, &policy)
