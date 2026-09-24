@@ -80,10 +80,16 @@ pactrail run "Fix the parser" --model MODEL_ID --input-price 200000 --cached-inp
 
 The estimate uses provider-reported input, cache-read, cache-creation, and
 output tokens. Anthropic cache tokens are added to its uncached input count;
-Gemini thinking tokens are included in output. The cap is checked after each
-response, so one response can exceed it. A cost-capped run fails if a provider
-omits usage. Tiered pricing and separately billed provider features are outside
-this estimate; set rates conservatively when a hard spending ceiling matters.
+Gemini thinking tokens are included in output. Before each cost-capped request,
+Pactrail reserves the declared input context capacity plus the requested
+maximum output at the most expensive applicable input rate. It refuses the
+request if the reservation exceeds the remaining cap, then reconciles the
+provider's reported usage afterward. A cost-capped run fails if a provider
+omits usage. The reservation can be deliberately conservative; reduce declared
+context or output limits when a smaller bound is valid for the model and task.
+Tiered pricing, inaccurate declared limits, and separately billed provider
+features are outside this estimate, so the cap is not a guarantee of the
+provider's final invoice.
 
 For investigation routing, provide all four `--investigation-*-price` rates
 as well as the primary rates. Pactrail uses the larger rate for each token

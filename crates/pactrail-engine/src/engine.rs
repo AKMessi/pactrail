@@ -1146,10 +1146,6 @@ impl<'a> RunEngine<'a> {
                     recovery_risk: recovery_risk.as_deref(),
                 },
             )?;
-            observer.on_progress(&RunProgress::ModelTurnStarted {
-                turn: turn + 1,
-                max_turns,
-            });
             let request = ModelRequest {
                 conversation: if turn_native_tools {
                     conversation.clone()
@@ -1165,6 +1161,17 @@ impl<'a> RunEngine<'a> {
                 temperature: Some(0.0),
                 phase: Some(model_phase),
             };
+            let cost_reservation = match self.reserve_cost_budget(&contract, usage, &request) {
+                Ok(reservation) => reservation,
+                Err(error) => {
+                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                    return Err(error);
+                }
+            };
+            observer.on_progress(&RunProgress::ModelTurnStarted {
+                turn: turn + 1,
+                max_turns,
+            });
             let model_started = Instant::now();
             let mut response = match self.invoke_model(&request, observer).await {
                 Ok(response) => response,
@@ -1271,6 +1278,12 @@ impl<'a> RunEngine<'a> {
             ]);
             if let Some(cost) = cost_microusd {
                 model_attributes.insert("cumulative_cost_microusd".to_owned(), cost.to_string());
+            }
+            if let Some(reservation) = cost_reservation {
+                model_attributes.insert(
+                    "pre_request_reservation_microusd".to_owned(),
+                    reservation.to_string(),
+                );
             }
             if let Some(request_id) = &response.provider_request_id {
                 model_attributes.insert(
@@ -1947,8 +1960,9 @@ impl<'a> RunEngine<'a> {
             journal,
             observer,
         )?;
-        observer.on_progress(&RunProgress::ModelTurnStarted { turn, max_turns });
         let request = self.recovery_request(conversation, turn_output_tokens)?;
+        let reservation = self.reserve_cost_budget(contract, *usage, &request)?;
+        observer.on_progress(&RunProgress::ModelTurnStarted { turn, max_turns });
         let model_started = Instant::now();
         let response = self.invoke_model(&request, observer).await?;
         let duration_ms = elapsed_millis(model_started);
@@ -1978,6 +1992,7 @@ impl<'a> RunEngine<'a> {
             &response,
             turn,
             duration_ms,
+            reservation,
         )))?;
         if response.finish_reason == FinishReason::ContentFilter {
             return Err(EngineError::Protocol(
@@ -2037,6 +2052,7 @@ impl<'a> RunEngine<'a> {
         response: &ModelResponse,
         turn: u16,
         duration_ms: u64,
+        reservation: Option<u64>,
     ) -> ActionRecord {
         let mut attributes = BTreeMap::from([
             ("adapter".to_owned(), bounded_trace_value(self.model.name())),
@@ -2077,6 +2093,12 @@ impl<'a> RunEngine<'a> {
             attributes.insert(
                 "provider_request_id".to_owned(),
                 bounded_trace_value(request_id),
+            );
+        }
+        if let Some(reservation) = reservation {
+            attributes.insert(
+                "pre_request_reservation_microusd".to_owned(),
+                reservation.to_string(),
             );
         }
         extend_provider_trace_attributes(&mut attributes, &response.extensions);
@@ -2706,6 +2728,41 @@ impl RunEngine<'_> {
             });
         }
         Ok(Some(cost))
+    }
+
+    fn reserve_cost_budget(
+        &self,
+        contract: &TaskContract,
+        usage: Usage,
+        request: &ModelRequest,
+    ) -> Result<Option<u64>, EngineError> {
+        if contract.budget.cost_microusd == 0 {
+            return Ok(None);
+        }
+        let pricing = self.pricing.ok_or_else(|| {
+            EngineError::InvalidConfiguration("cost budget requires model pricing".to_owned())
+        })?;
+        let used = pricing.estimate_microusd(usage).ok_or_else(|| {
+            EngineError::Protocol("provider cache usage exceeds total input tokens".to_owned())
+        })?;
+        let input_bound = self
+            .model
+            .capabilities()
+            .context_tokens
+            .saturating_sub(request.max_output_tokens);
+        let reserved = pricing.reserve_microusd(input_bound, request.max_output_tokens);
+        if reserved == u64::MAX
+            || used
+                .checked_add(reserved)
+                .is_none_or(|required| required > contract.budget.cost_microusd)
+        {
+            return Err(EngineError::CostReservationExceeded {
+                used,
+                reserved,
+                limit: contract.budget.cost_microusd,
+            });
+        }
+        Ok(Some(reserved))
     }
 
     fn checkpoint_profile_digests(
@@ -3801,6 +3858,14 @@ pub enum EngineError {
         "model cost estimate reached {used} micro-USD, exceeding the {limit} micro-USD task budget"
     )]
     CostBudgetExceeded { used: u64, limit: u64 },
+    #[error(
+        "model request requires a conservative {reserved} micro-USD reservation in addition to {used} micro-USD already used, exceeding the {limit} micro-USD task budget"
+    )]
+    CostReservationExceeded {
+        used: u64,
+        reserved: u64,
+        limit: u64,
+    },
     #[error("run exceeded its {wall_time_seconds}-second wall-time budget")]
     WallTimeExceeded { wall_time_seconds: u64 },
     #[error("run was cancelled")]
@@ -4851,7 +4916,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cost_budget_requires_pricing_and_stops_after_reported_overspend() {
+    async fn cost_budget_requires_pricing_and_reserves_before_model_io() {
         let model = ScriptedModel {
             name: "scripted".to_owned(),
             model: "priced-test".to_owned(),
@@ -4900,12 +4965,24 @@ mod tests {
         let run_id = RunId::new();
         let spent = RunEngine::new(&model, &registry, &policy)
             .with_pricing(pricing)
-            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .execute_with_id(run_id, contract.clone(), &transaction, &mut store)
             .await;
         assert!(matches!(
             spent,
-            Err(EngineError::CostBudgetExceeded { used: 10, limit: 1 })
+            Err(EngineError::CostReservationExceeded {
+                used: 0,
+                reserved: 32_768,
+                limit: 1
+            })
         ));
+        assert_eq!(
+            model
+                .responses
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .len(),
+            1
+        );
         assert_eq!(
             store
                 .snapshot(run_id)
@@ -4913,6 +4990,22 @@ mod tests {
                 .state,
             RunState::Failed
         );
+        contract.budget.cost_microusd = 32_768;
+        let accepted_id = RunId::new();
+        let accepted = RunEngine::new(&model, &registry, &policy)
+            .with_pricing(pricing)
+            .execute_with_id(accepted_id, contract, &transaction, &mut store)
+            .await
+            .unwrap_or_else(|error| unreachable!("accepted run: {error}"));
+        assert_eq!(accepted.cost_microusd, Some(10));
+        let actions = store
+            .load(accepted_id)
+            .unwrap_or_else(|error| unreachable!("events: {error}"));
+        assert!(actions.into_iter().any(|event| matches!(
+            event.event,
+            RunEvent::ActionCompleted(ActionRecord { attributes, .. })
+                if attributes.get("pre_request_reservation_microusd") == Some(&"32768".to_owned())
+        )));
     }
 
     #[tokio::test]

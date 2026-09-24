@@ -32,6 +32,9 @@ follow [Semantic Versioning](https://semver.org/).
   including cache reads and writes. A task cost budget can stop further work
   after a reported overrun; pricing is bound to resumable checkpoints and
   shown in traces and run output.
+- Cost-capped runs now reserve a conservative maximum request cost before each
+  model call, including read-only recovery, and reconcile it against reported
+  usage afterward.
 
 - Models declared with `--native-tools off` can now use one exact, bounded text
   action per turn. Pactrail parses the action into the same typed tool kernel,
