@@ -13,7 +13,7 @@
 ///
 /// This revision tracks source-level extension compatibility independently of
 /// durable task, event, receipt, checkpoint, and MCP schema versions.
-pub const SDK_API_REVISION: u32 = 6;
+pub const SDK_API_REVISION: u32 = 7;
 
 /// Provider-neutral model extension contracts and built-in adapters.
 pub mod model {
@@ -97,7 +97,8 @@ pub mod workspace {
 pub mod prelude {
     pub use async_trait::async_trait;
     pub use pactrail_core::{
-        ApprovalDecision, ApprovalRequest, Capability, PermissionSet, RunId, TaskContract,
+        AcceptanceCheck, ApprovalDecision, ApprovalRequest, Capability, PermissionSet, RunId,
+        TaskContract,
     };
     pub use pactrail_engine::{
         AdaptiveRuntimeClass, AdaptiveRuntimeProfile, ControllerPhase, RunEngine, RunObserver,
