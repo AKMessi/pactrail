@@ -1,0 +1,3672 @@
+[
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 0,
+    "timestamp": "2026-09-26T17:23:13.729469349Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Fix ripgrep issue #2944 in search statistics. When a buffered search stops early, such as after --max-count is reached, the reported 'bytes searched' can omit bytes that were already consumed from the reader. Ensure early termination accounts for the consumed portion of the current buffer without changing match output or normal end-of-input accounting. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.",
+        "workspace_root": "/tmp/pactrail-space-bunny-scored-v3-work/20260926T172312Z-pactrail-stealth-space-bunny-alpha/ripgrep-early-termination-byte-stats/workspace",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "01a0debe-1297-7271-b36f-eae48af322c8",
+            "description": "Fix ripgrep issue #2944 in search statistics. When a buffered search stops early, such as after --max-count is reached, the reported 'bytes searched' can omit bytes that were already consumed from the reader. Ensure early termination accounts for the consumed portion of the current buffer without changing match output or normal end-of-input accounting. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 294912,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 16
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read",
+            "network",
+            "secret_use",
+            "external_write"
+          ],
+          "ask": [
+            "process_spawn"
+          ],
+          "deny": [
+            "mcp_invoke"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "58b78c553ad418f6d06ce297c8c0758ece189d6393527eeef715fd4ae1531c3e"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 1,
+    "timestamp": "2026-09-26T17:23:13.729549319Z",
+    "previous_hash": "58b78c553ad418f6d06ce297c8c0758ece189d6393527eeef715fd4ae1531c3e",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "01f636696a6a2b267cb2d97e33774f5c26a83e3fc1f607f6d7e5331fb6498092"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 2,
+    "timestamp": "2026-09-26T17:23:13.729599047Z",
+    "previous_hash": "01f636696a6a2b267cb2d97e33774f5c26a83e3fc1f607f6d7e5331fb6498092",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "520b3bb7a5c2666303f401067d178e14bdd406c6bb28641f1ebc192aa7603f21"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 3,
+    "timestamp": "2026-09-26T17:23:14.328772547Z",
+    "previous_hash": "520b3bb7a5c2666303f401067d178e14bdd406c6bb28641f1ebc192aa7603f21",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 221 files and cited 36 within a 10750-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 599,
+        "attributes": {
+          "budget_bytes": "10752",
+          "bytes_hashed": "3061206",
+          "cache_eligible_files": "213",
+          "cache_hits": "21",
+          "cache_misses": "192",
+          "cache_rejected": "0",
+          "citation_coverage_bps": "7250",
+          "cited_files": "36",
+          "graph_symbols": "8",
+          "impact_files": "16",
+          "instructions": "0",
+          "lexical_files": "113",
+          "memory_fragments": "0",
+          "rendered_bytes": "10750",
+          "retrieved_files": "40",
+          "syntax_error_files": "0",
+          "tree_sitter_files": "100",
+          "truncated": "true",
+          "unscanned_files": "8"
+        }
+      }
+    },
+    "hash": "73b5f442d93566d962c7f9bd44a77d836b97b0f0a036a98199eb66691a20fd4c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 4,
+    "timestamp": "2026-09-26T17:23:14.328861597Z",
+    "previous_hash": "73b5f442d93566d962c7f9bd44a77d836b97b0f0a036a98199eb66691a20fd4c",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:7bc3a542498dcf56db21102694215d96bf78e536b85d8c097f1b5f963c8e0840"
+      }
+    },
+    "hash": "7cdb5f1f0cb47c387de22b757158a465d250108a3d29643a7981155e54a8a2fb"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 5,
+    "timestamp": "2026-09-26T17:23:14.328906925Z",
+    "previous_hash": "7cdb5f1f0cb47c387de22b757158a465d250108a3d29643a7981155e54a8a2fb",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "4abdd7e5a5bbb18a5991226fc51a42d7ec8290d424039579602d679bbef0115b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 6,
+    "timestamp": "2026-09-26T17:23:14.328968945Z",
+    "previous_hash": "4abdd7e5a5bbb18a5991226fc51a42d7ec8290d424039579602d679bbef0115b",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "6b7e8345a79d42facdaee4ecc32fbbfe7479f260e3c3908b1c074989d95d2704"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 7,
+    "timestamp": "2026-09-26T17:23:14.336635528Z",
+    "previous_hash": "6b7e8345a79d42facdaee4ecc32fbbfe7479f260e3c3908b1c074989d95d2704",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "select_runtime_profile",
+        "summary": "selected compact runtime profile from effective model capabilities",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "capability_source": "user_declared",
+          "discovery_turn_cap": "2",
+          "input_tokens": "14336",
+          "max_tool_calls_per_turn": "4",
+          "parallel_read_width": "1",
+          "profile": "compact",
+          "turn_output_tokens": "2048"
+        }
+      }
+    },
+    "hash": "e94dfdf04c9c01e0236ad4ce785f3acd1f14080c0d2a28d4d7e50327fafcea5b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 8,
+    "timestamp": "2026-09-26T17:23:14.343324659Z",
+    "previous_hash": "e94dfdf04c9c01e0236ad4ce785f3acd1f14080c0d2a28d4d7e50327fafcea5b",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:04439f4de424e27a87c9e81bfe31ca547ded50123c510a940c5b4ee2968508b4"
+      }
+    },
+    "hash": "4b929f9b67943c26e601b1a70a6fba004dcc1693c9c0bd96b865c6cd21b9557a"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 9,
+    "timestamp": "2026-09-26T17:23:14.349216953Z",
+    "previous_hash": "4b929f9b67943c26e601b1a70a6fba004dcc1693c9c0bd96b865c6cd21b9557a",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "enter_phase",
+        "summary": "entered investigating phase with 18 tool(s) available",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase": "investigating",
+          "phase_limit": "2",
+          "phase_turn": "1",
+          "reason": "bounded discovery turn; 14 implementation/verification turn(s) reserved",
+          "tools_available": "18",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "ce5ce7e3a26db036293faaca1ed8ecef3060bf623d0718fb3f82b605b107131b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 10,
+    "timestamp": "2026-09-26T17:23:14.349333311Z",
+    "previous_hash": "ce5ce7e3a26db036293faaca1ed8ecef3060bf623d0718fb3f82b605b107131b",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "controller announced investigating phase with a stable tool catalog"
+      }
+    },
+    "hash": "ad2ce72771f6f93de2509f40dfdc212fa02969a6d9fbd9349afa0d426f4d7a89"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 11,
+    "timestamp": "2026-09-26T17:23:14.356038088Z",
+    "previous_hash": "ad2ce72771f6f93de2509f40dfdc212fa02969a6d9fbd9349afa0d426f4d7a89",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:f81a32c7b527d496f673013a0ff9536fd2642d12ba8fcd7223f9b23de1678b43"
+      }
+    },
+    "hash": "2cd5695aa14e32fe49ca6e73314ecacbdb6deb3a8ba997f20495c6fb30df1949"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 12,
+    "timestamp": "2026-09-26T17:23:17.528226648Z",
+    "previous_hash": "2cd5695aa14e32fe49ca6e73314ecacbdb6deb3a8ba997f20495c6fb30df1949",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 1 produced 2 tool call(s) and 72 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 3171,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "194",
+          "cached_input_tokens": "141",
+          "finish_reason": "toolcalls",
+          "input_tokens": "7235",
+          "normalized_context_bytes": "29231",
+          "normalized_context_digest": "3dda2f0348d29d0852e831ea712463515e3637140b7063e4e5de3aa9451cdaec",
+          "output_tokens": "88",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "2867",
+          "stream_mode": "streaming",
+          "text_bytes": "72",
+          "tool_calls": "2",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "8b82220278ac13eb2d7a17e10eb029bad35c6fffe4fca47e6729bf72e8215ee4"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 13,
+    "timestamp": "2026-09-26T17:23:17.545589935Z",
+    "previous_hash": "8b82220278ac13eb2d7a17e10eb029bad35c6fffe4fca47e6729bf72e8215ee4",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:1b252bd8d4e982b7779e595b3d18ee57d0129c5c274a1bff59b8048ff3eaf2ab"
+      }
+    },
+    "hash": "0400fc47a2f1509e0e78bd7958d33cca8f3fb532ae0a314e1eb7f0facf817764"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 14,
+    "timestamp": "2026-09-26T17:23:17.561886443Z",
+    "previous_hash": "0400fc47a2f1509e0e78bd7958d33cca8f3fb532ae0a314e1eb7f0facf817764",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "7d1d0add-ce20-45b5-8a55-3b73f584d429",
+        "tool": "list_files",
+        "arguments_digest": "d2f5001fcfdf280d129c044f2ff9d18449553eaa864a47748bd3873652e057e5",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "0ee68e08af07c497c6a03ad9d31891d5dfd375e71cd7bee4f52113c5854f2ad7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 15,
+    "timestamp": "2026-09-26T17:23:17.590545768Z",
+    "previous_hash": "0ee68e08af07c497c6a03ad9d31891d5dfd375e71cd7bee4f52113c5854f2ad7",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:list_files",
+        "action": "list_files",
+        "summary": "listed 10 files below crates/searcher/src",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.list:crates/searcher/src"
+        ],
+        "succeeded": true,
+        "duration_ms": 21,
+        "attributes": {
+          "arguments_digest": "d2f5001fcfdf280d129c044f2ff9d18449553eaa864a47748bd3873652e057e5",
+          "call_id": "7d1d0add-ce20-45b5-8a55-3b73f584d429",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "532",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "5b2000b1d2329e6be10cf43ca4d90446174deae192204559b83cd6072fde2378"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 16,
+    "timestamp": "2026-09-26T17:23:17.590649834Z",
+    "previous_hash": "5b2000b1d2329e6be10cf43ca4d90446174deae192204559b83cd6072fde2378",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "7d1d0add-ce20-45b5-8a55-3b73f584d429",
+        "result_digest": "0a106f0bc19b47e70ebd46ed7dadc89c881c65adfeddf097cba285c3e639bfd5",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "a88cdf815f8002906ddcba9d1bd25ee9e7f46ab3083c297028540991350d2b08"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 17,
+    "timestamp": "2026-09-26T17:23:17.597426479Z",
+    "previous_hash": "a88cdf815f8002906ddcba9d1bd25ee9e7f46ab3083c297028540991350d2b08",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "d96aa9ca-dbe5-4b31-91a7-2340d79e79a1",
+        "tool": "search",
+        "arguments_digest": "a07ef00365f52986e7e96b19d4126198fd23dd2c603628386f96f8ed41cc4d62",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "5364cabf643089beb5acd2ab8dcd6b7217d1c4e1bbe4ec41d54e190e1dd80135"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 18,
+    "timestamp": "2026-09-26T17:23:17.620108301Z",
+    "previous_hash": "5364cabf643089beb5acd2ab8dcd6b7217d1c4e1bbe4ec41d54e190e1dd80135",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 0 matches for \"bytes_searched\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher"
+        ],
+        "succeeded": true,
+        "duration_ms": 15,
+        "attributes": {
+          "arguments_digest": "a07ef00365f52986e7e96b19d4126198fd23dd2c603628386f96f8ed41cc4d62",
+          "call_id": "d96aa9ca-dbe5-4b31-91a7-2340d79e79a1",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "2",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "4c232895c2f9d5ddfddf1f07afcc29d258a07e813b8958ad5dacf478e201fc72"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 19,
+    "timestamp": "2026-09-26T17:23:17.620234158Z",
+    "previous_hash": "4c232895c2f9d5ddfddf1f07afcc29d258a07e813b8958ad5dacf478e201fc72",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "d96aa9ca-dbe5-4b31-91a7-2340d79e79a1",
+        "result_digest": "99b7f1453360e5d80bb6f8cd32c7686eb8bc5fb1fc61fd64aede71319362dc1a",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "e1e8148731f7f89faa94699a6cb730e541a7ff4618db08c1bd473648f029a7f7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 20,
+    "timestamp": "2026-09-26T17:23:17.620347723Z",
+    "previous_hash": "e1e8148731f7f89faa94699a6cb730e541a7ff4618db08c1bd473648f029a7f7",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "dc0819482c63aa58961c93e0706a18c3b52d16bd7d7a53e516b728c91c817d65"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 21,
+    "timestamp": "2026-09-26T17:23:17.627573806Z",
+    "previous_hash": "dc0819482c63aa58961c93e0706a18c3b52d16bd7d7a53e516b728c91c817d65",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:449d333723182000e69baec2f80facd41491846b861f1de4cc0b11da1c38fe7e"
+      }
+    },
+    "hash": "9427ca2671c9ef18b67ccc18f9bb1524cdc63e04ece7d8fcdce31d867b929d24"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 22,
+    "timestamp": "2026-09-26T17:23:17.641694289Z",
+    "previous_hash": "9427ca2671c9ef18b67ccc18f9bb1524cdc63e04ece7d8fcdce31d867b929d24",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:b681472f73e25d48056ec9b17f8da2a38dc9b9d9e9a43dcd704c9fc54838ce8c"
+      }
+    },
+    "hash": "2b798e48e1a5949d63298e2a55fe2304c32aaa9df0c683e2ec7e4a70eb668bc1"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 23,
+    "timestamp": "2026-09-26T17:23:19.281831484Z",
+    "previous_hash": "2b798e48e1a5949d63298e2a55fe2304c32aaa9df0c683e2ec7e4a70eb668bc1",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 2 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1639,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9801",
+          "cached_input_tokens": "7321",
+          "finish_reason": "toolcalls",
+          "input_tokens": "7469",
+          "normalized_context_bytes": "30436",
+          "normalized_context_digest": "9c949590cdbff57cc8ddb4e622ebbfd85bf2c60f6fcd5a37961b0f21a8b2d862",
+          "output_tokens": "105",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1160",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "8808835109b83181ff9196f8e25bdc1f71d33b70e330036961aecc5576ee8a7a"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 24,
+    "timestamp": "2026-09-26T17:23:19.298676398Z",
+    "previous_hash": "8808835109b83181ff9196f8e25bdc1f71d33b70e330036961aecc5576ee8a7a",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:443c2e806d2cff1becde0bd4d8cdeed4302cfec1f7fe8ed7b853de3e5fdc58a0"
+      }
+    },
+    "hash": "1a46629075b2cfd9181df3992c807df4c0386f4aaffaf423c43465dc71942428"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 25,
+    "timestamp": "2026-09-26T17:23:19.315607289Z",
+    "previous_hash": "1a46629075b2cfd9181df3992c807df4c0386f4aaffaf423c43465dc71942428",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "e4d0d7b3-3af1-4fa2-8ad6-82f2240c879c",
+        "tool": "search",
+        "arguments_digest": "be828ce541b0c4dce5c1ce56b61f6b3f5e03d2260aad62c96167ed1031eecdff",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "30046e9c6f9bcbc3118d594a4b97c215b5db9be3d5c9c4d694260b6bb721f8f1"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 26,
+    "timestamp": "2026-09-26T17:23:19.345668989Z",
+    "previous_hash": "30046e9c6f9bcbc3118d594a4b97c215b5db9be3d5c9c4d694260b6bb721f8f1",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 1 matches for \"bytes_\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher/src/searcher/core.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 23,
+        "attributes": {
+          "arguments_digest": "be828ce541b0c4dce5c1ce56b61f6b3f5e03d2260aad62c96167ed1031eecdff",
+          "call_id": "e4d0d7b3-3af1-4fa2-8ad6-82f2240c879c",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "136",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "e3d290d49ddcda5f0a8954a228df8d823f6cd4b09b78514077943f671edfda05"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 27,
+    "timestamp": "2026-09-26T17:23:19.345768864Z",
+    "previous_hash": "e3d290d49ddcda5f0a8954a228df8d823f6cd4b09b78514077943f671edfda05",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "e4d0d7b3-3af1-4fa2-8ad6-82f2240c879c",
+        "result_digest": "9c58e216e9c729a120a0814719fd5b6741cbbbb2598fd65edfc7a7457fdc8f03",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "9c4d544441a20f4d8b9e284e5bf49ef6023e57303f1b549e3eef9b074bba26df"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 28,
+    "timestamp": "2026-09-26T17:23:19.352990129Z",
+    "previous_hash": "9c4d544441a20f4d8b9e284e5bf49ef6023e57303f1b549e3eef9b074bba26df",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "7ccf479f-7f73-42e0-ab0e-1633ac9685f1",
+        "tool": "search",
+        "arguments_digest": "ac7d722bbdeac5dd1f204d260fa16554cc56228794a06f2cf243cd8d2f708236",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "13ad64a116442fa603a93e0b326f7709bd237a385641627b96133eac413809ce"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 29,
+    "timestamp": "2026-09-26T17:23:19.374745555Z",
+    "previous_hash": "13ad64a116442fa603a93e0b326f7709bd237a385641627b96133eac413809ce",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 60 matches for \"bytes\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher"
+        ],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "ac7d722bbdeac5dd1f204d260fa16554cc56228794a06f2cf243cd8d2f708236",
+          "call_id": "7ccf479f-7f73-42e0-ab0e-1633ac9685f1",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "7418",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "6b06091085e56c0dbf79d0b25e325f882135c61e930d31a1a97b97760de38b71"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 30,
+    "timestamp": "2026-09-26T17:23:19.374852974Z",
+    "previous_hash": "6b06091085e56c0dbf79d0b25e325f882135c61e930d31a1a97b97760de38b71",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "7ccf479f-7f73-42e0-ab0e-1633ac9685f1",
+        "result_digest": "488df6495075dfc182d4656a7ebd05b7d7c808b92b76cf37049b738ed745239a",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "4fd8c8c119352bc29bce328e5eaa89b4dc75f432ae041fecdc3229f67ba663b8"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 31,
+    "timestamp": "2026-09-26T17:23:19.374981764Z",
+    "previous_hash": "4fd8c8c119352bc29bce328e5eaa89b4dc75f432ae041fecdc3229f67ba663b8",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "a20ebdb2166167e28a1d6feb52f2c659b4d7b9b0e04584b6fa2988e40dfb5beb"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 32,
+    "timestamp": "2026-09-26T17:23:19.382170831Z",
+    "previous_hash": "a20ebdb2166167e28a1d6feb52f2c659b4d7b9b0e04584b6fa2988e40dfb5beb",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:da7a27039ca43e963dc37de11611df0ae2969f966a51eb6e02ecaaa704059e20"
+      }
+    },
+    "hash": "79633a14a5e192cc7502d6c29786f48faa3c0716f091a9a818f6b3c29426d919"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 33,
+    "timestamp": "2026-09-26T17:23:19.389711137Z",
+    "previous_hash": "79633a14a5e192cc7502d6c29786f48faa3c0716f091a9a818f6b3c29426d919",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "enter_phase",
+        "summary": "entered implementing phase with 18 tool(s) available",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase": "implementing",
+          "phase_limit": "14",
+          "phase_turn": "1",
+          "reason": "discovery allowance reached; focus on implementation and targeted evidence",
+          "tools_available": "18",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "c980ce6f87d3b4e8f2c77632a30c821c39ed611b1f4dff3d5a8fc005b3708408"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 34,
+    "timestamp": "2026-09-26T17:23:19.389811432Z",
+    "previous_hash": "c980ce6f87d3b4e8f2c77632a30c821c39ed611b1f4dff3d5a8fc005b3708408",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "controller announced implementing phase with a stable tool catalog"
+      }
+    },
+    "hash": "c05c07378aeac518963fb2c03ff98231977a7f1b09d6ba631cc018131ab5d6e5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 35,
+    "timestamp": "2026-09-26T17:23:19.397063078Z",
+    "previous_hash": "c05c07378aeac518963fb2c03ff98231977a7f1b09d6ba631cc018131ab5d6e5",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:d013b98aa8c9be5a6cfa5f8a73cd56788bc6ffd4613120735fd685c3628a43fc"
+      }
+    },
+    "hash": "555fc88e3a165e37390b91e2bb2c5f24f07b5f93548e5bab5ed0315164179006"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 36,
+    "timestamp": "2026-09-26T17:23:21.642543482Z",
+    "previous_hash": "555fc88e3a165e37390b91e2bb2c5f24f07b5f93548e5bab5ed0315164179006",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 3 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2245,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "7701",
+          "cached_input_tokens": "7467",
+          "finish_reason": "toolcalls",
+          "input_tokens": "9696",
+          "normalized_context_bytes": "39040",
+          "normalized_context_digest": "76b2112525e5a5e4122e04e22586a02db6f0d7ed99dd1b5a6e9c292866fddac6",
+          "output_tokens": "140",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1586",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "4dba77b2e2a87dcfd0bcb874e58d1b6c3ff1ef9a8967f17b30c7a099ca051e4e"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 37,
+    "timestamp": "2026-09-26T17:23:21.658776084Z",
+    "previous_hash": "4dba77b2e2a87dcfd0bcb874e58d1b6c3ff1ef9a8967f17b30c7a099ca051e4e",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:004bd4a06a764709e2c2ff8385edf6e21c23614407a1e8e70d57285af9b89438"
+      }
+    },
+    "hash": "553731412d182016e12f9d5adbb48533e32d34fa67020beb483f1e4d5be28f51"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 38,
+    "timestamp": "2026-09-26T17:23:21.673962579Z",
+    "previous_hash": "553731412d182016e12f9d5adbb48533e32d34fa67020beb483f1e4d5be28f51",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "aedbb522-5c89-47c3-a6e6-4ce829ff9d9d",
+        "tool": "search",
+        "arguments_digest": "0476e79d4fc9821d211dceba1547e26f746721cd8a6c7b96339c754a13dcd3ba",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "def1afe69ea6aa222a30027f7e4e9d04f35a521c362b92024c88138427905a70"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 39,
+    "timestamp": "2026-09-26T17:23:21.705708679Z",
+    "previous_hash": "def1afe69ea6aa222a30027f7e4e9d04f35a521c362b92024c88138427905a70",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 12 matches for \"absolute_byte_offset\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher/src/searcher"
+        ],
+        "succeeded": true,
+        "duration_ms": 24,
+        "attributes": {
+          "arguments_digest": "0476e79d4fc9821d211dceba1547e26f746721cd8a6c7b96339c754a13dcd3ba",
+          "call_id": "aedbb522-5c89-47c3-a6e6-4ce829ff9d9d",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1449",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "67bb6b047388a3ace9cb7120bd3596fbf707633b12439a041c2a34226f43cfb5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 40,
+    "timestamp": "2026-09-26T17:23:21.705812676Z",
+    "previous_hash": "67bb6b047388a3ace9cb7120bd3596fbf707633b12439a041c2a34226f43cfb5",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "aedbb522-5c89-47c3-a6e6-4ce829ff9d9d",
+        "result_digest": "919cd1222e93f03f285310c594a8ad001e2f98bfab555de2325e27decf50e07b",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "b3444de85b390144a094f0207f3451c4b7de23f87b664d46f57428cc1bf0d5b4"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 41,
+    "timestamp": "2026-09-26T17:23:21.712469609Z",
+    "previous_hash": "b3444de85b390144a094f0207f3451c4b7de23f87b664d46f57428cc1bf0d5b4",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "732bc6fe-d6d7-465e-80bb-fc17a892e235",
+        "tool": "search",
+        "arguments_digest": "a3c3b553946ba60d8bcb3d8e41dcaaf338f3235873be970c65515020f8b83800",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "5e6115cbea36382b662ac8581522d4f1616954e2aa47556ae37603df4ad97a99"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 42,
+    "timestamp": "2026-09-26T17:23:21.732722856Z",
+    "previous_hash": "5e6115cbea36382b662ac8581522d4f1616954e2aa47556ae37603df4ad97a99",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 26 matches for \"fn \"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher/src/searcher/core.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "a3c3b553946ba60d8bcb3d8e41dcaaf338f3235873be970c65515020f8b83800",
+          "call_id": "732bc6fe-d6d7-465e-80bb-fc17a892e235",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "2768",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "c07ac2d74e42679481edb8d5c648548289a4db452303db7a6cf52158fa680ac5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 43,
+    "timestamp": "2026-09-26T17:23:21.732831671Z",
+    "previous_hash": "c07ac2d74e42679481edb8d5c648548289a4db452303db7a6cf52158fa680ac5",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "732bc6fe-d6d7-465e-80bb-fc17a892e235",
+        "result_digest": "1aea43779447f11f15e68e2948dee306e1212771464fd468eff05dfd0b0d1fb4",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "8205e6c50229f75e28d073088454430d1c261bb5861d7d56c95e2bb1fabec819"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 44,
+    "timestamp": "2026-09-26T17:23:21.732941464Z",
+    "previous_hash": "8205e6c50229f75e28d073088454430d1c261bb5861d7d56c95e2bb1fabec819",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "17ce034db10035d981e1ced10a8f28024961ab0863924ecbb221c4b735222efa"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 45,
+    "timestamp": "2026-09-26T17:23:21.740671394Z",
+    "previous_hash": "17ce034db10035d981e1ced10a8f28024961ab0863924ecbb221c4b735222efa",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:b776bf5b5ccc42549a8c49d0f774a5755c4e39d051ddfd73151e1a17e6d75387"
+      }
+    },
+    "hash": "728e788a34e47b97fef3bca77aa9d77295c611a6a9f739fdeab128d21c49e42f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 46,
+    "timestamp": "2026-09-26T17:23:21.755069223Z",
+    "previous_hash": "728e788a34e47b97fef3bca77aa9d77295c611a6a9f739fdeab128d21c49e42f",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:df1ac1decac2dd3fdb7fe3bdf5816e7c824fed3087e576c28a0b8b5dd29df664"
+      }
+    },
+    "hash": "d674c01ea56fdd833484914ad90d32326ba7295fed1ddb1308e4159eb54c3402"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 47,
+    "timestamp": "2026-09-26T17:23:23.671075715Z",
+    "previous_hash": "d674c01ea56fdd833484914ad90d32326ba7295fed1ddb1308e4159eb54c3402",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 4 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1915,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "8846",
+          "cached_input_tokens": "9694",
+          "finish_reason": "toolcalls",
+          "input_tokens": "10958",
+          "normalized_context_bytes": "43915",
+          "normalized_context_digest": "489fb03327966b8dc1510b122fae6bc3f968b9fbbc1975f02fae73f0edde7b27",
+          "output_tokens": "155",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1289",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "51ffdd1b9331fcd8455d6bc44c616609da4aef4f49c7ab0f5f25a72392247ff0"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 48,
+    "timestamp": "2026-09-26T17:23:23.689606776Z",
+    "previous_hash": "51ffdd1b9331fcd8455d6bc44c616609da4aef4f49c7ab0f5f25a72392247ff0",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:bc8cfc15979d6ed1d0e8cd626513843b2db43585315f335391c9f91c5a65633d"
+      }
+    },
+    "hash": "bc8f571ce08c4781196b12794fd51ea7175dba44b5560a28dc54f166710054f2"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 49,
+    "timestamp": "2026-09-26T17:23:23.70867395Z",
+    "previous_hash": "bc8f571ce08c4781196b12794fd51ea7175dba44b5560a28dc54f166710054f2",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "fa07737b-c786-48a5-baa8-a605e8b225eb",
+        "tool": "read_file",
+        "arguments_digest": "746f0e25aec644e584dfb7c7cd08b7a8acfd030c2032c06abb1dec0a034fbefb",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "1165d8c1e7fd404d15592b249c960ab050a6d076441b6d5014a7e5e1125b6202"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 50,
+    "timestamp": "2026-09-26T17:23:23.735341845Z",
+    "previous_hash": "1165d8c1e7fd404d15592b249c960ab050a6d076441b6d5014a7e5e1125b6202",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 200 lines from crates/searcher/src/searcher/core.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/searcher/src/searcher/core.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 19,
+        "attributes": {
+          "arguments_digest": "746f0e25aec644e584dfb7c7cd08b7a8acfd030c2032c06abb1dec0a034fbefb",
+          "call_id": "fa07737b-c786-48a5-baa8-a605e8b225eb",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "6085",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "bf2ebea9448fe206dccc810949e5a1d7d936cbc6127d4dedf2199de5d528e572"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 51,
+    "timestamp": "2026-09-26T17:23:23.735453454Z",
+    "previous_hash": "bf2ebea9448fe206dccc810949e5a1d7d936cbc6127d4dedf2199de5d528e572",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "fa07737b-c786-48a5-baa8-a605e8b225eb",
+        "result_digest": "ad49669c471d600e26bde0a59b3ce613bd1603b9a94183a07a521428953d93df",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "c7e37f766926f4d0591d859dbbe088c7ec25ec5451eee68f49a723f7da0eeeda"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 52,
+    "timestamp": "2026-09-26T17:23:23.742219762Z",
+    "previous_hash": "c7e37f766926f4d0591d859dbbe088c7ec25ec5451eee68f49a723f7da0eeeda",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "e7508dd9-013e-42fb-bfd8-1647dd1d49dd",
+        "tool": "read_file",
+        "arguments_digest": "67d48ef40395db4e1620e30f8e91088a56454d5428b0e8a167d164c2ddf28f2d",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "5f19a88f2c930350af92cb9088b7231747f73f1107157c234f7fca07bd7a046b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 53,
+    "timestamp": "2026-09-26T17:23:23.763590913Z",
+    "previous_hash": "5f19a88f2c930350af92cb9088b7231747f73f1107157c234f7fca07bd7a046b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 120 lines from crates/searcher/src/searcher/glue.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/searcher/src/searcher/glue.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 14,
+        "attributes": {
+          "arguments_digest": "67d48ef40395db4e1620e30f8e91088a56454d5428b0e8a167d164c2ddf28f2d",
+          "call_id": "e7508dd9-013e-42fb-bfd8-1647dd1d49dd",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "3990",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "7f0ed6fba4938fd087d6a0be6dfa7bcd652e091fc341ede8b33eb6e9dc44252d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 54,
+    "timestamp": "2026-09-26T17:23:23.763687017Z",
+    "previous_hash": "7f0ed6fba4938fd087d6a0be6dfa7bcd652e091fc341ede8b33eb6e9dc44252d",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "e7508dd9-013e-42fb-bfd8-1647dd1d49dd",
+        "result_digest": "8e5e37a58faa6c525b242eacfc605e3d8b241d2ed53d084455a58e250d90f21d",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "31405b57494c4711b573534089568a7296c08c5de746ba957f660032af9c2ba6"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 55,
+    "timestamp": "2026-09-26T17:23:23.763815668Z",
+    "previous_hash": "31405b57494c4711b573534089568a7296c08c5de746ba957f660032af9c2ba6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "7b0b2b006538d5e17a7f13fe15e28926f67e7507b7ba495801f523f2f3bdedff"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 56,
+    "timestamp": "2026-09-26T17:23:23.771210771Z",
+    "previous_hash": "7b0b2b006538d5e17a7f13fe15e28926f67e7507b7ba495801f523f2f3bdedff",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:5987247299c334b6c233b8c69478eda0fb6b1253edb39bfd8e1df3e0de27c1df"
+      }
+    },
+    "hash": "869b8deece07453be8be2f811fe7f59c294bfccc51d7912d8766128aba1e2cc2"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 57,
+    "timestamp": "2026-09-26T17:23:23.779534994Z",
+    "previous_hash": "869b8deece07453be8be2f811fe7f59c294bfccc51d7912d8766128aba1e2cc2",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 4 tool result(s), reclaiming 14704 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "39945",
+          "after_digest": "b12648ce3b7bba3c7bb494620c27314cb40e2c493c0d0f25c585ca813f281f1a",
+          "artifacts_written": "4",
+          "before_bytes": "54649",
+          "before_digest": "71dc258fe05f4dd43c650918de3956dd489a5cad133bf859e88f5161733a0c25",
+          "compacted_results": "4",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "14704",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "8cdcf39f09629f73dc389f684ec5d1ff05f6c75dca4faa29b67065cb7ab785f5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 58,
+    "timestamp": "2026-09-26T17:23:23.786748715Z",
+    "previous_hash": "8cdcf39f09629f73dc389f684ec5d1ff05f6c75dca4faa29b67065cb7ab785f5",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:847ed1cfdf8bc63b95bbd2e76f316b8231c8f5983d0d16c2bd9da7c612c20d89"
+      }
+    },
+    "hash": "0d703dfbd5c3f87ab05332e6bd1dcd23218b9ac66a04b30f5d83ffabaa833d35"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 59,
+    "timestamp": "2026-09-26T17:23:26.592124943Z",
+    "previous_hash": "0d703dfbd5c3f87ab05332e6bd1dcd23218b9ac66a04b30f5d83ffabaa833d35",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 5 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2804,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "7515",
+          "cached_input_tokens": "7608",
+          "finish_reason": "toolcalls",
+          "input_tokens": "10123",
+          "normalized_context_bytes": "39945",
+          "normalized_context_digest": "b12648ce3b7bba3c7bb494620c27314cb40e2c493c0d0f25c585ca813f281f1a",
+          "output_tokens": "100",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "2362",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "51f8eb833c83312f186e419661739e62ec978375819e321eb8d9e4e2ae500931"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 60,
+    "timestamp": "2026-09-26T17:23:26.60819481Z",
+    "previous_hash": "51f8eb833c83312f186e419661739e62ec978375819e321eb8d9e4e2ae500931",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:ba4f87cec1c978f55bad50c29c98aae707aae421ed2dd638e3d01eae8b353ae1"
+      }
+    },
+    "hash": "b8dbc8ad8c52581b4ed6b68e71e7de346e1ef58145a489c7aa35cb5980b21bee"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 61,
+    "timestamp": "2026-09-26T17:23:26.624396611Z",
+    "previous_hash": "b8dbc8ad8c52581b4ed6b68e71e7de346e1ef58145a489c7aa35cb5980b21bee",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "1dee0a89-ff86-46d3-9bd3-f3fabefac7c4",
+        "tool": "read_file",
+        "arguments_digest": "9eb4a7c2bb65f128a98cf3c866fbb8360a96f559fa0aa42bd1c36504c859f3bd",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "20ca89a08efb21b1a08af4793ff63a2ee21bba6e76bd7073cb8d91b58a297fd5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 62,
+    "timestamp": "2026-09-26T17:23:26.651083504Z",
+    "previous_hash": "20ca89a08efb21b1a08af4793ff63a2ee21bba6e76bd7073cb8d91b58a297fd5",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 156 lines from crates/searcher/src/searcher/core.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/searcher/src/searcher/core.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 20,
+        "attributes": {
+          "arguments_digest": "9eb4a7c2bb65f128a98cf3c866fbb8360a96f559fa0aa42bd1c36504c859f3bd",
+          "call_id": "1dee0a89-ff86-46d3-9bd3-f3fabefac7c4",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "4968",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "7991bad1e33c171616770cf3dfc5b5266cf2cbc2a4540a5363c686f305e2cab5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 63,
+    "timestamp": "2026-09-26T17:23:26.65120084Z",
+    "previous_hash": "7991bad1e33c171616770cf3dfc5b5266cf2cbc2a4540a5363c686f305e2cab5",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "1dee0a89-ff86-46d3-9bd3-f3fabefac7c4",
+        "result_digest": "287ec55442ddd4fc37267feae7d927582fbf25ac533cb784b3eb75a4139e2375",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "4b1626afd82157f76fc700b5afe3a0549bcc5f759b0fc268b38c779633d44ada"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 64,
+    "timestamp": "2026-09-26T17:23:26.651320969Z",
+    "previous_hash": "4b1626afd82157f76fc700b5afe3a0549bcc5f759b0fc268b38c779633d44ada",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "3a10efc2ac7c0b84512e07dd75abc4e23cecb6f903185ae3814b6f88292e43df"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 65,
+    "timestamp": "2026-09-26T17:23:26.658943132Z",
+    "previous_hash": "3a10efc2ac7c0b84512e07dd75abc4e23cecb6f903185ae3814b6f88292e43df",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:e681aa1992223eacd595598b377de6538992cc629e43417940f744824ea09c5b"
+      }
+    },
+    "hash": "8cf440bd0b6f233325e9afe5dbc94186e639d8361f83a32c8363f726830fb2a7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 66,
+    "timestamp": "2026-09-26T17:23:26.665834179Z",
+    "previous_hash": "8cf440bd0b6f233325e9afe5dbc94186e639d8361f83a32c8363f726830fb2a7",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "steer_implementation",
+        "summary": "4 implementing turns produced no isolated candidate",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase_turn": "4",
+          "tools_available": "18",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "73d05e6af242f57453dc5a93757b9515f65be866601502c6d249b33cc9427ae9"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 67,
+    "timestamp": "2026-09-26T17:23:26.673534356Z",
+    "previous_hash": "73d05e6af242f57453dc5a93757b9515f65be866601502c6d249b33cc9427ae9",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:eae12e186ece96716a57174a2a1ed238215cc1b536a2013d608c1ac4842e9086"
+      }
+    },
+    "hash": "4e351227f07298206bccf6af368d64c5b819bfc28553cb4ddd61cc93d7365bea"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 68,
+    "timestamp": "2026-09-26T17:23:28.979302781Z",
+    "previous_hash": "4e351227f07298206bccf6af368d64c5b819bfc28553cb4ddd61cc93d7365bea",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 6 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2305,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "8714",
+          "cached_input_tokens": "10121",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11614",
+          "normalized_context_bytes": "45696",
+          "normalized_context_digest": "ea43ea769eb21beb696d30956d6aac78769016552b6a30ac801eee35e5486c51",
+          "output_tokens": "88",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "2051",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "279ec3a688f3ea8d7ce4a2f32ea44c1eedc1df159b3fa4bd4143fb352a3a5514"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 69,
+    "timestamp": "2026-09-26T17:23:28.99541197Z",
+    "previous_hash": "279ec3a688f3ea8d7ce4a2f32ea44c1eedc1df159b3fa4bd4143fb352a3a5514",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:e31805f551bbabd0bd9105efdc1ba764c9f8172ef8001c5e7887150c2b2f0432"
+      }
+    },
+    "hash": "79ad0930a449b27a57321e64a8e0771bc97b4ad4c467e61a66eac97a7b496eb5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 70,
+    "timestamp": "2026-09-26T17:23:29.010334389Z",
+    "previous_hash": "79ad0930a449b27a57321e64a8e0771bc97b4ad4c467e61a66eac97a7b496eb5",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "1fc9af25-95d9-4d20-a371-2743514194f6",
+        "tool": "read_observation",
+        "arguments_digest": "e4c1bf3a7fe356cd34b1a719121ac2d35bf041d8fbfba7ceb3760ec8ed53da65",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "9b521a1ef25a32762a1b85d6ef12746db49bc55b2bca1ad886de6675981b88c3"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 71,
+    "timestamp": "2026-09-26T17:23:29.034520348Z",
+    "previous_hash": "9b521a1ef25a32762a1b85d6ef12746db49bc55b2bca1ad886de6675981b88c3",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_observation",
+        "action": "read_observation",
+        "summary": "read observation bytes 0..4096",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "artifact.read:c0bd864e86f02cb5f6e73a689288c703f7ced516da317ca14d9f70d7e7ac2cc4"
+        ],
+        "succeeded": true,
+        "duration_ms": 17,
+        "attributes": {
+          "arguments_digest": "e4c1bf3a7fe356cd34b1a719121ac2d35bf041d8fbfba7ceb3760ec8ed53da65",
+          "call_id": "1fc9af25-95d9-4d20-a371-2743514194f6",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "4421",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "1c2f2ccf08afe88a89416d488b91c5f4827742cac7ee94932b6677ca255aebdd"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 72,
+    "timestamp": "2026-09-26T17:23:29.034622039Z",
+    "previous_hash": "1c2f2ccf08afe88a89416d488b91c5f4827742cac7ee94932b6677ca255aebdd",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "1fc9af25-95d9-4d20-a371-2743514194f6",
+        "result_digest": "882799f557901c826192dcd314da7959926e7e41705440addfb7fa9588d6f1c6",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "ee38d8f250e34b85902651c946a71cab6d638ec7fedb06e5edbab89f983c3c1c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 73,
+    "timestamp": "2026-09-26T17:23:29.034727083Z",
+    "previous_hash": "ee38d8f250e34b85902651c946a71cab6d638ec7fedb06e5edbab89f983c3c1c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "fc3838dcaa43189c9f6acb4577a79c6c81513a59cb26e08bf12c8c3b9121f523"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 74,
+    "timestamp": "2026-09-26T17:23:29.042404561Z",
+    "previous_hash": "fc3838dcaa43189c9f6acb4577a79c6c81513a59cb26e08bf12c8c3b9121f523",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:a87d1d171a7870a61242310e860d55c574ef1790f156254c257798d9c9d3c2b4"
+      }
+    },
+    "hash": "bc3f00a1648f5a8d905ce5a3d582c7fd6037c4008f4b7830e799afae707fd9df"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 75,
+    "timestamp": "2026-09-26T17:23:29.050139729Z",
+    "previous_hash": "bc3f00a1648f5a8d905ce5a3d582c7fd6037c4008f4b7830e799afae707fd9df",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 2 tool result(s), reclaiming 7371 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "43152",
+          "after_digest": "a386b5299553affadc61e08e03dc3f254fa7cbc10e3bb22f1da7e871e52b1e37",
+          "artifacts_written": "2",
+          "before_bytes": "50523",
+          "before_digest": "2119f05fbe3a14982575557123faed7b0309b0d94db41c6486ac710b6117f1a6",
+          "compacted_results": "2",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "7371",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "64ab3ab51b0ae9beb02caf26ae8d260f97e0da778194306e888fb72aff589304"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 76,
+    "timestamp": "2026-09-26T17:23:29.057821467Z",
+    "previous_hash": "64ab3ab51b0ae9beb02caf26ae8d260f97e0da778194306e888fb72aff589304",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:e0b44eadf26d4b7ba565028465335d45f64ae0b71e239af0f9d20924cb9e2b55"
+      }
+    },
+    "hash": "a10fc1c863d29a5a8863d7b894c60b7ce737990b93abfaa68c0157fff14439bb"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 77,
+    "timestamp": "2026-09-26T17:23:30.966321317Z",
+    "previous_hash": "a10fc1c863d29a5a8863d7b894c60b7ce737990b93abfaa68c0157fff14439bb",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 7 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1908,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9170",
+          "cached_input_tokens": "10186",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11107",
+          "normalized_context_bytes": "43152",
+          "normalized_context_digest": "a386b5299553affadc61e08e03dc3f254fa7cbc10e3bb22f1da7e871e52b1e37",
+          "output_tokens": "108",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1205",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "3f2565e21252b286cb7d45964ba87ff361119e8fc113a012cb74b211a7829097"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 78,
+    "timestamp": "2026-09-26T17:23:30.984414183Z",
+    "previous_hash": "3f2565e21252b286cb7d45964ba87ff361119e8fc113a012cb74b211a7829097",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:d53fdd01ce6044961b5064a76141c8d0e0bbcbb08307e6c8c8f4ea8bf942a043"
+      }
+    },
+    "hash": "79546d00033f5fceb524354df12902c667dca0f609dc482bd653d65baa2fd042"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 79,
+    "timestamp": "2026-09-26T17:23:31.000962824Z",
+    "previous_hash": "79546d00033f5fceb524354df12902c667dca0f609dc482bd653d65baa2fd042",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "bc31d750-358e-4233-a2f3-b6c122f4e5f0",
+        "tool": "read_file",
+        "arguments_digest": "9f135a6a2a7c43293867e4492e0dbb9a46a0cfcb3330130737ae091eaf2f2837",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "0cac011b1ce30234708f6f89289fea71371e9ac25faf4c3438f260ce6e2c3e96"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 80,
+    "timestamp": "2026-09-26T17:23:31.030528709Z",
+    "previous_hash": "0cac011b1ce30234708f6f89289fea71371e9ac25faf4c3438f260ce6e2c3e96",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 61 lines from crates/searcher/src/searcher/core.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/searcher/src/searcher/core.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 22,
+        "attributes": {
+          "arguments_digest": "9f135a6a2a7c43293867e4492e0dbb9a46a0cfcb3330130737ae091eaf2f2837",
+          "call_id": "bc31d750-358e-4233-a2f3-b6c122f4e5f0",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1731",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "11534ce14ee47395193cb607926f6318b72525fe8af9558c0ce6c535c0ebc0af"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 81,
+    "timestamp": "2026-09-26T17:23:31.030645067Z",
+    "previous_hash": "11534ce14ee47395193cb607926f6318b72525fe8af9558c0ce6c535c0ebc0af",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "bc31d750-358e-4233-a2f3-b6c122f4e5f0",
+        "result_digest": "9e5228dcfb5aa82c6752ad084724538c2482eeed2afdd71d95c18a5aa1b15a73",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "ed48af427db094708c2b4dfe9b7ead621b8dc38e64ff43a4ba23b77445e6f2e3"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 82,
+    "timestamp": "2026-09-26T17:23:31.030730276Z",
+    "previous_hash": "ed48af427db094708c2b4dfe9b7ead621b8dc38e64ff43a4ba23b77445e6f2e3",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "615f56576621f62a752733a68462cd7d2bc850dce5897f572fd18143e11f1652"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 83,
+    "timestamp": "2026-09-26T17:23:31.0382937Z",
+    "previous_hash": "615f56576621f62a752733a68462cd7d2bc850dce5897f572fd18143e11f1652",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:a6e27d3e14de6606dd3c064f3b8dd05d2a7716505a99ed35800b304af1dc5044"
+      }
+    },
+    "hash": "21f85b444915ed06d01397053ad6766be37efc2361367e4b2b39442a57a5d8f5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 84,
+    "timestamp": "2026-09-26T17:23:31.052838619Z",
+    "previous_hash": "21f85b444915ed06d01397053ad6766be37efc2361367e4b2b39442a57a5d8f5",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:6365c05f6ae3b7df8977aec11c199a254f6179fbf657402277d24149533a84c9"
+      }
+    },
+    "hash": "1d4fdbab38ddd2b2f4720142b9aee4a45dca7819eb56ab9083f5e28906b63522"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 85,
+    "timestamp": "2026-09-26T17:23:33.276093763Z",
+    "previous_hash": "1d4fdbab38ddd2b2f4720142b9aee4a45dca7819eb56ab9083f5e28906b63522",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 8 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2222,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9514",
+          "cached_input_tokens": "11105",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11672",
+          "normalized_context_bytes": "45244",
+          "normalized_context_digest": "96f75d2634a091132c5444724744808f840add4839366c6f4fc70b442df3bd34",
+          "output_tokens": "175",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1088",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "9b9587bd6dd1677ff6809b51989705edaf958e59bd6ce3d547438d7647b24cad"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 86,
+    "timestamp": "2026-09-26T17:23:33.292429523Z",
+    "previous_hash": "9b9587bd6dd1677ff6809b51989705edaf958e59bd6ce3d547438d7647b24cad",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:66be0709236aef1f4f10dc96d71290742c0a1d86c7bb5552e2686ed97430fa1f"
+      }
+    },
+    "hash": "21ca59326cc86754cddd839a96c3e131e2a8a1afbac5e9c3f5002e14c543efe8"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 87,
+    "timestamp": "2026-09-26T17:23:33.308622803Z",
+    "previous_hash": "21ca59326cc86754cddd839a96c3e131e2a8a1afbac5e9c3f5002e14c543efe8",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "d6c09d4a-8427-4b36-b568-5957fb5842ff",
+        "tool": "search",
+        "arguments_digest": "deb448eaf8f2f2c1e006e31b4c69f7b98bcc13f00e492c8d427033d62d7d087a",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "d9cbc8e98219d290db942d8b2498ba44458f6bcc816e4c223743422fa199d4d6"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 88,
+    "timestamp": "2026-09-26T17:23:33.335331905Z",
+    "previous_hash": "d9cbc8e98219d290db942d8b2498ba44458f6bcc816e4c223743422fa199d4d6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 3 matches for \"finish(\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher/src/searcher/glue.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 20,
+        "attributes": {
+          "arguments_digest": "deb448eaf8f2f2c1e006e31b4c69f7b98bcc13f00e492c8d427033d62d7d087a",
+          "call_id": "d6c09d4a-8427-4b36-b568-5957fb5842ff",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "344",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "592835d14848e18adf825dc2ba08bf22b2e4a045615d66b7289d1b68bbf2894a"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 89,
+    "timestamp": "2026-09-26T17:23:33.335444073Z",
+    "previous_hash": "592835d14848e18adf825dc2ba08bf22b2e4a045615d66b7289d1b68bbf2894a",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "d6c09d4a-8427-4b36-b568-5957fb5842ff",
+        "result_digest": "34ada20a26ea6a14613cf96906130577927f8de7b9318e1fdb30dca495d197e0",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "b3e33e4f23f769c954ab9aa26fc208e4e18dfa386cedd4cc610c4f1e7093eb92"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 90,
+    "timestamp": "2026-09-26T17:23:33.342525372Z",
+    "previous_hash": "b3e33e4f23f769c954ab9aa26fc208e4e18dfa386cedd4cc610c4f1e7093eb92",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "d13f27ce-a080-4d4b-8ba6-5790c49b66e2",
+        "tool": "search",
+        "arguments_digest": "0d831d0a10629def4fd687984487190c8f696f60bd4f2a4e22bd1dff5de19735",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "e34f61a6aef3afce18630efe23ee9e1b35b5108b0f17779f432107aedb2f9bcc"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 91,
+    "timestamp": "2026-09-26T17:23:33.363081876Z",
+    "previous_hash": "e34f61a6aef3afce18630efe23ee9e1b35b5108b0f17779f432107aedb2f9bcc",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 60 matches for \"fn \"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher/src/searcher/glue.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "0d831d0a10629def4fd687984487190c8f696f60bd4f2a4e22bd1dff5de19735",
+          "call_id": "d13f27ce-a080-4d4b-8ba6-5790c49b66e2",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "5900",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "fefe6c0d26f707cbf42fc22ee7e8981f58676f10034917b32cecfa85cc2bdd09"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 92,
+    "timestamp": "2026-09-26T17:23:33.363183148Z",
+    "previous_hash": "fefe6c0d26f707cbf42fc22ee7e8981f58676f10034917b32cecfa85cc2bdd09",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "d13f27ce-a080-4d4b-8ba6-5790c49b66e2",
+        "result_digest": "d9fa7b37aa24216c461cbf53821b3a346488d14a8eaad1b289eb2245cdafda17",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "e458d9454572b50f3bc5546d79b7d88b29a876fdd8ce70d4e9e6ab9f88c21736"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 93,
+    "timestamp": "2026-09-26T17:23:33.363390372Z",
+    "previous_hash": "e458d9454572b50f3bc5546d79b7d88b29a876fdd8ce70d4e9e6ab9f88c21736",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "186a441d88be71bec248ba8af7561ee790ffa13e283c95bd6398f4352d7a1527"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 94,
+    "timestamp": "2026-09-26T17:23:33.370743849Z",
+    "previous_hash": "186a441d88be71bec248ba8af7561ee790ffa13e283c95bd6398f4352d7a1527",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:a3e71ef082129ea848959024838b737ac9dbdfee27edcaf8dbaed8dc5f93f9ff"
+      }
+    },
+    "hash": "eeb05681057c626c2ee975238855d9892f8c6be6a7d9710aef542f0cf8dc25eb"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 95,
+    "timestamp": "2026-09-26T17:23:33.37817569Z",
+    "previous_hash": "eeb05681057c626c2ee975238855d9892f8c6be6a7d9710aef542f0cf8dc25eb",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "steer_implementation",
+        "summary": "7 implementing turns produced no isolated candidate",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase_turn": "7",
+          "tools_available": "18",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "b6fc0d5163db53f64da80e167c092be9bb628044d9f15817f3abf671e09e3aa7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 96,
+    "timestamp": "2026-09-26T17:23:33.379484336Z",
+    "previous_hash": "b6fc0d5163db53f64da80e167c092be9bb628044d9f15817f3abf671e09e3aa7",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 2 tool result(s), reclaiming 4819 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "47743",
+          "after_digest": "ce85d5fa1f5b306bb1e08b2d7afcf4905ca5575a4a3ba8d06201a56ace8ac7ad",
+          "artifacts_written": "2",
+          "before_bytes": "52562",
+          "before_digest": "f5609a4273c669544ab2471efe09e2291b4a4928ca5a8e3b6759aefc78c28638",
+          "compacted_results": "2",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "4819",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "c66e4f3fd43d0894eae8de27096cc162c540f36de907769c08b6ad3a7d88fbfe"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 97,
+    "timestamp": "2026-09-26T17:23:33.386796046Z",
+    "previous_hash": "c66e4f3fd43d0894eae8de27096cc162c540f36de907769c08b6ad3a7d88fbfe",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:ccfc7bb79c09d4fcb4fa1a8f397d6ad5b8277c168c55796b502520b011c00c1d"
+      }
+    },
+    "hash": "8487f1bb296cb07f4698a3730ff2addfc0320f3e0515d1868c0280d5d8c54eb9"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 98,
+    "timestamp": "2026-09-26T17:23:35.854756947Z",
+    "previous_hash": "8487f1bb296cb07f4698a3730ff2addfc0320f3e0515d1868c0280d5d8c54eb9",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 9 produced 1 tool call(s) and 84 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2467,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9021",
+          "cached_input_tokens": "11170",
+          "finish_reason": "toolcalls",
+          "input_tokens": "12381",
+          "normalized_context_bytes": "47743",
+          "normalized_context_digest": "ce85d5fa1f5b306bb1e08b2d7afcf4905ca5575a4a3ba8d06201a56ace8ac7ad",
+          "output_tokens": "111",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1996",
+          "stream_mode": "streaming",
+          "text_bytes": "84",
+          "tool_calls": "1",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "6d598e09d7a8bbce4b76cecd0bf25e1d3c263deffad844bbab76da6857a5febb"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 99,
+    "timestamp": "2026-09-26T17:23:35.87118874Z",
+    "previous_hash": "6d598e09d7a8bbce4b76cecd0bf25e1d3c263deffad844bbab76da6857a5febb",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:cc7e93c0160c08613d609787f9ae75f1611ca628ff6b82850d01788d898c13b0"
+      }
+    },
+    "hash": "eca67197a60a755c077cc68ab246d77ce6304df4485304b4c28273a46654e008"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 100,
+    "timestamp": "2026-09-26T17:23:35.887442155Z",
+    "previous_hash": "eca67197a60a755c077cc68ab246d77ce6304df4485304b4c28273a46654e008",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "a3e87259-bcd2-4cb5-a1e4-c4440544d46a",
+        "tool": "read_observation",
+        "arguments_digest": "f6dd1dc6dc7c61200b2950b31ddd1ce83e369dd1fb70e299a63d77d7ed93ba75",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "4a442e5ee2253c09c8d517a2d7cfb3e55bc43fe42a71518429aba8fd2e50968d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 101,
+    "timestamp": "2026-09-26T17:23:35.910992683Z",
+    "previous_hash": "4a442e5ee2253c09c8d517a2d7cfb3e55bc43fe42a71518429aba8fd2e50968d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_observation",
+        "action": "read_observation",
+        "summary": "read observation bytes 0..3990",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "artifact.read:a36c21ede2ef55194e78d756c461136f056a0a6792c53b95d73c63a21a05ca15"
+        ],
+        "succeeded": true,
+        "duration_ms": 16,
+        "attributes": {
+          "arguments_digest": "f6dd1dc6dc7c61200b2950b31ddd1ce83e369dd1fb70e299a63d77d7ed93ba75",
+          "call_id": "a3e87259-bcd2-4cb5-a1e4-c4440544d46a",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "4293",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "dcf5eb1b931f3705c410f810562e85d6a3913c5f07cae199c760e8a8ee84c168"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 102,
+    "timestamp": "2026-09-26T17:23:35.911097168Z",
+    "previous_hash": "dcf5eb1b931f3705c410f810562e85d6a3913c5f07cae199c760e8a8ee84c168",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "a3e87259-bcd2-4cb5-a1e4-c4440544d46a",
+        "result_digest": "d30dfb434612a30c8d8d1d7d2f154c535d047db4cc2020bd12d160462b03ec04",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "150ffa0a8df06b5fac911234d4040a06ffb2fa9987741978eb9a8a5ebec4e814"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 103,
+    "timestamp": "2026-09-26T17:23:35.911192294Z",
+    "previous_hash": "150ffa0a8df06b5fac911234d4040a06ffb2fa9987741978eb9a8a5ebec4e814",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "10138d10788ac24cbdb5e922a5d8f67bf0f1b3946ecefdbc72387d302f031a0c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 104,
+    "timestamp": "2026-09-26T17:23:35.918477116Z",
+    "previous_hash": "10138d10788ac24cbdb5e922a5d8f67bf0f1b3946ecefdbc72387d302f031a0c",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:160cb09766e15e10835e7dc5e4e9f920adfff2208231f3bfbb76b83a33fc227f"
+      }
+    },
+    "hash": "57c78734925cb8c6121be1c36760e69819a0073a58a497bf6de143f5fbcc4511"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 105,
+    "timestamp": "2026-09-26T17:23:35.926639443Z",
+    "previous_hash": "57c78734925cb8c6121be1c36760e69819a0073a58a497bf6de143f5fbcc4511",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 1 tool result(s), reclaiming 3337 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "49189",
+          "after_digest": "81e8ba265cf59e6d640648c994337414f5169ff954c66bde4b5231a7a9235e6a",
+          "artifacts_written": "1",
+          "before_bytes": "52526",
+          "before_digest": "3e89025080782c4decf7e167f8324b12763c198033a282f6bd07ddf1d297b967",
+          "compacted_results": "1",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "3337",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "89f48f3556887399102a4b5add4ce65b0496faddaef83be6c58056d89b193797"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 106,
+    "timestamp": "2026-09-26T17:23:35.93381496Z",
+    "previous_hash": "89f48f3556887399102a4b5add4ce65b0496faddaef83be6c58056d89b193797",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:e5e97b82ecea4e5bbe584602d1eb764c55bdd615af87b5315632adc9c5196e4b"
+      }
+    },
+    "hash": "250f083987ca45f34a6f080c4918cc91f22029e8fa66aa0cdf734192a69cc49d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 107,
+    "timestamp": "2026-09-26T17:23:37.340525814Z",
+    "previous_hash": "250f083987ca45f34a6f080c4918cc91f22029e8fa66aa0cdf734192a69cc49d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 10 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1406,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9722",
+          "cached_input_tokens": "12490",
+          "finish_reason": "toolcalls",
+          "input_tokens": "12846",
+          "normalized_context_bytes": "49189",
+          "normalized_context_digest": "81e8ba265cf59e6d640648c994337414f5169ff954c66bde4b5231a7a9235e6a",
+          "output_tokens": "57",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1249",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "6ae728ee5aeb60e864df4d76b15a8dc7207c349e5002c5c1713f22c85d947c5a"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 108,
+    "timestamp": "2026-09-26T17:23:37.356950064Z",
+    "previous_hash": "6ae728ee5aeb60e864df4d76b15a8dc7207c349e5002c5c1713f22c85d947c5a",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:3781e109fc20fd673da8b3685f1c6ae9f9ce773bc5b6bd174c1f005ec74adcf5"
+      }
+    },
+    "hash": "7556db9897b31a768f310e5a6c933d98c4eacca3bd2024a6599b9cf09378ae0b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 109,
+    "timestamp": "2026-09-26T17:23:37.372859014Z",
+    "previous_hash": "7556db9897b31a768f310e5a6c933d98c4eacca3bd2024a6599b9cf09378ae0b",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "802e9c6b-6a5e-462d-a60b-ffc5ea443eec",
+        "tool": "read_file",
+        "arguments_digest": "c74a192a516ce79867cdedd34317f972169960a6d7195fc1bd057f5471c94b34",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "fcdae17c8012c3196ba607a3140f387d12ee9c2a292d8d6934a49139ff8ddfe3"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 110,
+    "timestamp": "2026-09-26T17:23:37.40251332Z",
+    "previous_hash": "fcdae17c8012c3196ba607a3140f387d12ee9c2a292d8d6934a49139ff8ddfe3",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 45 lines from crates/searcher/src/searcher/glue.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/searcher/src/searcher/glue.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 22,
+        "attributes": {
+          "arguments_digest": "c74a192a516ce79867cdedd34317f972169960a6d7195fc1bd057f5471c94b34",
+          "call_id": "802e9c6b-6a5e-462d-a60b-ffc5ea443eec",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1778",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "21ddf2cd064db88664311b9b8ce80a76366fcc1d0b90221df4baf82747453c3d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 111,
+    "timestamp": "2026-09-26T17:23:37.402634009Z",
+    "previous_hash": "21ddf2cd064db88664311b9b8ce80a76366fcc1d0b90221df4baf82747453c3d",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "802e9c6b-6a5e-462d-a60b-ffc5ea443eec",
+        "result_digest": "699994022cb5b34039984e5f47873c8ae2f8f8d645b6b1958a7b112447030b78",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "b3f09c721e81c93e17abfde22c1c1a1ddee2b4458195f46893ef8c7e00c17c5e"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 112,
+    "timestamp": "2026-09-26T17:23:37.402724805Z",
+    "previous_hash": "b3f09c721e81c93e17abfde22c1c1a1ddee2b4458195f46893ef8c7e00c17c5e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "b301979a196580e0c1ce61b58b4486e55164565996300240d6dfc168bafb7423"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 113,
+    "timestamp": "2026-09-26T17:23:37.410371063Z",
+    "previous_hash": "b301979a196580e0c1ce61b58b4486e55164565996300240d6dfc168bafb7423",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:ff5abf54bc5b174dcc0e150fea7e77f6d5fa48d4e6f7b99ccfa406536d102c7c"
+      }
+    },
+    "hash": "a6fef186c2d621e7b3c40cfa67dd7572c9ad0d4db26891fc9136bc67ac47e0a9"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 114,
+    "timestamp": "2026-09-26T17:23:37.417946361Z",
+    "previous_hash": "a6fef186c2d621e7b3c40cfa67dd7572c9ad0d4db26891fc9136bc67ac47e0a9",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 1 tool result(s), reclaiming 723 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "50604",
+          "after_digest": "a2588568f7031959e64e3b21ba376b8ae9ba6d738d9536928a93c6eb9f431a8c",
+          "artifacts_written": "1",
+          "before_bytes": "51327",
+          "before_digest": "daea1e5ab4eb1a28035347c7943a6d6532bd01586419e890df3f0fa561f7f1a8",
+          "compacted_results": "1",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "723",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "c8838b48dffb6236054c52fe2fa1a146dabeb7770c7c2048cf0c88dfbe7094ff"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 115,
+    "timestamp": "2026-09-26T17:23:37.425727975Z",
+    "previous_hash": "c8838b48dffb6236054c52fe2fa1a146dabeb7770c7c2048cf0c88dfbe7094ff",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:eed80a8a33391fa1e4332f85171e4c22b8e09de3187239ae5c2d2a4b36abec54"
+      }
+    },
+    "hash": "bab12fdfa062884e0e9c18a65f9ded72e40b89c7cbd985e8f102a326364e909b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 116,
+    "timestamp": "2026-09-26T17:23:40.905599959Z",
+    "previous_hash": "bab12fdfa062884e0e9c18a65f9ded72e40b89c7cbd985e8f102a326364e909b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 11 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 3479,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9717",
+          "cached_input_tokens": "12901",
+          "finish_reason": "toolcalls",
+          "input_tokens": "13276",
+          "normalized_context_bytes": "50604",
+          "normalized_context_digest": "a2588568f7031959e64e3b21ba376b8ae9ba6d738d9536928a93c6eb9f431a8c",
+          "output_tokens": "327",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1071",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "85ea97f9c3ad650e68123977455b6d3dcde638adbc470bb298a45fce815b7103"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 117,
+    "timestamp": "2026-09-26T17:23:40.922347233Z",
+    "previous_hash": "85ea97f9c3ad650e68123977455b6d3dcde638adbc470bb298a45fce815b7103",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:3fca0ed7e6b5d2f743454ee9e30cf66b3311bf816fad72338d0a8261ff5b28ba"
+      }
+    },
+    "hash": "ec579231b188e524c91fe05965a38118223cb1141f0feb4e1fa54db2c138852d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 118,
+    "timestamp": "2026-09-26T17:23:40.937805277Z",
+    "previous_hash": "ec579231b188e524c91fe05965a38118223cb1141f0feb4e1fa54db2c138852d",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "376a45a2-ac20-4d50-9421-4f1b6255492f",
+        "tool": "search",
+        "arguments_digest": "598b494190630cc861c2492ce37b7373e9d8a69a6eaa4c0e530852c5a0106a86",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "bf2b6762d5272e8ffdb710ddf3e1f75ac7522f2ca5e36721f35316f2637c034f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 119,
+    "timestamp": "2026-09-26T17:23:40.967777089Z",
+    "previous_hash": "bf2b6762d5272e8ffdb710ddf3e1f75ac7522f2ca5e36721f35316f2637c034f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 1 matches for \"fn finish\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher/src/searcher/core.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 23,
+        "attributes": {
+          "arguments_digest": "598b494190630cc861c2492ce37b7373e9d8a69a6eaa4c0e530852c5a0106a86",
+          "call_id": "376a45a2-ac20-4d50-9421-4f1b6255492f",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "95",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "30ae52c07c8597f64d0ec601c9a42fba7033304b7c77ef42ff2e7f7797921a1f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 120,
+    "timestamp": "2026-09-26T17:23:40.967879758Z",
+    "previous_hash": "30ae52c07c8597f64d0ec601c9a42fba7033304b7c77ef42ff2e7f7797921a1f",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "376a45a2-ac20-4d50-9421-4f1b6255492f",
+        "result_digest": "621b18e1711125cbb7be42898055e16f63e0c7e853bb480081fe718d9681e4d2",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "a14ac83af6f09bb8a9377add302dbf770326057bf32aef0a062f233def336c7d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 121,
+    "timestamp": "2026-09-26T17:23:40.975033066Z",
+    "previous_hash": "a14ac83af6f09bb8a9377add302dbf770326057bf32aef0a062f233def336c7d",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "f95c03a2-3955-465d-a70b-59e1e6cc07cc",
+        "tool": "read_observation",
+        "arguments_digest": "ab912d0ca337bc78440d297cb03ab418e005592625046549972d7865d1e70dd9",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "cd6f2696ceb486dab4cac31cea9f6efd35acd50a367719c431c81e71cbd11da2"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 122,
+    "timestamp": "2026-09-26T17:23:40.995651031Z",
+    "previous_hash": "cd6f2696ceb486dab4cac31cea9f6efd35acd50a367719c431c81e71cbd11da2",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_observation",
+        "action": "read_observation",
+        "summary": "read observation bytes 0..1731",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "artifact.read:7308f9598bd0766155d0c68c2c2db737d77a4fb39cb34475a171b19120fc0452"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "ab912d0ca337bc78440d297cb03ab418e005592625046549972d7865d1e70dd9",
+          "call_id": "f95c03a2-3955-465d-a70b-59e1e6cc07cc",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1983",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "c21afc7401a48660746502f12459420b4474e78270ad437fcdbc1422618ae28f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 123,
+    "timestamp": "2026-09-26T17:23:40.995752304Z",
+    "previous_hash": "c21afc7401a48660746502f12459420b4474e78270ad437fcdbc1422618ae28f",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "f95c03a2-3955-465d-a70b-59e1e6cc07cc",
+        "result_digest": "1b5d00abd634c2d7c8115ebf2213635c23d24628681b6a9dc3df6c48aa5725f4",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "0ef844be6f0743710dda75c350b57a61f0fd8a67e3f18d32e4cf8e91227fed4f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 124,
+    "timestamp": "2026-09-26T17:23:40.99583842Z",
+    "previous_hash": "0ef844be6f0743710dda75c350b57a61f0fd8a67e3f18d32e4cf8e91227fed4f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "11"
+        }
+      }
+    },
+    "hash": "9e8cc41b703280437c5c7b69c3bcdd204f5b259a24abb620c351c9a7d7bc0e1b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 125,
+    "timestamp": "2026-09-26T17:23:41.003035169Z",
+    "previous_hash": "9e8cc41b703280437c5c7b69c3bcdd204f5b259a24abb620c351c9a7d7bc0e1b",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:e43b8d3c19f68ae93d1fcd3a248cd42d0dbf40c938b60670ae6da610499c5253"
+      }
+    },
+    "hash": "1a24f8ef5d9fda8a71ecca54275ac5e3d0c442342abf6dc3eb0e499b6d915db3"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 126,
+    "timestamp": "2026-09-26T17:23:41.010760909Z",
+    "previous_hash": "1a24f8ef5d9fda8a71ecca54275ac5e3d0c442342abf6dc3eb0e499b6d915db3",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "steer_implementation",
+        "summary": "10 implementing turns produced no isolated candidate",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase_turn": "10",
+          "tools_available": "18",
+          "turn": "12"
+        }
+      }
+    },
+    "hash": "6157dc657b30b0e1c923533bf485769b84a8e05dad687166e35da2bc26a6cf01"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 127,
+    "timestamp": "2026-09-26T17:23:41.011686746Z",
+    "previous_hash": "6157dc657b30b0e1c923533bf485769b84a8e05dad687166e35da2bc26a6cf01",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 1 tool result(s), reclaiming 1025 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "52785",
+          "after_digest": "005448d33fb9aca666be308e1808088cfbd8cf2f8cabc880052fb864e58d0787",
+          "artifacts_written": "1",
+          "before_bytes": "53810",
+          "before_digest": "c095776b4b01e9ce3a0cb39a5536f3092cfd5431f31b448ffc7bbd97baaf5f40",
+          "compacted_results": "1",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "1025",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "cf86a9ad5ddc353e2ddab308e1a1d33543ea9cff187b75e84439f158790b21d7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 128,
+    "timestamp": "2026-09-26T17:23:41.018821615Z",
+    "previous_hash": "cf86a9ad5ddc353e2ddab308e1a1d33543ea9cff187b75e84439f158790b21d7",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:edf665dcbbb836dbd03885259be86aa4a73025b9097dbe75016cb04aa120bd94"
+      }
+    },
+    "hash": "5fe65412a79b857d5a7e50a4093ff233f29d81443727a69bfcb8dc5956f77e8d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 129,
+    "timestamp": "2026-09-26T17:23:42.941221453Z",
+    "previous_hash": "5fe65412a79b857d5a7e50a4093ff233f29d81443727a69bfcb8dc5956f77e8d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 12 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1922,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9566",
+          "cached_input_tokens": "13274",
+          "finish_reason": "toolcalls",
+          "input_tokens": "13875",
+          "normalized_context_bytes": "52785",
+          "normalized_context_digest": "005448d33fb9aca666be308e1808088cfbd8cf2f8cabc880052fb864e58d0787",
+          "output_tokens": "103",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1463",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "12"
+        }
+      }
+    },
+    "hash": "b344f36a0730e778e151646dfbb5a201de4813b880c7b68a08b77d8e7bdfed0d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 130,
+    "timestamp": "2026-09-26T17:23:42.958597662Z",
+    "previous_hash": "b344f36a0730e778e151646dfbb5a201de4813b880c7b68a08b77d8e7bdfed0d",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:0ac8038cfa41068325be740e03ef6190d48da08de2ed0137692e792aa9d10c9a"
+      }
+    },
+    "hash": "7c25d56b84d4d8ad2d9bab91149fe60e56d4a08bea1814dbdb2dd554a5b162e6"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 131,
+    "timestamp": "2026-09-26T17:23:42.974877547Z",
+    "previous_hash": "7c25d56b84d4d8ad2d9bab91149fe60e56d4a08bea1814dbdb2dd554a5b162e6",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "f812fc42-b218-4280-89d9-89bb4a477dad",
+        "tool": "read_file",
+        "arguments_digest": "8b09e20f1f4b2017a606396a214d08a56f4d6b876a17286575276b11cc649e4a",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "713420b83f4ae96070603ff86b19c3833709ac61a118fd435d16347dec70bfa3"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 132,
+    "timestamp": "2026-09-26T17:23:43.003442305Z",
+    "previous_hash": "713420b83f4ae96070603ff86b19c3833709ac61a118fd435d16347dec70bfa3",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 88 lines from crates/searcher/src/searcher/core.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/searcher/src/searcher/core.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 21,
+        "attributes": {
+          "arguments_digest": "8b09e20f1f4b2017a606396a214d08a56f4d6b876a17286575276b11cc649e4a",
+          "call_id": "f812fc42-b218-4280-89d9-89bb4a477dad",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "2872",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "12"
+        }
+      }
+    },
+    "hash": "27bdbd12f2f2b691a5e41a6e2c4ec0ec64294cf56725c29a21ffc4c912240676"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 133,
+    "timestamp": "2026-09-26T17:23:43.003567184Z",
+    "previous_hash": "27bdbd12f2f2b691a5e41a6e2c4ec0ec64294cf56725c29a21ffc4c912240676",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "f812fc42-b218-4280-89d9-89bb4a477dad",
+        "result_digest": "1719cc450515a51a781ca192a1c8313e890a6123256c5b04c300d36af010064c",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "18741ef7b7ca5459ca4aa6751e062c779bab9f92fd5c905a6e4d2b1ef821a26d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 134,
+    "timestamp": "2026-09-26T17:23:43.00368445Z",
+    "previous_hash": "18741ef7b7ca5459ca4aa6751e062c779bab9f92fd5c905a6e4d2b1ef821a26d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "12"
+        }
+      }
+    },
+    "hash": "9b8d1a3a05af92501ec8b157435c61a8acb30b65d7ccd2602aff4016f4bea64a"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 135,
+    "timestamp": "2026-09-26T17:23:43.011954755Z",
+    "previous_hash": "9b8d1a3a05af92501ec8b157435c61a8acb30b65d7ccd2602aff4016f4bea64a",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:cb9c4b24efa1f2a89e99b19e898a20130351c56b21d6451da1726d635e149b71"
+      }
+    },
+    "hash": "415330b097999706b18296aaec46ea92be217d19583b3c9baaecc2cc07e4bf9e"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 136,
+    "timestamp": "2026-09-26T17:23:43.019586835Z",
+    "previous_hash": "415330b097999706b18296aaec46ea92be217d19583b3c9baaecc2cc07e4bf9e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 1 tool result(s), reclaiming 1813 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "54205",
+          "after_digest": "4358a81d3b5be4c53e4a66386a6e8923c11c1b7f22498a2382b10368ff21e25f",
+          "artifacts_written": "1",
+          "before_bytes": "56018",
+          "before_digest": "28136f95a44f4ec60f41c1814dc48152c092ca3fd2dbe7354c2032004721a813",
+          "compacted_results": "1",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "1813",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "c7368dea94584dbb0e8983b6fe8c36d3418fe69f215bd976d262d979f720034b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 137,
+    "timestamp": "2026-09-26T17:23:43.02723456Z",
+    "previous_hash": "c7368dea94584dbb0e8983b6fe8c36d3418fe69f215bd976d262d979f720034b",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:24e402850e2ba1f5f4ad955a64becf2be5b3accde641c0229f8ffa98d80c5b2a"
+      }
+    },
+    "hash": "2932822d2f6dd36c4a0e17f449f45d38e1dea50da2735649ca9ccbfbc4e69c8f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 138,
+    "timestamp": "2026-09-26T17:23:45.293142748Z",
+    "previous_hash": "2932822d2f6dd36c4a0e17f449f45d38e1dea50da2735649ca9ccbfbc4e69c8f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 13 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2265,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9685",
+          "cached_input_tokens": "13873",
+          "finish_reason": "toolcalls",
+          "input_tokens": "14324",
+          "normalized_context_bytes": "54205",
+          "normalized_context_digest": "4358a81d3b5be4c53e4a66386a6e8923c11c1b7f22498a2382b10368ff21e25f",
+          "output_tokens": "101",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1490",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "13"
+        }
+      }
+    },
+    "hash": "c072da25f54909582e566d68fa1a5f59be80cb62cae30d045658f54a44dc1fe9"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 139,
+    "timestamp": "2026-09-26T17:23:45.310367467Z",
+    "previous_hash": "c072da25f54909582e566d68fa1a5f59be80cb62cae30d045658f54a44dc1fe9",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:12f3b0adfd9541034816cb53f5eb81cfa8ef970b37899aeed644161783745fa0"
+      }
+    },
+    "hash": "78567db255195da38bd7a1f48659c692d0c9e6c44539cdb5d3107a43c2f6a913"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 140,
+    "timestamp": "2026-09-26T17:23:45.327068924Z",
+    "previous_hash": "78567db255195da38bd7a1f48659c692d0c9e6c44539cdb5d3107a43c2f6a913",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "90ec4fb5-b394-4844-8934-fd19be033bca",
+        "tool": "search",
+        "arguments_digest": "ed02db408255c5b7d1bf921f67512852a37bd0e877ca97738724d78ff5001179",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "45767ed31e2e6cb2894970cd53ed1e9fc85f3e5d0cba65813befa72c2b357c88"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 141,
+    "timestamp": "2026-09-26T17:23:45.355829032Z",
+    "previous_hash": "45767ed31e2e6cb2894970cd53ed1e9fc85f3e5d0cba65813befa72c2b357c88",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 2 matches for \"byte_count\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher/src/searcher/core.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 21,
+        "attributes": {
+          "arguments_digest": "ed02db408255c5b7d1bf921f67512852a37bd0e877ca97738724d78ff5001179",
+          "call_id": "90ec4fb5-b394-4844-8934-fd19be033bca",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "222",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "13"
+        }
+      }
+    },
+    "hash": "f70a27f7abc7297e36d8799fe4c123a3d9d16ae0d358ee1f5f64ffe140f38f83"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 142,
+    "timestamp": "2026-09-26T17:23:45.355979474Z",
+    "previous_hash": "f70a27f7abc7297e36d8799fe4c123a3d9d16ae0d358ee1f5f64ffe140f38f83",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "90ec4fb5-b394-4844-8934-fd19be033bca",
+        "result_digest": "00e653a8e7093a32e0106d6eb56d5649631b4dc3d0d52ab5f8fdbd8dcfc99fc2",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "76c421b3334f3acf83131fdcc241f70abd747795ec9478366ba4cc8f8136332b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 143,
+    "timestamp": "2026-09-26T17:23:45.356059444Z",
+    "previous_hash": "76c421b3334f3acf83131fdcc241f70abd747795ec9478366ba4cc8f8136332b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "13"
+        }
+      }
+    },
+    "hash": "5b61a8e771c9836235aac5986f204213978dfc2750abe7cdca001e602371ffe3"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 144,
+    "timestamp": "2026-09-26T17:23:45.363560918Z",
+    "previous_hash": "5b61a8e771c9836235aac5986f204213978dfc2750abe7cdca001e602371ffe3",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:9c029aebebf7256f8a3878de965dbed33cf0b060dcc18d7c5e5d9932078b5973"
+      }
+    },
+    "hash": "3b19de7681d99b53a50c1255df1895be494468bd89b379e79b2332bf65958ac7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 145,
+    "timestamp": "2026-09-26T17:23:45.378529294Z",
+    "previous_hash": "3b19de7681d99b53a50c1255df1895be494468bd89b379e79b2332bf65958ac7",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:9e6a29eeb33ae01603bb66e319c0296bb2984f71acccfa549341bf5692403cfa"
+      }
+    },
+    "hash": "c355194b26a7fe0c28193eb2ec5a0ed3cd2c6195811743286fc5588fc120c09c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 146,
+    "timestamp": "2026-09-26T17:23:52.689551353Z",
+    "previous_hash": "c355194b26a7fe0c28193eb2ec5a0ed3cd2c6195811743286fc5588fc120c09c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 14 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 7310,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9910",
+          "cached_input_tokens": "14322",
+          "finish_reason": "toolcalls",
+          "input_tokens": "14452",
+          "normalized_context_bytes": "54789",
+          "normalized_context_digest": "a81ac14a0438286ce765ca1aa21c5634d31d6912812057345fd212339cb93e85",
+          "output_tokens": "938",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1129",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "14"
+        }
+      }
+    },
+    "hash": "ece9d6bcd421b1fe145ae98027c72b2da02cff9cc598c0a4e93a16db95b55ab3"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 147,
+    "timestamp": "2026-09-26T17:23:52.706397594Z",
+    "previous_hash": "ece9d6bcd421b1fe145ae98027c72b2da02cff9cc598c0a4e93a16db95b55ab3",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:3ebfa8863a638cd7655bb48bcf9616fc4db652f02dbfe7cc68f0ffdfc7cf3ed4"
+      }
+    },
+    "hash": "be3c4b3072aaf20b04476927510091dd43461f46e941af0622bb4b2a16ef9df2"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 148,
+    "timestamp": "2026-09-26T17:23:52.722365701Z",
+    "previous_hash": "be3c4b3072aaf20b04476927510091dd43461f46e941af0622bb4b2a16ef9df2",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "74b2d91f-6525-4984-8f91-80a62f82a4c3",
+        "tool": "search",
+        "arguments_digest": "e1e8290ca64879bcbafcd2dbccd07d761edacd523b3896758a3f19fff94d48bd",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "6318402f0ff74e51cc35b3811b5f1b736d3fbded010b2ec57ba20c06ad7dfb03"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 149,
+    "timestamp": "2026-09-26T17:23:52.749956639Z",
+    "previous_hash": "6318402f0ff74e51cc35b3811b5f1b736d3fbded010b2ec57ba20c06ad7dfb03",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 20 matches for \"absolute_byte_offset\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:crates/searcher/src/line_buffer.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 20,
+        "attributes": {
+          "arguments_digest": "e1e8290ca64879bcbafcd2dbccd07d761edacd523b3896758a3f19fff94d48bd",
+          "call_id": "74b2d91f-6525-4984-8f91-80a62f82a4c3",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "2425",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "14"
+        }
+      }
+    },
+    "hash": "be99ce47f4b8f52004bbe872d1187d494cc4dca00dd82d805a6ef4a734d22fd9"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 150,
+    "timestamp": "2026-09-26T17:23:52.75006741Z",
+    "previous_hash": "be99ce47f4b8f52004bbe872d1187d494cc4dca00dd82d805a6ef4a734d22fd9",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "74b2d91f-6525-4984-8f91-80a62f82a4c3",
+        "result_digest": "10bd548da2c9e23eef8988cc99bf4015716be8a79a4d2d4e98b3e58995aa617b",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "b80b4c8a16c664b3e4451163d4e8ceb4e3455aadd6fc1631d6cfa28cbdcb639b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 151,
+    "timestamp": "2026-09-26T17:23:52.757355933Z",
+    "previous_hash": "b80b4c8a16c664b3e4451163d4e8ceb4e3455aadd6fc1631d6cfa28cbdcb639b",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "6154ab5b-f929-42b6-805e-639c4333d213",
+        "tool": "read_file",
+        "arguments_digest": "df235063ce3e89bb335d59d6597f2aed0945a24ee5061d6b2040bd5889e4aae4",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "839bda1ce71d0b1c3aaaea610fcf90edf8e30cefef80dd1c16a2401d688e1299"
+      }
+    },
+    "hash": "5e7e989f7d4c2b361108b1e8b6312130ac33adfd5b359538c6edcd544590cf30"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 152,
+    "timestamp": "2026-09-26T17:23:52.777462929Z",
+    "previous_hash": "5e7e989f7d4c2b361108b1e8b6312130ac33adfd5b359538c6edcd544590cf30",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 41 lines from crates/searcher/src/searcher/core.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:crates/searcher/src/searcher/core.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 13,
+        "attributes": {
+          "arguments_digest": "df235063ce3e89bb335d59d6597f2aed0945a24ee5061d6b2040bd5889e4aae4",
+          "call_id": "6154ab5b-f929-42b6-805e-639c4333d213",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1707",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "14"
+        }
+      }
+    },
+    "hash": "dbb6fbf4aaa15cbb6f2dcff9c87aebf27dc7ab89eaab6fea898b82f274b567cd"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 153,
+    "timestamp": "2026-09-26T17:23:52.777566156Z",
+    "previous_hash": "dbb6fbf4aaa15cbb6f2dcff9c87aebf27dc7ab89eaab6fea898b82f274b567cd",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "6154ab5b-f929-42b6-805e-639c4333d213",
+        "result_digest": "7e0c64b3c8c9df94be452cddbb21448303ab9f8a0fec45a4e4bf85c3be948c0d",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "90e30adc2341688c8252a548bf0b9cb417a3341db0509c0d9c00c8e8a9318563"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 154,
+    "timestamp": "2026-09-26T17:23:52.777675391Z",
+    "previous_hash": "90e30adc2341688c8252a548bf0b9cb417a3341db0509c0d9c00c8e8a9318563",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "14"
+        }
+      }
+    },
+    "hash": "a31f9a07b0fe37a451b3618016cd8d70b502f1e087cb647c3036afea38471822"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 155,
+    "timestamp": "2026-09-26T17:23:52.785051916Z",
+    "previous_hash": "a31f9a07b0fe37a451b3618016cd8d70b502f1e087cb647c3036afea38471822",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:5d73c024b0686dc0343d49e32424e891da1130a931d195e04d2b247dba7238ff"
+      }
+    },
+    "hash": "e80b0cbef361a63976f8cbee8bf86e222a7978f3736fdbc0b2b1e713fca7627f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 156,
+    "timestamp": "2026-09-26T17:23:52.79286859Z",
+    "previous_hash": "e80b0cbef361a63976f8cbee8bf86e222a7978f3736fdbc0b2b1e713fca7627f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "steer_implementation",
+        "summary": "13 implementing turns produced no isolated candidate",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase_turn": "13",
+          "tools_available": "18",
+          "turn": "15"
+        }
+      }
+    },
+    "hash": "394ec1f0679bae39df98c64d09468f08ff0e7652a7e003c8400385d2237d4aee"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 157,
+    "timestamp": "2026-09-26T17:23:52.794094403Z",
+    "previous_hash": "394ec1f0679bae39df98c64d09468f08ff0e7652a7e003c8400385d2237d4aee",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 2 tool result(s), reclaiming 1358 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "58656",
+          "after_digest": "26370916a6bb52a2ebb41ce7eec9285b34704ef4fdebf6694f4cd8777e5a8bc4",
+          "artifacts_written": "2",
+          "before_bytes": "60014",
+          "before_digest": "0f686ab99cad5e7cd331f2e3b7b9ca4514bbc174f98eb3f846543fc35d29032d",
+          "compacted_results": "2",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "1358",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "a0f9757b7d697c04557722810debcae331b0b0f931b78974b369abc26b46009d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 158,
+    "timestamp": "2026-09-26T17:23:52.801479449Z",
+    "previous_hash": "a0f9757b7d697c04557722810debcae331b0b0f931b78974b369abc26b46009d",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:3dafe7241b238779caa7ffbb78c8506793ca92272f01993542120b477bd9b6a9"
+      }
+    },
+    "hash": "43e58ea007c1e9b64a0029264686420938ce297945f72984def9175b28838071"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 159,
+    "timestamp": "2026-09-26T17:24:07.552359994Z",
+    "previous_hash": "43e58ea007c1e9b64a0029264686420938ce297945f72984def9175b28838071",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 15 produced 0 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 14750,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9294",
+          "cached_input_tokens": "14450",
+          "finish_reason": "length",
+          "input_tokens": "15547",
+          "normalized_context_bytes": "58656",
+          "normalized_context_digest": "26370916a6bb52a2ebb41ce7eec9285b34704ef4fdebf6694f4cd8777e5a8bc4",
+          "output_tokens": "2048",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1678",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "0",
+          "turn": "15"
+        }
+      }
+    },
+    "hash": "eaa886c1db50de1258f19d4d24d74b69472efe5ed4d9e786989babf3a20c72d1"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debe-12a9-7bc1-83ea-0204b5378acb",
+    "sequence": 160,
+    "timestamp": "2026-09-26T17:24:07.552612127Z",
+    "previous_hash": "eaa886c1db50de1258f19d4d24d74b69472efe5ed4d9e786989babf3a20c72d1",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "failed"
+      }
+    },
+    "hash": "6a2e6bc3407f408c2f2231a2b023ca72f27b5116aba58075ea88d907d759274a"
+  }
+]

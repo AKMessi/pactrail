@@ -11,8 +11,8 @@ use pactrail_context::{
 use pactrail_core::{
     ActionRecord, ApprovalDecision, ApprovalRequest, Capability, ChangeReceipt, ContractError,
     EffectCompleted, EffectPrepared, EventHash, Evidence, EvidenceGrade, EvidenceId, EvidenceKind,
-    EvidenceStatus, FileChange, ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent, RunId,
-    RunState, TaskContract,
+    EvidenceStatus, FileChange, ObligationId, ReceiptError, ReceiptInput, ReceiptOutcome, RunEvent,
+    RunId, RunState, TaskContract,
 };
 use pactrail_memory::MemoryStore;
 use pactrail_models::{
@@ -1528,16 +1528,13 @@ impl<'a> RunEngine<'a> {
                     && accepted_completion_gate
                         .as_ref()
                         .is_none_or(|(digest, _)| digest != &candidate_digest)
-                    && contract
-                        .permissions
-                        .allow
-                        .contains(&Capability::ProcessSpawn)
+                    && self.can_run_unprompted_verification(&contract)
                 {
                     let validation_commands =
                         detect_verification_commands(transaction.workspace_root());
-                    if !validation_commands.is_empty() {
+                    if !validation_commands.is_empty() || !contract.acceptance_checks.is_empty() {
                         observer.on_progress(&RunProgress::VerificationStarted {
-                            commands: validation_commands.len(),
+                            commands: validation_commands.len() + contract.acceptance_checks.len(),
                         });
                         let validation = self
                             .verify(
@@ -1740,14 +1737,11 @@ impl<'a> RunEngine<'a> {
             if progress_assessment.candidate_changed
                 && turn.saturating_add(1) < max_turns
                 && proactive_verification_attempts < MAX_PROACTIVE_VERIFICATION_ATTEMPTS
-                && contract
-                    .permissions
-                    .allow
-                    .contains(&Capability::ProcessSpawn)
+                && self.can_run_unprompted_verification(&contract)
             {
                 let candidate_digest = candidate_changes_digest(&transaction.changes()?);
                 let commands = detect_verification_commands(transaction.workspace_root());
-                if !commands.is_empty()
+                if (!commands.is_empty() || !contract.acceptance_checks.is_empty())
                     && last_proactive_candidate_digest.as_ref() != Some(&candidate_digest)
                 {
                     proactive_verification_attempts =
@@ -1756,10 +1750,10 @@ impl<'a> RunEngine<'a> {
                         attempt: proactive_verification_attempts,
                         max_attempts: MAX_PROACTIVE_VERIFICATION_ATTEMPTS,
                         candidate_digest: candidate_digest.clone(),
-                        commands: commands.len(),
+                        commands: commands.len() + contract.acceptance_checks.len(),
                     });
                     observer.on_progress(&RunProgress::VerificationStarted {
-                        commands: commands.len(),
+                        commands: commands.len() + contract.acceptance_checks.len(),
                     });
                     let validation = self
                         .verify(
@@ -1785,7 +1779,7 @@ impl<'a> RunEngine<'a> {
                         actor: "controller".to_owned(),
                         action: "proactive_verification".to_owned(),
                         summary: format!(
-                            "proactively verified candidate {} with status {status_label}",
+                            "ran repository checks for candidate {} with status {status_label}",
                             truncate_digest(&candidate_digest)
                         ),
                         declared_effects: Vec::new(),
@@ -1798,7 +1792,10 @@ impl<'a> RunEngine<'a> {
                                 proactive_verification_attempts.to_string(),
                             ),
                             ("candidate_digest".to_owned(), candidate_digest.clone()),
-                            ("commands".to_owned(), commands.len().to_string()),
+                            (
+                                "commands".to_owned(),
+                                (commands.len() + contract.acceptance_checks.len()).to_string(),
+                            ),
                             ("repair_feedback".to_owned(), repair_feedback.to_string()),
                             ("status".to_owned(), status_label.to_owned()),
                         ]),
@@ -1808,7 +1805,7 @@ impl<'a> RunEngine<'a> {
                             &candidate_digest,
                             proactive_verification_attempts,
                             status_label,
-                            commands.len(),
+                            commands.len() + contract.acceptance_checks.len(),
                         ),
                     )));
                     last_proactive_candidate_digest = Some(candidate_digest.clone());
@@ -2047,7 +2044,7 @@ impl<'a> RunEngine<'a> {
         } else {
             let verification_commands = detect_verification_commands(transaction.workspace_root());
             observer.on_progress(&RunProgress::VerificationStarted {
-                commands: verification_commands.len(),
+                commands: verification_commands.len() + contract.acceptance_checks.len(),
             });
             self.verify(
                 &contract,
@@ -2589,6 +2586,17 @@ impl<'a> RunEngine<'a> {
         Ok(())
     }
 
+    fn can_run_unprompted_verification(&self, contract: &TaskContract) -> bool {
+        contract
+            .permissions
+            .allow
+            .contains(&Capability::ProcessSpawn)
+            || (contract.permissions.ask.contains(&Capability::ProcessSpawn)
+                && self
+                    .approval_resolver
+                    .is_some_and(ApprovalResolver::allows_unprompted_process))
+    }
+
     async fn verify(
         &self,
         contract: &TaskContract,
@@ -2598,32 +2606,52 @@ impl<'a> RunEngine<'a> {
         observer: &dyn RunObserver,
         phase: VerificationPhase,
     ) -> Result<VerificationResult, EngineError> {
-        if commands.is_empty() {
+        if commands.is_empty() && contract.acceptance_checks.is_empty() {
             return Ok(VerificationResult::unverified(
                 contract,
                 "No supported test manifest was detected",
             ));
         }
-        let verification_workspace = contract
+        let verification_workspace = (contract
             .permissions
             .allow
             .contains(&Capability::ProcessSpawn)
-            .then(|| VerificationWorkspace::create(transaction))
-            .transpose()?;
+            || contract.permissions.ask.contains(&Capability::ProcessSpawn))
+        .then(|| VerificationWorkspace::create(transaction))
+        .transpose()?;
         let verification_transaction = verification_workspace
             .as_ref()
             .map_or(transaction, VerificationWorkspace::transaction);
-        let mut command_results = Vec::new();
+        let mut command_results: Vec<CompletedVerificationCommand> = Vec::new();
         let mut verification_backends = BTreeSet::new();
         let mut diagnostics = Vec::new();
-        for (index, command) in commands.iter().enumerate() {
+        let acceptance_commands = contract
+            .acceptance_checks
+            .iter()
+            .map(|check| VerificationCommand {
+                program: check.program.clone(),
+                args: check.args.clone(),
+                description: check.description.clone(),
+            })
+            .collect::<Vec<_>>();
+        let scheduled = commands
+            .iter()
+            .map(|command| (command, None))
+            .chain(
+                acceptance_commands
+                    .iter()
+                    .zip(&contract.acceptance_checks)
+                    .map(|(command, check)| (command, Some(check.obligation_id))),
+            )
+            .collect::<Vec<_>>();
+        for (index, (command, obligation_id)) in scheduled.iter().enumerate() {
             let Some(outcome) = self
                 .run_verification_command(
                     verification_transaction,
                     VerificationCommandRequest {
                         command,
                         index,
-                        total: commands.len(),
+                        total: scheduled.len(),
                         phase,
                     },
                     journal,
@@ -2636,58 +2664,38 @@ impl<'a> RunEngine<'a> {
                     "Verification commands require process permission",
                 ));
             };
-            command_results.push((command.description.clone(), outcome.succeeded));
+            let reproduction = std::iter::once(command.program.as_str())
+                .chain(command.args.iter().map(String::as_str))
+                .collect::<Vec<_>>()
+                .join(" ");
+            command_results.push(CompletedVerificationCommand {
+                description: command.description.clone(),
+                succeeded: outcome.succeeded,
+                obligation_id: *obligation_id,
+                reproduction,
+            });
             if let Some(backend) = outcome.backend_kind {
                 verification_backends.insert(backend);
             }
             diagnostics.push(outcome.diagnostic);
         }
-        let all_passed = command_results.iter().all(|(_, passed)| *passed);
-        let summary = command_results
-            .iter()
-            .map(|(name, passed)| format!("{name}: {}", if *passed { "passed" } else { "failed" }))
-            .collect::<Vec<_>>()
-            .join("; ");
-        let evidence = contract
-            .obligations
-            .iter()
-            .map(|obligation| Evidence {
-                id: EvidenceId::new(),
-                obligation_id: obligation.id,
-                grade: EvidenceGrade::Deterministic,
-                kind: EvidenceKind::Test,
-                status: if all_passed {
-                    EvidenceStatus::Passed
-                } else {
-                    EvidenceStatus::Failed
-                },
-                summary: format!(
-                    "Automated repository checks for {:?}: {summary}",
-                    obligation.description
-                ),
-                artifact_digest: None,
-                reproduction: Some(
-                    commands
-                        .iter()
-                        .map(|command| {
-                            std::iter::once(command.program.as_str())
-                                .chain(command.args.iter().map(String::as_str))
-                                .collect::<Vec<_>>()
-                                .join(" ")
-                        })
-                        .collect::<Vec<_>>()
-                        .join(" && "),
-                ),
-            })
-            .collect();
+        let all_passed = command_results.iter().all(|result| result.succeeded);
+        let evidence = verification_evidence(contract, &command_results);
         let mut risks = Vec::new();
         if verification_backends.contains("native_trusted") {
             risks.push("Native verification processes are capability-gated but retain host filesystem and network authority; use the OCI-restricted backend for hostile repositories".to_owned());
         }
-        if !all_passed {
+        if all_passed
+            && evidence
+                .iter()
+                .any(|item: &Evidence| item.status == EvidenceStatus::Inconclusive)
+        {
+            risks.push("General repository checks passed, but the task-specific obligation was not independently verified".to_owned());
+        } else if !all_passed {
             risks.push("At least one deterministic repository check failed".to_owned());
         }
         Ok(VerificationResult {
+            checks_passed: all_passed,
             evidence,
             risks,
             diagnostics,
@@ -3677,7 +3685,78 @@ fn process_backend_attribute(content: &Value, field: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+#[derive(Clone)]
+struct CompletedVerificationCommand {
+    description: String,
+    succeeded: bool,
+    obligation_id: Option<ObligationId>,
+    reproduction: String,
+}
+
+fn verification_evidence(
+    contract: &TaskContract,
+    results: &[CompletedVerificationCommand],
+) -> Vec<Evidence> {
+    let generic_passed = results
+        .iter()
+        .filter(|result| result.obligation_id.is_none())
+        .all(|result| result.succeeded);
+    let summary = results
+        .iter()
+        .map(|result| {
+            format!(
+                "{}: {}",
+                result.description,
+                if result.succeeded { "passed" } else { "failed" }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    contract
+        .obligations
+        .iter()
+        .map(|obligation| {
+            let linked = results
+                .iter()
+                .filter(|result| result.obligation_id == Some(obligation.id))
+                .collect::<Vec<_>>();
+            let status = if !generic_passed || linked.iter().any(|result| !result.succeeded) {
+                EvidenceStatus::Failed
+            } else if linked.is_empty() {
+                EvidenceStatus::Inconclusive
+            } else {
+                EvidenceStatus::Passed
+            };
+            Evidence {
+                id: EvidenceId::new(),
+                obligation_id: obligation.id,
+                grade: EvidenceGrade::Deterministic,
+                kind: EvidenceKind::Test,
+                status,
+                summary: format!(
+                    "Repository and declared acceptance checks for {:?}: {summary}. {}",
+                    obligation.description,
+                    if linked.is_empty() {
+                        "No task-specific check was declared."
+                    } else {
+                        "The declared checks are bound to this obligation."
+                    }
+                ),
+                artifact_digest: None,
+                reproduction: (!linked.is_empty()).then(|| {
+                    linked
+                        .iter()
+                        .map(|result| result.reproduction.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" && ")
+                }),
+            }
+        })
+        .collect()
+}
+
 struct VerificationResult {
+    checks_passed: bool,
     evidence: Vec<Evidence>,
     risks: Vec<String>,
     diagnostics: Vec<Value>,
@@ -3685,11 +3764,7 @@ struct VerificationResult {
 
 impl VerificationResult {
     fn passed(&self) -> bool {
-        !self.evidence.is_empty()
-            && self
-                .evidence
-                .iter()
-                .all(|evidence| evidence.status == EvidenceStatus::Passed)
+        self.checks_passed
     }
 
     fn failed_checks(&self) -> usize {
@@ -3722,6 +3797,7 @@ impl VerificationResult {
 
     fn unverified(contract: &TaskContract, reason: &str) -> Self {
         Self {
+            checks_passed: false,
             evidence: contract
                 .obligations
                 .iter()
@@ -4389,6 +4465,74 @@ mod tests {
         capabilities: ModelCapabilities,
     }
 
+    struct UnpromptedProcessApproval;
+
+    impl ApprovalResolver for UnpromptedProcessApproval {
+        fn resolve(&self, _request: &ApprovalRequest) -> ApprovalDecision {
+            ApprovalDecision::AllowRun
+        }
+
+        fn allows_unprompted_process(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn proactive_verification_requires_unprompted_process_authority() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "test".to_owned(),
+            responses: Mutex::new(VecDeque::new()),
+            capabilities: ModelCapabilities::default(),
+        };
+        let registry = ToolRegistry::new();
+        let mut contract = TaskContract::new("fix behavior", ".");
+        contract.permissions.ask.insert(Capability::ProcessSpawn);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let engine = RunEngine::new(&model, &registry, &policy);
+        assert!(!engine.can_run_unprompted_verification(&contract));
+
+        let resolver = UnpromptedProcessApproval;
+        let engine = engine.with_approval_resolver(&resolver);
+        assert!(engine.can_run_unprompted_verification(&contract));
+        contract.permissions.ask.remove(&Capability::ProcessSpawn);
+        contract.permissions.deny.insert(Capability::ProcessSpawn);
+        assert!(!engine.can_run_unprompted_verification(&contract));
+    }
+
+    #[test]
+    fn acceptance_evidence_does_not_spill_between_obligations() {
+        let mut contract = TaskContract::new("fix behavior", ".");
+        contract
+            .obligations
+            .push(pactrail_core::Obligation::required(
+                "preserve another behavior",
+                pactrail_core::ObligationKind::Regression,
+            ));
+        let results = [CompletedVerificationCommand {
+            description: "specific behavior".to_owned(),
+            succeeded: true,
+            obligation_id: Some(contract.obligations[0].id),
+            reproduction: "cargo test specific_behavior".to_owned(),
+        }];
+        let evidence = verification_evidence(&contract, &results);
+        assert_eq!(evidence[0].status, EvidenceStatus::Passed);
+        assert_eq!(evidence[1].status, EvidenceStatus::Inconclusive);
+
+        let generic_failure = CompletedVerificationCommand {
+            description: "workspace tests".to_owned(),
+            succeeded: false,
+            obligation_id: None,
+            reproduction: "cargo test --workspace".to_owned(),
+        };
+        let evidence = verification_evidence(&contract, &[results[0].clone(), generic_failure]);
+        assert!(
+            evidence
+                .iter()
+                .all(|item| item.status == EvidenceStatus::Failed)
+        );
+    }
+
     struct FirstReadThenSuspendModel {
         capabilities: ModelCapabilities,
         calls: Mutex<u8>,
@@ -4677,6 +4821,7 @@ mod tests {
     #[test]
     fn repair_diagnostics_are_model_bounded_and_untrusted() {
         let validation = VerificationResult {
+            checks_passed: false,
             evidence: Vec::new(),
             risks: Vec::new(),
             diagnostics: vec![json!({
@@ -5161,8 +5306,9 @@ mod tests {
             verification
                 .evidence
                 .iter()
-                .all(|evidence| evidence.status == EvidenceStatus::Passed)
+                .all(|evidence| evidence.status == EvidenceStatus::Inconclusive)
         );
+        assert!(verification.passed(), "the repository check itself passed");
         assert!(
             !transaction
                 .workspace_root()
@@ -5170,6 +5316,82 @@ mod tests {
                 .exists()
         );
         assert!(!transaction.control_root().join("verification").exists());
+    }
+
+    #[tokio::test]
+    async fn declared_acceptance_check_binds_behavioral_evidence() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "test".to_owned(),
+            responses: Mutex::new(VecDeque::new()),
+            capabilities: ModelCapabilities::default(),
+        };
+        let (_source, _control, transaction) = rust_verification_fixture();
+        let registry = pactrail_tools::builtin_registry_with_process(
+            pactrail_tools::RunProcessTool::native_trusted(),
+        )
+        .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        let mut contract = TaskContract::new("answer must be 42", ".");
+        contract.permissions.allow.insert(Capability::ProcessSpawn);
+        contract
+            .acceptance_checks
+            .push(pactrail_core::AcceptanceCheck {
+                obligation_id: contract.obligations[0].id,
+                program: "cargo".to_owned(),
+                args: vec![
+                    "test".to_owned(),
+                    "--offline".to_owned(),
+                    "--lib".to_owned(),
+                ],
+                description: "answer contract".to_owned(),
+            });
+        fs::write(
+            transaction.workspace_root().join("src/lib.rs"),
+            "pub fn answer() -> u32 { 0 }\n#[test] fn answer_contract() { assert_eq!(answer(), 42); }\n",
+        )
+        .unwrap_or_else(|error| unreachable!("candidate: {error}"));
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let engine = RunEngine::new(&model, &registry, &policy);
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let mut journal = Journal::new(RunId::new(), &mut store);
+        let failed = engine
+            .verify(
+                &contract,
+                &transaction,
+                &[],
+                &mut journal,
+                &SilentRunObserver,
+                VerificationPhase::Final,
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("failed check: {error}"));
+        assert!(!failed.passed());
+        assert_eq!(failed.evidence[0].status, EvidenceStatus::Failed);
+
+        fs::write(
+            transaction.workspace_root().join("src/lib.rs"),
+            "pub fn answer() -> u32 { 42 }\n#[test] fn answer_contract() { assert_eq!(answer(), 42); }\n",
+        )
+        .unwrap_or_else(|error| unreachable!("repair: {error}"));
+        let passed = engine
+            .verify(
+                &contract,
+                &transaction,
+                &[],
+                &mut journal,
+                &SilentRunObserver,
+                VerificationPhase::Final,
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("passing check: {error}"));
+        assert!(passed.passed());
+        assert_eq!(passed.evidence[0].status, EvidenceStatus::Passed);
+        assert_eq!(
+            passed.evidence[0].reproduction.as_deref(),
+            Some("cargo test --offline --lib")
+        );
+        assert!(!transaction.workspace_root().join("target").exists());
     }
 
     #[tokio::test]
@@ -6596,7 +6818,7 @@ mod tests {
                 .receipt
                 .evidence
                 .iter()
-                .all(|evidence| evidence.status == EvidenceStatus::Passed)
+                .all(|evidence| evidence.status == EvidenceStatus::Inconclusive)
         );
         assert!(observer.events().iter().any(|event| matches!(
             event,
@@ -6677,9 +6899,12 @@ mod tests {
         let mut contract = TaskContract::new("Set the verified answer", ".");
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);
-        contract.permissions.allow.insert(Capability::ProcessSpawn);
+        contract.permissions.ask.insert(Capability::ProcessSpawn);
         let policy = PolicyEngine::new(contract.permissions.clone());
-        let engine = RunEngine::new(&model, &registry, &policy).with_max_turns(6);
+        let resolver = UnpromptedProcessApproval;
+        let engine = RunEngine::new(&model, &registry, &policy)
+            .with_approval_resolver(&resolver)
+            .with_max_turns(6);
         let mut store =
             EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
 
@@ -6692,6 +6917,7 @@ mod tests {
         let snapshot = store
             .snapshot(outcome.run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        assert!(!snapshot.approvals.is_empty());
         let verifier_actions = snapshot
             .actions
             .iter()

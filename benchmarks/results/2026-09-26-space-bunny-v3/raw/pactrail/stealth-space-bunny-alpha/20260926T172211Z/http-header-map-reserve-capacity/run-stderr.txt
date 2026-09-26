@@ -1,0 +1,3 @@
+warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run
+error: engine failed for run 01a0debd-22b7-7d20-8342-7e4d38d26936: model protocol violation: model exhausted output tokens without a result
+Portable trace: /tmp/pactrail-space-bunny-scored-v3-work/20260926T172211Z-pactrail-stealth-space-bunny-alpha/http-header-map-reserve-capacity/workspace/.pactrail/runs/01a0debd-22b7-7d20-8342-7e4d38d26936/trace.jsonl

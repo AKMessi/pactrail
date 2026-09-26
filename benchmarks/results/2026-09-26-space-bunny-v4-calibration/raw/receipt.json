@@ -1,0 +1,135 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0decc-b20a-75a3-87af-2c34691b4fc3",
+  "created_at": "2026-09-26T17:44:34.336952386Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix rust-lang/regex issue #1327 in regex-automata's one-pass DFA. DFA::try_search_slots promises to accept any caller-provided slot slice length, but it panics when the slice has more slots than the compiled regex uses. Preserve captures in the slots the regex owns, leave surplus slots valid, and keep existing behavior for smaller slices. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.",
+    "workspace_root": "/tmp/pactrail-space-bunny-v4-calibration-work/20260926T173910Z-pactrail-stealth-space-bunny-alpha/regex-onepass-excess-capture-slots/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0decc-b1f5-7b01-9e38-aa792bae7914",
+        "description": "Fix rust-lang/regex issue #1327 in regex-automata's one-pass DFA. DFA::try_search_slots promises to accept any caller-provided slot slice length, but it panics when the slice has more slots than the compiled regex uses. Preserve captures in the slots the regex owns, leave surplus slots valid, and keep existing behavior for smaller slices. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 983040,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 24
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "ready_to_apply",
+  "baseline_digest": "5d455d5335031a5c23e6c3c65a543fa52a7682d7ada5c9cb9b618ddfbddec600",
+  "final_event_hash": "2c42ef6f8f9a38beb84a1a95ab0446bd73f15a8be39de4fbb6b57b503234789c",
+  "changes": [
+    {
+      "path": "regex-automata/src/dfa/onepass.rs",
+      "before_digest": "8ffabc597f069813fa4a4c6055a87cca575a646c1270799192bd31eb279408f5",
+      "after_digest": "4b63a7860036f5f53630bfc31128487a110cc6d7a03b1ec27b97d7a1fe62381c",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 133587,
+      "bytes_removed": 133159
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0ded1-9d20-7450-b33a-a8d131539f8b",
+      "obligation_id": "01a0decc-b1f5-7b01-9e38-aa792bae7914",
+      "grade": "deterministic",
+      "kind": "test",
+      "status": "passed",
+      "summary": "Automated repository checks for \"Fix rust-lang/regex issue #1327 in regex-automata's one-pass DFA. DFA::try_search_slots promises to accept any caller-provided slot slice length, but it panics when the slice has more slots than the compiled regex uses. Preserve captures in the slots the regex owns, leave surplus slots valid, and keep existing behavior for smaller slices. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.\": Rust workspace tests: passed",
+      "artifact_digest": null,
+      "reproduction": "cargo test --workspace"
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0decd-1c06-7880-be7d-73240279f520",
+      "binding": {
+        "run_id": "01a0decc-b20a-75a3-87af-2c34691b4fc3",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"test\",\"-p\",\"regex-automata\",\"--lib\",\"onepass\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"cargo\",\"timeout_seconds\":1200}",
+        "actor_fingerprint": "41bc879d0cf3a3dbaf32a826265c3e1247be0d5854bfe2f026f13aa472936153",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-09-26T17:39:39.142143857Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0decd-d06e-7360-a426-fee3feb35e0b",
+      "binding": {
+        "run_id": "01a0decc-b20a-75a3-87af-2c34691b4fc3",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"test\",\"-p\",\"regex-automata\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"cargo\",\"timeout_seconds\":2400}",
+        "actor_fingerprint": "5b48fc4c6061ff9f0468cd9f8a1dd254ad3a4491bbf46d309948629f1abdf26e",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-09-26T17:40:25.32663071Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0decf-21eb-7e23-ae9d-5cf9106be396",
+      "binding": {
+        "run_id": "01a0decc-b20a-75a3-87af-2c34691b4fc3",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"test\",\"--workspace\"],\"environment_names\":[],\"max_output_bytes\":12288,\"program\":\"cargo\",\"timeout_seconds\":600}",
+        "actor_fingerprint": "3273c9e58a34f8f2242f3dea0ff08c1656149b5a81e14d160b3e96aa9a621682",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-09-26T17:41:51.723621305Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 1,
+    "failed": 0,
+    "inconclusive": 0,
+    "skipped": 0,
+    "highest_grade": "deterministic"
+  },
+  "unresolved_risks": [
+    "Native verification processes are capability-gated but retain host filesystem and network authority; use the OCI-restricted backend for hostile repositories"
+  ],
+  "metadata": {},
+  "integrity_hash": "977362feb6a2f503c0c37de9e25c6a4679222b24d7e95961785ec7c0bddb0b7b"
+}

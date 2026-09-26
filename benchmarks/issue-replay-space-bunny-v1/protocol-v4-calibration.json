@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "experiment": "pactrail-space-bunny-reasoning-calibration-v4",
+  "preregistered_at": "2026-09-26T17:38:55.589353+00:00",
+  "status": "frozen_before_first_model_request",
+  "scope": "One Pactrail pass@1 calibration on the known regex defect; no OpenCode or superiority claim.",
+  "implementation": {
+    "pactrail_commit": "3cf1f32",
+    "pactrail_executable_sha256": "bfa66b99218d069a3417f4dfa31ae22d262a7ae33e30022c758944a8ad9bd698"
+  },
+  "files": {
+    "manifest_sha256": "9334d5eb7b719170bd034cc47d1fa5279ddda2ad02cb59170e80f178ea482770",
+    "runner_sha256": "0ee7074b206288a4e1a9913987473c30fe94a0aea7a0094892539bf974be258f",
+    "grader_sha256": "14664adb0340b9f6c7139c17dd72541263757bca97c45a4320fba3b4c0f9f0d5"
+  },
+  "provider": {
+    "model": "stealth/space-bunny-alpha",
+    "api_base_url": "https://openrouter.ai/api/v1",
+    "reasoning_metadata_source": "https://openrouter.ai/api/v1/models",
+    "reasoning_mandatory": true,
+    "reasoning_effort": "low",
+    "pricing_usd_per_million_tokens": {
+      "input": 0,
+      "cached_input": 0,
+      "output": 0
+    }
+  },
+  "controls": {
+    "temperature": 0,
+    "context_tokens": 32768,
+    "max_output_tokens": 8192,
+    "max_steps": 24,
+    "case_repetitions": 1,
+    "retries": 0,
+    "execution_order": [
+      "regex/Pactrail"
+    ],
+    "maximum_case_seconds": 720
+  },
+  "scoring": "Existing hidden targeted and regression tests; retain failure, trace, usage and edits regardless of outcome.",
+  "revision_reason": "Previous v3 results reached max 2048 output tokens without a visible action. Model metadata revealed mandatory reasoning and default max effort. This trial explicitly requests low effort and allows 8192 output tokens."
+}

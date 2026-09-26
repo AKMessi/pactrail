@@ -1,0 +1,25 @@
+diff --git a/regex-automata/src/dfa/onepass.rs b/regex-automata/src/dfa/onepass.rs
+index 85f820e..85103d3 100644
+--- a/regex-automata/src/dfa/onepass.rs
++++ b/regex-automata/src/dfa/onepass.rs
+@@ -2217,10 +2217,16 @@ impl DFA {
+         if self.explicit_slot_start < slots.len() {
+             // NOTE: The 'cache.explicit_slots()' slice is setup at the
+             // beginning of every search such that it is guaranteed to return a
+-            // slice of length equivalent to 'slots[explicit_slot_start..]'.
+-            slots[self.explicit_slot_start..]
+-                .copy_from_slice(cache.explicit_slots());
+-            epsilons.slots().apply(at, &mut slots[self.explicit_slot_start..]);
++            // slice of length equivalent to 'slots[explicit_slot_start..]',
++            // unless the caller provided more slots than this regex can use,
++            // in which case it may be shorter. Since 'copy_from_slice' requires
++            // equal lengths, we only copy the slots the cache actually has and
++            // leave any surplus caller-provided slots alone.
++            let cached = cache.explicit_slots();
++            let caller_slots = &mut slots[self.explicit_slot_start..];
++            let len = core::cmp::min(cached.len(), caller_slots.len());
++            caller_slots[..len].copy_from_slice(&cached[..len]);
++            epsilons.slots().apply(at, caller_slots);
+         }
+         *matched_pid = Some(pid);
+         true

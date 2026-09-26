@@ -203,6 +203,9 @@ pactrail ❯ Fix the parser regression and add a test.
   immediate crash recovery, exclusive OS/SQLite run leases, and write-ahead
   effect fences visible in both human and JSON traces.
 - Automatic Rust, Go, Python, and JavaScript verification discovery.
+- Optional task-contract acceptance checks bind an exact process command to one
+  obligation; passing general repository tests alone leaves behavior
+  inconclusive in the receipt.
 - Up to two proactive candidate checks, with one bounded validation-repair
   cycle when an authorized deterministic check fails. Diagnostics are
   byte-budgeted to the configured context window, labelled as untrusted process

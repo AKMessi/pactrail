@@ -100,6 +100,10 @@ marked non-exhaustive, commands, tools, and provider capabilities may be added
 in a minor release. Removing or changing a documented field or behavior
 requires a major release unless the old behavior is unsafe.
 
+`TaskContract.acceptance_checks` is an optional, empty-by-default field. Older
+contracts and receipts serialize without it; contracts that declare checks
+bind each check to an existing obligation ID and retain the same schema version.
+
 The stable Rust contract is the `pactrail-sdk` facade, not every public item in
 the workspace's implementation crates. Downstream embedders should depend on an
 exact Pactrail tag or compatible `1.x` release and check `SDK_API_REVISION` when

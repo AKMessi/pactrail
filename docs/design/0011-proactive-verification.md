@@ -21,8 +21,10 @@ run. A check is eligible only when:
 
 - the tool turn changed the isolated candidate;
 - at least one model turn remains;
-- process authority was explicitly granted without another approval;
-- a supported non-installing manifest check exists; and
+- process authority was explicitly granted or covered by a run-wide approval
+  without another prompt;
+- a supported non-installing manifest check or caller-declared acceptance
+  check exists; and
 - the exact candidate digest has not already been checked.
 
 The first candidate consumes attempt one. If it fails with a normal non-zero
@@ -43,10 +45,12 @@ then journals `proactive_verification` with attempt, command count, status,
 repair decision, and the complete candidate digest. Raw stdout and stderr are
 not added to the portable trace.
 
-A passing `VerificationResult` remains in memory and becomes final receipt
-evidence only if the final candidate digest is identical. Any later mutation
-invalidates it automatically. When no accepted result matches, final
-verification runs normally.
+A passing repository check remains in memory and becomes final receipt evidence
+only if the final candidate digest is identical. Generic suite results leave
+task obligations inconclusive; a passing caller-declared acceptance check
+records a pass for its specifically bound obligation. Any later mutation
+invalidates the result automatically. When no
+accepted result matches, final verification runs normally.
 
 ## Repair feedback
 

@@ -11,7 +11,10 @@ runner, suite, config, graders, controls, execution order, scoring, and stopping
 rule before the first model request. Every declared case is pass@1, including
 failures and timeouts. Both harnesses use OpenRouter's
 `stealth/space-bunny-alpha` with identical context, output, temperature,
-thinking, step, process, and offline-workspace controls. The model was listed as
+step, process, and offline-workspace controls. The frozen settings requested
+non-thinking behavior, but post-run model metadata showed that Space Bunny's
+reasoning is mandatory, defaults to `max`, and cannot be disabled. The prior
+results must not be interpreted as a non-thinking comparison. The model was listed as
 free when the protocol was frozen; the runner still requires a declared
 estimated-spend cap. The API key must be supplied through
 `OPENROUTER_API_KEY`; it is never committed.
@@ -21,6 +24,11 @@ failed on a repeated streamed finish marker before any completed model turn.
 That outcome remains published. [`protocol-v2.json`](protocol-v2.json) freezes
 the corrected adapter binary at `508eaba` as a separate revision; its outcomes
 must not replace or be pooled silently with the first protocol's outcomes.
+
+The [complete revision 2 comparison](../results/2026-09-26-space-bunny-v2/README.md)
+scored 0/3 for both harnesses. [`protocol-v3.json`](protocol-v3.json) freezes
+the new action-deadline controller and corrected runner at `d4d9579` before
+another model trial. Its results are a separate engineering iteration.
 
 First validate the gold graders with `-ValidateGraders` using
 `benchmarks/issue-replay-v1/run.ps1`, this directory's `cases.json`, and

@@ -8,8 +8,15 @@ so a repository cannot cause arbitrary extension code to load.
 The facade crate is `pactrail-sdk`. The v1 distribution contract is an immutable
 Git tag; crates.io publication is not required or promised for 1.0. The facade
 follows Pactrail's 1.x SemVer contract while implementation crates remain
-internal. `SDK_API_REVISION` is currently 6 and lets embedders require a specific
+internal. `SDK_API_REVISION` is currently 7 and lets embedders require a specific
 additive extension surface independently of durable schema versions.
+
+Revision 7 exposes `AcceptanceCheck` in the core facade and prelude. Embedders
+can bind exact process checks to task obligations; the engine routes them
+through ordinary process policy and records their outcomes on those obligations.
+`ApprovalResolver::allows_unprompted_process` has a false default and lets a
+host declare run-wide process approval for automatic candidate checks without
+changing its exact request approvals.
 
 Revision 6 exports `ControllerPhase`, `AdaptiveRuntimeProfile`, and
 `AdaptiveRuntimeClass`, and adds runtime-profile, phase, semantic-progress,

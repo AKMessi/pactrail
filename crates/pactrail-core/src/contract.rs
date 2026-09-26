@@ -96,6 +96,20 @@ pub struct Obligation {
     pub required: bool,
 }
 
+/// Caller-declared process check bound to one task obligation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+pub struct AcceptanceCheck {
+    /// Obligation this command tests.
+    pub obligation_id: ObligationId,
+    /// Executable passed through the ordinary process capability boundary.
+    pub program: String,
+    /// Exact argument vector; no shell is introduced by Pactrail.
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Short label shown with the result.
+    pub description: String,
+}
+
 impl Obligation {
     /// Creates a required obligation.
     #[must_use]
@@ -126,6 +140,9 @@ pub struct TaskContract {
     pub out_of_scope: Vec<String>,
     /// Independently verifiable acceptance conditions.
     pub obligations: Vec<Obligation>,
+    /// Optional caller-declared checks for specific obligations.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub acceptance_checks: Vec<AcceptanceCheck>,
     /// Run resource limits.
     #[serde(default)]
     pub budget: Budget,
@@ -152,6 +169,7 @@ impl TaskContract {
                 goal.clone(),
                 ObligationKind::Functional,
             )],
+            acceptance_checks: Vec::new(),
             goal,
             workspace_root: workspace_root.into(),
             allowed_write_paths: vec![".".to_owned()],
@@ -203,7 +221,30 @@ impl TaskContract {
                 return Err(ContractError::DuplicateObligation(obligation.id));
             }
         }
-        self.permissions.validate()
+        if self.acceptance_checks.len() > 32 {
+            return Err(ContractError::TooManyAcceptanceChecks);
+        }
+        for check in &self.acceptance_checks {
+            if !obligation_ids.contains(&check.obligation_id) {
+                return Err(ContractError::UnknownCheckObligation(check.obligation_id));
+            }
+            if check.program.trim().is_empty()
+                || check.program.contains('\0')
+                || check.description.trim().is_empty()
+                || check.args.len() > 64
+                || check.args.iter().any(|arg| arg.contains('\0'))
+            {
+                return Err(ContractError::InvalidAcceptanceCheck(check.obligation_id));
+            }
+        }
+        self.permissions.validate()?;
+        if !self.acceptance_checks.is_empty()
+            && !self.permissions.allow.contains(&Capability::ProcessSpawn)
+            && !self.permissions.ask.contains(&Capability::ProcessSpawn)
+        {
+            return Err(ContractError::AcceptanceChecksNeedProcess);
+        }
+        Ok(())
     }
 }
 
@@ -231,6 +272,18 @@ pub enum ContractError {
     /// Two obligations have the same identity.
     #[error("duplicate obligation id {0}")]
     DuplicateObligation(ObligationId),
+    /// A check refers to a condition not present in the contract.
+    #[error("acceptance check refers to unknown obligation {0}")]
+    UnknownCheckObligation(ObligationId),
+    /// A check has invalid executable, arguments, or description.
+    #[error("invalid acceptance check for obligation {0}")]
+    InvalidAcceptanceCheck(ObligationId),
+    /// Too many caller-declared process checks.
+    #[error("at most 32 acceptance checks are allowed")]
+    TooManyAcceptanceChecks,
+    /// Declared commands cannot run without process authority.
+    #[error("acceptance checks require process_spawn in allow or ask permissions")]
+    AcceptanceChecksNeedProcess,
     /// A capability was both allowed and denied.
     #[error("capability {0:?} cannot be both allowed and denied")]
     ConflictingPermission(Capability),
@@ -253,6 +306,9 @@ mod tests {
     fn minimal_contract_is_valid() {
         let contract = TaskContract::new("repair the parser", ".");
         assert_eq!(contract.validate(), Ok(()));
+        let serialized = serde_json::to_value(&contract)
+            .unwrap_or_else(|error| unreachable!("serialize contract: {error}"));
+        assert!(serialized.get("acceptance_checks").is_none());
     }
 
     #[test]
@@ -270,6 +326,36 @@ mod tests {
         let mut contract = TaskContract::new("repair the parser", ".");
         contract.budget.cost_microusd = 1;
         assert!(contract.validate().is_ok());
+    }
+
+    #[test]
+    fn acceptance_checks_must_bind_a_valid_obligation_and_command() {
+        let mut contract = TaskContract::new("repair the parser", ".");
+        let valid_id = contract.obligations[0].id;
+        contract.acceptance_checks.push(AcceptanceCheck {
+            obligation_id: valid_id,
+            program: "cargo".to_owned(),
+            args: vec!["test".to_owned(), "--offline".to_owned()],
+            description: "parser behavior".to_owned(),
+        });
+        assert_eq!(
+            contract.validate(),
+            Err(ContractError::AcceptanceChecksNeedProcess)
+        );
+        contract.permissions.ask.insert(Capability::ProcessSpawn);
+        assert_eq!(contract.validate(), Ok(()));
+
+        contract.acceptance_checks[0].obligation_id = ObligationId::new();
+        assert!(matches!(
+            contract.validate(),
+            Err(ContractError::UnknownCheckObligation(_))
+        ));
+        contract.acceptance_checks[0].obligation_id = valid_id;
+        contract.acceptance_checks[0].program = " ".to_owned();
+        assert!(matches!(
+            contract.validate(),
+            Err(ContractError::InvalidAcceptanceCheck(_))
+        ));
     }
 
     #[test]
