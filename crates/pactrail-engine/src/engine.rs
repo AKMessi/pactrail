@@ -37,7 +37,7 @@ use crate::checkpoint::{
     CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint, contract_digest,
 };
 use crate::context_window::{
-    CompactionReport, ContextWindow, DeduplicationReport, append_deduplicated_result,
+    CompactionReport, ContextWindow, DeduplicationReport, append_deduplicated_result_with_artifacts,
 };
 use crate::controller::{ControllerKernel, GoalIntent, classify_goal};
 use crate::text_actions::{catalog_prompt, parse_action, transport_conversation};
@@ -1650,9 +1650,12 @@ impl<'a> RunEngine<'a> {
                     if let Some(error) = execution.fatal_error {
                         return Err(EngineError::ProcessCleanup(error));
                     }
-                    if let Some(report) =
-                        append_deduplicated_result(&mut conversation, execution.result)
-                            .map_err(|error| EngineError::ContextWindow(error.to_string()))?
+                    if let Some(report) = append_deduplicated_result_with_artifacts(
+                        &mut conversation,
+                        execution.result,
+                        observation_store.as_ref(),
+                    )
+                    .map_err(|error| EngineError::ContextWindow(error.to_string()))?
                     {
                         journal.append(RunEvent::ActionCompleted(deduplication_action(&report)))?;
                     }
@@ -3836,6 +3839,10 @@ fn deduplication_action(report: &DeduplicationReport) -> ActionRecord {
             (
                 "reference_bytes".to_owned(),
                 report.reference_bytes.to_string(),
+            ),
+            (
+                "artifact_written".to_owned(),
+                report.artifact_written.to_string(),
             ),
         ]),
     }

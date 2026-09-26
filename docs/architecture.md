@@ -241,6 +241,11 @@ binds the bytes with a BLAKE3 digest. This preserves the stable request prefix
 and avoids rebilling repeated output as prompt input. The run journal records
 the reclaimed bytes and digest; it does not record raw tool content.
 
+CLI runs store the exact deduplicated JSON under that digest in the run-scoped
+artifact store. If the source is later compacted, `read_observation` retrieves
+a bounded slice without repeating the original tool call. The deduplication
+action records whether the artifact was stored.
+
 When the high-water mark is crossed, older tool results are replaced in place
 with deterministic compaction envelopes. Each envelope retains the tool name,
 call ID, error state, original byte count and BLAKE3 digest, bounded scalar

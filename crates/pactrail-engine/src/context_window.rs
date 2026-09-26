@@ -28,15 +28,25 @@ pub(crate) struct DeduplicationReport {
     pub(crate) content_digest: String,
     pub(crate) original_bytes: usize,
     pub(crate) reference_bytes: usize,
+    pub(crate) artifact_written: bool,
 }
 
 /// Keeps the first complete tool observation in the stable request prefix and
 /// replaces a new, identical observation with a reference to it. A later
 /// context compaction may summarize the source; the reference then instructs
 /// the model to rerun the tool before relying on omitted details.
+#[cfg(test)]
 pub(crate) fn append_deduplicated_result(
     conversation: &mut Vec<ConversationItem>,
     result: ToolResult,
+) -> Result<Option<DeduplicationReport>, ContextWindowError> {
+    append_deduplicated_result_with_artifacts(conversation, result, None)
+}
+
+pub(crate) fn append_deduplicated_result_with_artifacts(
+    conversation: &mut Vec<ConversationItem>,
+    result: ToolResult,
+    artifacts: Option<&ArtifactStore>,
 ) -> Result<Option<DeduplicationReport>, ContextWindowError> {
     let original = serde_json::to_vec(&result.content)?;
     if original.len() < MIN_DUPLICATE_BYTES {
@@ -60,19 +70,30 @@ pub(crate) fn append_deduplicated_result(
         return Ok(None);
     };
     let digest = blake3::hash(&original).to_hex().to_string();
-    let reference = json!({
+    let mut reference = json!({
         "pactrail_duplicate": true,
         "version": 1,
         "source_call_id": source_call_id,
         "original_digest": digest.clone(),
         "semantic_digest": tool_result_digest(&result),
         "original_bytes": original.len(),
-        "guidance": "This tool output exactly matches the earlier result named by source_call_id. If that result was compacted, rerun the tool before relying on omitted details."
+        "guidance": if artifacts.is_some() {
+            "This tool output exactly matches source_call_id. The exact JSON is available through read_observation using original_digest; read a bounded slice when details are needed."
+        } else {
+            "This tool output exactly matches source_call_id. If that result was compacted, rerun the tool before relying on omitted details."
+        }
     });
+    if artifacts.is_some() {
+        reference["artifact_digest"] = Value::String(digest.clone());
+    }
     let reference_bytes = serde_json::to_vec(&reference)?.len();
     if reference_bytes >= original.len() {
         conversation.push(ConversationItem::ToolResult(result));
         return Ok(None);
+    }
+    if let Some(store) = artifacts {
+        let stored = store.put(&original)?;
+        debug_assert_eq!(stored.digest, digest);
     }
     let report = DeduplicationReport {
         source_call_id: source_call_id.to_owned(),
@@ -80,6 +101,7 @@ pub(crate) fn append_deduplicated_result(
         content_digest: digest,
         original_bytes: original.len(),
         reference_bytes,
+        artifact_written: artifacts.is_some(),
     };
     conversation.push(ConversationItem::ToolResult(ToolResult {
         content: reference,
@@ -573,6 +595,42 @@ mod tests {
         assert_eq!(
             restored.observe_turn(&[(original, false)]).novel_evidence,
             0
+        );
+    }
+
+    #[test]
+    fn duplicate_reference_retains_exact_retrievable_json() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let artifacts = ArtifactStore::open(root.path())
+            .unwrap_or_else(|error| unreachable!("artifacts: {error}"));
+        let content = json!({"text": "evidence".repeat(1_000)});
+        let original =
+            serde_json::to_vec(&content).unwrap_or_else(|error| unreachable!("original: {error}"));
+        let mut conversation = vec![ConversationItem::Message(Message::user("inspect"))];
+        conversation.extend(tool_turn("first", content.clone()));
+        conversation.push(tool_turn("second", content.clone())[0].clone());
+        let report = append_deduplicated_result_with_artifacts(
+            &mut conversation,
+            ToolResult {
+                call_id: "second".to_owned(),
+                name: "read_file".to_owned(),
+                content,
+                is_error: false,
+            },
+            Some(&artifacts),
+        )
+        .unwrap_or_else(|error| unreachable!("deduplication: {error}"))
+        .unwrap_or_else(|| unreachable!("expected duplicate"));
+        assert!(report.artifact_written);
+        assert_eq!(artifacts.get(&report.content_digest).ok(), Some(original));
+        let Some(ConversationItem::ToolResult(reference)) = conversation.last() else {
+            unreachable!("reference")
+        };
+        assert_eq!(reference.content["artifact_digest"], report.content_digest);
+        assert!(
+            reference.content["guidance"]
+                .as_str()
+                .is_some_and(|guidance| guidance.contains("read_observation"))
         );
     }
 
