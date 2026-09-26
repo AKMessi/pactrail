@@ -37,7 +37,8 @@ use crate::checkpoint::{
     CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint, contract_digest,
 };
 use crate::context_window::{
-    CompactionReport, ContextWindow, DeduplicationReport, append_deduplicated_result_with_artifacts,
+    CompactionReport, ContextWindow, DeduplicationReport, PreparedContext,
+    append_deduplicated_result_with_artifacts,
 };
 use crate::controller::{ControllerKernel, GoalIntent, classify_goal};
 use crate::text_actions::{catalog_prompt, parse_action, transport_conversation};
@@ -1222,7 +1223,7 @@ impl<'a> RunEngine<'a> {
                     ),
                 })?;
             }
-            compact_model_context(
+            let prepared_context = compact_model_context(
                 context_window,
                 &mut conversation,
                 if turn_native_tools {
@@ -1408,7 +1409,18 @@ impl<'a> RunEngine<'a> {
                     "cache_creation_input_tokens".to_owned(),
                     response.usage.cache_creation_input_tokens.to_string(),
                 ),
+                (
+                    "normalized_context_bytes".to_owned(),
+                    prepared_context.bytes.to_string(),
+                ),
+                (
+                    "normalized_context_digest".to_owned(),
+                    prepared_context.digest.clone(),
+                ),
             ]);
+            if let Some(coverage) = cache_read_basis_points(response.usage) {
+                model_attributes.insert("cache_read_basis_points".to_owned(), coverage.to_string());
+            }
             if let Some((turn_cost, cumulative_cost)) = cost_microusd {
                 model_attributes.insert("turn_cost_microusd".to_owned(), turn_cost.to_string());
                 model_attributes.insert(
@@ -2105,7 +2117,7 @@ impl<'a> RunEngine<'a> {
         conversation.push(ConversationItem::Message(Message::system(
             READ_ONLY_RECOVERY_PROMPT,
         )));
-        compact_model_context(
+        let prepared_context = compact_model_context(
             ContextWindow::from_model_limits_with_request_ceiling(
                 effective_context_tokens_for_conversation(
                     self.model.capabilities().context_tokens,
@@ -2160,6 +2172,7 @@ impl<'a> RunEngine<'a> {
             duration_ms,
             reservation,
             cost,
+            &prepared_context,
         )))?;
         if response.finish_reason == FinishReason::ContentFilter {
             return Err(EngineError::Protocol(
@@ -2222,6 +2235,7 @@ impl<'a> RunEngine<'a> {
         duration_ms: u64,
         reservation: Option<u64>,
         cost: Option<(u64, u64)>,
+        prepared_context: &PreparedContext,
     ) -> ActionRecord {
         let mut attributes = BTreeMap::from([
             ("adapter".to_owned(), bounded_trace_value(self.model.name())),
@@ -2257,7 +2271,18 @@ impl<'a> RunEngine<'a> {
                 "cached_input_tokens".to_owned(),
                 response.usage.cached_input_tokens.to_string(),
             ),
+            (
+                "normalized_context_bytes".to_owned(),
+                prepared_context.bytes.to_string(),
+            ),
+            (
+                "normalized_context_digest".to_owned(),
+                prepared_context.digest.clone(),
+            ),
         ]);
+        if let Some(coverage) = cache_read_basis_points(response.usage) {
+            attributes.insert("cache_read_basis_points".to_owned(), coverage.to_string());
+        }
         if let Some(request_id) = &response.provider_request_id {
             attributes.insert(
                 "provider_request_id".to_owned(),
@@ -3797,20 +3822,30 @@ fn compact_model_context(
     artifacts: Option<&ArtifactStore>,
     journal: &mut Journal<'_>,
     observer: &dyn RunObserver,
-) -> Result<(), EngineError> {
-    let report = window
-        .compact_with_artifacts(conversation, tools, artifacts)
+) -> Result<PreparedContext, EngineError> {
+    let prepared = window
+        .prepare_with_artifacts(conversation, tools, artifacts)
         .map_err(|error| EngineError::ContextWindow(error.to_string()))?;
-    let Some(report) = report else {
-        return Ok(());
-    };
-    observer.on_progress(&RunProgress::ContextCompacted {
-        compacted_results: report.compacted_results,
-        before_bytes: report.before_bytes,
-        after_bytes: report.after_bytes,
-        reclaimed_bytes: report.reclaimed_bytes,
-    });
-    journal.append(RunEvent::ActionCompleted(compaction_action(&report)))
+    if let Some(report) = prepared.report.as_ref() {
+        observer.on_progress(&RunProgress::ContextCompacted {
+            compacted_results: report.compacted_results,
+            before_bytes: report.before_bytes,
+            after_bytes: report.after_bytes,
+            reclaimed_bytes: report.reclaimed_bytes,
+        });
+        journal.append(RunEvent::ActionCompleted(compaction_action(report)))?;
+    }
+    Ok(prepared)
+}
+
+fn cache_read_basis_points(usage: Usage) -> Option<u64> {
+    if usage.input_tokens == 0 {
+        return None;
+    }
+    let basis_points = (u128::from(usage.cached_input_tokens) * 10_000
+        / u128::from(usage.input_tokens))
+    .min(10_000);
+    u64::try_from(basis_points).ok()
 }
 
 fn deduplication_action(report: &DeduplicationReport) -> ActionRecord {
@@ -6149,6 +6184,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::too_many_lines)]
     async fn oversized_observation_is_compacted_and_recorded_before_next_turn() {
         let responses = VecDeque::from([
             tool_response(
@@ -6240,6 +6276,33 @@ mod tests {
         assert_eq!(compaction.attributes["artifacts_written"], "1");
         assert_eq!(compaction.attributes["before_digest"].len(), 64);
         assert_eq!(compaction.attributes["after_digest"].len(), 64);
+        let next_model_turn = snapshot
+            .actions
+            .iter()
+            .filter(|action| action.action == "invoke")
+            .nth(1)
+            .unwrap_or_else(|| unreachable!("model turn after compaction"));
+        assert_eq!(
+            next_model_turn.attributes["normalized_context_digest"],
+            compaction.attributes["after_digest"]
+        );
+        assert_eq!(
+            next_model_turn.attributes["normalized_context_bytes"],
+            compaction.attributes["after_bytes"]
+        );
+    }
+
+    #[test]
+    fn cache_coverage_uses_reported_input_tokens_and_omits_unknown_usage() {
+        assert_eq!(cache_read_basis_points(Usage::default()), None);
+        assert_eq!(
+            cache_read_basis_points(Usage {
+                input_tokens: 20,
+                cached_input_tokens: 5,
+                ..Usage::default()
+            }),
+            Some(2_500)
+        );
     }
 
     #[tokio::test]

@@ -268,6 +268,13 @@ reclaimed bytes, and the artifact count to the hash-linked action journal and ap
 CLI timeline. Raw observations remain intentionally absent from the durable
 trace.
 
+Every model action also records the digest and byte size of the normalized
+conversation and tool descriptors immediately before provider transport, along
+with reported cache-read coverage when input usage is available. These values
+identify context changes and cache outcomes without persisting prompt text.
+They are provider-neutral measurements, not exact wire-body bytes or a promise
+that a provider will cache a particular prefix.
+
 The execution controller is a deterministic kernel above the model loop. It
 classifies the task as informational or change-seeking, divides the existing
 turn ceiling into `investigating`, `implementing`, `validating`, and
