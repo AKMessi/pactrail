@@ -51,7 +51,7 @@ const COMMANDS: &[CommandHelp] = &[
     ),
     CommandHelp::new("Work", "/review [run]", "show receipt and immutable diff"),
     CommandHelp::new("Work", "/diff [run]", "review candidate changes"),
-    CommandHelp::new("Work", "/apply [run]", "land a verified candidate"),
+    CommandHelp::new("Work", "/apply [run]", "land a reviewed candidate"),
     CommandHelp::new(
         "Work",
         "/discard [run]",

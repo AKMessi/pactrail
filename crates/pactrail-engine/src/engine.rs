@@ -1779,7 +1779,7 @@ impl<'a> RunEngine<'a> {
                         actor: "controller".to_owned(),
                         action: "proactive_verification".to_owned(),
                         summary: format!(
-                            "proactively verified candidate {} with status {status_label}",
+                            "ran repository checks for candidate {} with status {status_label}",
                             truncate_digest(&candidate_digest)
                         ),
                         declared_effects: Vec::new(),
