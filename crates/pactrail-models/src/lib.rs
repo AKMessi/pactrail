@@ -26,6 +26,6 @@ pub use types::{
     ImageMediaType, ImageSetSummary, MAX_INLINE_MODEL_REQUEST_BYTES, MAX_INPUT_IMAGE_BYTES,
     MAX_INPUT_IMAGE_DIMENSION, MAX_INPUT_IMAGES, MAX_TOTAL_INPUT_IMAGE_BYTES,
     MODEL_IR_SCHEMA_VERSION, Message, ModelCapabilities, ModelPhase, ModelPricing, ModelRequest,
-    ModelResponse, ModelRoute, ModelStreamEvent, Role, ToolCall, ToolResult, Usage, UserContent,
-    validate_image_set,
+    ModelRequestCodecError, ModelResponse, ModelRoute, ModelStreamEvent, Role, ToolCall,
+    ToolResult, Usage, UserContent, validate_image_set,
 };

@@ -8,6 +8,7 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Provider-neutral model requests now have a bounded versioned codec for durable or cross-process handoff, with fail-closed schema and control validation.
 - Repeated large tool observations now become digest-bound references to the
   first identical result, reducing repeated prompt bytes while preserving the
   earlier request prefix and journaling the savings.
