@@ -1660,6 +1660,10 @@ struct ConfiguredApprovalResolver<'a> {
 }
 
 impl ApprovalResolver for ConfiguredApprovalResolver<'_> {
+    fn allows_unprompted_process(&self) -> bool {
+        self.process == ProcessApprovalArg::AllowRun
+    }
+
     fn resolve(&self, request: &ApprovalRequest) -> ApprovalDecision {
         let decision = if request.binding.backend_kind.starts_with("mcp_") {
             match self.mcp {

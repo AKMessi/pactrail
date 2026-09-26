@@ -1528,10 +1528,7 @@ impl<'a> RunEngine<'a> {
                     && accepted_completion_gate
                         .as_ref()
                         .is_none_or(|(digest, _)| digest != &candidate_digest)
-                    && contract
-                        .permissions
-                        .allow
-                        .contains(&Capability::ProcessSpawn)
+                    && self.can_run_unprompted_verification(&contract)
                 {
                     let validation_commands =
                         detect_verification_commands(transaction.workspace_root());
@@ -1740,10 +1737,7 @@ impl<'a> RunEngine<'a> {
             if progress_assessment.candidate_changed
                 && turn.saturating_add(1) < max_turns
                 && proactive_verification_attempts < MAX_PROACTIVE_VERIFICATION_ATTEMPTS
-                && contract
-                    .permissions
-                    .allow
-                    .contains(&Capability::ProcessSpawn)
+                && self.can_run_unprompted_verification(&contract)
             {
                 let candidate_digest = candidate_changes_digest(&transaction.changes()?);
                 let commands = detect_verification_commands(transaction.workspace_root());
@@ -2589,6 +2583,17 @@ impl<'a> RunEngine<'a> {
         Ok(())
     }
 
+    fn can_run_unprompted_verification(&self, contract: &TaskContract) -> bool {
+        contract
+            .permissions
+            .allow
+            .contains(&Capability::ProcessSpawn)
+            || (contract.permissions.ask.contains(&Capability::ProcessSpawn)
+                && self
+                    .approval_resolver
+                    .is_some_and(ApprovalResolver::allows_unprompted_process))
+    }
+
     async fn verify(
         &self,
         contract: &TaskContract,
@@ -2604,12 +2609,13 @@ impl<'a> RunEngine<'a> {
                 "No supported test manifest was detected",
             ));
         }
-        let verification_workspace = contract
+        let verification_workspace = (contract
             .permissions
             .allow
             .contains(&Capability::ProcessSpawn)
-            .then(|| VerificationWorkspace::create(transaction))
-            .transpose()?;
+            || contract.permissions.ask.contains(&Capability::ProcessSpawn))
+        .then(|| VerificationWorkspace::create(transaction))
+        .transpose()?;
         let verification_transaction = verification_workspace
             .as_ref()
             .map_or(transaction, VerificationWorkspace::transaction);
@@ -2657,12 +2663,12 @@ impl<'a> RunEngine<'a> {
                 grade: EvidenceGrade::Deterministic,
                 kind: EvidenceKind::Test,
                 status: if all_passed {
-                    EvidenceStatus::Passed
+                    EvidenceStatus::Inconclusive
                 } else {
                     EvidenceStatus::Failed
                 },
                 summary: format!(
-                    "Automated repository checks for {:?}: {summary}",
+                    "General repository checks for {:?}: {summary}. Passing these checks does not establish the task-specific behavior.",
                     obligation.description
                 ),
                 artifact_digest: None,
@@ -2684,10 +2690,13 @@ impl<'a> RunEngine<'a> {
         if verification_backends.contains("native_trusted") {
             risks.push("Native verification processes are capability-gated but retain host filesystem and network authority; use the OCI-restricted backend for hostile repositories".to_owned());
         }
-        if !all_passed {
+        if all_passed {
+            risks.push("General repository checks passed, but the task-specific obligation was not independently verified".to_owned());
+        } else {
             risks.push("At least one deterministic repository check failed".to_owned());
         }
         Ok(VerificationResult {
+            checks_passed: all_passed,
             evidence,
             risks,
             diagnostics,
@@ -3678,6 +3687,7 @@ fn process_backend_attribute(content: &Value, field: &str) -> Option<String> {
 }
 
 struct VerificationResult {
+    checks_passed: bool,
     evidence: Vec<Evidence>,
     risks: Vec<String>,
     diagnostics: Vec<Value>,
@@ -3685,11 +3695,7 @@ struct VerificationResult {
 
 impl VerificationResult {
     fn passed(&self) -> bool {
-        !self.evidence.is_empty()
-            && self
-                .evidence
-                .iter()
-                .all(|evidence| evidence.status == EvidenceStatus::Passed)
+        self.checks_passed
     }
 
     fn failed_checks(&self) -> usize {
@@ -3722,6 +3728,7 @@ impl VerificationResult {
 
     fn unverified(contract: &TaskContract, reason: &str) -> Self {
         Self {
+            checks_passed: false,
             evidence: contract
                 .obligations
                 .iter()
@@ -4389,6 +4396,41 @@ mod tests {
         capabilities: ModelCapabilities,
     }
 
+    struct UnpromptedProcessApproval;
+
+    impl ApprovalResolver for UnpromptedProcessApproval {
+        fn resolve(&self, _request: &ApprovalRequest) -> ApprovalDecision {
+            ApprovalDecision::AllowRun
+        }
+
+        fn allows_unprompted_process(&self) -> bool {
+            true
+        }
+    }
+
+    #[test]
+    fn proactive_verification_requires_unprompted_process_authority() {
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "test".to_owned(),
+            responses: Mutex::new(VecDeque::new()),
+            capabilities: ModelCapabilities::default(),
+        };
+        let registry = ToolRegistry::new();
+        let mut contract = TaskContract::new("fix behavior", ".");
+        contract.permissions.ask.insert(Capability::ProcessSpawn);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let engine = RunEngine::new(&model, &registry, &policy);
+        assert!(!engine.can_run_unprompted_verification(&contract));
+
+        let resolver = UnpromptedProcessApproval;
+        let engine = engine.with_approval_resolver(&resolver);
+        assert!(engine.can_run_unprompted_verification(&contract));
+        contract.permissions.ask.remove(&Capability::ProcessSpawn);
+        contract.permissions.deny.insert(Capability::ProcessSpawn);
+        assert!(!engine.can_run_unprompted_verification(&contract));
+    }
+
     struct FirstReadThenSuspendModel {
         capabilities: ModelCapabilities,
         calls: Mutex<u8>,
@@ -4677,6 +4719,7 @@ mod tests {
     #[test]
     fn repair_diagnostics_are_model_bounded_and_untrusted() {
         let validation = VerificationResult {
+            checks_passed: false,
             evidence: Vec::new(),
             risks: Vec::new(),
             diagnostics: vec![json!({
@@ -5161,8 +5204,9 @@ mod tests {
             verification
                 .evidence
                 .iter()
-                .all(|evidence| evidence.status == EvidenceStatus::Passed)
+                .all(|evidence| evidence.status == EvidenceStatus::Inconclusive)
         );
+        assert!(verification.passed(), "the repository check itself passed");
         assert!(
             !transaction
                 .workspace_root()
@@ -6596,7 +6640,7 @@ mod tests {
                 .receipt
                 .evidence
                 .iter()
-                .all(|evidence| evidence.status == EvidenceStatus::Passed)
+                .all(|evidence| evidence.status == EvidenceStatus::Inconclusive)
         );
         assert!(observer.events().iter().any(|event| matches!(
             event,
@@ -6677,9 +6721,12 @@ mod tests {
         let mut contract = TaskContract::new("Set the verified answer", ".");
         contract.permissions.allow.insert(Capability::FileRead);
         contract.permissions.allow.insert(Capability::FileWrite);
-        contract.permissions.allow.insert(Capability::ProcessSpawn);
+        contract.permissions.ask.insert(Capability::ProcessSpawn);
         let policy = PolicyEngine::new(contract.permissions.clone());
-        let engine = RunEngine::new(&model, &registry, &policy).with_max_turns(6);
+        let resolver = UnpromptedProcessApproval;
+        let engine = RunEngine::new(&model, &registry, &policy)
+            .with_approval_resolver(&resolver)
+            .with_max_turns(6);
         let mut store =
             EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
 
@@ -6692,6 +6739,7 @@ mod tests {
         let snapshot = store
             .snapshot(outcome.run_id)
             .unwrap_or_else(|error| unreachable!("snapshot: {error}"));
+        assert!(!snapshot.approvals.is_empty());
         let verifier_actions = snapshot
             .actions
             .iter()

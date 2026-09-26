@@ -527,12 +527,18 @@ trace labels this execution workspace explicitly. Retained output and wall time
 are bounded.
 
 Verification results become deterministic evidence. Model statements do not.
-Each required obligation receives a grade and status; missing process permission
-creates explicit inconclusive evidence and an unresolved risk rather than a
-fictional pass.
+Discovered repository checks establish whether the existing suite passes on the
+candidate; a green suite alone does not establish the requested task behavior.
+The receipt therefore records required task obligations as inconclusive after
+generic checks pass, with an explicit unresolved risk. A failed check records
+failed evidence. Missing process permission also creates inconclusive evidence.
+`ReadyToApply` means an isolated candidate is available for review, not that
+every task obligation has been proven.
 
 When a tool turn first changes the isolated candidate and another model turn is
-available, the controller runs the discovered checks immediately. Proactive
+available, the controller runs the discovered checks immediately when process
+authority is already allowed or covered by run-wide approval. Prompt-only
+approval does not trigger an automatic process. Proactive
 verification is bounded to two distinct candidate digests. Each attempt emits a
 live controller lane, a `controller_gate` verifier phase, and a hash-linked
 decision binding status and command count to the complete candidate digest.
@@ -546,7 +552,8 @@ that repository process output is untrusted data. Tool-launch, authorization,
 and infrastructure errors do not trigger source repair. The model therefore
 sees a real failure before it can spend a turn claiming completion.
 
-A successful gate on an unchanged candidate becomes final evidence directly,
+A successful repository-check gate on an unchanged candidate becomes final
+inconclusive task-obligation evidence directly,
 avoiding a duplicate test run. A later mutation invalidates it by changing the
 candidate digest and may consume the second proactive attempt. If no accepted
 gate matches at completion, normal final verification runs in a fresh

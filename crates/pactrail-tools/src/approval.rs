@@ -8,6 +8,14 @@ use crate::ToolError;
 pub trait ApprovalResolver: Send + Sync {
     /// Returns the user's decision for this exact, immutable request binding.
     fn resolve(&self, request: &ApprovalRequest) -> ApprovalDecision;
+
+    /// Whether process checks can start without presenting another approval prompt.
+    ///
+    /// This only makes verification eligible. Each command still crosses the
+    /// policy gate and records its exact approval decision.
+    fn allows_unprompted_process(&self) -> bool {
+        false
+    }
 }
 
 /// Policy and approval facts collected during one tool execution.
