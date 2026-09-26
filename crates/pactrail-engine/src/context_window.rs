@@ -173,18 +173,34 @@ impl ContextWindow {
         conversation: &mut [ConversationItem],
         tools: &[ToolDescriptor],
     ) -> Result<Option<CompactionReport>, ContextWindowError> {
-        self.compact_with_artifacts(conversation, tools, None)
+        self.prepare_with_artifacts(conversation, tools, None)
+            .map(|prepared| prepared.report)
     }
 
+    #[cfg(test)]
     pub(crate) fn compact_with_artifacts(
         self,
         conversation: &mut [ConversationItem],
         tools: &[ToolDescriptor],
         artifacts: Option<&ArtifactStore>,
     ) -> Result<Option<CompactionReport>, ContextWindowError> {
+        self.prepare_with_artifacts(conversation, tools, artifacts)
+            .map(|prepared| prepared.report)
+    }
+
+    pub(crate) fn prepare_with_artifacts(
+        self,
+        conversation: &mut [ConversationItem],
+        tools: &[ToolDescriptor],
+        artifacts: Option<&ArtifactStore>,
+    ) -> Result<PreparedContext, ContextWindowError> {
         let before = request_fingerprint(conversation, tools)?;
         if before.bytes <= self.high_water_bytes {
-            return Ok(None);
+            return Ok(PreparedContext {
+                report: None,
+                bytes: before.bytes,
+                digest: before.digest,
+            });
         }
 
         let latest_turn_start = conversation
@@ -247,13 +263,17 @@ impl ContextWindow {
         }
 
         if compacted_results == 0 {
-            return Ok(None);
+            return Ok(PreparedContext {
+                report: None,
+                bytes: before.bytes,
+                digest: before.digest,
+            });
         }
         let after = request_fingerprint(conversation, tools)?;
         if after.bytes != after_bytes {
             return Err(ContextWindowError::Accounting);
         }
-        Ok(Some(CompactionReport {
+        let report = CompactionReport {
             before_bytes: before.bytes,
             after_bytes: after.bytes,
             reclaimed_bytes: before.bytes.saturating_sub(after.bytes),
@@ -262,9 +282,20 @@ impl ContextWindow {
             high_water_bytes: self.high_water_bytes,
             target_bytes: self.target_bytes,
             before_digest: before.digest,
-            after_digest: after.digest,
-        }))
+            after_digest: after.digest.clone(),
+        };
+        Ok(PreparedContext {
+            report: Some(report),
+            bytes: after.bytes,
+            digest: after.digest,
+        })
     }
+}
+
+pub(crate) struct PreparedContext {
+    pub(crate) report: Option<CompactionReport>,
+    pub(crate) bytes: usize,
+    pub(crate) digest: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
