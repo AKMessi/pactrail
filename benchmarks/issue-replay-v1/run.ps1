@@ -14,7 +14,7 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$OpenCodeProvider = 'deepseek-direct',
 
-    [ValidateSet('disabled', 'enabled')]
+    [ValidateSet('disabled', 'enabled', 'low', 'medium', 'high', 'xhigh', 'max')]
     [string]$ThinkingMode = 'disabled',
 
     [ValidateRange(0, 1000)]
@@ -704,6 +704,9 @@ function Invoke-PactrailRun {
         '--allow-process', '--write-path', '.', '--output', 'json'
     )
     if ($ThinkingMode -eq 'disabled') { $arguments += '--disable-thinking' }
+    if ($ThinkingMode -in @('low', 'medium', 'high', 'xhigh', 'max')) {
+        $arguments += @('--reasoning-effort', $ThinkingMode)
+    }
     $arguments += [string]$Case.prompt
     return Invoke-CapturedProcess -FileName $command.Source -Arguments $arguments -WorkingDirectory $Workspace -TimeoutSeconds ([int]$manifest.controls.maximum_case_seconds) `
         -StdoutPath (Join-Path $ArtifactDirectory 'run-output.json') -StderrPath (Join-Path $ArtifactDirectory 'run-stderr.txt') `
