@@ -1216,12 +1216,41 @@ impl<'a> RunEngine<'a> {
             }
             if let Some(prompt) = control.prompt.as_ref() {
                 conversation.push(ConversationItem::Message(Message::system(prompt)));
-                journal.append(RunEvent::NoteRecorded {
-                    message: format!(
-                        "controller announced {} phase with a stable tool catalog",
-                        control.phase.label()
-                    ),
-                })?;
+                if control.action_deadline {
+                    let reason = format!(
+                        "{} implementing turns produced no isolated candidate",
+                        control.phase_turn
+                    );
+                    observer.on_progress(&RunProgress::ControllerIntervened {
+                        turn: turn.saturating_add(1),
+                        no_progress_turns: 0,
+                        reason: reason.clone(),
+                    });
+                    journal.append(RunEvent::ActionCompleted(ActionRecord {
+                        actor: "controller".to_owned(),
+                        action: "steer_implementation".to_owned(),
+                        summary: reason,
+                        declared_effects: Vec::new(),
+                        observed_effects: Vec::new(),
+                        succeeded: true,
+                        duration_ms: 0,
+                        attributes: BTreeMap::from([
+                            ("turn".to_owned(), turn.saturating_add(1).to_string()),
+                            ("phase_turn".to_owned(), control.phase_turn.to_string()),
+                            (
+                                "tools_available".to_owned(),
+                                control.tools.len().to_string(),
+                            ),
+                        ]),
+                    }))?;
+                } else {
+                    journal.append(RunEvent::NoteRecorded {
+                        message: format!(
+                            "controller announced {} phase with a stable tool catalog",
+                            control.phase.label()
+                        ),
+                    })?;
+                }
             }
             let prepared_context = compact_model_context(
                 context_window,

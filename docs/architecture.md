@@ -308,6 +308,13 @@ previously unseen successful evidence resets the counter. Two stagnant turns
 produce explicit steering toward a narrower next action; the older identical-call
 and all-failed-call stop conditions remain independent fail-safes.
 
+Novel reads can still consume an entire change run without producing a
+candidate. During implementation, every third turn after the initial three
+adds an explicit action deadline when the candidate is still empty. It asks
+for a supported edit, one exact missing fact followed by an edit, or a
+concrete blocker. The tool catalog remains unchanged, and the reminder is an
+append-only controller turn so resume and provider prefix caching stay stable.
+
 Phase entry, available tool count, progress assessment, and intervention are
 visible through `RunProgress` and recorded as hash-linked controller actions or
 notes. Phase prompts are checkpointed before provider I/O. Resume reconstructs
