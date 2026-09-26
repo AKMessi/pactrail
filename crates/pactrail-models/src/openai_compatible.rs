@@ -388,22 +388,49 @@ impl OpenAiStreamAccumulator {
         let Some(choice) = choices.first() else {
             return Ok(());
         };
+        self.apply_choice(choice, observer)
+    }
+
+    fn apply_choice(
+        &mut self,
+        choice: &Value,
+        observer: &dyn ModelStreamObserver,
+    ) -> Result<(), ModelError> {
         if choice.get("index").and_then(Value::as_u64).unwrap_or(0) != 0 {
             return Err(ModelError::MalformedResponse(
                 "OpenAI stream returned a non-zero choice index".to_owned(),
             ));
         }
+        let already_finished = self.finish_reason.is_some();
         if let Some(reason) = choice.get("finish_reason").and_then(Value::as_str) {
             let reason = openai_finish_reason(Some(reason));
-            if self.finish_reason.replace(reason).is_some() {
+            if self
+                .finish_reason
+                .is_some_and(|previous| previous != reason)
+            {
                 return Err(ModelError::MalformedResponse(
-                    "OpenAI stream emitted more than one finish reason".to_owned(),
+                    "OpenAI stream emitted conflicting finish reasons".to_owned(),
                 ));
             }
+            self.finish_reason = Some(reason);
         }
         let Some(delta) = choice.get("delta") else {
             return Ok(());
         };
+        if already_finished
+            && (delta
+                .get("content")
+                .and_then(Value::as_str)
+                .is_some_and(|text| !text.is_empty())
+                || delta
+                    .get("tool_calls")
+                    .and_then(Value::as_array)
+                    .is_some_and(|calls| !calls.is_empty()))
+        {
+            return Err(ModelError::MalformedResponse(
+                "OpenAI stream emitted content after its finish reason".to_owned(),
+            ));
+        }
         if let Some(text) = delta.get("content").and_then(Value::as_str) {
             if self.text.len().saturating_add(text.len()) > MAX_STREAM_TEXT_BYTES {
                 return Err(ModelError::ResponseTooLarge {
@@ -1247,6 +1274,50 @@ mod tests {
             event,
             ModelStreamEvent::ToolArgumentsDelta { bytes, .. } if *bytes > 0
         )));
+    }
+
+    #[test]
+    fn stream_accepts_identical_terminal_repeat_but_rejects_changed_or_late_output() {
+        let observer = RecordingObserver::default();
+        let terminal = sse(&json!({
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]
+        }));
+        let mut repeated = OpenAiStreamAccumulator::default();
+        repeated
+            .apply(&terminal, &observer)
+            .unwrap_or_else(|error| unreachable!("first terminal marker: {error}"));
+        repeated
+            .apply(&terminal, &observer)
+            .unwrap_or_else(|error| unreachable!("identical terminal marker: {error}"));
+        repeated
+            .apply(
+                &sse(&json!({
+                    "choices": [],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 2}
+                })),
+                &observer,
+            )
+            .unwrap_or_else(|error| unreachable!("usage after terminal marker: {error}"));
+
+        let conflicting = sse(&json!({
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
+        }));
+        assert!(matches!(
+            repeated.apply(&conflicting, &observer),
+            Err(ModelError::MalformedResponse(message)) if message.contains("conflicting finish")
+        ));
+
+        let mut late_output = OpenAiStreamAccumulator::default();
+        late_output
+            .apply(&terminal, &observer)
+            .unwrap_or_else(|error| unreachable!("terminal marker: {error}"));
+        assert!(matches!(
+            late_output.apply(
+                &sse(&json!({"choices": [{"index": 0, "delta": {"content": "late"}}]})),
+                &observer
+            ),
+            Err(ModelError::MalformedResponse(message)) if message.contains("after its finish")
+        ));
     }
 
     #[test]
