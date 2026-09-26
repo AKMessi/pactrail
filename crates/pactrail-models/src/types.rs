@@ -12,6 +12,9 @@ use thiserror::Error;
 
 /// Current schema of Pactrail's provider-neutral conversation and request IR.
 pub const MODEL_IR_SCHEMA_VERSION: u32 = 1;
+/// Current schema for standalone normalized usage exchange.
+pub const USAGE_SCHEMA_VERSION: u32 = 1;
+const MAX_VERSIONED_USAGE_BYTES: usize = 1_024;
 
 pub(crate) fn late_system_directive(content: &str) -> String {
     format!("Pactrail controller directive: {content}")
@@ -801,6 +804,7 @@ pub enum FinishReason {
 
 /// Normalized token accounting from a provider.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Usage {
     pub input_tokens: u64,
     pub output_tokens: u64,
@@ -809,7 +813,69 @@ pub struct Usage {
     pub cache_creation_input_tokens: u64,
 }
 
+/// Validation or versioned decoding failure for provider-neutral usage.
+#[derive(Debug, Error)]
+pub enum UsageCodecError {
+    #[error("usage record exceeds the bounded codec size")]
+    TooLarge,
+    #[error("unsupported usage schema {0}")]
+    UnsupportedSchema(u32),
+    #[error("cache token counters exceed input tokens")]
+    InvalidCacheCounters,
+    #[error("usage codec failed: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct VersionedUsage {
+    schema_version: u32,
+    usage: Usage,
+}
+
 impl Usage {
+    /// Rejects impossible normalized provider cache accounting.
+    ///
+    /// # Errors
+    /// Returns an error when cache read plus cache creation exceeds input.
+    pub fn validate(self) -> Result<(), UsageCodecError> {
+        if self
+            .cached_input_tokens
+            .checked_add(self.cache_creation_input_tokens)
+            .is_none_or(|cached| cached > self.input_tokens)
+        {
+            return Err(UsageCodecError::InvalidCacheCounters);
+        }
+        Ok(())
+    }
+
+    /// Encodes a standalone versioned usage record.
+    ///
+    /// # Errors
+    /// Rejects invalid counters or JSON encoding failure.
+    pub fn encode_versioned(self) -> Result<Vec<u8>, UsageCodecError> {
+        self.validate()?;
+        Ok(serde_json::to_vec(&VersionedUsage {
+            schema_version: USAGE_SCHEMA_VERSION,
+            usage: self,
+        })?)
+    }
+
+    /// Decodes a standalone usage record under the supported schema.
+    ///
+    /// # Errors
+    /// Rejects future schemas, malformed JSON, or invalid counters.
+    pub fn decode_versioned(bytes: &[u8]) -> Result<Self, UsageCodecError> {
+        if bytes.len() > MAX_VERSIONED_USAGE_BYTES {
+            return Err(UsageCodecError::TooLarge);
+        }
+        let envelope: VersionedUsage = serde_json::from_slice(bytes)?;
+        if envelope.schema_version != USAGE_SCHEMA_VERSION {
+            return Err(UsageCodecError::UnsupportedSchema(envelope.schema_version));
+        }
+        envelope.usage.validate()?;
+        Ok(envelope.usage)
+    }
     /// Adds another turn's counters without integer overflow.
     #[must_use]
     pub fn saturating_add(self, other: Self) -> Self {
@@ -931,6 +997,41 @@ mod tests {
 
     use super::*;
     use crate::test_support::tiny_png;
+
+    #[test]
+    fn versioned_usage_rejects_future_schemas_and_impossible_cache_totals() {
+        let usage = Usage {
+            input_tokens: 100,
+            output_tokens: 20,
+            cached_input_tokens: 40,
+            cache_creation_input_tokens: 10,
+        };
+        let bytes = usage
+            .encode_versioned()
+            .unwrap_or_else(|error| unreachable!("usage encode: {error}"));
+        assert_eq!(Usage::decode_versioned(&bytes).ok(), Some(usage));
+        let mut future: Value = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|error| unreachable!("usage JSON: {error}"));
+        future["schema_version"] = json!(USAGE_SCHEMA_VERSION + 1);
+        let future_bytes = serde_json::to_vec(&future)
+            .unwrap_or_else(|error| unreachable!("future usage: {error}"));
+        assert!(matches!(
+            Usage::decode_versioned(&future_bytes),
+            Err(UsageCodecError::UnsupportedSchema(_))
+        ));
+        assert!(matches!(
+            Usage {
+                cached_input_tokens: 101,
+                ..usage
+            }
+            .validate(),
+            Err(UsageCodecError::InvalidCacheCounters)
+        ));
+        assert!(matches!(
+            Usage::decode_versioned(&vec![b' '; MAX_VERSIONED_USAGE_BYTES + 1]),
+            Err(UsageCodecError::TooLarge)
+        ));
+    }
 
     #[test]
     fn versioned_model_request_round_trips_and_rejects_future_schema() {

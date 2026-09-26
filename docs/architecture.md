@@ -444,6 +444,10 @@ seals the active adaptive model route. Schema 1 and 2 checkpoints remain
 readable: schema 1 spend is reconstructed from durable actions, and the next
 safe checkpoint is written as schema 3. Future schemas fail closed.
 
+Normalized usage also has a bounded standalone versioned codec. Every
+checkpoint validates that cache-read plus cache-creation tokens do not exceed
+reported input tokens before resume; valid historical usage remains readable.
+
 `pactrail resume <run-id>` reopens the existing workspace transaction and reads
 the original `run.json`; it never reloads a mutable task file. Before appending
 anything, the engine requires the supplied checkpoint to be the exact artifact

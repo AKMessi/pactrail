@@ -134,6 +134,9 @@ impl RunCheckpoint {
                 "an older checkpoint schema cannot carry an active route",
             ));
         }
+        self.usage
+            .validate()
+            .map_err(|error| CheckpointError::InvalidUsage(error.to_string()))?;
         for (field, digest) in [
             ("event_hash", self.event_hash.0.as_str()),
             ("contract_digest", self.contract_digest.as_str()),
@@ -396,6 +399,8 @@ pub enum CheckpointError {
     InvalidPhase(&'static str),
     #[error("checkpoint image artifacts are invalid: {0}")]
     InvalidImages(String),
+    #[error("checkpoint model usage is invalid: {0}")]
+    InvalidUsage(String),
     #[error("run {0} has no durable session checkpoint")]
     NotFound(RunId),
     #[error("run {run_id} event head {head_sequence} is not a safe checkpoint")]
@@ -452,6 +457,21 @@ mod tests {
             vec![ConversationItem::Message(Message::user("fix it"))],
         )
         .unwrap_or_else(|error| unreachable!("checkpoint: {error}"))
+    }
+
+    #[test]
+    fn checkpoint_rejects_impossible_cache_usage_before_resume() {
+        let run_id = RunId::new();
+        let mut value = checkpoint(run_id, 0, EventHash("0".repeat(64)));
+        value.usage = Usage {
+            input_tokens: 10,
+            cached_input_tokens: 11,
+            ..Usage::default()
+        };
+        assert!(matches!(
+            value.validate(),
+            Err(CheckpointError::InvalidUsage(_))
+        ));
     }
 
     #[test]
