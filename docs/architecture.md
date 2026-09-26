@@ -444,6 +444,12 @@ seals the active adaptive model route. Schema 1 and 2 checkpoints remain
 readable: schema 1 spend is reconstructed from durable actions, and the next
 safe checkpoint is written as schema 3. Future schemas fail closed.
 
+Compaction completes before the `BeforeModel` checkpoint is written. A crash
+at the next provider request therefore resumes from the exact compacted
+conversation and its run-local observation artifact; the completed read is
+never replayed. A scripted crash replay test checks that the resumed model
+turn retains the compaction digest and performs only the original file read.
+
 Normalized usage also has a bounded standalone versioned codec. Every
 checkpoint validates that cache-read plus cache-creation tokens do not exceed
 reported input tokens before resume; valid historical usage remains readable.
