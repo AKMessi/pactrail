@@ -405,7 +405,11 @@ The checkpoint points back to the preceding event sequence/hash and also binds
 the task contract, candidate change set, repository context, model/tool
 profiles, secret-free CLI manifest, resolved process-runtime/image profile,
 sealed input artifacts, token use, turn counters, repair state, and elapsed
-active budget.
+active budget. Checkpoint schema 2 also seals reconciled micro-USD spend at
+each safe boundary. On resume, Pactrail compares that value with the hash-linked
+model action ledger before any new model or tool work. Schema 1 checkpoints
+remain readable: their spend is reconstructed from durable actions, and the
+next safe checkpoint is written as schema 2. Future schemas fail closed.
 
 `pactrail resume <run-id>` reopens the existing workspace transaction and reads
 the original `run.json`; it never reloads a mutable task file. Before appending

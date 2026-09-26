@@ -166,7 +166,7 @@ pub(crate) fn manifest() -> CompatibilityManifest {
             "pactrail-engine",
             pactrail_engine::CHECKPOINT_SCHEMA_VERSION,
             pactrail_engine::MIN_CHECKPOINT_SCHEMA_VERSION,
-            CompatibilityStrategy::ExactVersion,
+            CompatibilityStrategy::ReadCompatible,
             true,
         ),
         format(

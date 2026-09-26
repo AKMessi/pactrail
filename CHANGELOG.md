@@ -11,6 +11,9 @@ follow [Semantic Versioning](https://semver.org/).
 - Repeated large tool observations now become digest-bound references to the
   first identical result, reducing repeated prompt bytes while preserving the
   earlier request prefix and journaling the savings.
+- Run checkpoints now use schema 2 to seal the reconciled cost ledger. Schema 1
+  checkpoints remain readable and are upgraded at the next safe write; resume
+  rejects a cost ledger that disagrees with durable model actions.
 
 - The Anthropic native adapter now enables automatic ephemeral prompt caching
   when `--prompt-caching on` is declared, with cache usage reflected in

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "run_id": "01900000-0000-7000-8000-000000000001",
+  "event_sequence": 0,
+  "event_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "contract_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+  "candidate_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+  "model_profile_digest": "3333333333333333333333333333333333333333333333333333333333333333",
+  "tool_profile_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+  "context_digest": "5555555555555555555555555555555555555555555555555555555555555555",
+  "project_profile": "",
+  "phase": "before_model",
+  "next_turn": 0,
+  "elapsed_active_ms": 0,
+  "conversation": [],
+  "usage": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "cached_input_tokens": 0,
+    "cache_creation_input_tokens": 0
+  },
+  "call_ids": [],
+  "previous_tool_signature": null,
+  "repeated_tool_turns": 0,
+  "consecutive_failed_tool_turns": 0,
+  "automatic_repair_cycles": 0,
+  "final_text": "",
+  "recovery_risk": null
+}

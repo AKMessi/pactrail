@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Current schema for content-addressed run checkpoints.
-pub const CHECKPOINT_SCHEMA_VERSION: u32 = 1;
+pub const CHECKPOINT_SCHEMA_VERSION: u32 = 2;
 
 /// Oldest checkpoint schema this binary can resume.
 pub const MIN_CHECKPOINT_SCHEMA_VERSION: u32 = 1;
@@ -46,6 +46,9 @@ pub struct RunCheckpoint {
     pub elapsed_active_ms: u64,
     pub conversation: Vec<ConversationItem>,
     pub usage: Usage,
+    /// Reconciled cost through the last completed model turn, when priced.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_spent_microusd: Option<u64>,
     pub call_ids: BTreeSet<String>,
     pub previous_tool_signature: Option<Vec<(String, String)>>,
     pub repeated_tool_turns: u16,
@@ -93,6 +96,7 @@ impl RunCheckpoint {
             elapsed_active_ms: 0,
             conversation,
             usage: Usage::default(),
+            cost_spent_microusd: None,
             call_ids: BTreeSet::new(),
             previous_tool_signature: None,
             repeated_tool_turns: 0,
@@ -111,8 +115,15 @@ impl RunCheckpoint {
     ///
     /// Returns a fail-closed checkpoint diagnostic.
     pub fn validate(&self) -> Result<(), CheckpointError> {
-        if self.schema_version != CHECKPOINT_SCHEMA_VERSION {
+        if !(MIN_CHECKPOINT_SCHEMA_VERSION..=CHECKPOINT_SCHEMA_VERSION)
+            .contains(&self.schema_version)
+        {
             return Err(CheckpointError::UnsupportedSchema(self.schema_version));
+        }
+        if self.schema_version == 1 && self.cost_spent_microusd.is_some() {
+            return Err(CheckpointError::InvalidPhase(
+                "schema one cannot carry a cost ledger",
+            ));
         }
         for (field, digest) in [
             ("event_hash", self.event_hash.0.as_str()),
@@ -201,6 +212,11 @@ impl CheckpointStore {
     /// Returns an error for invalid state, JSON encoding, or artifact I/O.
     pub fn put(&self, checkpoint: &RunCheckpoint) -> Result<StoredArtifact, CheckpointError> {
         checkpoint.validate()?;
+        if checkpoint.schema_version != CHECKPOINT_SCHEMA_VERSION {
+            return Err(CheckpointError::UnsupportedSchema(
+                checkpoint.schema_version,
+            ));
+        }
         let bytes = serde_json::to_vec(checkpoint).map_err(CheckpointError::Encoding)?;
         self.artifacts
             .put(&bytes)
@@ -427,6 +443,72 @@ mod tests {
             vec![ConversationItem::Message(Message::user("fix it"))],
         )
         .unwrap_or_else(|error| unreachable!("checkpoint: {error}"))
+    }
+
+    #[test]
+    fn historical_v1_checkpoint_is_readable_and_next_write_uses_v2() {
+        let mut historical: RunCheckpoint = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/compatibility/historical/run-checkpoint-v1.json"
+        )))
+        .unwrap_or_else(|error| unreachable!("historical checkpoint: {error}"));
+        historical
+            .validate()
+            .unwrap_or_else(|error| unreachable!("historical validation: {error}"));
+        assert_eq!(historical.schema_version, 1);
+        assert_eq!(historical.cost_spent_microusd, None);
+        historical.schema_version = CHECKPOINT_SCHEMA_VERSION;
+        historical.cost_spent_microusd = Some(42);
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let store = CheckpointStore::open(root.path())
+            .unwrap_or_else(|error| unreachable!("store: {error}"));
+        store
+            .put(&historical)
+            .unwrap_or_else(|error| unreachable!("v2 write: {error}"));
+        historical.schema_version = 1;
+        assert!(matches!(
+            historical.validate(),
+            Err(CheckpointError::InvalidPhase(_))
+        ));
+    }
+
+    #[test]
+    fn historical_v1_artifact_remains_head_loadable() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let checkpoints = CheckpointStore::open(root.path())
+            .unwrap_or_else(|error| unreachable!("checkpoint store: {error}"));
+        let mut events = EventStore::open_in_memory()
+            .unwrap_or_else(|error| unreachable!("event store: {error}"));
+        let run_id = RunId::new();
+        let contract = events
+            .append(
+                run_id,
+                0,
+                RunEvent::ContractRegistered(TaskContract::new("fix it", ".")),
+            )
+            .unwrap_or_else(|error| unreachable!("contract: {error}"));
+        let mut historical = checkpoint(run_id, contract.sequence, contract.hash);
+        historical.schema_version = 1;
+        let bytes =
+            serde_json::to_vec(&historical).unwrap_or_else(|error| unreachable!("encode: {error}"));
+        let artifact = checkpoints
+            .artifacts
+            .put(&bytes)
+            .unwrap_or_else(|error| unreachable!("artifact: {error}"));
+        events
+            .append(
+                run_id,
+                1,
+                RunEvent::CheckpointCreated {
+                    checkpoint: CheckpointStore::event_reference(&artifact),
+                },
+            )
+            .unwrap_or_else(|error| unreachable!("checkpoint event: {error}"));
+        assert_eq!(
+            checkpoints.load_head(&events, run_id).ok(),
+            Some(historical)
+        );
+        assert_eq!(checkpoints.validate_all(&events, run_id).ok(), Some(1));
     }
 
     #[test]
