@@ -1,0 +1,2 @@
+warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run
+2026-09-26T17:39:33.719232Z  WARN pactrail_engine::engine: tool call failed tool=edit_file error=invalid input for edit_file: unknown field `new_at`, expected one of `old`, `new`, `expected_replacements`

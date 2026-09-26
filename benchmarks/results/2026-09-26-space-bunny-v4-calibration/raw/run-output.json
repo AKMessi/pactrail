@@ -1,0 +1,80 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "41bc879d0cf3a3dbaf32a826265c3e1247be0d5854bfe2f026f13aa472936153",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"test\",\"-p\",\"regex-automata\",\"--lib\",\"onepass\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"cargo\",\"timeout_seconds\":1200}",
+        "run_id": "01a0decc-b20a-75a3-87af-2c34691b4fc3"
+      },
+      "created_at": "2026-09-26T17:39:39.142143857Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0decd-1c06-7880-be7d-73240279f520",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "5b48fc4c6061ff9f0468cd9f8a1dd254ad3a4491bbf46d309948629f1abdf26e",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"test\",\"-p\",\"regex-automata\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"cargo\",\"timeout_seconds\":2400}",
+        "run_id": "01a0decc-b20a-75a3-87af-2c34691b4fc3"
+      },
+      "created_at": "2026-09-26T17:40:25.32663071Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0decd-d06e-7360-a426-fee3feb35e0b",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "3273c9e58a34f8f2242f3dea0ff08c1656149b5a81e14d160b3e96aa9a621682",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"test\",\"--workspace\"],\"environment_names\":[],\"max_output_bytes\":12288,\"program\":\"cargo\",\"timeout_seconds\":600}",
+        "run_id": "01a0decc-b20a-75a3-87af-2c34691b4fc3"
+      },
+      "created_at": "2026-09-26T17:41:51.723621305Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0decf-21eb-7e23-ae9d-5cf9106be396",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "4b63a7860036f5f53630bfc31128487a110cc6d7a03b1ec27b97d7a1fe62381c",
+      "after_unix_mode": 33152,
+      "before_digest": "8ffabc597f069813fa4a4c6055a87cca575a646c1270799192bd31eb279408f5",
+      "before_unix_mode": 33204,
+      "bytes_added": 133587,
+      "bytes_removed": 133159,
+      "path": "regex-automata/src/dfa/onepass.rs"
+    }
+  ],
+  "cost_microusd": null,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-space-bunny-v4-calibration-work/20260926T173910Z-pactrail-stealth-space-bunny-alpha/regex-onepass-excess-capture-slots/workspace/.pactrail/runs/01a0decc-b20a-75a3-87af-2c34691b4fc3/receipt.json",
+  "risks": [
+    "Native verification processes are capability-gated but retain host filesystem and network authority; use the OCI-restricted backend for hostile repositories"
+  ],
+  "run_id": "01a0decc-b20a-75a3-87af-2c34691b4fc3",
+  "summary": "Fix applied and verified.\n\n**Change** (`regex-automata/src/dfa/onepass.rs`, match-finalization path in the one-pass DFA search): the code previously did `slots[explicit_slot_start..].copy_from_slice(cache.explicit_slots())`, which panics when the caller supplies more slots than the regex needs (cache slice shorter). Now it copies only the overlap (`min` of both lengths) and then applies epsilon slot transitions to the full caller slice, so regex-owned slots get captures, surplus slots are left as valid `Option<NonMaxUsize>` values, and shorter-than-needed slices behave exactly as before.\n\n**Verification** (tool results, exit 0):\n- `cargo test -p regex-automata --lib onepass`\n- `cargo test -p regex-automata` (full crate test suite)\n\nNo tests, docs, or manifests were modified.",
+  "tokens": 172108,
+  "trace": "/tmp/pactrail-space-bunny-v4-calibration-work/20260926T173910Z-pactrail-stealth-space-bunny-alpha/regex-onepass-excess-capture-slots/workspace/.pactrail/runs/01a0decc-b20a-75a3-87af-2c34691b4fc3/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "deterministic",
+    "inconclusive": 0,
+    "passed": 1,
+    "skipped": 0
+  }
+}
