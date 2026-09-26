@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, codex/pactrail-2-architecture]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
