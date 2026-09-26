@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "experiment": "pactrail-space-bunny-architecture-regression",
+  "preregistered_at": "2026-09-26T13:58:45.037474+00:00",
+  "status": "frozen_before_first_model_request",
+  "implementation": {
+    "pactrail_commit": "740bc8f",
+    "pactrail_version": "1.0.0",
+    "pactrail_executable_sha256": "80e0b140fd1d10dac0bf28b74a456ba55d53cc25efeba22732d9a11f4f46278a",
+    "opencode_version": "1.18.32",
+    "opencode_executable_sha256": "513f500a1a5ea1dc7d865547ac87b32a8936334e8d5abd5b3ff585c45a170080"
+  },
+  "files": {
+    "manifest_sha256": "bf273a3401418c26a214d9e0280939dcb3c08f50229a360d10753d1f8f22f152",
+    "runner_sha256": "21f83eb38fab98f8fca8ac5ffaa50c6a8075ac8a2733084e5bf6e0d899537c62",
+    "opencode_config_sha256": "a2161970026c5eac4948c183a92ef0abfac6611e47b35d4f4821e152d1774f90",
+    "grader_sha256": {
+      "http-header-map-reserve.rs": "02abf1afaa6499fdc79c6a317d18d9fd29d5a62e4adf771383fe9c69615d578b",
+      "regex-onepass-slots.rs": "14664adb0340b9f6c7139c17dd72541263757bca97c45a4320fba3b4c0f9f0d5",
+      "ripgrep-byte-stats.rs": "ca8cda7f04f629c051a21496b85b526b72155b7d63a5b1762a2276ad97be83ef"
+    },
+    "gold_validation_sha256": "68a2371dac0ec8260b1c724fa013f57597ae4e6bd4668ea100c82ed9721784a6"
+  },
+  "provider": {
+    "base_url": "https://openrouter.ai/api/v1",
+    "model": "stealth/space-bunny-alpha",
+    "api_key_env": "OPENROUTER_API_KEY",
+    "pricing_usd_per_million_tokens": {
+      "input": 0,
+      "cached_input": 0,
+      "output": 0
+    },
+    "price_source": "https://openrouter.ai/stealth/space-bunny-alpha",
+    "price_checked_at": "2026-09-26",
+    "supported_parameter_source": "https://openrouter.ai/api/v1/models"
+  },
+  "controls": {
+    "temperature": 0,
+    "thinking": "disabled",
+    "context_tokens": 16384,
+    "max_output_tokens": 2048,
+    "max_steps": 16,
+    "case_repetitions": 1,
+    "pass_at_k": 1,
+    "retries": 0,
+    "process_execution": "trusted native for both",
+    "network": "task workspaces offline with prefetched Cargo dependencies and no remote",
+    "max_estimated_spend_usd": 1,
+    "execution_order": [
+      "regex/Pactrail",
+      "regex/OpenCode",
+      "http/OpenCode",
+      "http/Pactrail",
+      "ripgrep/Pactrail",
+      "ripgrep/OpenCode"
+    ],
+    "stopping_rule": "Stop before a case if worst-case estimated spend plus spent exceeds the cap. Keep every incomplete or failed case."
+  },
+  "scoring": {
+    "functional": "hidden targeted test and broader regression test pass",
+    "task": "functional passes with no forbidden path changes",
+    "strict": "task passes without timeout or provider error and harness completes cleanly; Pactrail also requires ready-to-apply, source isolation, trace verification, and exact applied-candidate match"
+  },
+  "interpretation": {
+    "supported": "Whether this architecture branch fixes the previously measured no-edit failure on the known three-case regression under Space Bunny Alpha, and how it compares with OpenCode under that same model.",
+    "not_supported": "Broad coding-agent superiority or a held-out correctness claim; these tasks motivated the architecture."
+  }
+}

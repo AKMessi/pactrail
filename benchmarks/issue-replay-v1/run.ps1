@@ -5,8 +5,29 @@ param(
     [string]$Harness,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('deepseek-v4-flash', 'deepseek-v4-pro')]
+    [ValidateNotNullOrEmpty()]
     [string]$Model,
+
+    [ValidateNotNullOrEmpty()]
+    [string]$ApiBaseUrl = 'https://api.deepseek.com',
+
+    [ValidateNotNullOrEmpty()]
+    [string]$OpenCodeProvider = 'deepseek-direct',
+
+    [ValidateSet('disabled', 'enabled')]
+    [string]$ThinkingMode = 'disabled',
+
+    [ValidateRange(0, 1000)]
+    [decimal]$InputPriceUsdPerMillion = 0,
+
+    [ValidateRange(0, 1000)]
+    [decimal]$CachedPriceUsdPerMillion = 0,
+
+    [ValidateRange(0, 1000)]
+    [decimal]$OutputPriceUsdPerMillion = 0,
+
+    [ValidateRange(0, 1000)]
+    [decimal]$MaxEstimatedSpendUsd = 0,
 
     [ValidateNotNullOrEmpty()]
     [string]$Pactrail = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'target/release/pactrail.exe'),
@@ -49,6 +70,22 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if ($manifest.schema_version -ne 1) {
     throw "Unsupported issue-replay manifest version: $($manifest.schema_version)"
+}
+if ([string]$manifest.controls.thinking -ne $ThinkingMode) {
+    throw "Thinking mode must match the frozen manifest control: $($manifest.controls.thinking)"
+}
+$hasExplicitPrices = $PSBoundParameters.ContainsKey('InputPriceUsdPerMillion') -and
+    $PSBoundParameters.ContainsKey('CachedPriceUsdPerMillion') -and
+    $PSBoundParameters.ContainsKey('OutputPriceUsdPerMillion')
+$usesDeepSeekBalance = $ApiBaseUrl -eq 'https://api.deepseek.com' -and $MaxEstimatedSpendUsd -eq 0
+if (-not $usesDeepSeekBalance -and (-not $hasExplicitPrices -or $MaxEstimatedSpendUsd -le 0)) {
+    throw 'A non-DeepSeek endpoint requires all three explicit token prices and MaxEstimatedSpendUsd.'
+}
+if ($ApiBaseUrl -notmatch '^https://[^/]+(?:/.*)?$') {
+    throw 'ApiBaseUrl must be an HTTPS endpoint.'
+}
+if ($OpenCodeProvider -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$') {
+    throw 'OpenCodeProvider must be a bounded provider identifier.'
 }
 
 $cases = @($manifest.tasks)
@@ -612,10 +649,16 @@ function Get-OpenCodeMetrics {
 
 function Get-EstimatedCost {
     param([string]$ModelName, [long]$InputTokens, [long]$CachedTokens, [long]$OutputTokens)
-    if ($ModelName -eq 'deepseek-v4-flash') {
+    if ($hasExplicitPrices) {
+        $missRate = $InputPriceUsdPerMillion
+        $hitRate = $CachedPriceUsdPerMillion
+        $outputRate = $OutputPriceUsdPerMillion
+    } elseif ($ModelName -eq 'deepseek-v4-flash') {
         $missRate = 0.14; $hitRate = 0.0028; $outputRate = 0.28
-    } else {
+    } elseif ($ModelName -eq 'deepseek-v4-pro') {
         $missRate = 0.435; $hitRate = 0.003625; $outputRate = 0.87
+    } else {
+        throw "No frozen token prices for model $ModelName. Pass explicit token prices."
     }
     $miss = [Math]::Max(0L, $InputTokens - $CachedTokens)
     return [Math]::Round((($miss * $missRate) + ($CachedTokens * $hitRate) + ($OutputTokens * $outputRate)) / 1000000, 6)
@@ -641,15 +684,16 @@ function Invoke-PactrailRun {
     $command = Get-Command $Pactrail -ErrorAction Stop
     $arguments = @(
         'run', '--workspace', $Workspace,
-        '--provider', 'open-ai-compatible', '--base-url', 'https://api.deepseek.com',
+        '--provider', 'open-ai-compatible', '--base-url', $ApiBaseUrl,
         '--model', $Model, '--api-key-env', $ApiKeyEnv,
         '--context-tokens', ([string]$manifest.controls.context_tokens),
         '--max-output-tokens', ([string]$manifest.controls.max_output_tokens),
         '--max-turns', ([string]$manifest.controls.max_steps),
         '--request-timeout-seconds', ([string]$manifest.controls.maximum_case_seconds),
-        '--disable-thinking', '--allow-process', '--write-path', '.', '--output', 'json',
-        [string]$Case.prompt
+        '--allow-process', '--write-path', '.', '--output', 'json'
     )
+    if ($ThinkingMode -eq 'disabled') { $arguments += '--disable-thinking' }
+    $arguments += [string]$Case.prompt
     return Invoke-CapturedProcess -FileName $command.Source -Arguments $arguments -WorkingDirectory $Workspace -TimeoutSeconds ([int]$manifest.controls.maximum_case_seconds) `
         -StdoutPath (Join-Path $ArtifactDirectory 'run-output.json') -StderrPath (Join-Path $ArtifactDirectory 'run-stderr.txt') `
         -Environment @{ $ApiKeyEnv = $ApiKey }
@@ -659,7 +703,7 @@ function Invoke-OpenCodeRun {
     param($Case, [string]$Workspace, [string]$ArtifactDirectory, [string]$ApiKey, [string]$RuntimeRoot)
     $command = Get-Command $OpenCode -ErrorAction Stop
     $config = $openCodeConfigPath
-    $arguments = @('run', '--dir', $Workspace, '--model', "deepseek-direct/$Model", '--agent', 'build', '--format', 'json', [string]$Case.prompt)
+    $arguments = @('run', '--dir', $Workspace, '--model', "$OpenCodeProvider/$Model", '--agent', 'build', '--format', 'json', [string]$Case.prompt)
     $fileName = $command.Source
     if ($command.CommandType -eq 'ExternalScript') {
         $fileName = (Get-Process -Id $PID).Path
@@ -733,9 +777,21 @@ if ($ValidateGraders) {
 }
 
 $apiKey = Get-ApiKey
-$balanceBefore = Get-DeepSeekBalance -ApiKey $apiKey
-if ($balanceBefore -lt [decimal]$manifest.controls.minimum_balance_usd) {
-    throw "DeepSeek balance $balanceBefore is below the preregistered floor $($manifest.controls.minimum_balance_usd)."
+$balanceBefore = $null
+$worstCasePerCaseUsd = 0
+if ($usesDeepSeekBalance) {
+    $balanceBefore = Get-DeepSeekBalance -ApiKey $apiKey
+    if ($balanceBefore -lt [decimal]$manifest.controls.minimum_balance_usd) {
+        throw "DeepSeek balance $balanceBefore is below the preregistered floor $($manifest.controls.minimum_balance_usd)."
+    }
+} else {
+    $inputBound = [decimal]$manifest.controls.context_tokens * [decimal]$manifest.controls.max_steps
+    $outputBound = [decimal]$manifest.controls.max_output_tokens * [decimal]$manifest.controls.max_steps
+    $worstCasePerCaseUsd = (($inputBound * [Math]::Max($InputPriceUsdPerMillion, $CachedPriceUsdPerMillion)) +
+        ($outputBound * $OutputPriceUsdPerMillion)) / 1000000
+    if ($worstCasePerCaseUsd -gt $MaxEstimatedSpendUsd) {
+        throw 'A single worst-case trial exceeds MaxEstimatedSpendUsd.'
+    }
 }
 
 $runStamp = [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmssZ')
@@ -763,13 +819,26 @@ $protocol = [ordered]@{
     max_steps = [int]$manifest.controls.max_steps
     temperature = [double]$manifest.controls.temperature
     thinking = [string]$manifest.controls.thinking
+    api_base_url = $ApiBaseUrl
+    opencode_provider = $OpenCodeProvider
+    budget_mode = if ($usesDeepSeekBalance) { 'balance_floor' } else { 'estimated_spend_cap' }
+    max_estimated_spend_usd = $MaxEstimatedSpendUsd
+    worst_case_per_case_usd = $worstCasePerCaseUsd
+    input_price_usd_per_million = $InputPriceUsdPerMillion
+    cached_price_usd_per_million = $CachedPriceUsdPerMillion
+    output_price_usd_per_million = $OutputPriceUsdPerMillion
 }
 $results = New-Object System.Collections.ArrayList
+$estimatedSpendUsd = [decimal]0
 
 foreach ($case in $cases) {
-    $currentBalance = Get-DeepSeekBalance -ApiKey $apiKey
-    if ($currentBalance -lt [decimal]$manifest.controls.minimum_balance_usd) {
-        throw "Budget floor reached before $($case.id); refusing additional model calls."
+    if ($usesDeepSeekBalance) {
+        $currentBalance = Get-DeepSeekBalance -ApiKey $apiKey
+        if ($currentBalance -lt [decimal]$manifest.controls.minimum_balance_usd) {
+            throw "Budget floor reached before $($case.id); refusing additional model calls."
+        }
+    } elseif ($estimatedSpendUsd + $worstCasePerCaseUsd -gt $MaxEstimatedSpendUsd) {
+        throw "Estimated spend cap reached before $($case.id); refusing additional model calls."
     }
     Write-Host "[$Harness/$Model] $($case.id)"
     $caseRoot = Join-Path $matrixWorkspace ([string]$case.id)
@@ -852,6 +921,7 @@ foreach ($case in $cases) {
         $strictPassed = $strictPassed -and $outcome -eq 'ready_to_apply' -and $isolated -and $traceValid -and $appliedMatches
     }
     $cost = Get-EstimatedCost -ModelName $Model -InputTokens $inputTokens -CachedTokens $cachedTokens -OutputTokens $outputTokens
+    $estimatedSpendUsd += [decimal]$cost
     $record = [pscustomobject]@{
         schema_version = 1
         suite = [string]$manifest.suite
@@ -901,7 +971,7 @@ foreach ($case in $cases) {
     }
 }
 
-$balanceAfter = Get-DeepSeekBalance -ApiKey $apiKey
+$balanceAfter = if ($usesDeepSeekBalance) { Get-DeepSeekBalance -ApiKey $apiKey } else { $null }
 $durations = @($results | ForEach-Object { [long]$_.duration_ms } | Sort-Object)
 $median = if ($durations.Count % 2 -eq 0) {
     [long](($durations[$durations.Count / 2 - 1] + $durations[$durations.Count / 2]) / 2)
@@ -926,8 +996,8 @@ $summary = [pscustomobject]@{
     total_output_tokens = [long](($results | Measure-Object -Property output_tokens -Sum).Sum)
     total_tokens = [long](($results | Measure-Object -Property total_tokens -Sum).Sum)
     estimated_cost_usd = [Math]::Round([double](($results | Measure-Object -Property estimated_cost_usd -Sum).Sum), 6)
-    balance_before_usd = $balanceBefore.ToString('0.00')
-    balance_after_usd = $balanceAfter.ToString('0.00')
+    balance_before_usd = if ($null -ne $balanceBefore) { $balanceBefore.ToString('0.00') } else { $null }
+    balance_after_usd = if ($null -ne $balanceAfter) { $balanceAfter.ToString('0.00') } else { $null }
     protocol = $protocol
     results = @($results)
 }

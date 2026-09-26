@@ -1,0 +1,46 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "share": "disabled",
+  "model": "openrouter-direct/stealth/space-bunny-alpha",
+  "small_model": "openrouter-direct/stealth/space-bunny-alpha",
+  "provider": {
+    "openrouter-direct": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenRouter direct API",
+      "options": {
+        "apiKey": "{env:OPENROUTER_API_KEY}",
+        "baseURL": "https://openrouter.ai/api/v1",
+        "timeout": 720000
+      },
+      "models": {
+        "stealth/space-bunny-alpha": {
+          "name": "Space Bunny Alpha",
+          "reasoning": false,
+          "temperature": true,
+          "tool_call": true,
+          "limit": {
+            "context": 16384,
+            "output": 2048
+          }
+        }
+      }
+    }
+  },
+  "agent": {
+    "build": {
+      "temperature": 0,
+      "steps": 16,
+      "permission": {
+        "*": "deny",
+        "bash": "allow",
+        "edit": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "read": "allow",
+        "todowrite": "allow"
+      }
+    }
+  }
+}
