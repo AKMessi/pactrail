@@ -109,6 +109,21 @@ impl OpenAiCompatibleDriver {
                 "provider timeout must be greater than zero".to_owned(),
             ));
         }
+        if config.disable_thinking && config.reasoning_effort.is_some() {
+            return Err(ModelError::InvalidRequest(
+                "thinking disable and reasoning effort cannot be combined".to_owned(),
+            ));
+        }
+        if config.reasoning_effort.as_deref().is_some_and(|effort| {
+            !matches!(
+                effort,
+                "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max"
+            )
+        }) {
+            return Err(ModelError::InvalidRequest(
+                "unsupported reasoning effort".to_owned(),
+            ));
+        }
         let client = reqwest::Client::builder()
             .timeout(config.timeout)
             .redirect(reqwest::redirect::Policy::none())
@@ -1200,6 +1215,24 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
         assert_eq!(body["reasoning"]["effort"], "low");
         assert!(body.get("thinking").is_none());
+    }
+
+    #[test]
+    fn reasoning_controls_reject_conflicting_and_unknown_values() {
+        let mut conflicting = config("https://api.example.com/v1");
+        conflicting.disable_thinking = true;
+        conflicting.reasoning_effort = Some("low".to_owned());
+        assert!(matches!(
+            OpenAiCompatibleDriver::new(conflicting),
+            Err(ModelError::InvalidRequest(_))
+        ));
+
+        let mut config = config("https://api.example.com/v1");
+        config.reasoning_effort = Some("unknown".to_owned());
+        assert!(matches!(
+            OpenAiCompatibleDriver::new(config),
+            Err(ModelError::InvalidRequest(_))
+        ));
     }
 
     #[test]
