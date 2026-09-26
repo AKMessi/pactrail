@@ -1,0 +1,2445 @@
+[
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 0,
+    "timestamp": "2026-09-26T17:22:12.286028441Z",
+    "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "event": {
+      "type": "contract_registered",
+      "data": {
+        "schema_version": 1,
+        "goal": "Fix hyperium/http issue #741 in HeaderMap::reserve. Reserving space for a requested number of entries can allocate insufficient usable capacity because the requested entry capacity is treated as raw hash-table capacity. After reserve(n), inserting n entries into an empty map must not trigger another allocation, while overflow and existing-map behavior remain correct. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.",
+        "workspace_root": "/tmp/pactrail-space-bunny-scored-v3-work/20260926T172211Z-pactrail-stealth-space-bunny-alpha/http-header-map-reserve-capacity/workspace",
+        "allowed_write_paths": [
+          "."
+        ],
+        "out_of_scope": [],
+        "obligations": [
+          {
+            "id": "01a0debd-22a5-7cc0-bc3a-b6a5cbe1d004",
+            "description": "Fix hyperium/http issue #741 in HeaderMap::reserve. Reserving space for a requested number of entries can allocate insufficient usable capacity because the requested entry capacity is treated as raw hash-table capacity. After reserve(n), inserting n entries into an empty map must not trigger another allocation, while overflow and existing-map behavior remain correct. Work offline, do not inspect git history or any remote, do not modify tests, documentation, changelogs, or manifests, and make a focused production-quality fix. Run relevant tests before finishing.",
+            "kind": "functional",
+            "required": true
+          }
+        ],
+        "budget": {
+          "wall_time_seconds": 3600,
+          "model_tokens": 294912,
+          "cost_microusd": 0,
+          "max_concurrency": 4,
+          "max_model_attempts": 16
+        },
+        "permissions": {
+          "allow": [
+            "file_read",
+            "file_write",
+            "memory_read",
+            "network",
+            "secret_use",
+            "external_write"
+          ],
+          "ask": [
+            "process_spawn"
+          ],
+          "deny": [
+            "mcp_invoke"
+          ]
+        },
+        "provider": null,
+        "model": null
+      }
+    },
+    "hash": "a3b02980755e28f475593322a77430714dd9fe9937da2d256314ab0e675c218b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 1,
+    "timestamp": "2026-09-26T17:22:12.286106595Z",
+    "previous_hash": "a3b02980755e28f475593322a77430714dd9fe9937da2d256314ab0e675c218b",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "created",
+        "to": "contracting"
+      }
+    },
+    "hash": "e6b584dae06b4f513c8c1530fe9d655592c5565d532d711dea7ad98093c7222c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 2,
+    "timestamp": "2026-09-26T17:22:12.286154298Z",
+    "previous_hash": "e6b584dae06b4f513c8c1530fe9d655592c5565d532d711dea7ad98093c7222c",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "contracting",
+        "to": "investigating"
+      }
+    },
+    "hash": "f9ecd4e72b241fcfe802914762ac79c4597c30cae4fea48309bfe034cf69ee50"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 3,
+    "timestamp": "2026-09-26T17:22:12.436952878Z",
+    "previous_hash": "f9ecd4e72b241fcfe802914762ac79c4597c30cae4fea48309bfe034cf69ee50",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compile_repository_context",
+        "summary": "indexed 46 files and cited 16 within a 10739-byte context pack",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 150,
+        "attributes": {
+          "budget_bytes": "10752",
+          "bytes_hashed": "562099",
+          "cache_eligible_files": "46",
+          "cache_hits": "0",
+          "cache_misses": "46",
+          "cache_rejected": "0",
+          "citation_coverage_bps": "5333",
+          "cited_files": "16",
+          "graph_symbols": "8",
+          "impact_files": "16",
+          "instructions": "0",
+          "lexical_files": "12",
+          "memory_fragments": "0",
+          "rendered_bytes": "10739",
+          "retrieved_files": "30",
+          "syntax_error_files": "0",
+          "tree_sitter_files": "34",
+          "truncated": "true",
+          "unscanned_files": "0"
+        }
+      }
+    },
+    "hash": "b6805f40ab8770c182d32ac49d6f81394e5019c0faafa769e62ae3d7287f8a80"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 4,
+    "timestamp": "2026-09-26T17:22:12.43705415Z",
+    "previous_hash": "b6805f40ab8770c182d32ac49d6f81394e5019c0faafa769e62ae3d7287f8a80",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "context:1b9a51491215acc27286ba30d2daaf3dfb0ceccae7ad306b121cabe732fafdb4"
+      }
+    },
+    "hash": "d9b1d9047d49ffa9c51ae890a3f21b81041b5c998d06a7974f2d16fdaf6c6d12"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 5,
+    "timestamp": "2026-09-26T17:22:12.437101922Z",
+    "previous_hash": "d9b1d9047d49ffa9c51ae890a3f21b81041b5c998d06a7974f2d16fdaf6c6d12",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "investigating",
+        "to": "planning"
+      }
+    },
+    "hash": "2dd57cc3dee77bacc35507de52da100438b1484d657a6769923e6813740a5edf"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 6,
+    "timestamp": "2026-09-26T17:22:12.437170508Z",
+    "previous_hash": "2dd57cc3dee77bacc35507de52da100438b1484d657a6769923e6813740a5edf",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "planning",
+        "to": "executing"
+      }
+    },
+    "hash": "faa8fcfefaa6ecd26324a9350fe98aa0837f2401d7ae097b0b2b73eed93c05bd"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 7,
+    "timestamp": "2026-09-26T17:22:12.439149646Z",
+    "previous_hash": "faa8fcfefaa6ecd26324a9350fe98aa0837f2401d7ae097b0b2b73eed93c05bd",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "select_runtime_profile",
+        "summary": "selected compact runtime profile from effective model capabilities",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "capability_source": "user_declared",
+          "discovery_turn_cap": "2",
+          "input_tokens": "14336",
+          "max_tool_calls_per_turn": "4",
+          "parallel_read_width": "1",
+          "profile": "compact",
+          "turn_output_tokens": "2048"
+        }
+      }
+    },
+    "hash": "60075e012c05cc2e3131cf14d7e0a10bc39a19912d6a969d2bf9a06e67d1ee9f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 8,
+    "timestamp": "2026-09-26T17:22:12.441155672Z",
+    "previous_hash": "60075e012c05cc2e3131cf14d7e0a10bc39a19912d6a969d2bf9a06e67d1ee9f",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:f5dd236918559d5eadf74cb389e979a9050797007509d767b694ac86ec0bdf33"
+      }
+    },
+    "hash": "75af5a702d8b18830ef7b4ea57405e04c1175816849a95cec1b1d12a2be219bc"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 9,
+    "timestamp": "2026-09-26T17:22:12.442457334Z",
+    "previous_hash": "75af5a702d8b18830ef7b4ea57405e04c1175816849a95cec1b1d12a2be219bc",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "enter_phase",
+        "summary": "entered investigating phase with 18 tool(s) available",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase": "investigating",
+          "phase_limit": "2",
+          "phase_turn": "1",
+          "reason": "bounded discovery turn; 14 implementation/verification turn(s) reserved",
+          "tools_available": "18",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "85fdb8a3115a9fc63611c20951b189eeeb582b20bf6d59021d2189f59ea31910"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 10,
+    "timestamp": "2026-09-26T17:22:12.442520612Z",
+    "previous_hash": "85fdb8a3115a9fc63611c20951b189eeeb582b20bf6d59021d2189f59ea31910",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "controller announced investigating phase with a stable tool catalog"
+      }
+    },
+    "hash": "04e3ee485de97fb16f5b5d029a38e4dd85602d9e63209d72a38e5205b0c6afac"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 11,
+    "timestamp": "2026-09-26T17:22:12.444206479Z",
+    "previous_hash": "04e3ee485de97fb16f5b5d029a38e4dd85602d9e63209d72a38e5205b0c6afac",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:7742f969e5e47a1b3ca54feb8f4fc6fb3cf7cb4f65318bdd7e814bf0def76c2d"
+      }
+    },
+    "hash": "860cdd6b3a527a6896e1936414647a9364b846963bc2aedd4c5eecb3c50374ef"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 12,
+    "timestamp": "2026-09-26T17:22:15.194068354Z",
+    "previous_hash": "860cdd6b3a527a6896e1936414647a9364b846963bc2aedd4c5eecb3c50374ef",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 1 produced 2 tool call(s) and 114 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2749,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "193",
+          "cached_input_tokens": "141",
+          "finish_reason": "toolcalls",
+          "input_tokens": "7273",
+          "normalized_context_bytes": "29238",
+          "normalized_context_digest": "7a2c458f7c960538bef1f44fbce0c50131fe352b8e157c09667d968481ea4ca8",
+          "output_tokens": "125",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "2056",
+          "stream_mode": "streaming",
+          "text_bytes": "114",
+          "tool_calls": "2",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "727fcc14dc1952e7bdeecaf11008c39fb1ca0a8f149d6a6f2b56f206a9c064e8"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 13,
+    "timestamp": "2026-09-26T17:22:15.19818168Z",
+    "previous_hash": "727fcc14dc1952e7bdeecaf11008c39fb1ca0a8f149d6a6f2b56f206a9c064e8",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:0f73f04e9305a74d11b9da9e4152c0e9f7d276a6231cca8e48283e8091089cc9"
+      }
+    },
+    "hash": "52dbc081cd4cbfac82e6c8c407374f75000673b4a19892468bb7fe2848dae846"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 14,
+    "timestamp": "2026-09-26T17:22:15.201612851Z",
+    "previous_hash": "52dbc081cd4cbfac82e6c8c407374f75000673b4a19892468bb7fe2848dae846",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "cfdd4fb0-e6fa-4b2a-a29b-3dcaf200ec34",
+        "tool": "read_file",
+        "arguments_digest": "910a54c5f48c2806aee2a185fe5de007f256446ca57b6ad6b8344e05ec815372",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "94d8c205ad33266a84550e52edfdb446ca651d49ce5f5d6a53d9edae53d3466c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 15,
+    "timestamp": "2026-09-26T17:22:15.211982422Z",
+    "previous_hash": "94d8c205ad33266a84550e52edfdb446ca651d49ce5f5d6a53d9edae53d3466c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 161 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "910a54c5f48c2806aee2a185fe5de007f256446ca57b6ad6b8344e05ec815372",
+          "call_id": "cfdd4fb0-e6fa-4b2a-a29b-3dcaf200ec34",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "5546",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "9dfeb6fec18d83d4251c9a4e95f87c204afc077400f3a9fb3a297faca57a45b1"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 16,
+    "timestamp": "2026-09-26T17:22:15.212171207Z",
+    "previous_hash": "9dfeb6fec18d83d4251c9a4e95f87c204afc077400f3a9fb3a297faca57a45b1",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "cfdd4fb0-e6fa-4b2a-a29b-3dcaf200ec34",
+        "result_digest": "9b0e0dae8d683b14616e978a264c245e7c861fa65ff5fa93d625f5fbbf119787",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "6591fe5a98f1cf4f19aebdbc70a41520dbb37a65f97a4ef7e18a6a159679bdaf"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 17,
+    "timestamp": "2026-09-26T17:22:15.215216216Z",
+    "previous_hash": "6591fe5a98f1cf4f19aebdbc70a41520dbb37a65f97a4ef7e18a6a159679bdaf",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "3c7d34ba-f9d3-4aed-92f6-e8e67b9a11e5",
+        "tool": "search_code_graph",
+        "arguments_digest": "410adabf077c88d74de9b4d28f74f398857f254881d275d3f5b670291229b7f1",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "23af701c72354ea9ea9994da4c7828b31b3ebcc92ddcef7e850b0ca05644548e"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 18,
+    "timestamp": "2026-09-26T17:22:15.350938095Z",
+    "previous_hash": "23af701c72354ea9ea9994da4c7828b31b3ebcc92ddcef7e850b0ca05644548e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search_code_graph",
+        "action": "search_code_graph",
+        "summary": "found 5 definition(s) and 8 bounded reference location(s)",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "repository.graph.search"
+        ],
+        "succeeded": true,
+        "duration_ms": 134,
+        "attributes": {
+          "arguments_digest": "410adabf077c88d74de9b4d28f74f398857f254881d275d3f5b670291229b7f1",
+          "call_id": "3c7d34ba-f9d3-4aed-92f6-e8e67b9a11e5",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1732",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "8bccbac689645c841b59603c6581ecf8cc6a700cfc8ac52b6cf0be6a9a3916f9"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 19,
+    "timestamp": "2026-09-26T17:22:15.35106486Z",
+    "previous_hash": "8bccbac689645c841b59603c6581ecf8cc6a700cfc8ac52b6cf0be6a9a3916f9",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "3c7d34ba-f9d3-4aed-92f6-e8e67b9a11e5",
+        "result_digest": "2d31512646b4701ec452557f4ac2a4054faddaebeaf16c91a9b8db89fc25f0c9",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "19547c47b48ef8f312b843acaf860b193464f74c0ed04710bfd883d0d9e9c3f7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 20,
+    "timestamp": "2026-09-26T17:22:15.351196374Z",
+    "previous_hash": "19547c47b48ef8f312b843acaf860b193464f74c0ed04710bfd883d0d9e9c3f7",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "1"
+        }
+      }
+    },
+    "hash": "b4145c9e9ff3941ad6db3eac3c575dbb07d58d3c4a670241d68dc549b09b162c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 21,
+    "timestamp": "2026-09-26T17:22:15.353585279Z",
+    "previous_hash": "b4145c9e9ff3941ad6db3eac3c575dbb07d58d3c4a670241d68dc549b09b162c",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:c31b1d3c7ff873d05147cec8dad65e028edc3154476220b6782d252d116de413"
+      }
+    },
+    "hash": "c715a4d1960f649ea420da49b52195dc4aae5dcf61db58b9e3a998bb25fe6c6d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 22,
+    "timestamp": "2026-09-26T17:22:15.357218366Z",
+    "previous_hash": "c715a4d1960f649ea420da49b52195dc4aae5dcf61db58b9e3a998bb25fe6c6d",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:d4bf355e978929222061bcd5875d50c11edff34e7f9c36169c80966be6dc4d3c"
+      }
+    },
+    "hash": "f3f6029378ab015347ec51e636b9cfcd58b2bc8f2c2767a7ba363788a6f2c650"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 23,
+    "timestamp": "2026-09-26T17:22:17.50922541Z",
+    "previous_hash": "f3f6029378ab015347ec51e636b9cfcd58b2bc8f2c2767a7ba363788a6f2c650",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 2 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2151,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "7942",
+          "cached_input_tokens": "7396",
+          "finish_reason": "toolcalls",
+          "input_tokens": "9312",
+          "normalized_context_bytes": "37277",
+          "normalized_context_digest": "9e961f833c444798148706610339ca626d9638627b30895339995871187bfbc1",
+          "output_tokens": "112",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1781",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "4b0aba6668172a02e1f65d441c21c8a3126ec28651a02a49a18be82f1185f49b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 24,
+    "timestamp": "2026-09-26T17:22:17.511974844Z",
+    "previous_hash": "4b0aba6668172a02e1f65d441c21c8a3126ec28651a02a49a18be82f1185f49b",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:148aa8795ac2183c3acd5b4057763591a66028d0260b96ac28ee7ef70df4d91f"
+      }
+    },
+    "hash": "ce05eac3d2714e91d19a55d06a2ae2149f92b323df17a1809558cfd80ba348d8"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 25,
+    "timestamp": "2026-09-26T17:22:17.513447551Z",
+    "previous_hash": "ce05eac3d2714e91d19a55d06a2ae2149f92b323df17a1809558cfd80ba348d8",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "3fe58c07-e27b-4ba7-925c-af1192ead56b",
+        "tool": "read_file",
+        "arguments_digest": "d3cc06be3c337c2822c3ec04789199dba3201e450d3cf2ac3b4f20aba53aedd7",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "9cba01d3bbcb5a7cf475a98888d80c35d10edbec4b85d581f8e88a0355cd596e"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 26,
+    "timestamp": "2026-09-26T17:22:17.517737929Z",
+    "previous_hash": "9cba01d3bbcb5a7cf475a98888d80c35d10edbec4b85d581f8e88a0355cd596e",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 101 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 2,
+        "attributes": {
+          "arguments_digest": "d3cc06be3c337c2822c3ec04789199dba3201e450d3cf2ac3b4f20aba53aedd7",
+          "call_id": "3fe58c07-e27b-4ba7-925c-af1192ead56b",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "3661",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "66122eec5f01f5dff2ccf1be03c98a1fa2537d7ea3f0ffface997474d3d425f8"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 27,
+    "timestamp": "2026-09-26T17:22:17.517842065Z",
+    "previous_hash": "66122eec5f01f5dff2ccf1be03c98a1fa2537d7ea3f0ffface997474d3d425f8",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "3fe58c07-e27b-4ba7-925c-af1192ead56b",
+        "result_digest": "a91873b835aa33a07738a73596a01aa24e3b914f2247285a5b851101d0e388aa",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "6ff3f70ba29d66b7da9a675476162244116bc3172f45d972f50f6a8aef995711"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 28,
+    "timestamp": "2026-09-26T17:22:17.519499925Z",
+    "previous_hash": "6ff3f70ba29d66b7da9a675476162244116bc3172f45d972f50f6a8aef995711",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "d4e503fa-b59e-4b19-b86d-512cfd3598da",
+        "tool": "read_file",
+        "arguments_digest": "c9d880afbe032947e23314d59436f82d0ac5432e8f3c55924de558c4675a491f",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "56ea12549a6d7f193064899419f3f2ce6e44594b881a5dff5f47f33b63b07e9f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 29,
+    "timestamp": "2026-09-26T17:22:17.524099637Z",
+    "previous_hash": "56ea12549a6d7f193064899419f3f2ce6e44594b881a5dff5f47f33b63b07e9f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 80 lines from tests/header_map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:tests/header_map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 3,
+        "attributes": {
+          "arguments_digest": "c9d880afbe032947e23314d59436f82d0ac5432e8f3c55924de558c4675a491f",
+          "call_id": "d4e503fa-b59e-4b19-b86d-512cfd3598da",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "2107",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "2a7251afa6185e5e689155ad53301d976a2c368999ab5103f805baf13d1d3db0"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 30,
+    "timestamp": "2026-09-26T17:22:17.524196159Z",
+    "previous_hash": "2a7251afa6185e5e689155ad53301d976a2c368999ab5103f805baf13d1d3db0",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "d4e503fa-b59e-4b19-b86d-512cfd3598da",
+        "result_digest": "de85fcf48583bcbc9bd56d34f3e9f834c4289d18781c94162edb2288f90a03a1",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "638bb60fc44800c7e3fb008e1ed80c0eb2a0c6fb8c332760c9943ac82a49449d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 31,
+    "timestamp": "2026-09-26T17:22:17.524308816Z",
+    "previous_hash": "638bb60fc44800c7e3fb008e1ed80c0eb2a0c6fb8c332760c9943ac82a49449d",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "2"
+        }
+      }
+    },
+    "hash": "374b66c86f28da97da6da659205086c48fb72b77fc7b72b90e9aa0ada45ad7e2"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 32,
+    "timestamp": "2026-09-26T17:22:17.526250448Z",
+    "previous_hash": "374b66c86f28da97da6da659205086c48fb72b77fc7b72b90e9aa0ada45ad7e2",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:c7df2f2995b24d3391c3ce27b11a1946d6592b44d866f68aaf1be338d0ccfef1"
+      }
+    },
+    "hash": "337bcb6623cc7c9873f81c43cbcec6949dba8a05831455bade63b0d41652b45f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 33,
+    "timestamp": "2026-09-26T17:22:17.527855367Z",
+    "previous_hash": "337bcb6623cc7c9873f81c43cbcec6949dba8a05831455bade63b0d41652b45f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "enter_phase",
+        "summary": "entered implementing phase with 18 tool(s) available",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase": "implementing",
+          "phase_limit": "14",
+          "phase_turn": "1",
+          "reason": "discovery allowance reached; focus on implementation and targeted evidence",
+          "tools_available": "18",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "3336d03609ae0f74f846f5e49197e6658d95221a8d8d8a964854cd8a1c2d543a"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 34,
+    "timestamp": "2026-09-26T17:22:17.52792535Z",
+    "previous_hash": "3336d03609ae0f74f846f5e49197e6658d95221a8d8d8a964854cd8a1c2d543a",
+    "event": {
+      "type": "note_recorded",
+      "data": {
+        "message": "controller announced implementing phase with a stable tool catalog"
+      }
+    },
+    "hash": "549b4d59c5828ebb66be0d243a68a2529c320c92ab59bf71f5b841dafd2b0dc9"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 35,
+    "timestamp": "2026-09-26T17:22:17.529883604Z",
+    "previous_hash": "549b4d59c5828ebb66be0d243a68a2529c320c92ab59bf71f5b841dafd2b0dc9",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:59fa3b99e5c1e4ef379e839a0f101ae14be14931ed885bec24f7d980a728d2f7"
+      }
+    },
+    "hash": "2f366a894522a59c5f5711d57b6ab43a22ef0699d66f4c1fc80e869ccde7d078"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 36,
+    "timestamp": "2026-09-26T17:22:24.444738102Z",
+    "previous_hash": "2f366a894522a59c5f5711d57b6ab43a22ef0699d66f4c1fc80e869ccde7d078",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 3 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 6914,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "8383",
+          "cached_input_tokens": "9310",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11105",
+          "normalized_context_bytes": "44086",
+          "normalized_context_digest": "9efc3ead044694a90681d37e3676674f70f2a626fb9a45f256156e6cea6e5525",
+          "output_tokens": "615",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "2629",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "f472fda4695e582547188bec7f565acbac27b269d21e180426a7b0e33c8c07e3"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 37,
+    "timestamp": "2026-09-26T17:22:24.449591483Z",
+    "previous_hash": "f472fda4695e582547188bec7f565acbac27b269d21e180426a7b0e33c8c07e3",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:5731b6f061e77d134e0fc2f70d7786f702bd3fe2c7d4361a28c85ee2f680d0e9"
+      }
+    },
+    "hash": "fafcddbe0caa363950abbc8684c378a2b874c3ee5e0c31fc6c93794fc3b83cc0"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 38,
+    "timestamp": "2026-09-26T17:22:24.453444714Z",
+    "previous_hash": "fafcddbe0caa363950abbc8684c378a2b874c3ee5e0c31fc6c93794fc3b83cc0",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "1ab962ce-832c-4f55-b227-74ffe51b8c03",
+        "tool": "search",
+        "arguments_digest": "21550ef226f72921a5a9592586a0a33ef0e008b9ffa425211b929cfddc3d67c4",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "383823aa2bedf967f53dae480b9511cdb738ae096b98c1cc531abef17bc325de"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 39,
+    "timestamp": "2026-09-26T17:22:24.464983804Z",
+    "previous_hash": "383823aa2bedf967f53dae480b9511cdb738ae096b98c1cc531abef17bc325de",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 5 matches for \"usable_capacity\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 8,
+        "attributes": {
+          "arguments_digest": "21550ef226f72921a5a9592586a0a33ef0e008b9ffa425211b929cfddc3d67c4",
+          "call_id": "1ab962ce-832c-4f55-b227-74ffe51b8c03",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "559",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "4eb4ca2c5c1bffaebd0a578e613efd10aed1007912ea7fa986d9cc3d548b5f51"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 40,
+    "timestamp": "2026-09-26T17:22:24.465191028Z",
+    "previous_hash": "4eb4ca2c5c1bffaebd0a578e613efd10aed1007912ea7fa986d9cc3d548b5f51",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "1ab962ce-832c-4f55-b227-74ffe51b8c03",
+        "result_digest": "a0fb08815407e92de19e6decad7694c44b527bfcaebe0e573594be053af5fb54",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "52041da271b761efbbda59394caea7e295438b9d825bc396f462e4413625f49f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 41,
+    "timestamp": "2026-09-26T17:22:24.468604179Z",
+    "previous_hash": "52041da271b761efbbda59394caea7e295438b9d825bc396f462e4413625f49f",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "c4b8b4c3-ab55-4f98-a66e-aabfead21892",
+        "tool": "search",
+        "arguments_digest": "cf97a3c44ad429d5868a00d2d4416da5423720baa41efb0f005b227ce629c814",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "e2376ce62af56646c81c5f0c59e3b06154bfa128025df42a69604e56ff34e322"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 42,
+    "timestamp": "2026-09-26T17:22:24.480199213Z",
+    "previous_hash": "e2376ce62af56646c81c5f0c59e3b06154bfa128025df42a69604e56ff34e322",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:search",
+        "action": "search",
+        "summary": "found 2 matches for \"to_raw_capacity\"",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.search:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 8,
+        "attributes": {
+          "arguments_digest": "cf97a3c44ad429d5868a00d2d4416da5423720baa41efb0f005b227ce629c814",
+          "call_id": "c4b8b4c3-ab55-4f98-a66e-aabfead21892",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "228",
+          "output_truncated": "false",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "00765ff8a3ed15dfd78280db9209bb4a60a3feda829cd8acb0e7629c6c49033b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 43,
+    "timestamp": "2026-09-26T17:22:24.480431999Z",
+    "previous_hash": "00765ff8a3ed15dfd78280db9209bb4a60a3feda829cd8acb0e7629c6c49033b",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "c4b8b4c3-ab55-4f98-a66e-aabfead21892",
+        "result_digest": "ba3799204112d1c60bf2d228d311155785dd2c288e66acd91caf567548c7a115",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "75e01e3ad9fef3f9eceffc9460d8db8c6764937012dd9ce0cbe23c6c51160927"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 44,
+    "timestamp": "2026-09-26T17:22:24.480604721Z",
+    "previous_hash": "75e01e3ad9fef3f9eceffc9460d8db8c6764937012dd9ce0cbe23c6c51160927",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "3"
+        }
+      }
+    },
+    "hash": "47495991cdfdd97492ce763c7659a43e2722958d220089a34570f42e8c2b7e73"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 45,
+    "timestamp": "2026-09-26T17:22:24.483153427Z",
+    "previous_hash": "47495991cdfdd97492ce763c7659a43e2722958d220089a34570f42e8c2b7e73",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:82d16fb4ce6cdc71c3afef2642df6453fda98998f2bec4714db541ae9a502395"
+      }
+    },
+    "hash": "581b2d6f416651fae162c494949a2f79080c8b42e0bb881938e20c911189ad70"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 46,
+    "timestamp": "2026-09-26T17:22:24.486788399Z",
+    "previous_hash": "581b2d6f416651fae162c494949a2f79080c8b42e0bb881938e20c911189ad70",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:5393e60edbc1722431e9eb32ba028c407de1fb6852fa99a2ea94a7d7fc3788cc"
+      }
+    },
+    "hash": "5fde87cee0742f2a71d6a832afecab7fe3418e1425cd396840104435e491f24b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 47,
+    "timestamp": "2026-09-26T17:22:26.18878861Z",
+    "previous_hash": "5fde87cee0742f2a71d6a832afecab7fe3418e1425cd396840104435e491f24b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 4 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1701,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9732",
+          "cached_input_tokens": "11103",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11408",
+          "normalized_context_bytes": "45474",
+          "normalized_context_digest": "c10b8f71b71a358345c3bda4ba0bb01255175f8f9ce6afa67960db75eec0166e",
+          "output_tokens": "104",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1166",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "9b07e8220c30fe2d7a349dd3dd0b2adc195bd6a3a642ba92678dc9206f7d2c3f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 48,
+    "timestamp": "2026-09-26T17:22:26.193455091Z",
+    "previous_hash": "9b07e8220c30fe2d7a349dd3dd0b2adc195bd6a3a642ba92678dc9206f7d2c3f",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:b61663d1a8f62b521910e6147d78ea7ce4815115b6d1a24bd5d4b5e823ff4c0f"
+      }
+    },
+    "hash": "25a09e528d8be9e0a217be80bf47dc4001034898dbf2278963340546f5a439bc"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 49,
+    "timestamp": "2026-09-26T17:22:26.196939203Z",
+    "previous_hash": "25a09e528d8be9e0a217be80bf47dc4001034898dbf2278963340546f5a439bc",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "fe7804ac-50d5-4850-85dc-d141334fe135",
+        "tool": "read_file",
+        "arguments_digest": "e91ceacdd73c19291ea693c45dd7d441094046eb435f473b16e97e24e69e8cb9",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "4488c30d129abd57813c32bb4f0ae3fa2c09f720c580d284c0ddbe40c124ea4c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 50,
+    "timestamp": "2026-09-26T17:22:26.207779026Z",
+    "previous_hash": "4488c30d129abd57813c32bb4f0ae3fa2c09f720c580d284c0ddbe40c124ea4c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 31 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "e91ceacdd73c19291ea693c45dd7d441094046eb435f473b16e97e24e69e8cb9",
+          "call_id": "fe7804ac-50d5-4850-85dc-d141334fe135",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "841",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "0aee51970ecfb3271ee6ee50c0db0233eb1abc87a4aabf3d9474a248979b5646"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 51,
+    "timestamp": "2026-09-26T17:22:26.207979265Z",
+    "previous_hash": "0aee51970ecfb3271ee6ee50c0db0233eb1abc87a4aabf3d9474a248979b5646",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "fe7804ac-50d5-4850-85dc-d141334fe135",
+        "result_digest": "a35765726776232e5bde303e0a2425e764cf60b56e9c574320e3102dfc0dea87",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "6bb86539e2051acbe67dbcb3731e98ae9f24e8a03c329a68248bfda51088f82a"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 52,
+    "timestamp": "2026-09-26T17:22:26.211371114Z",
+    "previous_hash": "6bb86539e2051acbe67dbcb3731e98ae9f24e8a03c329a68248bfda51088f82a",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "765c8de4-df48-4103-b290-15de81fa4c29",
+        "tool": "read_file",
+        "arguments_digest": "49741d0e04956e94eced381aa4a35d5e097ea0dd8debc6a94de195e39a5b7ee2",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "71a8730dcab9ad40ebb6a3a2031397b11d438a8fe22ebb3453d15c08da5c99a2"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 53,
+    "timestamp": "2026-09-26T17:22:26.222111621Z",
+    "previous_hash": "71a8730dcab9ad40ebb6a3a2031397b11d438a8fe22ebb3453d15c08da5c99a2",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 111 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "49741d0e04956e94eced381aa4a35d5e097ea0dd8debc6a94de195e39a5b7ee2",
+          "call_id": "765c8de4-df48-4103-b290-15de81fa4c29",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "3499",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "2450365194402521470f7da1b95df6ea59537ca2bb44f3230033e85412e1c425"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 54,
+    "timestamp": "2026-09-26T17:22:26.222359493Z",
+    "previous_hash": "2450365194402521470f7da1b95df6ea59537ca2bb44f3230033e85412e1c425",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "765c8de4-df48-4103-b290-15de81fa4c29",
+        "result_digest": "bebd98a80d503abe3853a922cd7473f2d1b21fd8c4bc6ff44d895278d498b704",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "ea7e018cfbf700c83ec323e4a474eb06d54b477d619dc781323216306eb31ac4"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 55,
+    "timestamp": "2026-09-26T17:22:26.222582362Z",
+    "previous_hash": "ea7e018cfbf700c83ec323e4a474eb06d54b477d619dc781323216306eb31ac4",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "4"
+        }
+      }
+    },
+    "hash": "b8a0f3213d9241cf0aef8a535e6d4725b3cdc04cb316a773d9d6370fa53f7658"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 56,
+    "timestamp": "2026-09-26T17:22:26.227095538Z",
+    "previous_hash": "b8a0f3213d9241cf0aef8a535e6d4725b3cdc04cb316a773d9d6370fa53f7658",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:98ffd51818ecd1d424b75d55317938d079de05854f61941d8743e79f4f20b0be"
+      }
+    },
+    "hash": "758a52d50f1584f93a9cef37ba695cf245c73d5b385ef5771f72b7e1cd07c3a7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 57,
+    "timestamp": "2026-09-26T17:22:26.232654263Z",
+    "previous_hash": "758a52d50f1584f93a9cef37ba695cf245c73d5b385ef5771f72b7e1cd07c3a7",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 3 tool result(s), reclaiming 8193 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "42250",
+          "after_digest": "e3d8cc2c3cb18b4d4f1c3ba742b80a722e0852889df70b24fcd7216669f1c247",
+          "artifacts_written": "3",
+          "before_bytes": "50443",
+          "before_digest": "142f6f84dfb049ec6f0f93be66b8315aa81666989b48c845293942216c57f983",
+          "compacted_results": "3",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "8193",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "bbce5cf33d26c1135a168223650c140f809a6e3f7b709ad7a08506d40132414c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 58,
+    "timestamp": "2026-09-26T17:22:26.236973066Z",
+    "previous_hash": "bbce5cf33d26c1135a168223650c140f809a6e3f7b709ad7a08506d40132414c",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:666d7cfabb0a2d1df38f3f3f0c7b66b9cc0078f05e2e1703cfd2419057e793a0"
+      }
+    },
+    "hash": "5f53e28e55b532ef58fb86d14f0648f9404beb022a13f23ebe92ee5168d8ea4b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 59,
+    "timestamp": "2026-09-26T17:22:29.073840262Z",
+    "previous_hash": "5f53e28e55b532ef58fb86d14f0648f9404beb022a13f23ebe92ee5168d8ea4b",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 5 produced 2 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 2836,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "6919",
+          "cached_input_tokens": "7405",
+          "finish_reason": "toolcalls",
+          "input_tokens": "10701",
+          "normalized_context_bytes": "42250",
+          "normalized_context_digest": "e3d8cc2c3cb18b4d4f1c3ba742b80a722e0852889df70b24fcd7216669f1c247",
+          "output_tokens": "163",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1965",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "2",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "4e5b66bac84f38fffbfe66ef0d73bce3bce3c041e407e504840fff21c31164a4"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 60,
+    "timestamp": "2026-09-26T17:22:29.078313629Z",
+    "previous_hash": "4e5b66bac84f38fffbfe66ef0d73bce3bce3c041e407e504840fff21c31164a4",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:f4e623eaef576c589b308e88fb4dc87019ee5f5fd36c732e78fc7179455d9035"
+      }
+    },
+    "hash": "03827524c3c9a7a37a7acaeefcb70df24f9da43af28f895714ef13b9eb6330a0"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 61,
+    "timestamp": "2026-09-26T17:22:29.081540858Z",
+    "previous_hash": "03827524c3c9a7a37a7acaeefcb70df24f9da43af28f895714ef13b9eb6330a0",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "8ec5b9fc-9f29-4eb4-95fa-ff3c35652be3",
+        "tool": "read_file",
+        "arguments_digest": "c147f8d1fd3ddb2fea10b3a42e32d8a8e2d9ee4a5e3c7a8a369c5bf05bfa6f13",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "4e2679a34590d1dcb275dbb16daaa0d2dbeda57f8f76feb4398faf55dfd93260"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 62,
+    "timestamp": "2026-09-26T17:22:29.092132321Z",
+    "previous_hash": "4e2679a34590d1dcb275dbb16daaa0d2dbeda57f8f76feb4398faf55dfd93260",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 41 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "c147f8d1fd3ddb2fea10b3a42e32d8a8e2d9ee4a5e3c7a8a369c5bf05bfa6f13",
+          "call_id": "8ec5b9fc-9f29-4eb4-95fa-ff3c35652be3",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1752",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "139b952a01d59c3df569dba269c84b97aac95e2ed94890b71afa726687421850"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 63,
+    "timestamp": "2026-09-26T17:22:29.092478671Z",
+    "previous_hash": "139b952a01d59c3df569dba269c84b97aac95e2ed94890b71afa726687421850",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "8ec5b9fc-9f29-4eb4-95fa-ff3c35652be3",
+        "result_digest": "ffee5dd8d367aa92ba194a5f166d787a4aed480a63600e82b367ce0cc36f0a53",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "612001eae80e2bf62482236ea51dd73bae5c6ed66fbfaca0afd383fce6ddaf04"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 64,
+    "timestamp": "2026-09-26T17:22:29.095548825Z",
+    "previous_hash": "612001eae80e2bf62482236ea51dd73bae5c6ed66fbfaca0afd383fce6ddaf04",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "4363d363-7ecf-49e3-87a6-967c69963f48",
+        "tool": "read_file",
+        "arguments_digest": "0f697307bc7ad9125e56129b66ce4f77f301ffd7fa8bacbff40d748c6e523840",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "1e3d9974e72419facccafeebd3efd57464c1c6b764937e8fd0073fc9e8943510"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 65,
+    "timestamp": "2026-09-26T17:22:29.105606059Z",
+    "previous_hash": "1e3d9974e72419facccafeebd3efd57464c1c6b764937e8fd0073fc9e8943510",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 96 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 6,
+        "attributes": {
+          "arguments_digest": "0f697307bc7ad9125e56129b66ce4f77f301ffd7fa8bacbff40d748c6e523840",
+          "call_id": "4363d363-7ecf-49e3-87a6-967c69963f48",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "3560",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "b43d41c9d44924c7f2b0a49a7034b3fb0da572e11381257f3e4292b81fb15795"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 66,
+    "timestamp": "2026-09-26T17:22:29.105800641Z",
+    "previous_hash": "b43d41c9d44924c7f2b0a49a7034b3fb0da572e11381257f3e4292b81fb15795",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "4363d363-7ecf-49e3-87a6-967c69963f48",
+        "result_digest": "e362debdcd48459efb0ba08f31a2580e7d2f622fa537a58552c9bb918dbe6054",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "df1b16e08b44e367c60f09fb106951d1cdc7265d6577f37b0157e51c159fbf41"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 67,
+    "timestamp": "2026-09-26T17:22:29.106008284Z",
+    "previous_hash": "df1b16e08b44e367c60f09fb106951d1cdc7265d6577f37b0157e51c159fbf41",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 2 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "2",
+          "turn": "5"
+        }
+      }
+    },
+    "hash": "55a1743ce9ba028d881ad5c4d40857a9e62b379d89bf4011dc9c21c2df9b0f3e"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 68,
+    "timestamp": "2026-09-26T17:22:29.110248515Z",
+    "previous_hash": "55a1743ce9ba028d881ad5c4d40857a9e62b379d89bf4011dc9c21c2df9b0f3e",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:f01baf587b3506b858396eb2c31fdf747e4cfb61f889b567ce3cb74928dcf125"
+      }
+    },
+    "hash": "6b6aaa7bf21c489e5d298a78b4db041ce41c5f0efdf4d92dd09cf54b7dd87a64"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 69,
+    "timestamp": "2026-09-26T17:22:29.113657825Z",
+    "previous_hash": "6b6aaa7bf21c489e5d298a78b4db041ce41c5f0efdf4d92dd09cf54b7dd87a64",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "steer_implementation",
+        "summary": "4 implementing turns produced no isolated candidate",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase_turn": "4",
+          "tools_available": "18",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "fdcef62108f6180e887447b966fcf5f4c9fa445907f1a4bc1e4eafff9c48a1a4"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 70,
+    "timestamp": "2026-09-26T17:22:29.115950627Z",
+    "previous_hash": "fdcef62108f6180e887447b966fcf5f4c9fa445907f1a4bc1e4eafff9c48a1a4",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 3 tool result(s), reclaiming 5695 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "42914",
+          "after_digest": "7c0ea4a078a5a73c6be77df8ee75fa563d5ecb570cdbaeeeeab8aa5824f56f6c",
+          "artifacts_written": "3",
+          "before_bytes": "48609",
+          "before_digest": "65dc434f3493050867ecb356d347181a4babba4977fa1495d6b1ee62e73aa51f",
+          "compacted_results": "3",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "5695",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "d15b1f8d77e014b8a61814e1d4f5eb897143737bc4df833e0872891982e9b8e5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 71,
+    "timestamp": "2026-09-26T17:22:29.120481753Z",
+    "previous_hash": "d15b1f8d77e014b8a61814e1d4f5eb897143737bc4df833e0872891982e9b8e5",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:281cf6466de7e22d141e3d6f7f83740e1765b664f8aad2a14ba660634f9fd9ae"
+      }
+    },
+    "hash": "4589e7f1d7c139813ba9b5fdbe6e6cb888a373e218c5d4f6e485aadf693bf15f"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 72,
+    "timestamp": "2026-09-26T17:22:33.175977338Z",
+    "previous_hash": "4589e7f1d7c139813ba9b5fdbe6e6cb888a373e218c5d4f6e485aadf693bf15f",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 6 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 4055,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "8848",
+          "cached_input_tokens": "9781",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11054",
+          "normalized_context_bytes": "42914",
+          "normalized_context_digest": "7c0ea4a078a5a73c6be77df8ee75fa563d5ecb570cdbaeeeeab8aa5824f56f6c",
+          "output_tokens": "314",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1363",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "15cac5799c54f4043f9cf81f32e67f023d71c74292555c1b0c613f96c126032a"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 73,
+    "timestamp": "2026-09-26T17:22:33.18046593Z",
+    "previous_hash": "15cac5799c54f4043f9cf81f32e67f023d71c74292555c1b0c613f96c126032a",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:ac4eed72eebd2893dc97fc6d49610411c159c8deb971a556f2b023a31c74d65d"
+      }
+    },
+    "hash": "8b064f96b99d87c543a8417dfc99e83ab5ca1d37110cd9f19196e186eb726038"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 74,
+    "timestamp": "2026-09-26T17:22:33.183678981Z",
+    "previous_hash": "8b064f96b99d87c543a8417dfc99e83ab5ca1d37110cd9f19196e186eb726038",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "8f0c9f5b-ca56-4fbc-8ef7-795080673cf8",
+        "tool": "read_file",
+        "arguments_digest": "54a36128bdb7006977de6b836edee752d4abd26f3dfc2a731f973eb27f407b02",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "f47611a149577a799b256d8677637d3d779e862f84af5da79e71ca804f897706"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 75,
+    "timestamp": "2026-09-26T17:22:33.193879603Z",
+    "previous_hash": "f47611a149577a799b256d8677637d3d779e862f84af5da79e71ca804f897706",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 35 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "54a36128bdb7006977de6b836edee752d4abd26f3dfc2a731f973eb27f407b02",
+          "call_id": "8f0c9f5b-ca56-4fbc-8ef7-795080673cf8",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1364",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "22f1272685cffc8d813acb0ab38a7666e525c8b1aa6a5153cacd2ed5b2ae5efa"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 76,
+    "timestamp": "2026-09-26T17:22:33.194126079Z",
+    "previous_hash": "22f1272685cffc8d813acb0ab38a7666e525c8b1aa6a5153cacd2ed5b2ae5efa",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "8f0c9f5b-ca56-4fbc-8ef7-795080673cf8",
+        "result_digest": "04efe662dae881fe2f36479dc6cee70c606188d2863b79419ddd15f4e54e630f",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "470410a03de8e9c2814cfa6c0f052341af3926e8319efa1060df56852e06776c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 77,
+    "timestamp": "2026-09-26T17:22:33.194327156Z",
+    "previous_hash": "470410a03de8e9c2814cfa6c0f052341af3926e8319efa1060df56852e06776c",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "6"
+        }
+      }
+    },
+    "hash": "705e95121cd92356d0f470e5a60b2e0adf90642f2a357aa91179ec1b2d7d568b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 78,
+    "timestamp": "2026-09-26T17:22:33.198392291Z",
+    "previous_hash": "705e95121cd92356d0f470e5a60b2e0adf90642f2a357aa91179ec1b2d7d568b",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:b4ade0fa241a95951b46b76560160ff436773432a4982ad94ac8ccbbc5b4fce7"
+      }
+    },
+    "hash": "ef3a4a52caabc1dae49797bfc30e503af434ba3e6b50567fbe290542b3664f17"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 79,
+    "timestamp": "2026-09-26T17:22:33.206631375Z",
+    "previous_hash": "ef3a4a52caabc1dae49797bfc30e503af434ba3e6b50567fbe290542b3664f17",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:7255f98cf31fe919c415a806d204c8e05d4453719f9c863e088a01b1fe38080d"
+      }
+    },
+    "hash": "f073862e320f8b0e7334d7baddde947de253b6ff42f614130970a920ccf0e072"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 80,
+    "timestamp": "2026-09-26T17:22:34.937139104Z",
+    "previous_hash": "f073862e320f8b0e7334d7baddde947de253b6ff42f614130970a920ccf0e072",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 7 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1730,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9614",
+          "cached_input_tokens": "11052",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11495",
+          "normalized_context_bytes": "44621",
+          "normalized_context_digest": "5f4368355e12cddddf2cdb226dfcf64bf78b2971e811b10bda727a444636ebd6",
+          "output_tokens": "85",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1251",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "f15158c6e98e87394dbb669dc4f84d4e8428f3b5dd87dbe0f26cf11252b923d1"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 81,
+    "timestamp": "2026-09-26T17:22:34.941831567Z",
+    "previous_hash": "f15158c6e98e87394dbb669dc4f84d4e8428f3b5dd87dbe0f26cf11252b923d1",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:3481dc80dca0c2f8610c54c8e67b0e4be6b5acec4b4fab4785b377750de9f179"
+      }
+    },
+    "hash": "0da7c1dc696687bb55d04f99474d2ea0e62e309e2e575d23586159546c767f60"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 82,
+    "timestamp": "2026-09-26T17:22:34.94513304Z",
+    "previous_hash": "0da7c1dc696687bb55d04f99474d2ea0e62e309e2e575d23586159546c767f60",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "debc9b38-f0ee-453a-87a5-21bea5c0e9ee",
+        "tool": "read_file",
+        "arguments_digest": "5a0203d5b72334fbd739aae326bae721298948793d3f30fc86888ef29d1ca737",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "63e50d4fd1d8685beeccc626f34e0b4ad725dbb5e6ba2f126df74ebe4bf0a0bb"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 83,
+    "timestamp": "2026-09-26T17:22:34.955415587Z",
+    "previous_hash": "63e50d4fd1d8685beeccc626f34e0b4ad725dbb5e6ba2f126df74ebe4bf0a0bb",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 35 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 6,
+        "attributes": {
+          "arguments_digest": "5a0203d5b72334fbd739aae326bae721298948793d3f30fc86888ef29d1ca737",
+          "call_id": "debc9b38-f0ee-453a-87a5-21bea5c0e9ee",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "1401",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "947cd00d3d082c44a5b2b771900ca856fe1450cc6e88c264a7d24f4fb1daf126"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 84,
+    "timestamp": "2026-09-26T17:22:34.955610518Z",
+    "previous_hash": "947cd00d3d082c44a5b2b771900ca856fe1450cc6e88c264a7d24f4fb1daf126",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "debc9b38-f0ee-453a-87a5-21bea5c0e9ee",
+        "result_digest": "04727faf1eeae8af17e0b0c825c5078932dd11b693625b47d9b218cffe80bf34",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "2eca99951d41fbe28ab87ee1fe04d725c14bc0fb86c7c1e7c988ba60e5634f83"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 85,
+    "timestamp": "2026-09-26T17:22:34.955806847Z",
+    "previous_hash": "2eca99951d41fbe28ab87ee1fe04d725c14bc0fb86c7c1e7c988ba60e5634f83",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "7"
+        }
+      }
+    },
+    "hash": "5c8b586ceff8c862081571833a1d59e89a62eb7b551868036608becd7a46688d"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 86,
+    "timestamp": "2026-09-26T17:22:34.960045681Z",
+    "previous_hash": "5c8b586ceff8c862081571833a1d59e89a62eb7b551868036608becd7a46688d",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:38c7288befcb793117c315211c639e3ecfebb9e0915533c25328abd45c8b5660"
+      }
+    },
+    "hash": "bda4230b6a25fd03dd27ff4235924793d9ff96854757c18702207d3e50942dd7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 87,
+    "timestamp": "2026-09-26T17:22:34.965461088Z",
+    "previous_hash": "bda4230b6a25fd03dd27ff4235924793d9ff96854757c18702207d3e50942dd7",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "context",
+        "action": "compact_model_context",
+        "summary": "compacted 2 tool result(s), reclaiming 684 model-context bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "after_bytes": "45681",
+          "after_digest": "6090a443c01816ac5956ff79cbe2f45918a9d81c46d69b8cfcc9aad5f1fbe0bb",
+          "artifacts_written": "2",
+          "before_bytes": "46365",
+          "before_digest": "d2829de1e03c8e7d70e7116861b11cc02d3af26f71c1031f71a2c7767d896992",
+          "compacted_results": "2",
+          "high_water_bytes": "45875",
+          "reclaimed_bytes": "684",
+          "target_bytes": "37273"
+        }
+      }
+    },
+    "hash": "5331994c36e2b592c94c735d67ecad05f94b43b6e6268477dcfad36ef6ff54da"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 88,
+    "timestamp": "2026-09-26T17:22:34.970090623Z",
+    "previous_hash": "5331994c36e2b592c94c735d67ecad05f94b43b6e6268477dcfad36ef6ff54da",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:97633bd4e18de8877b351a988331d32ed0ec9cd361c23231063a264cf37c68c6"
+      }
+    },
+    "hash": "c42f95955dfc2f672a949c6babce70266129228433e783c80705958233b2bc97"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 89,
+    "timestamp": "2026-09-26T17:22:36.944507758Z",
+    "previous_hash": "c42f95955dfc2f672a949c6babce70266129228433e783c80705958233b2bc97",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 8 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 1973,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9334",
+          "cached_input_tokens": "11114",
+          "finish_reason": "toolcalls",
+          "input_tokens": "11906",
+          "normalized_context_bytes": "45681",
+          "normalized_context_digest": "6090a443c01816ac5956ff79cbe2f45918a9d81c46d69b8cfcc9aad5f1fbe0bb",
+          "output_tokens": "90",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1657",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "77388358c5d8c69451377db15cea85a73bb2d16bf2978c647ab748f4bfc95b76"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 90,
+    "timestamp": "2026-09-26T17:22:36.94900536Z",
+    "previous_hash": "77388358c5d8c69451377db15cea85a73bb2d16bf2978c647ab748f4bfc95b76",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:a2c7d77b698e3ac6c33dc351407fcc03f55816394bad6f63b25a4e7bd22404f8"
+      }
+    },
+    "hash": "24f8e80e895c215dc78fb41b5d52b8a1d676efc23aa4f0e6d1061465f341d4c7"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 91,
+    "timestamp": "2026-09-26T17:22:36.952445959Z",
+    "previous_hash": "24f8e80e895c215dc78fb41b5d52b8a1d676efc23aa4f0e6d1061465f341d4c7",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "8cff28c4-c271-4e6a-b5d7-2892eda744f5",
+        "tool": "read_file",
+        "arguments_digest": "6fa8408dd2dd993af1f3c8c4fee68de4bee552733252b9fd7d7bb052a4c20643",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "25e42186abcd8d113afc37b2e9d5627d14794c8ad602b8526b878e72f105cb5a"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 92,
+    "timestamp": "2026-09-26T17:22:36.962495162Z",
+    "previous_hash": "25e42186abcd8d113afc37b2e9d5627d14794c8ad602b8526b878e72f105cb5a",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 22 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 6,
+        "attributes": {
+          "arguments_digest": "6fa8408dd2dd993af1f3c8c4fee68de4bee552733252b9fd7d7bb052a4c20643",
+          "call_id": "8cff28c4-c271-4e6a-b5d7-2892eda744f5",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "988",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "4b62db704e9d0b9688f2583fa1062ff46659f29c8707aa062fb1f360daf153d0"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 93,
+    "timestamp": "2026-09-26T17:22:36.962687788Z",
+    "previous_hash": "4b62db704e9d0b9688f2583fa1062ff46659f29c8707aa062fb1f360daf153d0",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "8cff28c4-c271-4e6a-b5d7-2892eda744f5",
+        "result_digest": "ec9d3195b3a6658dc43fa4af6748ef8b03f0cb0032bbbccd33c3284e88a0443b",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "34d1d48239361be51cef09c03c2ffe17d7a67ed3a0f2bef33643ee4e50fd5da6"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 94,
+    "timestamp": "2026-09-26T17:22:36.962858554Z",
+    "previous_hash": "34d1d48239361be51cef09c03c2ffe17d7a67ed3a0f2bef33643ee4e50fd5da6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "8"
+        }
+      }
+    },
+    "hash": "04adc5d160045b8414399cb7728d619bb218dfde2f29468d1dfbdc965a6e6ff6"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 95,
+    "timestamp": "2026-09-26T17:22:36.966946388Z",
+    "previous_hash": "04adc5d160045b8414399cb7728d619bb218dfde2f29468d1dfbdc965a6e6ff6",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:f9334f9d39099bd02c3e337e547bd2700ec4a2f4d087ccdd38458a942a6818a2"
+      }
+    },
+    "hash": "f6a513b8cafdb041deb5ad3ccededf6292fa64bdacf73b04dfe4fa00a61ec6c6"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 96,
+    "timestamp": "2026-09-26T17:22:36.970863036Z",
+    "previous_hash": "f6a513b8cafdb041deb5ad3ccededf6292fa64bdacf73b04dfe4fa00a61ec6c6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "steer_implementation",
+        "summary": "7 implementing turns produced no isolated candidate",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "phase_turn": "7",
+          "tools_available": "18",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "9bd13d8af89f26a29d6a2ec54e2872c4836292ee0905e2aa0e37e1a93f8ce615"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 97,
+    "timestamp": "2026-09-26T17:22:36.97610195Z",
+    "previous_hash": "9bd13d8af89f26a29d6a2ec54e2872c4836292ee0905e2aa0e37e1a93f8ce615",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:7faf8ff78aa1d5d70e8b08eed9241e289a00f41397aa3f993bccbdb4e6cceeb2"
+      }
+    },
+    "hash": "26ae625c643f4e72d3132ec9b586f13bdc95dd466f0c27d688acbc460ad2a6e4"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 98,
+    "timestamp": "2026-09-26T17:22:41.303725769Z",
+    "previous_hash": "26ae625c643f4e72d3132ec9b586f13bdc95dd466f0c27d688acbc460ad2a6e4",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 9 produced 1 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 4326,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9668",
+          "cached_input_tokens": "11904",
+          "finish_reason": "toolcalls",
+          "input_tokens": "12312",
+          "normalized_context_bytes": "47433",
+          "normalized_context_digest": "1740a9d15479ca9b27f81af26b85ea7d5841da3efb4bc66e17eedd6dfad29069",
+          "output_tokens": "217",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "2291",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "1",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "47cdac639e315d5523e5a051fed2115efedab3e1f4a1249e6b6a43c7061169c3"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 99,
+    "timestamp": "2026-09-26T17:22:41.308739579Z",
+    "previous_hash": "47cdac639e315d5523e5a051fed2115efedab3e1f4a1249e6b6a43c7061169c3",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:49878212ca19f579224a21d0fabaa7a26fa80bbf74955b9b7678b952b2039123"
+      }
+    },
+    "hash": "3bbf0e8b1b92c67e9bfd4ae69ed47074cd5b89c74cf0feaaaf02bf7dd74e0c8c"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 100,
+    "timestamp": "2026-09-26T17:22:41.312297934Z",
+    "previous_hash": "3bbf0e8b1b92c67e9bfd4ae69ed47074cd5b89c74cf0feaaaf02bf7dd74e0c8c",
+    "event": {
+      "type": "effect_prepared",
+      "data": {
+        "call_id": "1318ca04-fb77-4946-b8f3-7ed2d887a183",
+        "tool": "read_file",
+        "arguments_digest": "38aaa240d1de2e5ff90b7304c467300162622630c85aeb4bf43d024e459e4ceb",
+        "candidate_digest_before": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "risk": "read_only",
+        "runtime_profile_digest": "40c41d00645a312d6637081eade93bda29e9ab6bc429aa3d1c71c80762fe0781"
+      }
+    },
+    "hash": "89b39707cf5d2ceb8caf6c9e9c0577074c340e87267177d64d6ee076c4a30c31"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 101,
+    "timestamp": "2026-09-26T17:22:41.323112754Z",
+    "previous_hash": "89b39707cf5d2ceb8caf6c9e9c0577074c340e87267177d64d6ee076c4a30c31",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "tool:read_file",
+        "action": "read_file",
+        "summary": "read 21 lines from src/header/map.rs",
+        "declared_effects": [
+          "file_read"
+        ],
+        "observed_effects": [
+          "fs.read:src/header/map.rs"
+        ],
+        "succeeded": true,
+        "duration_ms": 7,
+        "attributes": {
+          "arguments_digest": "38aaa240d1de2e5ff90b7304c467300162622630c85aeb4bf43d024e459e4ceb",
+          "call_id": "1318ca04-fb77-4946-b8f3-7ed2d887a183",
+          "changed_files": "0",
+          "execution": "serial",
+          "output_bytes": "744",
+          "output_truncated": "true",
+          "parallel_safe": "true",
+          "risk": "readonly",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "a2c448016f5b7b876ed908a82ef2ddc0c26c342903f334944f7ba5774a6bde4b"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 102,
+    "timestamp": "2026-09-26T17:22:41.323350289Z",
+    "previous_hash": "a2c448016f5b7b876ed908a82ef2ddc0c26c342903f334944f7ba5774a6bde4b",
+    "event": {
+      "type": "effect_completed",
+      "data": {
+        "call_id": "1318ca04-fb77-4946-b8f3-7ed2d887a183",
+        "result_digest": "fa2f11f0068f64a83dd5cfda8dd75820ae29729a6afe27cfd59a614f7aa29cf3",
+        "candidate_digest_after": "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+        "succeeded": true
+      }
+    },
+    "hash": "c99327810944f39c224dd27623d198b78f3b95fc54dd74dd889bbb2fc8a4eff6"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 103,
+    "timestamp": "2026-09-26T17:22:41.323850783Z",
+    "previous_hash": "c99327810944f39c224dd27623d198b78f3b95fc54dd74dd889bbb2fc8a4eff6",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "controller",
+        "action": "assess_progress",
+        "summary": "tool turn produced 1 novel evidence item(s); candidate_changed=false",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 0,
+        "attributes": {
+          "candidate_changed": "false",
+          "no_progress_turns": "0",
+          "novel_evidence": "1",
+          "turn": "9"
+        }
+      }
+    },
+    "hash": "0cf197b9d4ad8dc62fd7834d6756c3a4299ab504078f3335f41fff57795b32b2"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 104,
+    "timestamp": "2026-09-26T17:22:41.328561266Z",
+    "previous_hash": "0cf197b9d4ad8dc62fd7834d6756c3a4299ab504078f3335f41fff57795b32b2",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:f02a6d669b0dbe1613bbc5458a785c7513d42f2a516b7b47d21629bc48a984f7"
+      }
+    },
+    "hash": "d21dc571fdb2a703d4bf93024bab60b288336de6f084af77c05c22b862721b74"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 105,
+    "timestamp": "2026-09-26T17:22:41.337624078Z",
+    "previous_hash": "d21dc571fdb2a703d4bf93024bab60b288336de6f084af77c05c22b862721b74",
+    "event": {
+      "type": "checkpoint_created",
+      "data": {
+        "checkpoint": "session:62f0924c04f807d1f1ee010752c17bb03900e5c82bcb9f7dd457337838e81dbc"
+      }
+    },
+    "hash": "171325b5767df6303a86dca1024c218b985f4c825d7b03c3d713bf40a3b95921"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 106,
+    "timestamp": "2026-09-26T17:22:59.145984363Z",
+    "previous_hash": "171325b5767df6303a86dca1024c218b985f4c825d7b03c3d713bf40a3b95921",
+    "event": {
+      "type": "action_completed",
+      "data": {
+        "actor": "model:openai-compatible/stealth/space-bunny-alpha",
+        "action": "invoke",
+        "summary": "model turn 10 produced 0 tool call(s) and 0 text bytes",
+        "declared_effects": [],
+        "observed_effects": [],
+        "succeeded": true,
+        "duration_ms": 17807,
+        "attributes": {
+          "adapter": "openai-compatible",
+          "cache_creation_input_tokens": "0",
+          "cache_read_basis_points": "9782",
+          "cached_input_tokens": "12310",
+          "finish_reason": "length",
+          "input_tokens": "12584",
+          "normalized_context_bytes": "48520",
+          "normalized_context_digest": "7daf9f4ba79d7a3416d23c0de00d2ad00ce16e37db41fd07d3cc37df9d3df62c",
+          "output_tokens": "2048",
+          "provider.streaming": "true",
+          "provider.time_to_first_byte_ms": "1555",
+          "stream_mode": "streaming",
+          "text_bytes": "0",
+          "tool_calls": "0",
+          "turn": "10"
+        }
+      }
+    },
+    "hash": "4f7f6e609f96913233d807e9346892919ce8ec971520f967df61816b89aef1f5"
+  },
+  {
+    "schema_version": 2,
+    "run_id": "01a0debd-22b7-7d20-8342-7e4d38d26936",
+    "sequence": 107,
+    "timestamp": "2026-09-26T17:22:59.146192495Z",
+    "previous_hash": "4f7f6e609f96913233d807e9346892919ce8ec971520f967df61816b89aef1f5",
+    "event": {
+      "type": "state_changed",
+      "data": {
+        "from": "executing",
+        "to": "failed"
+      }
+    },
+    "hash": "0ce5be9f7682dd9a915bfdfea4cab961c65f0dc071cc4f941b604ecf73d5b512"
+  }
+]

@@ -1,0 +1,3 @@
+warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run
+error: engine failed for run 01a0deb7-7051-79f1-8161-9564b013a7fa: model did not complete within 16 turns
+Portable trace: /tmp/pactrail-space-bunny-scored-v3-work/20260926T171556Z-pactrail-stealth-space-bunny-alpha/regex-onepass-excess-capture-slots/workspace/.pactrail/runs/01a0deb7-7051-79f1-8161-9564b013a7fa/trace.jsonl
