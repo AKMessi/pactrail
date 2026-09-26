@@ -1216,12 +1216,41 @@ impl<'a> RunEngine<'a> {
             }
             if let Some(prompt) = control.prompt.as_ref() {
                 conversation.push(ConversationItem::Message(Message::system(prompt)));
-                journal.append(RunEvent::NoteRecorded {
-                    message: format!(
-                        "controller announced {} phase with a stable tool catalog",
-                        control.phase.label()
-                    ),
-                })?;
+                if control.action_deadline {
+                    let reason = format!(
+                        "{} implementing turns produced no isolated candidate",
+                        control.phase_turn
+                    );
+                    observer.on_progress(&RunProgress::ControllerIntervened {
+                        turn: turn.saturating_add(1),
+                        no_progress_turns: 0,
+                        reason: reason.clone(),
+                    });
+                    journal.append(RunEvent::ActionCompleted(ActionRecord {
+                        actor: "controller".to_owned(),
+                        action: "steer_implementation".to_owned(),
+                        summary: reason,
+                        declared_effects: Vec::new(),
+                        observed_effects: Vec::new(),
+                        succeeded: true,
+                        duration_ms: 0,
+                        attributes: BTreeMap::from([
+                            ("turn".to_owned(), turn.saturating_add(1).to_string()),
+                            ("phase_turn".to_owned(), control.phase_turn.to_string()),
+                            (
+                                "tools_available".to_owned(),
+                                control.tools.len().to_string(),
+                            ),
+                        ]),
+                    }))?;
+                } else {
+                    journal.append(RunEvent::NoteRecorded {
+                        message: format!(
+                            "controller announced {} phase with a stable tool catalog",
+                            control.phase.label()
+                        ),
+                    })?;
+                }
             }
             let prepared_context = compact_model_context(
                 context_window,
@@ -3879,6 +3908,10 @@ fn deduplication_action(report: &DeduplicationReport) -> ActionRecord {
                 "artifact_written".to_owned(),
                 report.artifact_written.to_string(),
             ),
+            (
+                "source_compacted".to_owned(),
+                report.source_compacted.to_string(),
+            ),
         ]),
     }
 }
@@ -4356,6 +4389,11 @@ mod tests {
         capabilities: ModelCapabilities,
     }
 
+    struct FirstReadThenSuspendModel {
+        capabilities: ModelCapabilities,
+        calls: Mutex<u8>,
+    }
+
     struct BarrierReadTool {
         barrier: Arc<Barrier>,
     }
@@ -4432,6 +4470,41 @@ mod tests {
                 .map_err(|_| ModelError::InvalidRequest("script lock poisoned".to_owned()))?
                 .pop_front()
                 .ok_or_else(|| ModelError::InvalidRequest("script exhausted".to_owned()))
+        }
+    }
+
+    #[async_trait]
+    impl ModelDriver for FirstReadThenSuspendModel {
+        fn name(&self) -> &'static str {
+            "scripted"
+        }
+
+        fn model(&self) -> &'static str {
+            "small-context"
+        }
+
+        fn capabilities(&self) -> &ModelCapabilities {
+            &self.capabilities
+        }
+
+        async fn invoke(&self, _request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+            let turn = {
+                let mut calls = self
+                    .calls
+                    .lock()
+                    .map_err(|_| ModelError::InvalidRequest("call lock poisoned".to_owned()))?;
+                let turn = *calls;
+                *calls = calls.saturating_add(1);
+                turn
+            };
+            if turn == 0 {
+                return Ok(tool_response(
+                    "large-read",
+                    "read_file",
+                    json!({"path": "large.txt", "start_line": 1, "end_line": 300}),
+                ));
+            }
+            std::future::pending::<Result<ModelResponse, ModelError>>().await
         }
     }
 
@@ -6302,6 +6375,151 @@ mod tests {
                 ..Usage::default()
             }),
             Some(2_500)
+        );
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn compacted_context_checkpoint_resumes_without_replaying_the_read() {
+        let capabilities = ModelCapabilities {
+            context_tokens: 4_096,
+            max_output_tokens: 512,
+            ..ModelCapabilities::default()
+        };
+        let suspended_model = FirstReadThenSuspendModel {
+            capabilities: capabilities.clone(),
+            calls: Mutex::new(0),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let mut large_file = String::new();
+        for line in 0..300 {
+            writeln!(&mut large_file, "{line:03}: {}", "fixture".repeat(20))
+                .unwrap_or_else(|error| unreachable!("fixture text: {error}"));
+        }
+        fs::write(source.path().join("large.txt"), large_file)
+            .unwrap_or_else(|error| unreachable!("large file: {error}"));
+        let control = tempfile::tempdir().unwrap_or_else(|error| unreachable!("control: {error}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let checkpoints = CheckpointStore::open(control.path().join("checkpoints"))
+            .unwrap_or_else(|error| unreachable!("checkpoints: {error}"));
+        let observation_root = control.path().join("observations");
+        let mut registry = pactrail_tools::builtin_registry()
+            .unwrap_or_else(|error| unreachable!("tools: {error}"));
+        registry
+            .register(pactrail_tools::ReadObservationTool::new(
+                observation_root.clone(),
+            ))
+            .unwrap_or_else(|error| unreachable!("observation tool: {error}"));
+        let policy = PolicyEngine::local_default();
+        let suspended_engine = RunEngine::new(&suspended_model, &registry, &policy)
+            .with_checkpoint_store(&checkpoints)
+            .with_observation_store(observation_root.clone());
+        let mut store =
+            EventStore::open_in_memory().unwrap_or_else(|error| unreachable!("store: {error}"));
+        let mut contract = TaskContract::new("Explain large.txt", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let run_id = RunId::new();
+        let interrupted = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            suspended_engine.execute_inner(
+                run_id,
+                contract.clone(),
+                &transaction,
+                &mut store,
+                &SilentRunObserver,
+                None,
+            ),
+        )
+        .await;
+        assert!(interrupted.is_err(), "second provider turn should suspend");
+
+        let checkpoint = checkpoints
+            .load_head(&store, run_id)
+            .unwrap_or_else(|error| unreachable!("checkpoint: {error}"));
+        assert_eq!(checkpoint.phase, ResumePhase::BeforeModel);
+        assert_eq!(checkpoint.next_turn, 1);
+        let compacted = checkpoint
+            .conversation
+            .iter()
+            .find_map(|item| match item {
+                ConversationItem::ToolResult(result)
+                    if result.content["pactrail_compacted"] == true =>
+                {
+                    Some(result)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| unreachable!("compacted observation"));
+        let digest = compacted.content["artifact_digest"]
+            .as_str()
+            .unwrap_or_else(|| unreachable!("artifact digest"));
+        let artifacts = ArtifactStore::open(observation_root.join(run_id.to_string()))
+            .unwrap_or_else(|error| unreachable!("artifacts: {error}"));
+        assert!(artifacts.get(digest).is_ok());
+        let before_resume = store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("before resume: {error}"));
+        let compaction = before_resume
+            .actions
+            .iter()
+            .find(|action| action.action == "compact_model_context")
+            .unwrap_or_else(|| unreachable!("compaction action"));
+        let compacted_context_digest = compaction.attributes["after_digest"].clone();
+
+        let resumed_model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "small-context".to_owned(),
+            responses: Mutex::new(VecDeque::from([ModelResponse {
+                text: "The file contains repeated fixture data.".to_owned(),
+                tool_calls: Vec::new(),
+                finish_reason: FinishReason::Complete,
+                usage: Usage::default(),
+                provider_request_id: None,
+                extensions: serde_json::Map::new(),
+            }])),
+            capabilities,
+        };
+        let resumed_engine = RunEngine::new(&resumed_model, &registry, &policy)
+            .with_checkpoint_store(&checkpoints)
+            .with_observation_store(observation_root);
+        let outcome = resumed_engine
+            .resume_with_observer(
+                run_id,
+                contract,
+                &transaction,
+                &mut store,
+                checkpoint,
+                &SilentRunObserver,
+            )
+            .await
+            .unwrap_or_else(|error| unreachable!("resume: {error}"));
+        assert_eq!(outcome.receipt.outcome, ReceiptOutcome::Answered);
+        let after_resume = store
+            .snapshot(run_id)
+            .unwrap_or_else(|error| unreachable!("after resume: {error}"));
+        assert_eq!(
+            after_resume
+                .actions
+                .iter()
+                .filter(|action| action.action == "read_file")
+                .count(),
+            1
+        );
+        let model_turn = after_resume
+            .actions
+            .iter()
+            .filter(|action| action.action == "invoke")
+            .nth(1)
+            .unwrap_or_else(|| unreachable!("resumed model turn"));
+        assert_eq!(
+            model_turn.attributes["normalized_context_digest"],
+            compacted_context_digest
         );
     }
 

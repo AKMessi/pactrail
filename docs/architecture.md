@@ -244,7 +244,10 @@ the reclaimed bytes and digest; it does not record raw tool content.
 CLI runs store the exact deduplicated JSON under that digest in the run-scoped
 artifact store. If the source is later compacted, `read_observation` retrieves
 a bounded slice without repeating the original tool call. The deduplication
-action records whether the artifact was stored.
+action records whether the artifact was stored. A later identical observation
+can also reference a compacted source after Pactrail checks the stored bytes
+against the new result. If that artifact is missing or fails validation, the
+new observation remains complete in the conversation.
 
 When the high-water mark is crossed, older tool results are replaced in place
 with deterministic compaction envelopes. Each envelope retains the tool name,
@@ -304,6 +307,13 @@ observations therefore count as no semantic progress. A candidate mutation or
 previously unseen successful evidence resets the counter. Two stagnant turns
 produce explicit steering toward a narrower next action; the older identical-call
 and all-failed-call stop conditions remain independent fail-safes.
+
+Novel reads can still consume an entire change run without producing a
+candidate. During implementation, every third turn after the initial three
+adds an explicit action deadline when the candidate is still empty. It asks
+for a supported edit, one exact missing fact followed by an edit, or a
+concrete blocker. The tool catalog remains unchanged, and the reminder is an
+append-only controller turn so resume and provider prefix caching stay stable.
 
 Phase entry, available tool count, progress assessment, and intervention are
 visible through `RunProgress` and recorded as hash-linked controller actions or
@@ -440,6 +450,16 @@ model action ledger before any new model or tool work. Schema 3 additionally
 seals the active adaptive model route. Schema 1 and 2 checkpoints remain
 readable: schema 1 spend is reconstructed from durable actions, and the next
 safe checkpoint is written as schema 3. Future schemas fail closed.
+
+Compaction completes before the `BeforeModel` checkpoint is written. A crash
+at the next provider request therefore resumes from the exact compacted
+conversation and its run-local observation artifact; the completed read is
+never replayed. A scripted crash replay test checks that the resumed model
+turn retains the compaction digest and performs only the original file read.
+
+Normalized usage also has a bounded standalone versioned codec. Every
+checkpoint validates that cache-read plus cache-creation tokens do not exceed
+reported input tokens before resume; valid historical usage remains readable.
 
 `pactrail resume <run-id>` reopens the existing workspace transaction and reads
 the original `run.json`; it never reloads a mutable task file. Before appending

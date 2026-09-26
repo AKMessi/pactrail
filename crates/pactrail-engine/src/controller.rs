@@ -48,6 +48,7 @@ pub(crate) struct TurnControl {
     pub(crate) tools: Vec<ToolDescriptor>,
     pub(crate) allowed_tool_names: BTreeSet<String>,
     pub(crate) phase_changed: bool,
+    pub(crate) action_deadline: bool,
     pub(crate) prompt: Option<String>,
     pub(crate) reason: String,
 }
@@ -168,15 +169,24 @@ impl ControllerKernel {
         // from collecting the final evidence it needs before a safe edit.
         let tools = all_tools.to_vec();
         let allowed_tool_names = tools.iter().map(|tool| tool.name.clone()).collect();
-        let prompt = if self.announced_phases.contains(&phase) {
-            None
-        } else {
+        let action_deadline = phase == ControllerPhase::Implementing
+            && !phase_changed
+            && phase_turn >= 4
+            && (phase_turn - 4).is_multiple_of(3);
+        let prompt = if !self.announced_phases.contains(&phase) {
             self.announced_phases.insert(phase);
             Some(phase_prompt(
                 phase,
                 phase_turn,
                 self.max_turns.saturating_sub(turn),
             ))
+        } else if action_deadline {
+            Some(action_deadline_prompt(
+                phase_turn,
+                self.max_turns.saturating_sub(turn),
+            ))
+        } else {
+            None
         };
         TurnControl {
             phase,
@@ -185,6 +195,7 @@ impl ControllerKernel {
             tools,
             allowed_tool_names,
             phase_changed,
+            action_deadline,
             prompt,
             reason: self.phase_reason(phase, candidate_present),
         }
@@ -335,6 +346,12 @@ fn phase_prompt(phase: ControllerPhase, phase_turn: u16, turns_remaining: u16) -
     format!(
         "{PHASE_MARKER} {}. {instruction} {turns_remaining} model turn(s) remain.",
         phase.label()
+    )
+}
+
+fn action_deadline_prompt(phase_turn: u16, turns_remaining: u16) -> String {
+    format!(
+        "Pactrail action controller: {phase_turn} implementing turns have passed without an isolated candidate. {turns_remaining} model turn(s) remain. Make the smallest source edit supported by the evidence on this turn. If one exact missing fact prevents an edit, request only that fact and use the next turn to edit. Stop broad exploration; if no safe edit is possible, state the concrete blocker."
     )
 }
 
@@ -558,6 +575,61 @@ mod tests {
         assert_eq!(controlled.phase, ControllerPhase::Implementing);
         assert!(controlled.tools.iter().any(|tool| tool.name == "search"));
         assert!(controlled.prompt.is_some());
+    }
+
+    #[test]
+    fn novel_reads_do_not_suppress_the_implementation_action_deadline() {
+        let tools = vec![
+            descriptor("read_file", ToolAnnotations::READ_ONLY),
+            descriptor("edit_file", ToolAnnotations::WORKSPACE_MUTATION),
+        ];
+        let mut kernel = ControllerKernel::restore_with_discovery_cap("fix the parser", 16, 2, &[]);
+        for turn in 0..5 {
+            let control = kernel.before_turn(turn, false, &tools);
+            assert!(!control.action_deadline);
+            kernel.observe_turn(&[(
+                ToolResult {
+                    call_id: format!("read-{turn}"),
+                    name: "read_file".to_owned(),
+                    content: json!({"line": turn}),
+                    is_error: false,
+                },
+                false,
+            )]);
+        }
+        let deadline = kernel.before_turn(5, false, &tools);
+        assert_eq!(deadline.phase, ControllerPhase::Implementing);
+        assert_eq!(deadline.phase_turn, 4);
+        assert!(deadline.action_deadline);
+        assert!(deadline.prompt.as_deref().is_some_and(|prompt| {
+            prompt.contains("Make the smallest source edit") && !prompt.starts_with(PHASE_MARKER)
+        }));
+        assert!(deadline.tools.iter().any(|tool| tool.name == "read_file"));
+        assert_eq!(
+            kernel.before_turn(6, true, &tools).phase,
+            ControllerPhase::Validating
+        );
+    }
+
+    #[test]
+    fn action_deadline_resume_keeps_the_implementation_turn_count() {
+        let conversation = vec![
+            ConversationItem::Message(Message::system(phase_prompt(
+                ControllerPhase::Implementing,
+                1,
+                14,
+            ))),
+            ConversationItem::Message(Message::assistant("first turn")),
+            ConversationItem::Message(Message::assistant("second turn")),
+            ConversationItem::Message(Message::assistant("third turn")),
+            ConversationItem::Message(Message::system(action_deadline_prompt(4, 11))),
+        ];
+        let tools = vec![descriptor("edit_file", ToolAnnotations::WORKSPACE_MUTATION)];
+        let mut restored =
+            ControllerKernel::restore_with_discovery_cap("fix the parser", 16, 2, &conversation);
+        let control = restored.before_turn(5, false, &tools);
+        assert_eq!(control.phase_turn, 4);
+        assert!(control.action_deadline);
     }
 
     #[test]

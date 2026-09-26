@@ -29,6 +29,7 @@ pub(crate) struct DeduplicationReport {
     pub(crate) original_bytes: usize,
     pub(crate) reference_bytes: usize,
     pub(crate) artifact_written: bool,
+    pub(crate) source_compacted: bool,
 }
 
 /// Keeps the first complete tool observation in the stable request prefix and
@@ -53,23 +54,34 @@ pub(crate) fn append_deduplicated_result_with_artifacts(
         conversation.push(ConversationItem::ToolResult(result));
         return Ok(None);
     }
-    let source = conversation.iter().find_map(|item| match item {
-        ConversationItem::ToolResult(previous)
-            if previous.name == result.name
-                && previous.is_error == result.is_error
-                && !is_compacted(previous)
-                && !is_duplicate(previous)
-                && previous.content == result.content =>
+    let digest = blake3::hash(&original).to_hex().to_string();
+    let source = conversation.iter().find_map(|item| {
+        let ConversationItem::ToolResult(previous) = item else {
+            return None;
+        };
+        if previous.name != result.name
+            || previous.is_error != result.is_error
+            || is_duplicate(previous)
         {
-            Some(previous.call_id.as_str())
+            return None;
         }
-        _ => None,
+        if !is_compacted(previous) {
+            return (previous.content == result.content)
+                .then_some((previous.call_id.as_str(), false));
+        }
+        let store = artifacts?;
+        let matches_digest = previous
+            .content
+            .get("original_digest")
+            .and_then(Value::as_str)
+            == Some(digest.as_str());
+        (matches_digest && store.get(&digest).is_ok_and(|saved| saved == original))
+            .then_some((previous.call_id.as_str(), true))
     });
-    let Some(source_call_id) = source else {
+    let Some((source_call_id, source_compacted)) = source else {
         conversation.push(ConversationItem::ToolResult(result));
         return Ok(None);
     };
-    let digest = blake3::hash(&original).to_hex().to_string();
     let mut reference = json!({
         "pactrail_duplicate": true,
         "version": 1,
@@ -91,7 +103,7 @@ pub(crate) fn append_deduplicated_result_with_artifacts(
         conversation.push(ConversationItem::ToolResult(result));
         return Ok(None);
     }
-    if let Some(store) = artifacts {
+    if let Some(store) = artifacts.filter(|_| !source_compacted) {
         let stored = store.put(&original)?;
         debug_assert_eq!(stored.digest, digest);
     }
@@ -101,7 +113,8 @@ pub(crate) fn append_deduplicated_result_with_artifacts(
         content_digest: digest,
         original_bytes: original.len(),
         reference_bytes,
-        artifact_written: artifacts.is_some(),
+        artifact_written: artifacts.is_some() && !source_compacted,
+        source_compacted,
     };
     conversation.push(ConversationItem::ToolResult(ToolResult {
         content: reference,
@@ -665,6 +678,68 @@ mod tests {
                 .as_str()
                 .is_some_and(|guidance| guidance.contains("read_observation"))
         );
+    }
+
+    #[test]
+    fn compacted_source_reuses_only_an_integrity_checked_artifact() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let artifacts = ArtifactStore::open(root.path())
+            .unwrap_or_else(|error| unreachable!("artifacts: {error}"));
+        let content = json!({"path": "src/lib.rs", "text": "x".repeat(12_000)});
+        let mut conversation = vec![ConversationItem::Message(Message::user("inspect"))];
+        conversation.extend(tool_turn("first", content.clone()));
+        ContextWindow::with_limits(4_000, 3_000)
+            .compact_with_artifacts(&mut conversation, &[], Some(&artifacts))
+            .unwrap_or_else(|error| unreachable!("compaction: {error}"))
+            .unwrap_or_else(|| unreachable!("expected compaction"));
+        let ConversationItem::ToolResult(source) = &conversation[2] else {
+            unreachable!("source")
+        };
+        let digest = source.content["artifact_digest"]
+            .as_str()
+            .unwrap_or_else(|| unreachable!("digest"))
+            .to_owned();
+        conversation.push(tool_turn("second", content.clone())[0].clone());
+        let report = append_deduplicated_result_with_artifacts(
+            &mut conversation,
+            ToolResult {
+                call_id: "second".to_owned(),
+                name: "read_file".to_owned(),
+                content: content.clone(),
+                is_error: false,
+            },
+            Some(&artifacts),
+        )
+        .unwrap_or_else(|error| unreachable!("deduplication: {error}"))
+        .unwrap_or_else(|| unreachable!("expected duplicate"));
+        assert_eq!(report.source_call_id, "first");
+        assert!(report.source_compacted);
+        assert!(!report.artifact_written);
+        let Some(ConversationItem::ToolResult(reference)) = conversation.last() else {
+            unreachable!("reference")
+        };
+        assert_eq!(reference.content["artifact_digest"], digest);
+
+        let artifact_path = root.path().join(&digest[..2]).join(format!("{digest}.zst"));
+        std::fs::remove_file(artifact_path)
+            .unwrap_or_else(|error| unreachable!("remove artifact: {error}"));
+        conversation.push(tool_turn("third", content.clone())[0].clone());
+        let no_reference = append_deduplicated_result_with_artifacts(
+            &mut conversation,
+            ToolResult {
+                call_id: "third".to_owned(),
+                name: "read_file".to_owned(),
+                content: content.clone(),
+                is_error: false,
+            },
+            Some(&artifacts),
+        )
+        .unwrap_or_else(|error| unreachable!("missing artifact: {error}"));
+        assert!(no_reference.is_none());
+        let Some(ConversationItem::ToolResult(full)) = conversation.last() else {
+            unreachable!("full result")
+        };
+        assert_eq!(full.content, content);
     }
 
     #[test]
