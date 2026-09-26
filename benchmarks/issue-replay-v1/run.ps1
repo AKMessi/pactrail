@@ -400,9 +400,20 @@ function Copy-Tree {
 }
 
 function Test-IgnoredRelativePath {
-    param([string]$Relative)
+    param([string]$Relative, [string]$Root)
     $first = ($Relative -replace '\\', '/') -split '/' | Select-Object -First 1
-    return $first -in @('.git', '.pactrail', 'target')
+    if ($first -in @('.git', '.pactrail', 'target')) { return $true }
+    # The runner generates root Cargo.lock files for offline grading. When the
+    # source repository ignores that file, Pactrail also omits it from its
+    # isolated candidate; exclude it equally from both harness snapshots.
+    if ($Relative -eq 'Cargo.lock') {
+        $gitignore = Join-Path $Root '.gitignore'
+        if (Test-Path -LiteralPath $gitignore) {
+            $rules = @(Get-Content -LiteralPath $gitignore | ForEach-Object { $_.Trim() })
+            if ($rules -contains 'Cargo.lock' -or $rules -contains '/Cargo.lock') { return $true }
+        }
+    }
+    return $false
 }
 
 function Get-VisibleSnapshot {
@@ -411,7 +422,7 @@ function Get-VisibleSnapshot {
     if (-not (Test-Path -LiteralPath $Root)) { return $snapshot }
     foreach ($file in Get-ChildItem -LiteralPath $Root -Recurse -File -Force | Sort-Object FullName) {
         $relative = $file.FullName.Substring($Root.Length).TrimStart('\', '/') -replace '\\', '/'
-        if (Test-IgnoredRelativePath -Relative $relative) { continue }
+        if (Test-IgnoredRelativePath -Relative $relative -Root $Root) { continue }
         $snapshot[$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     return $snapshot
@@ -435,7 +446,7 @@ function Copy-VisibleTree {
     Reset-BenchmarkDirectory -Root $MutationRoot -Path $Destination
     foreach ($file in Get-ChildItem -LiteralPath $Source -Recurse -File -Force) {
         $relative = $file.FullName.Substring($Source.Length).TrimStart('\', '/') -replace '\\', '/'
-        if (Test-IgnoredRelativePath -Relative $relative) { continue }
+        if (Test-IgnoredRelativePath -Relative $relative -Root $Source) { continue }
         $target = Join-Path $Destination ($relative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
         $parent = Split-Path -Parent $target
         if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
@@ -452,7 +463,7 @@ function Sync-SolutionIntoGrade {
     }
     foreach ($file in Get-ChildItem -LiteralPath $Solution -Recurse -File -Force) {
         $relative = $file.FullName.Substring($Solution.Length).TrimStart('\', '/') -replace '\\', '/'
-        if (Test-IgnoredRelativePath -Relative $relative) { continue }
+        if (Test-IgnoredRelativePath -Relative $relative -Root $Solution) { continue }
         $target = Join-Path $GradeRoot ($relative -replace '/', [System.IO.Path]::DirectorySeparatorChar)
         $parent = Split-Path -Parent $target
         if ($parent) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
@@ -888,7 +899,7 @@ foreach ($case in $cases) {
         $inputTokens = [long]$metrics.input_tokens
         $cachedTokens = [long]$metrics.cached_input_tokens
         $outputTokens = [long]$metrics.output_tokens
-        $providerErrors = if ($invoke.exit_code -eq 0) { 0 } else { 1 }
+        $providerErrors = if ($invoke.stderr -match 'model invocation failed:') { 1 } else { 0 }
         $summaryText = if ($null -ne $runJson) { [string]$runJson.summary } else { '' }
         $outcome = if ($null -ne $runJson) { [string]$runJson.outcome } else { 'process_error' }
     } else {
