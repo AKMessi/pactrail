@@ -36,6 +36,12 @@
       "schema": 1,
       "path": "memory-database-v1.sql",
       "strategy": "migrate_atomically"
+    },
+    {
+      "format": "run_checkpoint",
+      "schema": 1,
+      "path": "run-checkpoint-v1.json",
+      "strategy": "read_compatible"
     }
   ]
 }

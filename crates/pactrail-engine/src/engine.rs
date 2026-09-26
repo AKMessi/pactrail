@@ -36,7 +36,9 @@ use tracing::{info, warn};
 use crate::checkpoint::{
     CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint, contract_digest,
 };
-use crate::context_window::{CompactionReport, ContextWindow};
+use crate::context_window::{
+    CompactionReport, ContextWindow, DeduplicationReport, append_deduplicated_result,
+};
 use crate::controller::{ControllerKernel, GoalIntent, classify_goal};
 use crate::text_actions::{catalog_prompt, parse_action, transport_conversation};
 use crate::{
@@ -729,7 +731,12 @@ impl<'a> RunEngine<'a> {
                 &checkpoint,
                 max_turns,
             )?;
-            let cost_spent = self.resume_cost_spent(store, run_id, checkpoint.usage)?;
+            let cost_spent =
+                if checkpoint.schema_version == crate::checkpoint::CHECKPOINT_SCHEMA_VERSION {
+                    checkpoint.cost_spent_microusd
+                } else {
+                    self.resume_cost_spent(store, run_id, checkpoint.usage)?
+                };
             let mut journal = Journal::resume(run_id, store)?;
             journal.append(RunEvent::NoteRecorded {
                 message: format!(
@@ -1080,6 +1087,7 @@ impl<'a> RunEngine<'a> {
                 elapsed_active_ms: active_base_ms.saturating_add(elapsed_millis(active_started)),
                 conversation: &conversation,
                 usage,
+                cost_spent_microusd: cost_spent,
                 call_ids: &call_ids,
                 previous_tool_signature: previous_tool_signature.as_ref(),
                 repeated_tool_turns,
@@ -1173,6 +1181,7 @@ impl<'a> RunEngine<'a> {
                         .saturating_add(elapsed_millis(active_started)),
                     conversation: &conversation,
                     usage,
+                    cost_spent_microusd: cost_spent,
                     call_ids: &call_ids,
                     previous_tool_signature: previous_tool_signature.as_ref(),
                     repeated_tool_turns,
@@ -1444,6 +1453,7 @@ impl<'a> RunEngine<'a> {
                                         .saturating_add(elapsed_millis(active_started)),
                                     conversation: &conversation,
                                     usage,
+                                    cost_spent_microusd: cost_spent,
                                     call_ids: &call_ids,
                                     previous_tool_signature: previous_tool_signature.as_ref(),
                                     repeated_tool_turns,
@@ -1506,6 +1516,7 @@ impl<'a> RunEngine<'a> {
                         .saturating_add(elapsed_millis(active_started)),
                     conversation: &conversation,
                     usage,
+                    cost_spent_microusd: cost_spent,
                     call_ids: &call_ids,
                     previous_tool_signature: previous_tool_signature.as_ref(),
                     repeated_tool_turns,
@@ -1554,7 +1565,12 @@ impl<'a> RunEngine<'a> {
                     if let Some(error) = execution.fatal_error {
                         return Err(EngineError::ProcessCleanup(error));
                     }
-                    conversation.push(ConversationItem::ToolResult(execution.result));
+                    if let Some(report) =
+                        append_deduplicated_result(&mut conversation, execution.result)
+                            .map_err(|error| EngineError::ContextWindow(error.to_string()))?
+                    {
+                        journal.append(RunEvent::ActionCompleted(deduplication_action(&report)))?;
+                    }
                 }
             }
             let progress_assessment = controller.observe_turn(&controller_results);
@@ -1800,6 +1816,7 @@ impl<'a> RunEngine<'a> {
                         .saturating_add(elapsed_millis(active_started)),
                     conversation: &conversation,
                     usage,
+                    cost_spent_microusd: cost_spent,
                     call_ids: &call_ids,
                     previous_tool_signature: previous_tool_signature.as_ref(),
                     repeated_tool_turns,
@@ -1864,6 +1881,7 @@ impl<'a> RunEngine<'a> {
                 elapsed_active_ms: active_base_ms.saturating_add(elapsed_millis(active_started)),
                 conversation: &conversation,
                 usage,
+                cost_spent_microusd: cost_spent,
                 call_ids: &call_ids,
                 previous_tool_signature: previous_tool_signature.as_ref(),
                 repeated_tool_turns,
@@ -2659,6 +2677,7 @@ struct CheckpointLoopState<'a> {
     elapsed_active_ms: u64,
     conversation: &'a Vec<ConversationItem>,
     usage: Usage,
+    cost_spent_microusd: Option<u64>,
     call_ids: &'a BTreeSet<String>,
     previous_tool_signature: Option<&'a Vec<(String, String)>>,
     repeated_tool_turns: u16,
@@ -2753,17 +2772,7 @@ impl RunEngine<'_> {
                 contract.budget.model_tokens
             )));
         }
-        if let Some(spent) = self
-            .resume_cost_spent(events, run_id, checkpoint.usage)
-            .map_err(|error| reject(error.to_string()))?
-            && contract.budget.cost_microusd != 0
-            && spent > contract.budget.cost_microusd
-        {
-            return Err(reject(format!(
-                "checkpoint cost ledger used {spent} micro-USD, exceeding the {} micro-USD task budget",
-                contract.budget.cost_microusd
-            )));
-        }
+        self.validate_resume_cost(events, run_id, contract, checkpoint)?;
         match checkpoint.phase {
             ResumePhase::BeforeModel => {}
             ResumePhase::BeforeVerification if !checkpoint.final_text.trim().is_empty() => {}
@@ -2778,6 +2787,36 @@ impl RunEngine<'_> {
                         .to_owned(),
                 ));
             }
+        }
+        Ok(())
+    }
+
+    fn validate_resume_cost(
+        &self,
+        events: &EventStore,
+        run_id: RunId,
+        contract: &TaskContract,
+        checkpoint: &RunCheckpoint,
+    ) -> Result<(), EngineError> {
+        let reject = |reason: String| EngineError::ResumeRejected(reason);
+        let journal_cost = self
+            .resume_cost_spent(events, run_id, checkpoint.usage)
+            .map_err(|error| reject(error.to_string()))?;
+        if checkpoint.schema_version == crate::checkpoint::CHECKPOINT_SCHEMA_VERSION
+            && checkpoint.cost_spent_microusd != journal_cost
+        {
+            return Err(reject(
+                "checkpoint cost ledger disagrees with the durable model actions".to_owned(),
+            ));
+        }
+        if let Some(spent) = journal_cost
+            && contract.budget.cost_microusd != 0
+            && spent > contract.budget.cost_microusd
+        {
+            return Err(reject(format!(
+                "checkpoint cost ledger used {spent} micro-USD, exceeding the {} micro-USD task budget",
+                contract.budget.cost_microusd
+            )));
         }
         Ok(())
     }
@@ -2956,6 +2995,8 @@ impl RunEngine<'_> {
         checkpoint.elapsed_active_ms = state.elapsed_active_ms;
         checkpoint.conversation.clone_from(state.conversation);
         checkpoint.usage = state.usage;
+        checkpoint.cost_spent_microusd = state.cost_spent_microusd;
+        checkpoint.schema_version = crate::checkpoint::CHECKPOINT_SCHEMA_VERSION;
         checkpoint.call_ids.clone_from(state.call_ids);
         checkpoint
             .previous_tool_signature
@@ -3583,6 +3624,37 @@ fn compact_model_context(
         reclaimed_bytes: report.reclaimed_bytes,
     });
     journal.append(RunEvent::ActionCompleted(compaction_action(&report)))
+}
+
+fn deduplication_action(report: &DeduplicationReport) -> ActionRecord {
+    ActionRecord {
+        actor: "context".to_owned(),
+        action: "deduplicate_tool_result".to_owned(),
+        summary: format!(
+            "reused identical tool evidence, reclaiming {} model-context bytes",
+            report.original_bytes.saturating_sub(report.reference_bytes)
+        ),
+        declared_effects: Vec::new(),
+        observed_effects: Vec::new(),
+        succeeded: true,
+        duration_ms: 0,
+        attributes: BTreeMap::from([
+            ("source_call_id".to_owned(), report.source_call_id.clone()),
+            (
+                "duplicate_call_id".to_owned(),
+                report.duplicate_call_id.clone(),
+            ),
+            ("content_digest".to_owned(), report.content_digest.clone()),
+            (
+                "original_bytes".to_owned(),
+                report.original_bytes.to_string(),
+            ),
+            (
+                "reference_bytes".to_owned(),
+                report.reference_bytes.to_string(),
+            ),
+        ]),
+    }
 }
 
 fn compaction_action(report: &CompactionReport) -> ActionRecord {
@@ -4533,6 +4605,11 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("load checkpoint: {error}"));
         assert_eq!(checkpoint.phase, ResumePhase::BeforeModel);
         assert_eq!(checkpoint.next_turn, 0);
+        assert_eq!(
+            checkpoint.schema_version,
+            crate::checkpoint::CHECKPOINT_SCHEMA_VERSION
+        );
+        assert_eq!(checkpoint.cost_spent_microusd, Some(0));
         assert_eq!(
             store
                 .snapshot(run_id)
