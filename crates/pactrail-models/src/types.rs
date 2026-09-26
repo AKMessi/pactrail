@@ -715,6 +715,12 @@ struct VersionedModelRequest {
     request: ModelRequest,
 }
 
+#[derive(Serialize)]
+struct VersionedModelRequestRef<'a> {
+    schema_version: u32,
+    request: &'a ModelRequest,
+}
+
 impl ModelRequest {
     /// Encodes the current request schema for a checkpoint or transport boundary.
     ///
@@ -722,9 +728,9 @@ impl ModelRequest {
     /// Rejects invalid controls or a request above the portable inline limit.
     pub fn encode_versioned(&self) -> Result<Vec<u8>, ModelRequestCodecError> {
         self.validate_controls()?;
-        let bytes = serde_json::to_vec(&VersionedModelRequest {
+        let bytes = serde_json::to_vec(&VersionedModelRequestRef {
             schema_version: MODEL_IR_SCHEMA_VERSION,
-            request: self.clone(),
+            request: self,
         })?;
         if bytes.len() > MAX_INLINE_MODEL_REQUEST_BYTES {
             return Err(ModelRequestCodecError::TooLarge);
