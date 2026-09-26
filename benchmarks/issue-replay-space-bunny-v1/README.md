@@ -22,6 +22,11 @@ That outcome remains published. [`protocol-v2.json`](protocol-v2.json) freezes
 the corrected adapter binary at `508eaba` as a separate revision; its outcomes
 must not replace or be pooled silently with the first protocol's outcomes.
 
+The [complete revision 2 comparison](../results/2026-09-26-space-bunny-v2/README.md)
+scored 0/3 for both harnesses. [`protocol-v3.json`](protocol-v3.json) freezes
+the new action-deadline controller and corrected runner at `d4d9579` before
+another model trial. Its results are a separate engineering iteration.
+
 First validate the gold graders with `-ValidateGraders` using
 `benchmarks/issue-replay-v1/run.ps1`, this directory's `cases.json`, and
 `benchmarks/issue-replay-v1/opencode-openrouter-space-bunny.json`. Then run the
