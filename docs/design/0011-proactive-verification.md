@@ -47,8 +47,9 @@ not added to the portable trace.
 
 A passing repository check remains in memory and becomes final receipt evidence
 only if the final candidate digest is identical. Generic suite results leave
-task obligations inconclusive; a passing caller-declared acceptance check can
-prove its specifically bound obligation. Any later mutation invalidates the result automatically. When no
+task obligations inconclusive; a passing caller-declared acceptance check
+records a pass for its specifically bound obligation. Any later mutation
+invalidates the result automatically. When no
 accepted result matches, final verification runs normally.
 
 ## Repair feedback
