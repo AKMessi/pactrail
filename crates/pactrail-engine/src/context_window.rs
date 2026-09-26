@@ -210,14 +210,16 @@ impl ContextWindow {
         let mut artifacts_written = 0_usize;
         let mut after_bytes = before.bytes;
         for index in old_results {
-            compact_result_at(
+            let reclaimed = compact_result_at(
                 conversation,
                 index,
                 artifacts,
                 &mut compacted_results,
                 &mut artifacts_written,
             )?;
-            after_bytes = request_bytes(conversation, tools)?;
+            after_bytes = after_bytes
+                .checked_sub(reclaimed)
+                .ok_or(ContextWindowError::Accounting)?;
             if after_bytes <= self.target_bytes {
                 break;
             }
@@ -228,14 +230,16 @@ impl ContextWindow {
         // provider-specific tokenizer or sending a predictably invalid request.
         if after_bytes > self.high_water_bytes {
             for index in latest_results {
-                compact_result_at(
+                let reclaimed = compact_result_at(
                     conversation,
                     index,
                     artifacts,
                     &mut compacted_results,
                     &mut artifacts_written,
                 )?;
-                after_bytes = request_bytes(conversation, tools)?;
+                after_bytes = after_bytes
+                    .checked_sub(reclaimed)
+                    .ok_or(ContextWindowError::Accounting)?;
                 if after_bytes <= self.target_bytes {
                     break;
                 }
@@ -246,6 +250,9 @@ impl ContextWindow {
             return Ok(None);
         }
         let after = request_fingerprint(conversation, tools)?;
+        if after.bytes != after_bytes {
+            return Err(ContextWindowError::Accounting);
+        }
         Ok(Some(CompactionReport {
             before_bytes: before.bytes,
             after_bytes: after.bytes,
@@ -275,6 +282,8 @@ pub(crate) struct CompactionReport {
 
 #[derive(Debug, Error)]
 pub(crate) enum ContextWindowError {
+    #[error("model context byte accounting disagreed with serialized request")]
+    Accounting,
     #[error("failed to serialize model context for deterministic compaction: {0}")]
     Serialization(#[from] serde_json::Error),
     #[error("failed to persist an exact tool observation: {0}")]
@@ -301,13 +310,6 @@ fn request_fingerprint(
         bytes: bytes.len(),
         digest: blake3::hash(&bytes).to_hex().to_string(),
     })
-}
-
-fn request_bytes(
-    conversation: &[ConversationItem],
-    tools: &[ToolDescriptor],
-) -> Result<usize, serde_json::Error> {
-    normalized_request_bytes(conversation, tools).map(|bytes| bytes.len())
 }
 
 fn normalized_request_bytes(
@@ -354,15 +356,15 @@ fn compact_result_at(
     artifacts: Option<&ArtifactStore>,
     compacted_results: &mut usize,
     artifacts_written: &mut usize,
-) -> Result<(), ContextWindowError> {
+) -> Result<usize, ContextWindowError> {
     let ConversationItem::ToolResult(result) = &mut conversation[index] else {
-        return Ok(());
+        return Ok(0);
     };
     let original = serde_json::to_vec(&result.content)?;
     let compacted = compacted_content(result, &original, artifacts.is_some());
     let compacted_bytes = serde_json::to_vec(&compacted)?;
     if compacted_bytes.len() >= original.len() {
-        return Ok(());
+        return Ok(0);
     }
     if let Some(store) = artifacts {
         let stored = store.put(&original)?;
@@ -371,7 +373,7 @@ fn compact_result_at(
     }
     result.content = compacted;
     *compacted_results = compacted_results.saturating_add(1);
-    Ok(())
+    Ok(original.len().saturating_sub(compacted_bytes.len()))
 }
 
 fn compacted_content(result: &ToolResult, original: &[u8], artifact_available: bool) -> Value {
@@ -749,6 +751,30 @@ mod tests {
                 .unwrap_or_else(|error| unreachable!("repeat: {error}"))
                 .is_none()
         );
+    }
+
+    #[test]
+    fn incremental_compaction_size_matches_full_request_serialization() {
+        let mut conversation = vec![ConversationItem::Message(Message::system("stable"))];
+        for index in 0..6 {
+            conversation.extend(tool_turn(
+                &format!("result-{index}"),
+                json!({"text": "x".repeat(6_000), "index": index}),
+            ));
+        }
+        let before = request_fingerprint(&conversation, &[])
+            .unwrap_or_else(|error| unreachable!("before: {error}"));
+        let report = ContextWindow::with_limits(20_000, 15_000)
+            .compact(&mut conversation, &[])
+            .unwrap_or_else(|error| unreachable!("compaction: {error}"))
+            .unwrap_or_else(|| unreachable!("expected compaction"));
+        let after = request_fingerprint(&conversation, &[])
+            .unwrap_or_else(|error| unreachable!("after: {error}"));
+        assert!(report.compacted_results >= 2);
+        assert_eq!(report.before_bytes, before.bytes);
+        assert_eq!(report.after_bytes, after.bytes);
+        assert_eq!(report.reclaimed_bytes, before.bytes - after.bytes);
+        assert_eq!(report.after_digest, after.digest);
     }
 
     #[test]
