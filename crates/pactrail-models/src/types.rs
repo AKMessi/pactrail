@@ -13,6 +13,10 @@ use thiserror::Error;
 /// Current schema of Pactrail's provider-neutral conversation and request IR.
 pub const MODEL_IR_SCHEMA_VERSION: u32 = 1;
 
+pub(crate) fn late_system_directive(content: &str) -> String {
+    format!("Pactrail controller directive: {content}")
+}
+
 /// Maximum number of image artifacts accepted on one user turn.
 pub const MAX_INPUT_IMAGES: usize = 4;
 /// Maximum decoded bytes accepted for one image artifact.
@@ -682,7 +686,8 @@ impl Default for ModelCapabilities {
 }
 
 /// Complete normalized request passed to a model driver.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ModelRequest {
     pub conversation: Vec<ConversationItem>,
     pub tools: Vec<ToolDescriptor>,
@@ -690,6 +695,85 @@ pub struct ModelRequest {
     pub temperature: Option<f32>,
     /// Engine-owned turn phase; providers ignore it, opt-in routers may use it.
     pub phase: Option<ModelPhase>,
+    /// Optional explicit route; independent of the semantic turn phase.
+    pub route: Option<ModelRoute>,
+}
+
+/// A bounded, explicit codec for a provider-neutral request crossing a durable boundary.
+#[derive(Debug, Error)]
+pub enum ModelRequestCodecError {
+    #[error("model request exceeds the portable inline limit")]
+    TooLarge,
+    #[error("unsupported model request schema {0}")]
+    UnsupportedSchema(u32),
+    #[error("model request has invalid output or temperature controls")]
+    InvalidControls,
+    #[error("model request codec failed: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct VersionedModelRequest {
+    schema_version: u32,
+    request: ModelRequest,
+}
+
+#[derive(Serialize)]
+struct VersionedModelRequestRef<'a> {
+    schema_version: u32,
+    request: &'a ModelRequest,
+}
+
+impl ModelRequest {
+    /// Encodes the current request schema for a checkpoint or transport boundary.
+    ///
+    /// # Errors
+    /// Rejects invalid controls or a request above the portable inline limit.
+    pub fn encode_versioned(&self) -> Result<Vec<u8>, ModelRequestCodecError> {
+        self.validate_controls()?;
+        let bytes = serde_json::to_vec(&VersionedModelRequestRef {
+            schema_version: MODEL_IR_SCHEMA_VERSION,
+            request: self,
+        })?;
+        if bytes.len() > MAX_INLINE_MODEL_REQUEST_BYTES {
+            return Err(ModelRequestCodecError::TooLarge);
+        }
+        Ok(bytes)
+    }
+
+    /// Decodes only the supported provider-neutral request schema.
+    ///
+    /// # Errors
+    /// Rejects oversized, malformed, future-version, or invalid requests.
+    pub fn decode_versioned(bytes: &[u8]) -> Result<Self, ModelRequestCodecError> {
+        if bytes.len() > MAX_INLINE_MODEL_REQUEST_BYTES {
+            return Err(ModelRequestCodecError::TooLarge);
+        }
+        let envelope: VersionedModelRequest = serde_json::from_slice(bytes)?;
+        if envelope.schema_version != MODEL_IR_SCHEMA_VERSION {
+            return Err(ModelRequestCodecError::UnsupportedSchema(
+                envelope.schema_version,
+            ));
+        }
+        envelope.request.validate_controls()?;
+        Ok(envelope.request)
+    }
+
+    fn validate_controls(&self) -> Result<(), ModelRequestCodecError> {
+        if self.max_output_tokens == 0 || self.temperature.is_some_and(|value| !value.is_finite()) {
+            return Err(ModelRequestCodecError::InvalidControls);
+        }
+        Ok(())
+    }
+}
+
+/// Which configured endpoint serves a routed model turn.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelRoute {
+    Primary,
+    Investigation,
 }
 
 /// Provider-neutral purpose of one model request.
@@ -847,6 +931,40 @@ mod tests {
 
     use super::*;
     use crate::test_support::tiny_png;
+
+    #[test]
+    fn versioned_model_request_round_trips_and_rejects_future_schema() {
+        let request = ModelRequest {
+            conversation: vec![ConversationItem::Message(Message::user("inspect"))],
+            tools: Vec::new(),
+            max_output_tokens: 512,
+            temperature: Some(0.0),
+            phase: Some(ModelPhase::Investigation),
+            route: Some(ModelRoute::Primary),
+        };
+        let bytes = request
+            .encode_versioned()
+            .unwrap_or_else(|error| unreachable!("encode: {error}"));
+        let decoded = ModelRequest::decode_versioned(&bytes)
+            .unwrap_or_else(|error| unreachable!("decode: {error}"));
+        assert_eq!(decoded.conversation, request.conversation);
+        assert_eq!(decoded.phase, request.phase);
+        assert_eq!(decoded.route, request.route);
+
+        let mut future: Value =
+            serde_json::from_slice(&bytes).unwrap_or_else(|error| unreachable!("JSON: {error}"));
+        future["schema_version"] = json!(MODEL_IR_SCHEMA_VERSION + 1);
+        let future_bytes = serde_json::to_vec(&future)
+            .unwrap_or_else(|error| unreachable!("future JSON: {error}"));
+        assert!(matches!(
+            ModelRequest::decode_versioned(&future_bytes),
+            Err(ModelRequestCodecError::UnsupportedSchema(_))
+        ));
+        assert!(matches!(
+            ModelRequest::decode_versioned(&vec![b' '; MAX_INLINE_MODEL_REQUEST_BYTES + 1]),
+            Err(ModelRequestCodecError::TooLarge)
+        ));
+    }
 
     #[test]
     fn pricing_separates_read_and_write_cache_tokens_without_float_rounding() {

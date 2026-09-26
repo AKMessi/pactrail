@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use pactrail_models::{ConversationItem, ToolResult};
+use pactrail_store::{ArtifactError, ArtifactStore};
 use pactrail_tools::ToolDescriptor;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -27,15 +28,25 @@ pub(crate) struct DeduplicationReport {
     pub(crate) content_digest: String,
     pub(crate) original_bytes: usize,
     pub(crate) reference_bytes: usize,
+    pub(crate) artifact_written: bool,
 }
 
 /// Keeps the first complete tool observation in the stable request prefix and
 /// replaces a new, identical observation with a reference to it. A later
 /// context compaction may summarize the source; the reference then instructs
 /// the model to rerun the tool before relying on omitted details.
+#[cfg(test)]
 pub(crate) fn append_deduplicated_result(
     conversation: &mut Vec<ConversationItem>,
     result: ToolResult,
+) -> Result<Option<DeduplicationReport>, ContextWindowError> {
+    append_deduplicated_result_with_artifacts(conversation, result, None)
+}
+
+pub(crate) fn append_deduplicated_result_with_artifacts(
+    conversation: &mut Vec<ConversationItem>,
+    result: ToolResult,
+    artifacts: Option<&ArtifactStore>,
 ) -> Result<Option<DeduplicationReport>, ContextWindowError> {
     let original = serde_json::to_vec(&result.content)?;
     if original.len() < MIN_DUPLICATE_BYTES {
@@ -59,19 +70,30 @@ pub(crate) fn append_deduplicated_result(
         return Ok(None);
     };
     let digest = blake3::hash(&original).to_hex().to_string();
-    let reference = json!({
+    let mut reference = json!({
         "pactrail_duplicate": true,
         "version": 1,
         "source_call_id": source_call_id,
-        "original_digest": digest,
+        "original_digest": digest.clone(),
         "semantic_digest": tool_result_digest(&result),
         "original_bytes": original.len(),
-        "guidance": "This tool output exactly matches the earlier result named by source_call_id. If that result was compacted, rerun the tool before relying on omitted details."
+        "guidance": if artifacts.is_some() {
+            "This tool output exactly matches source_call_id. The exact JSON is available through read_observation using original_digest; read a bounded slice when details are needed."
+        } else {
+            "This tool output exactly matches source_call_id. If that result was compacted, rerun the tool before relying on omitted details."
+        }
     });
+    if artifacts.is_some() {
+        reference["artifact_digest"] = Value::String(digest.clone());
+    }
     let reference_bytes = serde_json::to_vec(&reference)?.len();
     if reference_bytes >= original.len() {
         conversation.push(ConversationItem::ToolResult(result));
         return Ok(None);
+    }
+    if let Some(store) = artifacts {
+        let stored = store.put(&original)?;
+        debug_assert_eq!(stored.digest, digest);
     }
     let report = DeduplicationReport {
         source_call_id: source_call_id.to_owned(),
@@ -79,6 +101,7 @@ pub(crate) fn append_deduplicated_result(
         content_digest: digest,
         original_bytes: original.len(),
         reference_bytes,
+        artifact_written: artifacts.is_some(),
     };
     conversation.push(ConversationItem::ToolResult(ToolResult {
         content: reference,
@@ -144,10 +167,20 @@ impl ContextWindow {
     /// high-water mark, it is compacted as a final safety valve. Assistant tool
     /// calls are retained, so providers continue to receive valid call/result
     /// pairs and the model can repeat a call with narrower arguments.
+    #[cfg(test)]
     pub(crate) fn compact(
         self,
         conversation: &mut [ConversationItem],
         tools: &[ToolDescriptor],
+    ) -> Result<Option<CompactionReport>, ContextWindowError> {
+        self.compact_with_artifacts(conversation, tools, None)
+    }
+
+    pub(crate) fn compact_with_artifacts(
+        self,
+        conversation: &mut [ConversationItem],
+        tools: &[ToolDescriptor],
+        artifacts: Option<&ArtifactStore>,
     ) -> Result<Option<CompactionReport>, ContextWindowError> {
         let before = request_fingerprint(conversation, tools)?;
         if before.bytes <= self.high_water_bytes {
@@ -174,10 +207,19 @@ impl ContextWindow {
         }
 
         let mut compacted_results = 0_usize;
+        let mut artifacts_written = 0_usize;
         let mut after_bytes = before.bytes;
         for index in old_results {
-            compact_result_at(conversation, index, &mut compacted_results)?;
-            after_bytes = request_bytes(conversation, tools)?;
+            let reclaimed = compact_result_at(
+                conversation,
+                index,
+                artifacts,
+                &mut compacted_results,
+                &mut artifacts_written,
+            )?;
+            after_bytes = after_bytes
+                .checked_sub(reclaimed)
+                .ok_or(ContextWindowError::Accounting)?;
             if after_bytes <= self.target_bytes {
                 break;
             }
@@ -188,8 +230,16 @@ impl ContextWindow {
         // provider-specific tokenizer or sending a predictably invalid request.
         if after_bytes > self.high_water_bytes {
             for index in latest_results {
-                compact_result_at(conversation, index, &mut compacted_results)?;
-                after_bytes = request_bytes(conversation, tools)?;
+                let reclaimed = compact_result_at(
+                    conversation,
+                    index,
+                    artifacts,
+                    &mut compacted_results,
+                    &mut artifacts_written,
+                )?;
+                after_bytes = after_bytes
+                    .checked_sub(reclaimed)
+                    .ok_or(ContextWindowError::Accounting)?;
                 if after_bytes <= self.target_bytes {
                     break;
                 }
@@ -200,11 +250,15 @@ impl ContextWindow {
             return Ok(None);
         }
         let after = request_fingerprint(conversation, tools)?;
+        if after.bytes != after_bytes {
+            return Err(ContextWindowError::Accounting);
+        }
         Ok(Some(CompactionReport {
             before_bytes: before.bytes,
             after_bytes: after.bytes,
             reclaimed_bytes: before.bytes.saturating_sub(after.bytes),
             compacted_results,
+            artifacts_written,
             high_water_bytes: self.high_water_bytes,
             target_bytes: self.target_bytes,
             before_digest: before.digest,
@@ -219,6 +273,7 @@ pub(crate) struct CompactionReport {
     pub(crate) after_bytes: usize,
     pub(crate) reclaimed_bytes: usize,
     pub(crate) compacted_results: usize,
+    pub(crate) artifacts_written: usize,
     pub(crate) high_water_bytes: usize,
     pub(crate) target_bytes: usize,
     pub(crate) before_digest: String,
@@ -227,8 +282,12 @@ pub(crate) struct CompactionReport {
 
 #[derive(Debug, Error)]
 pub(crate) enum ContextWindowError {
+    #[error("model context byte accounting disagreed with serialized request")]
+    Accounting,
     #[error("failed to serialize model context for deterministic compaction: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error("failed to persist an exact tool observation: {0}")]
+    Artifact(#[from] ArtifactError),
 }
 
 #[derive(Serialize)]
@@ -251,13 +310,6 @@ fn request_fingerprint(
         bytes: bytes.len(),
         digest: blake3::hash(&bytes).to_hex().to_string(),
     })
-}
-
-fn request_bytes(
-    conversation: &[ConversationItem],
-    tools: &[ToolDescriptor],
-) -> Result<usize, serde_json::Error> {
-    normalized_request_bytes(conversation, tools).map(|bytes| bytes.len())
 }
 
 fn normalized_request_bytes(
@@ -301,40 +353,56 @@ fn normalized_request_bytes(
 fn compact_result_at(
     conversation: &mut [ConversationItem],
     index: usize,
+    artifacts: Option<&ArtifactStore>,
     compacted_results: &mut usize,
-) -> Result<(), serde_json::Error> {
+    artifacts_written: &mut usize,
+) -> Result<usize, ContextWindowError> {
     let ConversationItem::ToolResult(result) = &mut conversation[index] else {
-        return Ok(());
+        return Ok(0);
     };
     let original = serde_json::to_vec(&result.content)?;
-    let compacted = compacted_content(result, &original);
+    let compacted = compacted_content(result, &original, artifacts.is_some());
     let compacted_bytes = serde_json::to_vec(&compacted)?;
     if compacted_bytes.len() >= original.len() {
-        return Ok(());
+        return Ok(0);
+    }
+    if let Some(store) = artifacts {
+        let stored = store.put(&original)?;
+        debug_assert_eq!(stored.digest, blake3::hash(&original).to_hex().to_string());
+        *artifacts_written = artifacts_written.saturating_add(1);
     }
     result.content = compacted;
     *compacted_results = compacted_results.saturating_add(1);
-    Ok(())
+    Ok(original.len().saturating_sub(compacted_bytes.len()))
 }
 
-fn compacted_content(result: &ToolResult, original: &[u8]) -> Value {
+fn compacted_content(result: &ToolResult, original: &[u8], artifact_available: bool) -> Value {
     let serialized = String::from_utf8_lossy(original);
     let preview = truncate_utf8(&serialized, PREVIEW_BYTES);
     let mut anchors = BTreeMap::new();
     collect_anchors(&result.content, "", &mut anchors);
-    json!({
+    let digest = blake3::hash(original).to_hex().to_string();
+    let mut compacted = json!({
         "pactrail_compacted": true,
         "version": COMPACTION_VERSION,
         "tool": result.name,
         "call_id": result.call_id,
         "is_error": result.is_error,
         "original_bytes": original.len(),
-        "original_digest": blake3::hash(original).to_hex().to_string(),
+        "original_digest": digest.clone(),
         "semantic_digest": tool_result_digest(result),
         "anchors": anchors,
         "preview_json": preview,
         "guidance": "This is a deterministic compacted observation. Use the retained assistant tool call and run the tool again with narrower arguments before relying on omitted details."
-    })
+    });
+    if artifact_available {
+        compacted["artifact_digest"] = Value::String(digest);
+        compacted["guidance"] = Value::String(
+            "Use read_observation with artifact_digest and a byte offset for exact omitted JSON."
+                .to_owned(),
+        );
+    }
+    compacted
 }
 
 fn collect_anchors(value: &Value, prefix: &str, anchors: &mut BTreeMap<String, String>) {
@@ -533,6 +601,42 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_reference_retains_exact_retrievable_json() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let artifacts = ArtifactStore::open(root.path())
+            .unwrap_or_else(|error| unreachable!("artifacts: {error}"));
+        let content = json!({"text": "evidence".repeat(1_000)});
+        let original =
+            serde_json::to_vec(&content).unwrap_or_else(|error| unreachable!("original: {error}"));
+        let mut conversation = vec![ConversationItem::Message(Message::user("inspect"))];
+        conversation.extend(tool_turn("first", content.clone()));
+        conversation.push(tool_turn("second", content.clone())[0].clone());
+        let report = append_deduplicated_result_with_artifacts(
+            &mut conversation,
+            ToolResult {
+                call_id: "second".to_owned(),
+                name: "read_file".to_owned(),
+                content,
+                is_error: false,
+            },
+            Some(&artifacts),
+        )
+        .unwrap_or_else(|error| unreachable!("deduplication: {error}"))
+        .unwrap_or_else(|| unreachable!("expected duplicate"));
+        assert!(report.artifact_written);
+        assert_eq!(artifacts.get(&report.content_digest).ok(), Some(original));
+        let Some(ConversationItem::ToolResult(reference)) = conversation.last() else {
+            unreachable!("reference")
+        };
+        assert_eq!(reference.content["artifact_digest"], report.content_digest);
+        assert!(
+            reference.content["guidance"]
+                .as_str()
+                .is_some_and(|guidance| guidance.contains("read_observation"))
+        );
+    }
+
+    #[test]
     fn leaves_recent_turn_lossless_when_old_results_are_enough() {
         let mut conversation = vec![ConversationItem::Message(Message::user("fix it"))];
         conversation.extend(tool_turn(
@@ -591,6 +695,31 @@ mod tests {
     }
 
     #[test]
+    fn compacted_observation_has_an_integrity_checked_retrieval_artifact() {
+        let root = tempfile::tempdir().unwrap_or_else(|error| unreachable!("root: {error}"));
+        let artifacts = ArtifactStore::open(root.path())
+            .unwrap_or_else(|error| unreachable!("artifact store: {error}"));
+        let content = json!({"path": "src/lib.rs", "content": "z".repeat(20_000)});
+        let original =
+            serde_json::to_vec(&content).unwrap_or_else(|error| unreachable!("original: {error}"));
+        let mut conversation = vec![ConversationItem::Message(Message::user("inspect"))];
+        conversation.extend(tool_turn("latest", content));
+        let report = ContextWindow::with_limits(4_000, 3_000)
+            .compact_with_artifacts(&mut conversation, &[], Some(&artifacts))
+            .unwrap_or_else(|error| unreachable!("compaction: {error}"))
+            .unwrap_or_else(|| unreachable!("expected compaction"));
+        assert_eq!(report.artifacts_written, 1);
+        let ConversationItem::ToolResult(result) = &conversation[2] else {
+            unreachable!("result")
+        };
+        let digest = result.content["artifact_digest"]
+            .as_str()
+            .unwrap_or_else(|| unreachable!("artifact digest"));
+        assert_eq!(result.content["original_digest"], digest);
+        assert_eq!(artifacts.get(digest).ok(), Some(original));
+    }
+
+    #[test]
     fn compaction_is_deterministic_and_idempotent() {
         let original = vec![
             ConversationItem::Message(Message::system("stable")),
@@ -622,6 +751,30 @@ mod tests {
                 .unwrap_or_else(|error| unreachable!("repeat: {error}"))
                 .is_none()
         );
+    }
+
+    #[test]
+    fn incremental_compaction_size_matches_full_request_serialization() {
+        let mut conversation = vec![ConversationItem::Message(Message::system("stable"))];
+        for index in 0..6 {
+            conversation.extend(tool_turn(
+                &format!("result-{index}"),
+                json!({"text": "x".repeat(6_000), "index": index}),
+            ));
+        }
+        let before = request_fingerprint(&conversation, &[])
+            .unwrap_or_else(|error| unreachable!("before: {error}"));
+        let report = ContextWindow::with_limits(20_000, 15_000)
+            .compact(&mut conversation, &[])
+            .unwrap_or_else(|error| unreachable!("compaction: {error}"))
+            .unwrap_or_else(|| unreachable!("expected compaction"));
+        let after = request_fingerprint(&conversation, &[])
+            .unwrap_or_else(|error| unreachable!("after: {error}"));
+        assert!(report.compacted_results >= 2);
+        assert_eq!(report.before_bytes, before.bytes);
+        assert_eq!(report.after_bytes, after.bytes);
+        assert_eq!(report.reclaimed_bytes, before.bytes - after.bytes);
+        assert_eq!(report.after_digest, after.digest);
     }
 
     #[test]

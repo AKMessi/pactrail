@@ -28,7 +28,8 @@ use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
     ApprovalResolver, DisabledProcessBackend, NativeProcessBackend, OciProcessBackend,
     OciProcessConfig, OciRuntimeKind, OciSandboxProfile, PolicyEngine, ProcessBackend,
-    RunProcessTool, RunShellTool, ToolError, ToolRegistry, ToolRisk, builtin_registry_with_process,
+    ReadObservationTool, RunProcessTool, RunShellTool, ToolError, ToolRegistry, ToolRisk,
+    builtin_registry_with_process,
 };
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
@@ -213,6 +214,7 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         provider: args.provider,
         model: Some(args.model),
         investigation_model: None,
+        adaptive_routing: false,
         investigation_provider: None,
         investigation_base_url: None,
         investigation_api_key_env: None,
@@ -452,6 +454,8 @@ async fn execute_resume_inner(
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
     let mut registry = run_tool_registry(process_backend, cancellation.clone(), args.allow_shell)?;
+    let observation_root = state.join("artifacts").join("observations");
+    registry.register(ReadObservationTool::new(observation_root.clone()))?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
@@ -459,6 +463,7 @@ async fn execute_resume_inner(
         .with_memory(&memory)
         .with_context_fragments(mcp_runtime.context_fragments())
         .with_repository_cache(state.join("artifacts").join("repository-index"))
+        .with_observation_store(observation_root)
         .with_checkpoint_store(&checkpoints)
         .with_runtime_identity(runtime_identity)
         .with_max_turns(args.max_turns)
@@ -608,6 +613,8 @@ async fn execute_run_inner(
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
     let mut registry = run_tool_registry(process_backend, cancellation.clone(), args.allow_shell)?;
+    let observation_root = state.join("artifacts").join("observations");
+    registry.register(ReadObservationTool::new(observation_root.clone()))?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let mut context_fragments = memory_context_fragments(&contract, &memory, &transaction)?;
@@ -616,6 +623,7 @@ async fn execute_run_inner(
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
         .with_repository_cache(state.join("artifacts").join("repository-index"))
+        .with_observation_store(observation_root)
         .with_checkpoint_store(&checkpoints)
         .with_runtime_identity(runtime_identity)
         .with_input_images(input_images)
@@ -1133,6 +1141,16 @@ fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn Model
 
 fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
     validate_price_provenance(args)?;
+    if args.adaptive_routing && args.investigation_model.is_none() {
+        return Err(CliError::Argument(
+            "--adaptive-routing requires --investigation-model".to_owned(),
+        ));
+    }
+    if args.adaptive_routing && configured_route_pricing(args)?.is_none() {
+        return Err(CliError::Argument(
+            "--adaptive-routing requires complete rate cards for both models".to_owned(),
+        ));
+    }
     if args.investigation_model.is_none()
         && (args.investigation_provider.is_some()
             || args.investigation_base_url.is_some()
@@ -1380,18 +1398,20 @@ fn configure_engine_pricing<'a>(
     if let Some((primary, investigation)) = configured_route_pricing(args)? {
         engine = engine.with_routed_pricing(primary, investigation);
     }
-    Ok(engine.with_price_provenance(
-        price_provenance(
-            args.price_source.as_deref(),
-            args.price_effective_date.as_deref(),
-            "model",
-        )?,
-        price_provenance(
-            args.investigation_price_source.as_deref(),
-            args.investigation_price_effective_date.as_deref(),
-            "investigation model",
-        )?,
-    ))
+    Ok(engine
+        .with_adaptive_routing(args.adaptive_routing)
+        .with_price_provenance(
+            price_provenance(
+                args.price_source.as_deref(),
+                args.price_effective_date.as_deref(),
+                "model",
+            )?,
+            price_provenance(
+                args.investigation_price_source.as_deref(),
+                args.investigation_price_effective_date.as_deref(),
+                "investigation model",
+            )?,
+        ))
 }
 
 fn configured_pricing(args: &RunArgs) -> Result<Option<ModelPricing>, CliError> {
@@ -2791,6 +2811,9 @@ pub(crate) fn validate_run_artifacts(state: &Path, store: &EventStore) -> Result
 fn tools(state: &Path, json_output: bool) -> Result<(), CliError> {
     let cancellation = CancellationToken::new();
     let mut registry = builtin_registry_with_process(RunProcessTool::disabled())?;
+    registry.register(ReadObservationTool::new(
+        state.join("artifacts").join("observations"),
+    ))?;
     McpRuntime::load(state)?.register(&mut registry, &cancellation)?;
     let descriptors = registry.descriptors();
     if json_output {
@@ -3698,6 +3721,8 @@ mod tests {
         assert!(validate_model_options(&args).is_err());
         args.investigation_model = Some("economical".to_owned());
         assert!(validate_model_options(&args).is_ok());
+        args.adaptive_routing = true;
+        assert!(validate_model_options(&args).is_err());
         args.input_price = Some(200_000);
         args.cached_input_price = Some(20_000);
         args.cache_creation_price = Some(250_000);
@@ -3707,6 +3732,7 @@ mod tests {
         args.investigation_cached_input_price = Some(30_000);
         args.investigation_cache_creation_price = Some(100_000);
         args.investigation_output_price = Some(800_000);
+        assert!(validate_model_options(&args).is_ok());
         let pricing = configured_pricing(&args)
             .unwrap_or_else(|error| unreachable!("pricing: {error}"))
             .unwrap_or_else(|| unreachable!("missing rates"));

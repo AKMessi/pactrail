@@ -1,7 +1,9 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
-use crate::{ModelCapabilities, ModelPhase, ModelRequest, ModelResponse, ModelStreamEvent};
+use crate::{
+    ModelCapabilities, ModelPhase, ModelRequest, ModelResponse, ModelRoute, ModelStreamEvent,
+};
 
 /// Receives transient progress while a driver assembles one complete response.
 pub trait ModelStreamObserver: Send + Sync {
@@ -26,6 +28,15 @@ pub trait ModelDriver: Send + Sync {
     /// profile for context and budget compilation.
     fn capabilities_for_phase(&self, _phase: ModelPhase) -> &ModelCapabilities {
         self.capabilities()
+    }
+
+    /// Effective capabilities when a router selects an explicit endpoint.
+    fn capabilities_for_route(
+        &self,
+        phase: ModelPhase,
+        _route: Option<ModelRoute>,
+    ) -> &ModelCapabilities {
+        self.capabilities_for_phase(phase)
     }
 
     /// Performs one model turn.

@@ -84,6 +84,7 @@ pub async fn probe_capabilities(
         max_output_tokens: driver.capabilities().max_output_tokens.clamp(1, 256),
         temperature: Some(0.0),
         phase: Some(ModelPhase::Probe),
+        route: None,
     };
     let response = driver.invoke_with_observer(&request, &observer).await?;
     if response.finish_reason == FinishReason::ContentFilter {

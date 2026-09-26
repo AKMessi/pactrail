@@ -354,6 +354,11 @@ pub struct RunArgs {
     #[serde(default)]
     pub investigation_model: Option<String>,
 
+    /// Escalate stalled investigation turns to the primary model at safe checkpoints.
+    #[arg(long)]
+    #[serde(default)]
+    pub adaptive_routing: bool,
+
     /// Provider for the investigation model; defaults to the primary provider.
     #[arg(long, value_enum)]
     #[serde(default)]

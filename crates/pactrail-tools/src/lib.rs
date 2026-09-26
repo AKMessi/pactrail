@@ -4,6 +4,7 @@ mod advanced;
 mod approval;
 mod builtins;
 mod git;
+mod observation;
 mod patch;
 mod policy;
 mod process;
@@ -15,6 +16,7 @@ pub use builtins::{
     ListFilesTool, ReadFileTool, RemoveFileTool, ReplaceTextTool, SearchTool, WriteFileTool,
 };
 pub use git::{GitDiffTool, GitHistoryTool, GitStatusTool};
+pub use observation::ReadObservationTool;
 pub use patch::ApplyPatchTool;
 pub use policy::PolicyEngine;
 pub use process::{RunProcessTool, RunShellTool};

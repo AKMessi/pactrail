@@ -210,6 +210,10 @@ impl ControllerKernel {
         }
     }
 
+    pub(crate) const fn no_progress_turns(&self) -> u16 {
+        self.no_progress_turns
+    }
+
     pub(crate) fn steering_prompt(&self) -> Option<String> {
         (self.no_progress_turns >= SEMANTIC_STEERING_THRESHOLD).then(|| {
             if self.intent == GoalIntent::Change {

@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use tracing::warn;
 
 use crate::sse::{SseDecoder, SseEvent};
-use crate::types::{validate_request_body_size, validate_request_images};
+use crate::types::{late_system_directive, validate_request_body_size, validate_request_images};
 use crate::{
     ConversationItem, FinishReason, Message, ModelCapabilities, ModelDriver, ModelError,
     ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, Usage,
@@ -699,15 +699,29 @@ fn message_json(message: &Message) -> Value {
 fn canonical_messages(conversation: &[ConversationItem]) -> Result<Vec<Value>, ModelError> {
     let mut system_instructions = Vec::new();
     let mut messages = Vec::with_capacity(conversation.len());
+    let mut prefix_ended = false;
     for item in conversation {
         if let ConversationItem::Message(Message {
             role: Role::System,
             content,
         }) = item
+            && !prefix_ended
         {
             system_instructions.push(content.as_str());
         } else {
-            messages.push(conversation_json(item)?);
+            prefix_ended = true;
+            if let ConversationItem::Message(Message {
+                role: Role::System,
+                content,
+            }) = item
+            {
+                messages.push(json!({
+                    "role": "user",
+                    "content": late_system_directive(content),
+                }));
+            } else {
+                messages.push(conversation_json(item)?);
+            }
         }
     }
 
@@ -1046,7 +1060,7 @@ mod tests {
     }
 
     #[test]
-    fn coalesces_all_system_instructions_into_one_leading_message() {
+    fn coalesces_only_the_stable_system_prefix() {
         let conversation = vec![
             ConversationItem::Message(Message::system("base policy")),
             ConversationItem::Message(Message::system("repository context")),
@@ -1058,14 +1072,16 @@ mod tests {
         let messages = canonical_messages(&conversation)
             .unwrap_or_else(|error| unreachable!("valid conversation: {error}"));
 
-        assert_eq!(messages.len(), 3);
+        assert_eq!(messages.len(), 4);
         assert_eq!(messages[0]["role"], "system");
-        assert_eq!(
-            messages[0]["content"],
-            "base policy\n\nrepository context\n\nrecovery instruction"
-        );
+        assert_eq!(messages[0]["content"], "base policy\n\nrepository context");
         assert_eq!(messages[1]["role"], "user");
         assert_eq!(messages[2]["role"], "assistant");
+        assert_eq!(messages[3]["role"], "user");
+        assert_eq!(
+            messages[3]["content"],
+            "Pactrail controller directive: recovery instruction"
+        );
         assert_eq!(
             messages
                 .iter()
@@ -1106,6 +1122,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let mut vision = config("https://api.example.com/v1");
         vision.capabilities.vision = true;
@@ -1130,6 +1147,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let default_body = request_body(&config("https://api.example.com/v1"), &request, false)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
@@ -1150,6 +1168,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: None,
             phase: None,
+            route: None,
         };
         let mut streaming = config("https://api.example.com/v1");
         streaming.stream = true;
@@ -1484,6 +1503,7 @@ mod tests {
                     max_output_tokens: 32,
                     temperature: None,
                     phase: None,
+                    route: None,
                 },
                 &observer,
             )

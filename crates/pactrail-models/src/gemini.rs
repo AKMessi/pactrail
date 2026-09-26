@@ -9,7 +9,7 @@ use serde_json::{Map, Value, json};
 use tracing::warn;
 
 use crate::sse::SseDecoder;
-use crate::types::{validate_request_body_size, validate_request_images};
+use crate::types::{late_system_directive, validate_request_body_size, validate_request_images};
 use crate::{
     ConversationItem, FinishReason, Message, ModelCapabilities, ModelDriver, ModelError,
     ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, Usage,
@@ -275,13 +275,25 @@ fn request_body(config: &GeminiConfig, request: &ModelRequest) -> Result<Value, 
 fn gemini_contents(conversation: &[ConversationItem]) -> Result<(String, Vec<Value>), ModelError> {
     let mut system = Vec::new();
     let mut contents = Vec::<Value>::new();
+    let mut prefix_ended = false;
     for item in conversation {
         match item {
             ConversationItem::Message(Message {
                 role: Role::System,
                 content,
-            }) => system.push(content.as_str()),
+            }) if !prefix_ended => system.push(content.as_str()),
+            ConversationItem::Message(Message {
+                role: Role::System,
+                content,
+            }) => {
+                push_content(
+                    &mut contents,
+                    "user",
+                    vec![json!({"text": late_system_directive(content)})],
+                )?;
+            }
             ConversationItem::Message(Message { role, content }) => {
+                prefix_ended = true;
                 let role = match role {
                     Role::User => "user",
                     Role::Assistant => "model",
@@ -294,6 +306,7 @@ fn gemini_contents(conversation: &[ConversationItem]) -> Result<(String, Vec<Val
                 push_content(&mut contents, role, vec![json!({"text": content})])?;
             }
             ConversationItem::UserContent(content) => {
+                prefix_ended = true;
                 let mut parts =
                     Vec::with_capacity(content.images.len().saturating_mul(2).saturating_add(1));
                 if !content.text.is_empty() {
@@ -313,6 +326,7 @@ fn gemini_contents(conversation: &[ConversationItem]) -> Result<(String, Vec<Val
                 push_content(&mut contents, "user", parts)?;
             }
             ConversationItem::AssistantToolCalls { text, calls } => {
+                prefix_ended = true;
                 let mut parts = Vec::with_capacity(calls.len().saturating_add(1));
                 if !text.is_empty() {
                     parts.push(json!({"text": text}));
@@ -333,6 +347,7 @@ fn gemini_contents(conversation: &[ConversationItem]) -> Result<(String, Vec<Val
                 push_content(&mut contents, "model", parts)?;
             }
             ConversationItem::ToolResult(result) => {
+                prefix_ended = true;
                 let response = if result.content.is_object() {
                     result.content.clone()
                 } else {
@@ -984,6 +999,34 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn late_controller_directive_preserves_initial_system_instruction() {
+        let base = vec![
+            ConversationItem::Message(Message::system("base policy")),
+            ConversationItem::Message(Message::user("task")),
+            ConversationItem::Message(Message::assistant("working")),
+        ];
+        let (initial_system, initial_contents) =
+            gemini_contents(&base).unwrap_or_else(|error| unreachable!("initial: {error}"));
+        let mut continued = base;
+        continued.push(ConversationItem::Message(Message::system(
+            "validate candidate",
+        )));
+        let (later_system, later_contents) =
+            gemini_contents(&continued).unwrap_or_else(|error| unreachable!("continued: {error}"));
+        assert_eq!(later_system, initial_system);
+        assert_eq!(&later_contents[..initial_contents.len()], initial_contents);
+        assert_eq!(
+            later_contents.last().map(|item| &item["role"]),
+            Some(&json!("user"))
+        );
+        assert!(later_contents.last().is_some_and(|item| {
+            item["parts"][0]["text"]
+                .as_str()
+                .is_some_and(|text| text.contains("validate candidate"))
+        }));
+    }
+
     #[derive(Default)]
     struct RecordingObserver(Mutex<Vec<ModelStreamEvent>>);
 
@@ -1041,6 +1084,7 @@ mod tests {
             max_output_tokens: 512,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let body = request_body(&config(), &request)
             .unwrap_or_else(|error| unreachable!("native request: {error}"));
@@ -1071,6 +1115,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let mut config = config();
         config.capabilities.vision = true;
@@ -1205,6 +1250,7 @@ mod tests {
                     max_output_tokens: 32,
                     temperature: None,
                     phase: None,
+                    route: None,
                 },
                 &RecordingObserver::default(),
             )

@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use tracing::warn;
 
 use crate::sse::{SseDecoder, SseEvent};
-use crate::types::{validate_request_body_size, validate_request_images};
+use crate::types::{late_system_directive, validate_request_body_size, validate_request_images};
 use crate::{
     ConversationItem, FinishReason, Message, ModelCapabilities, ModelDriver, ModelError,
     ModelRequest, ModelResponse, ModelStreamEvent, ModelStreamObserver, Role, ToolCall, Usage,
@@ -268,13 +268,25 @@ fn anthropic_messages(
 ) -> Result<(String, Vec<Value>), ModelError> {
     let mut system = Vec::new();
     let mut messages = Vec::<Value>::new();
+    let mut prefix_ended = false;
     for item in conversation {
         match item {
             ConversationItem::Message(Message {
                 role: Role::System,
                 content,
-            }) => system.push(content.as_str()),
+            }) if !prefix_ended => system.push(content.as_str()),
+            ConversationItem::Message(Message {
+                role: Role::System,
+                content,
+            }) => {
+                push_message_blocks(
+                    &mut messages,
+                    "user",
+                    vec![json!({"type": "text", "text": late_system_directive(content)})],
+                )?;
+            }
             ConversationItem::Message(Message { role, content }) => {
+                prefix_ended = true;
                 let role = match role {
                     Role::User => "user",
                     Role::Assistant => "assistant",
@@ -291,6 +303,7 @@ fn anthropic_messages(
                 )?;
             }
             ConversationItem::UserContent(content) => {
+                prefix_ended = true;
                 let mut blocks =
                     Vec::with_capacity(content.images.len().saturating_mul(2).saturating_add(1));
                 for image in &content.images {
@@ -313,6 +326,7 @@ fn anthropic_messages(
                 push_message_blocks(&mut messages, "user", blocks)?;
             }
             ConversationItem::AssistantToolCalls { text, calls } => {
+                prefix_ended = true;
                 let mut blocks = Vec::with_capacity(calls.len().saturating_add(1));
                 if !text.is_empty() {
                     blocks.push(json!({"type": "text", "text": text}));
@@ -328,6 +342,7 @@ fn anthropic_messages(
                 push_message_blocks(&mut messages, "assistant", blocks)?;
             }
             ConversationItem::ToolResult(result) => {
+                prefix_ended = true;
                 push_message_blocks(
                     &mut messages,
                     "user",
@@ -1117,6 +1132,34 @@ mod tests {
     }
 
     #[test]
+    fn late_controller_directive_does_not_rewrite_cached_system_prefix() {
+        let base = vec![
+            ConversationItem::Message(Message::system("base policy")),
+            ConversationItem::Message(Message::user("task")),
+            ConversationItem::Message(Message::assistant("working")),
+        ];
+        let (initial_system, initial_messages) =
+            anthropic_messages(&base).unwrap_or_else(|error| unreachable!("initial: {error}"));
+        let mut continued = base;
+        continued.push(ConversationItem::Message(Message::system(
+            "validate candidate",
+        )));
+        let (later_system, later_messages) = anthropic_messages(&continued)
+            .unwrap_or_else(|error| unreachable!("continued: {error}"));
+        assert_eq!(later_system, initial_system);
+        assert_eq!(&later_messages[..initial_messages.len()], initial_messages);
+        assert_eq!(
+            later_messages.last().map(|message| &message["role"]),
+            Some(&json!("user"))
+        );
+        assert!(later_messages.last().is_some_and(|message| {
+            message["content"][0]["text"]
+                .as_str()
+                .is_some_and(|text| text.contains("validate candidate"))
+        }));
+    }
+
+    #[test]
     fn maps_system_tools_and_parallel_results_to_native_blocks() {
         let tools = builtin_registry()
             .unwrap_or_else(|error| unreachable!("registry: {error}"))
@@ -1146,6 +1189,7 @@ mod tests {
             max_output_tokens: 512,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let body = request_body(&config(), &request, true)
             .unwrap_or_else(|error| unreachable!("native request: {error}"));
@@ -1167,6 +1211,7 @@ mod tests {
             max_output_tokens: 256,
             temperature: None,
             phase: None,
+            route: None,
         };
         let cached = request_body(&config, &request, false)
             .unwrap_or_else(|error| unreachable!("cached request: {error}"));
@@ -1194,6 +1239,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let mut config = config();
         config.capabilities.vision = true;
@@ -1357,6 +1403,7 @@ mod tests {
                     max_output_tokens: 32,
                     temperature: None,
                     phase: None,
+                    route: None,
                 },
                 &RecordingObserver::default(),
             )

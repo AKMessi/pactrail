@@ -8,12 +8,23 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Provider adapters now keep the initial system prompt stable when later controller directives arrive. OpenAI Responses retains ordered system items; Anthropic, Gemini, and OpenAI-compatible transports render later directives in turn order, improving prompt-cache reuse across phase changes.
+- Context compaction now accounts for each exact JSON size reduction and verifies the final request size once, avoiding repeated full conversation serialization as tool history grows.
+- Repeated large observations in CLI runs now retain exact JSON in the run-local artifact store when deduplicated, so omitted details can be retrieved without repeating the original tool call.
+- Provider-neutral model requests now have a bounded versioned codec for durable or cross-process handoff, with fail-closed schema and control validation.
 - Repeated large tool observations now become digest-bound references to the
   first identical result, reducing repeated prompt bytes while preserving the
   earlier request prefix and journaling the savings.
+- Compacted tool observations in CLI runs now retain exact JSON in run-scoped,
+  integrity-checked artifacts. The new `read_observation` tool retrieves a
+  bounded byte range instead of requiring another full tool result.
 - Run checkpoints now use schema 2 to seal the reconciled cost ledger. Schema 1
   checkpoints remain readable and are upgraded at the next safe write; resume
   rejects a cost ledger that disagrees with durable model actions.
+- Opt-in adaptive routing now escalates stalled investigation to the primary
+  model at a safe checkpoint, selects using explicit cost cards and remaining
+  budget, and records the route and reason. Checkpoint schema 3 seals that
+  route while continuing to read schemas 1 and 2.
 
 - The Anthropic native adapter now enables automatic ephemeral prompt caching
   when `--prompt-caching on` is declared, with cache usage reflected in

@@ -241,6 +241,11 @@ binds the bytes with a BLAKE3 digest. This preserves the stable request prefix
 and avoids rebilling repeated output as prompt input. The run journal records
 the reclaimed bytes and digest; it does not record raw tool content.
 
+CLI runs store the exact deduplicated JSON under that digest in the run-scoped
+artifact store. If the source is later compacted, `read_observation` retrieves
+a bounded slice without repeating the original tool call. The deduplication
+action records whether the artifact was stored.
+
 When the high-water mark is crossed, older tool results are replaced in place
 with deterministic compaction envelopes. Each envelope retains the tool name,
 call ID, error state, original byte count and BLAKE3 digest, bounded scalar
@@ -250,8 +255,16 @@ and conversation order are never removed, preserving provider protocol
 validity. The latest tool turn remains unmodified unless it alone threatens the
 window. Model-generated summaries are never used for compaction.
 
+CLI runs persist the exact JSON bytes of each compacted observation in a
+run-scoped content-addressed artifact store before replacing the model-visible
+result. The envelope includes an `artifact_digest`; `read_observation` can
+retrieve at most 4096 UTF-8 bytes per call using that digest and a byte offset.
+The tool resolves artifacts only under the current run ID and requires file-read
+authority. Missing or tampered artifacts fail integrity checks, and the model
+can still repeat the original tool call when an artifact is unavailable.
+
 Each compaction writes before/after request digests, byte counts, thresholds,
-and reclaimed bytes to the hash-linked action journal and appears in the live
+reclaimed bytes, and the artifact count to the hash-linked action journal and appears in the live
 CLI timeline. Raw observations remain intentionally absent from the durable
 trace.
 
@@ -262,6 +275,15 @@ turn ceiling into `investigating`, `implementing`, `validating`, and
 turns when the configured budget permits. Each `ModelRequest` advertises the
 same configured tool catalog. Tool dispatch rejects calls outside that catalog
 before registry or policy execution.
+
+The initial contiguous system messages form the stable provider instruction
+prefix. Later controller messages remain at their original turn boundary:
+Responses sends them as ordered system items, while Anthropic, Gemini, and
+OpenAI-compatible transports render them as labelled user turns because their
+portable request shape does not require a mid-conversation system role. The
+initial policy names phase announcements and forbids them from expanding tool
+authority. Adding a phase therefore appends to the provider transcript instead
+of rewriting its initial system prefix.
 
 Change tasks receive bounded initial discovery. Once its allowance is reached,
 the controller asks for a supported edit, a targeted missing fact, or a precise
@@ -407,9 +429,10 @@ profiles, secret-free CLI manifest, resolved process-runtime/image profile,
 sealed input artifacts, token use, turn counters, repair state, and elapsed
 active budget. Checkpoint schema 2 also seals reconciled micro-USD spend at
 each safe boundary. On resume, Pactrail compares that value with the hash-linked
-model action ledger before any new model or tool work. Schema 1 checkpoints
-remain readable: their spend is reconstructed from durable actions, and the
-next safe checkpoint is written as schema 2. Future schemas fail closed.
+model action ledger before any new model or tool work. Schema 3 additionally
+seals the active adaptive model route. Schema 1 and 2 checkpoints remain
+readable: schema 1 spend is reconstructed from durable actions, and the next
+safe checkpoint is written as schema 3. Future schemas fail closed.
 
 `pactrail resume <run-id>` reopens the existing workspace transaction and reads
 the original `run.json`; it never reloads a mutable task file. Before appending
