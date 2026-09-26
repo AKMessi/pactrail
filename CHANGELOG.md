@@ -11,6 +11,9 @@ follow [Semantic Versioning](https://semver.org/).
 - Repeated large tool observations now become digest-bound references to the
   first identical result, reducing repeated prompt bytes while preserving the
   earlier request prefix and journaling the savings.
+- Compacted tool observations in CLI runs now retain exact JSON in run-scoped,
+  integrity-checked artifacts. The new `read_observation` tool retrieves a
+  bounded byte range instead of requiring another full tool result.
 - Run checkpoints now use schema 2 to seal the reconciled cost ledger. Schema 1
   checkpoints remain readable and are upgraded at the next safe write; resume
   rejects a cost ledger that disagrees with durable model actions.

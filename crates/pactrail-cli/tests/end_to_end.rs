@@ -854,8 +854,9 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
     let tools = tools
         .as_array()
         .unwrap_or_else(|| unreachable!("tool descriptors were not an array"));
-    assert_eq!(tools.len(), 17);
+    assert_eq!(tools.len(), 18);
     assert!(tools.iter().any(|tool| tool["name"] == "run_process"));
+    assert!(tools.iter().any(|tool| tool["name"] == "read_observation"));
     let patch = tools
         .iter()
         .find(|tool| tool["name"] == "apply_patch")

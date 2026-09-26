@@ -28,7 +28,8 @@ use pactrail_store::{EventStore, RunLease, StoreError};
 use pactrail_tools::{
     ApprovalResolver, DisabledProcessBackend, NativeProcessBackend, OciProcessBackend,
     OciProcessConfig, OciRuntimeKind, OciSandboxProfile, PolicyEngine, ProcessBackend,
-    RunProcessTool, RunShellTool, ToolError, ToolRegistry, ToolRisk, builtin_registry_with_process,
+    ReadObservationTool, RunProcessTool, RunShellTool, ToolError, ToolRegistry, ToolRisk,
+    builtin_registry_with_process,
 };
 use pactrail_workspace::{TransactionError, WorkspaceTransaction};
 use schemars::schema_for;
@@ -453,6 +454,8 @@ async fn execute_resume_inner(
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
     let mut registry = run_tool_registry(process_backend, cancellation.clone(), args.allow_shell)?;
+    let observation_root = state.join("artifacts").join("observations");
+    registry.register(ReadObservationTool::new(observation_root.clone()))?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
@@ -460,6 +463,7 @@ async fn execute_resume_inner(
         .with_memory(&memory)
         .with_context_fragments(mcp_runtime.context_fragments())
         .with_repository_cache(state.join("artifacts").join("repository-index"))
+        .with_observation_store(observation_root)
         .with_checkpoint_store(&checkpoints)
         .with_runtime_identity(runtime_identity)
         .with_max_turns(args.max_turns)
@@ -609,6 +613,8 @@ async fn execute_run_inner(
         .map_err(EngineError::from)?;
     let memory = MemoryStore::open(state.join("memory.sqlite3"))?;
     let mut registry = run_tool_registry(process_backend, cancellation.clone(), args.allow_shell)?;
+    let observation_root = state.join("artifacts").join("observations");
+    registry.register(ReadObservationTool::new(observation_root.clone()))?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let mut context_fragments = memory_context_fragments(&contract, &memory, &transaction)?;
@@ -617,6 +623,7 @@ async fn execute_run_inner(
         .with_memory(&memory)
         .with_context_fragments(context_fragments)
         .with_repository_cache(state.join("artifacts").join("repository-index"))
+        .with_observation_store(observation_root)
         .with_checkpoint_store(&checkpoints)
         .with_runtime_identity(runtime_identity)
         .with_input_images(input_images)
@@ -2804,6 +2811,9 @@ pub(crate) fn validate_run_artifacts(state: &Path, store: &EventStore) -> Result
 fn tools(state: &Path, json_output: bool) -> Result<(), CliError> {
     let cancellation = CancellationToken::new();
     let mut registry = builtin_registry_with_process(RunProcessTool::disabled())?;
+    registry.register(ReadObservationTool::new(
+        state.join("artifacts").join("observations"),
+    ))?;
     McpRuntime::load(state)?.register(&mut registry, &cancellation)?;
     let descriptors = registry.descriptors();
     if json_output {
