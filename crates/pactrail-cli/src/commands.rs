@@ -253,6 +253,7 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         request_timeout_seconds: args.request_timeout_seconds,
         no_stream: args.no_stream,
         disable_thinking: args.disable_thinking,
+        reasoning_effort: args.reasoning_effort.clone(),
         native_tools: args.native_tools,
         parallel_tools: args.parallel_tools,
         structured_output: args.structured_output,
@@ -1178,6 +1179,7 @@ fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
             "--parallel-tools on conflicts with --native-tools off".to_owned(),
         ));
     }
+    validate_reasoning_effort(args)?;
     if args.disable_thinking && args.reasoning_controls == crate::cli::CapabilitySetting::Off {
         return Err(CliError::Argument(
             "--disable-thinking conflicts with --reasoning-controls off".to_owned(),
@@ -1209,6 +1211,44 @@ fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
     Ok(())
 }
 
+fn validate_reasoning_effort(args: &RunArgs) -> Result<(), CliError> {
+    if args.disable_thinking && args.reasoning_effort.is_some() {
+        return Err(CliError::Argument(
+            "--disable-thinking conflicts with --reasoning-effort".to_owned(),
+        ));
+    }
+    if args.reasoning_effort.is_some()
+        && args.reasoning_controls == crate::cli::CapabilitySetting::Off
+    {
+        return Err(CliError::Argument(
+            "--reasoning-effort conflicts with --reasoning-controls off".to_owned(),
+        ));
+    }
+    if args.reasoning_effort.is_some()
+        && matches!(
+            args.provider,
+            ProviderKind::Anthropic | ProviderKind::Gemini | ProviderKind::OpenAiResponses
+        )
+    {
+        return Err(CliError::Argument(
+            "--reasoning-effort is only valid for Chat Completions adapters".to_owned(),
+        ));
+    }
+    if args.reasoning_effort.is_some()
+        && args.investigation_model.is_some()
+        && matches!(
+            args.investigation_provider.unwrap_or(args.provider),
+            ProviderKind::Anthropic | ProviderKind::Gemini | ProviderKind::OpenAiResponses
+        )
+    {
+        return Err(CliError::Argument(
+            "--reasoning-effort is not valid for the investigation provider's native adapter"
+                .to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 fn build_driver_for_provider(
     model: String,
     capabilities: ModelCapabilities,
@@ -1228,6 +1268,7 @@ fn build_driver_for_provider(
                 capabilities,
                 stream: !args.no_stream,
                 disable_thinking: args.disable_thinking,
+                reasoning_effort: args.reasoning_effort.clone(),
             })
             .map_err(CliError::Model)?,
         ),
@@ -1244,6 +1285,7 @@ fn build_driver_for_provider(
                 capabilities,
                 stream: !args.no_stream,
                 disable_thinking: args.disable_thinking,
+                reasoning_effort: args.reasoning_effort.clone(),
             })
             .map_err(CliError::Model)?,
         ),
@@ -1263,6 +1305,7 @@ fn build_driver_for_provider(
                 capabilities,
                 stream: !args.no_stream,
                 disable_thinking: args.disable_thinking,
+                reasoning_effort: args.reasoning_effort.clone(),
             })
             .map_err(CliError::Model)?,
         ),
@@ -1344,7 +1387,9 @@ fn configured_capabilities(args: &RunArgs) -> ModelCapabilities {
         vision: args.vision.resolve(false),
         prompt_caching: args.prompt_caching.resolve(false),
         streaming: !args.no_stream,
-        reasoning_controls: args.reasoning_controls.resolve(args.disable_thinking),
+        reasoning_controls: args
+            .reasoning_controls
+            .resolve(args.disable_thinking || args.reasoning_effort.is_some()),
         context_tokens: args.context_tokens,
         max_output_tokens: args.max_output_tokens,
         source: CapabilitySource::UserDeclared,
@@ -3709,6 +3754,7 @@ mod tests {
             request_timeout_seconds: 300,
             no_stream: false,
             disable_thinking: false,
+            reasoning_effort: None,
             native_tools: crate::cli::CapabilitySetting::Auto,
             parallel_tools: crate::cli::CapabilitySetting::Auto,
             structured_output: crate::cli::CapabilitySetting::Auto,
@@ -3765,6 +3811,7 @@ mod tests {
             request_timeout_seconds: 300,
             no_stream: false,
             disable_thinking: false,
+            reasoning_effort: None,
             native_tools: crate::cli::CapabilitySetting::Auto,
             parallel_tools: crate::cli::CapabilitySetting::Auto,
             structured_output: crate::cli::CapabilitySetting::Auto,

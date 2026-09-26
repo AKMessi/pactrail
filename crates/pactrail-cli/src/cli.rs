@@ -141,6 +141,9 @@ pub struct ProbeArgs {
     /// Send the compatible-provider extension `thinking.type=disabled`.
     #[arg(long)]
     pub disable_thinking: bool,
+    /// Explicit reasoning effort for Chat Completions compatible endpoints.
+    #[arg(long, value_parser = ["none", "minimal", "low", "medium", "high", "xhigh", "max"])]
+    pub reasoning_effort: Option<String>,
     /// Override native tool-call support while constructing the request.
     #[arg(long, value_enum, default_value = "auto")]
     pub native_tools: CapabilitySetting,
@@ -539,6 +542,9 @@ pub struct RunArgs {
     /// multi-turn tool protocol should run without hidden reasoning state.
     #[arg(long)]
     pub disable_thinking: bool,
+    /// Explicit reasoning effort for Chat Completions compatible endpoints.
+    #[arg(long, value_parser = ["none", "minimal", "low", "medium", "high", "xhigh", "max"])]
+    pub reasoning_effort: Option<String>,
 
     /// Override native model tool-call support.
     #[arg(long, value_enum, default_value = "auto")]
@@ -759,6 +765,24 @@ mod tests {
             unreachable!("run command")
         };
         assert!(args.disable_thinking);
+    }
+
+    #[test]
+    fn run_accepts_supported_reasoning_effort() {
+        let cli = Cli::try_parse_from([
+            "pactrail",
+            "run",
+            "--model",
+            "model",
+            "--reasoning-effort",
+            "low",
+            "task",
+        ])
+        .unwrap_or_else(|error| unreachable!("valid CLI: {error}"));
+        let Some(Command::Run(args)) = cli.command else {
+            unreachable!("run command")
+        };
+        assert_eq!(args.reasoning_effort.as_deref(), Some("low"));
     }
 
     #[test]

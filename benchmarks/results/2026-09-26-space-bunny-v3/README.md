@@ -24,11 +24,14 @@ and excludes generated, ignored `Cargo.lock` files from changed paths.
 
 Pactrail preserved source isolation and verified its trace in all three runs.
 Its lower wall time and slightly fewer reported tokens do not establish a
-coding-task efficiency win when both harnesses solved 0/3. The model's actual
-reasoning mode is also uncertain: Pactrail requested the provider-specific
-`thinking.type=disabled` extension, which may not control OpenRouter's
-`reasoning` parameter. That setting needs verification before drawing a
-reasoning-mode comparison or changing the protocol again.
+coding-task efficiency win when both harnesses solved 0/3. Post-run inspection
+of OpenRouter's live model metadata found that Space Bunny's reasoning is
+mandatory, supports efforts from `low` through `max`, and defaults to `max`.
+The frozen protocol's `thinking: disabled` label therefore describes the
+requested harness setting, not an achievable model mode. Pactrail sent the
+Chat Completions `thinking.type=disabled` extension, while OpenCode's config
+declared `reasoning: false`; neither setting establishes that OpenRouter
+disabled this model's reasoning. No reasoning-mode equivalence is claimed.
 
 This suite measures three known regressions and cannot establish broad
 coding-agent superiority. It identifies a remaining action-loop problem and

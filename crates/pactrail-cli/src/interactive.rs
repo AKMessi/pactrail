@@ -3670,6 +3670,7 @@ fn run_args_from_settings(
         request_timeout_seconds: 300,
         no_stream: !settings.streaming,
         disable_thinking: false,
+        reasoning_effort: None,
         native_tools: settings.native_tools,
         parallel_tools: settings.parallel_tools,
         structured_output: settings.structured_output,

@@ -11,7 +11,10 @@ runner, suite, config, graders, controls, execution order, scoring, and stopping
 rule before the first model request. Every declared case is pass@1, including
 failures and timeouts. Both harnesses use OpenRouter's
 `stealth/space-bunny-alpha` with identical context, output, temperature,
-thinking, step, process, and offline-workspace controls. The model was listed as
+step, process, and offline-workspace controls. The frozen settings requested
+non-thinking behavior, but post-run model metadata showed that Space Bunny's
+reasoning is mandatory, defaults to `max`, and cannot be disabled. The prior
+results must not be interpreted as a non-thinking comparison. The model was listed as
 free when the protocol was frozen; the runner still requires a declared
 estimated-spend cap. The API key must be supplied through
 `OPENROUTER_API_KEY`; it is never committed.

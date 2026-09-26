@@ -40,6 +40,8 @@ pub struct OpenAiCompatibleConfig {
     /// `thinking.type=disabled` extension. This is opt-in because the field is
     /// not part of the core `OpenAI` Chat Completions schema.
     pub disable_thinking: bool,
+    /// Explicit Chat Completions reasoning effort, if supported by the provider.
+    pub reasoning_effort: Option<String>,
 }
 
 impl OpenAiCompatibleConfig {
@@ -55,6 +57,7 @@ impl OpenAiCompatibleConfig {
             capabilities: ModelCapabilities::default(),
             stream: true,
             disable_thinking: false,
+            reasoning_effort: None,
         }
     }
 }
@@ -697,6 +700,9 @@ fn request_body(
     if config.disable_thinking {
         body["thinking"] = json!({ "type": "disabled" });
     }
+    if let Some(effort) = &config.reasoning_effort {
+        body["reasoning"] = json!({ "effort": effort });
+    }
     if !tools.is_empty() {
         body["tools"] = Value::Array(tools);
         body["tool_choice"] = Value::String("auto".to_owned());
@@ -1043,6 +1049,7 @@ mod tests {
             capabilities: ModelCapabilities::default(),
             stream: false,
             disable_thinking: false,
+            reasoning_effort: None,
         }
     }
 
@@ -1179,12 +1186,20 @@ mod tests {
         let default_body = request_body(&config("https://api.example.com/v1"), &request, false)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
         assert!(default_body.get("thinking").is_none());
+        assert!(default_body.get("reasoning").is_none());
 
         let mut non_thinking = config("https://api.example.com/v1");
         non_thinking.disable_thinking = true;
         let body = request_body(&non_thinking, &request, false)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
         assert_eq!(body["thinking"]["type"], "disabled");
+
+        let mut reasoned = config("https://api.example.com/v1");
+        reasoned.reasoning_effort = Some("low".to_owned());
+        let body = request_body(&reasoned, &request, false)
+            .unwrap_or_else(|error| unreachable!("valid request: {error}"));
+        assert_eq!(body["reasoning"]["effort"], "low");
+        assert!(body.get("thinking").is_none());
     }
 
     #[test]
