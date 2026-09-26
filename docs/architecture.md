@@ -244,7 +244,10 @@ the reclaimed bytes and digest; it does not record raw tool content.
 CLI runs store the exact deduplicated JSON under that digest in the run-scoped
 artifact store. If the source is later compacted, `read_observation` retrieves
 a bounded slice without repeating the original tool call. The deduplication
-action records whether the artifact was stored.
+action records whether the artifact was stored. A later identical observation
+can also reference a compacted source after Pactrail checks the stored bytes
+against the new result. If that artifact is missing or fails validation, the
+new observation remains complete in the conversation.
 
 When the high-water mark is crossed, older tool results are replaced in place
 with deterministic compaction envelopes. Each envelope retains the tool name,

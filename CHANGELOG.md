@@ -8,6 +8,7 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Large observations can now deduplicate against an earlier compacted result when its exact run-local artifact passes integrity validation; unavailable artifacts leave the new observation intact.
 - Model-turn traces now record a digest and size for the normalized pre-provider context plus provider-reported cache-read coverage, making cache behavior inspectable without persisting prompts.
 - Provider adapters now keep the initial system prompt stable when later controller directives arrive. OpenAI Responses retains ordered system items; Anthropic, Gemini, and OpenAI-compatible transports render later directives in turn order, improving prompt-cache reuse across phase changes.
 - Context compaction now accounts for each exact JSON size reduction and verifies the final request size once, avoiding repeated full conversation serialization as tool history grows.

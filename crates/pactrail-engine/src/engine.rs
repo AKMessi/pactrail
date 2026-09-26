@@ -3879,6 +3879,10 @@ fn deduplication_action(report: &DeduplicationReport) -> ActionRecord {
                 "artifact_written".to_owned(),
                 report.artifact_written.to_string(),
             ),
+            (
+                "source_compacted".to_owned(),
+                report.source_compacted.to_string(),
+            ),
         ]),
     }
 }
