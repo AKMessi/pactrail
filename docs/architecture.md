@@ -541,7 +541,10 @@ declared executable and argument vector through the same process policy,
 approval, disposable workspace, cancellation, output bound, and trace as
 discovered checks. A passing declared check marks only its bound obligation as
 passed; every check bound to that obligation must pass. An obligation without
-a declared check remains inconclusive after generic checks pass. For example:
+a declared check remains inconclusive after generic checks pass. The task
+contract must also list `process_spawn` in `permissions.allow` or
+`permissions.ask`, and the run must select a native or OCI process backend.
+For example:
 
 ```toml
 [[acceptance_checks]]

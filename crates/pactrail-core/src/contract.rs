@@ -237,7 +237,14 @@ impl TaskContract {
                 return Err(ContractError::InvalidAcceptanceCheck(check.obligation_id));
             }
         }
-        self.permissions.validate()
+        self.permissions.validate()?;
+        if !self.acceptance_checks.is_empty()
+            && !self.permissions.allow.contains(&Capability::ProcessSpawn)
+            && !self.permissions.ask.contains(&Capability::ProcessSpawn)
+        {
+            return Err(ContractError::AcceptanceChecksNeedProcess);
+        }
+        Ok(())
     }
 }
 
@@ -274,6 +281,9 @@ pub enum ContractError {
     /// Too many caller-declared process checks.
     #[error("at most 32 acceptance checks are allowed")]
     TooManyAcceptanceChecks,
+    /// Declared commands cannot run without process authority.
+    #[error("acceptance checks require process_spawn in allow or ask permissions")]
+    AcceptanceChecksNeedProcess,
     /// A capability was both allowed and denied.
     #[error("capability {0:?} cannot be both allowed and denied")]
     ConflictingPermission(Capability),
@@ -328,6 +338,11 @@ mod tests {
             args: vec!["test".to_owned(), "--offline".to_owned()],
             description: "parser behavior".to_owned(),
         });
+        assert_eq!(
+            contract.validate(),
+            Err(ContractError::AcceptanceChecksNeedProcess)
+        );
+        contract.permissions.ask.insert(Capability::ProcessSpawn);
         assert_eq!(contract.validate(), Ok(()));
 
         contract.acceptance_checks[0].obligation_id = ObligationId::new();
