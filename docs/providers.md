@@ -67,6 +67,17 @@ calls or text actions are selected for each phase from that route's declared
 capabilities, so a text-only investigation model does not disable native
 tools on the primary route.
 
+`--adaptive-routing` additionally requires complete rate cards for both
+models. It begins investigation on the lower-cost route when its conservative
+request reservation is cheaper. Two investigation turns without new evidence
+escalate to the primary route; that escalation remains in place for the rest
+of investigation. If the primary request would exceed the remaining cost cap
+and investigation fits, the next turn stays on investigation. Implementation,
+validation, synthesis, and recovery use primary. Every adaptive decision is
+recorded before provider I/O and the selected route is sealed in checkpoint
+schema 3. A response must attest to the selected route before its cost is
+charged. Provider errors never trigger an automatic route retry.
+
 ## Explicit cost accounting
 
 Provide all four current rates in micro-US dollars per million tokens. For

@@ -213,6 +213,7 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         provider: args.provider,
         model: Some(args.model),
         investigation_model: None,
+        adaptive_routing: false,
         investigation_provider: None,
         investigation_base_url: None,
         investigation_api_key_env: None,
@@ -1133,6 +1134,16 @@ fn build_driver(contract: &TaskContract, args: &RunArgs) -> Result<Box<dyn Model
 
 fn validate_model_options(args: &RunArgs) -> Result<(), CliError> {
     validate_price_provenance(args)?;
+    if args.adaptive_routing && args.investigation_model.is_none() {
+        return Err(CliError::Argument(
+            "--adaptive-routing requires --investigation-model".to_owned(),
+        ));
+    }
+    if args.adaptive_routing && configured_route_pricing(args)?.is_none() {
+        return Err(CliError::Argument(
+            "--adaptive-routing requires complete rate cards for both models".to_owned(),
+        ));
+    }
     if args.investigation_model.is_none()
         && (args.investigation_provider.is_some()
             || args.investigation_base_url.is_some()
@@ -1380,18 +1391,20 @@ fn configure_engine_pricing<'a>(
     if let Some((primary, investigation)) = configured_route_pricing(args)? {
         engine = engine.with_routed_pricing(primary, investigation);
     }
-    Ok(engine.with_price_provenance(
-        price_provenance(
-            args.price_source.as_deref(),
-            args.price_effective_date.as_deref(),
-            "model",
-        )?,
-        price_provenance(
-            args.investigation_price_source.as_deref(),
-            args.investigation_price_effective_date.as_deref(),
-            "investigation model",
-        )?,
-    ))
+    Ok(engine
+        .with_adaptive_routing(args.adaptive_routing)
+        .with_price_provenance(
+            price_provenance(
+                args.price_source.as_deref(),
+                args.price_effective_date.as_deref(),
+                "model",
+            )?,
+            price_provenance(
+                args.investigation_price_source.as_deref(),
+                args.investigation_price_effective_date.as_deref(),
+                "investigation model",
+            )?,
+        ))
 }
 
 fn configured_pricing(args: &RunArgs) -> Result<Option<ModelPricing>, CliError> {
@@ -3698,6 +3711,8 @@ mod tests {
         assert!(validate_model_options(&args).is_err());
         args.investigation_model = Some("economical".to_owned());
         assert!(validate_model_options(&args).is_ok());
+        args.adaptive_routing = true;
+        assert!(validate_model_options(&args).is_err());
         args.input_price = Some(200_000);
         args.cached_input_price = Some(20_000);
         args.cache_creation_price = Some(250_000);
@@ -3707,6 +3722,7 @@ mod tests {
         args.investigation_cached_input_price = Some(30_000);
         args.investigation_cache_creation_price = Some(100_000);
         args.investigation_output_price = Some(800_000);
+        assert!(validate_model_options(&args).is_ok());
         let pricing = configured_pricing(&args)
             .unwrap_or_else(|error| unreachable!("pricing: {error}"))
             .unwrap_or_else(|| unreachable!("missing rates"));

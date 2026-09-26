@@ -42,6 +42,12 @@
       "schema": 1,
       "path": "run-checkpoint-v1.json",
       "strategy": "read_compatible"
+    },
+    {
+      "format": "run_checkpoint",
+      "schema": 2,
+      "path": "run-checkpoint-v2.json",
+      "strategy": "read_compatible"
     }
   ]
 }

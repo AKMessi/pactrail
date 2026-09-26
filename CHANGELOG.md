@@ -14,6 +14,10 @@ follow [Semantic Versioning](https://semver.org/).
 - Run checkpoints now use schema 2 to seal the reconciled cost ledger. Schema 1
   checkpoints remain readable and are upgraded at the next safe write; resume
   rejects a cost ledger that disagrees with durable model actions.
+- Opt-in adaptive routing now escalates stalled investigation to the primary
+  model at a safe checkpoint, selects using explicit cost cards and remaining
+  budget, and records the route and reason. Checkpoint schema 3 seals that
+  route while continuing to read schemas 1 and 2.
 
 - The Anthropic native adapter now enables automatic ephemeral prompt caching
   when `--prompt-caching on` is declared, with cache usage reflected in

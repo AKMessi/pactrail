@@ -3628,6 +3628,7 @@ fn run_args_from_settings(
         provider: settings.provider,
         model: Some(model),
         investigation_model: None,
+        adaptive_routing: false,
         investigation_provider: None,
         investigation_base_url: None,
         investigation_api_key_env: None,

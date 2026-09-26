@@ -2,13 +2,13 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use pactrail_core::{EventHash, RunEvent, RunId, TaskContract};
-use pactrail_models::{ConversationItem, Usage, validate_image_set};
+use pactrail_models::{ConversationItem, ModelRoute, Usage, validate_image_set};
 use pactrail_store::{ArtifactError, ArtifactStore, EventStore, StoreError, StoredArtifact};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// Current schema for content-addressed run checkpoints.
-pub const CHECKPOINT_SCHEMA_VERSION: u32 = 2;
+pub const CHECKPOINT_SCHEMA_VERSION: u32 = 3;
 
 /// Oldest checkpoint schema this binary can resume.
 pub const MIN_CHECKPOINT_SCHEMA_VERSION: u32 = 1;
@@ -49,6 +49,9 @@ pub struct RunCheckpoint {
     /// Reconciled cost through the last completed model turn, when priced.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cost_spent_microusd: Option<u64>,
+    /// Selected endpoint at the safe model boundary, when adaptive routing is enabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_route: Option<ModelRoute>,
     pub call_ids: BTreeSet<String>,
     pub previous_tool_signature: Option<Vec<(String, String)>>,
     pub repeated_tool_turns: u16,
@@ -97,6 +100,7 @@ impl RunCheckpoint {
             conversation,
             usage: Usage::default(),
             cost_spent_microusd: None,
+            active_route: None,
             call_ids: BTreeSet::new(),
             previous_tool_signature: None,
             repeated_tool_turns: 0,
@@ -123,6 +127,11 @@ impl RunCheckpoint {
         if self.schema_version == 1 && self.cost_spent_microusd.is_some() {
             return Err(CheckpointError::InvalidPhase(
                 "schema one cannot carry a cost ledger",
+            ));
+        }
+        if self.schema_version < 3 && self.active_route.is_some() {
+            return Err(CheckpointError::InvalidPhase(
+                "an older checkpoint schema cannot carry an active route",
             ));
         }
         for (field, digest) in [
@@ -446,7 +455,7 @@ mod tests {
     }
 
     #[test]
-    fn historical_v1_checkpoint_is_readable_and_next_write_uses_v2() {
+    fn historical_v1_checkpoint_is_readable_and_next_write_uses_current_schema() {
         let mut historical: RunCheckpoint = serde_json::from_str(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../tests/fixtures/compatibility/historical/run-checkpoint-v1.json"
@@ -464,8 +473,26 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("store: {error}"));
         store
             .put(&historical)
-            .unwrap_or_else(|error| unreachable!("v2 write: {error}"));
+            .unwrap_or_else(|error| unreachable!("current write: {error}"));
         historical.schema_version = 1;
+        assert!(matches!(
+            historical.validate(),
+            Err(CheckpointError::InvalidPhase(_))
+        ));
+    }
+
+    #[test]
+    fn historical_v2_checkpoint_preserves_cost_and_rejects_a_route_field() {
+        let mut historical: RunCheckpoint = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/compatibility/historical/run-checkpoint-v2.json"
+        )))
+        .unwrap_or_else(|error| unreachable!("historical checkpoint: {error}"));
+        historical
+            .validate()
+            .unwrap_or_else(|error| unreachable!("historical validation: {error}"));
+        assert_eq!(historical.cost_spent_microusd, Some(0));
+        historical.active_route = Some(ModelRoute::Primary);
         assert!(matches!(
             historical.validate(),
             Err(CheckpointError::InvalidPhase(_))
