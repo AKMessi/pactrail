@@ -690,6 +690,16 @@ pub struct ModelRequest {
     pub temperature: Option<f32>,
     /// Engine-owned turn phase; providers ignore it, opt-in routers may use it.
     pub phase: Option<ModelPhase>,
+    /// Optional explicit route; independent of the semantic turn phase.
+    pub route: Option<ModelRoute>,
+}
+
+/// Which configured endpoint serves a routed model turn.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelRoute {
+    Primary,
+    Investigation,
 }
 
 /// Provider-neutral purpose of one model request.

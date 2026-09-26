@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::{
     CapabilitySource, ConversationItem, Message, ModelCapabilities, ModelDriver, ModelError,
-    ModelPhase, ModelRequest, ModelResponse, ModelStreamObserver,
+    ModelPhase, ModelRequest, ModelResponse, ModelRoute, ModelStreamObserver,
 };
 
 const ROUTE_ORIGIN_KEY: &str = "pactrail_route_origin";
@@ -54,8 +54,14 @@ impl PhaseModelRouter {
         }
     }
 
-    fn select(&self, phase: Option<ModelPhase>) -> (&dyn ModelDriver, &'static str) {
-        if phase == Some(ModelPhase::Investigation) {
+    fn select(
+        &self,
+        phase: Option<ModelPhase>,
+        route: Option<ModelRoute>,
+    ) -> (&dyn ModelDriver, &'static str) {
+        if route == Some(ModelRoute::Investigation)
+            || (route.is_none() && phase == Some(ModelPhase::Investigation))
+        {
             (self.investigation.as_ref(), "investigation")
         } else {
             (self.primary.as_ref(), "primary")
@@ -162,11 +168,19 @@ impl ModelDriver for PhaseModelRouter {
     }
 
     fn capabilities_for_phase(&self, phase: ModelPhase) -> &ModelCapabilities {
-        self.select(Some(phase)).0.capabilities()
+        self.select(Some(phase), None).0.capabilities()
+    }
+
+    fn capabilities_for_route(
+        &self,
+        phase: ModelPhase,
+        route: Option<ModelRoute>,
+    ) -> &ModelCapabilities {
+        self.select(Some(phase), route).0.capabilities()
     }
 
     async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
-        let (model, route) = self.select(request.phase);
+        let (model, route) = self.select(request.phase, request.route);
         let portable = Self::portable_request(request, route);
         let response = model.invoke(&portable).await?;
         Ok(Self::annotate(response, model, route))
@@ -177,7 +191,7 @@ impl ModelDriver for PhaseModelRouter {
         request: &ModelRequest,
         observer: &dyn ModelStreamObserver,
     ) -> Result<ModelResponse, ModelError> {
-        let (model, route) = self.select(request.phase);
+        let (model, route) = self.select(request.phase, request.route);
         let portable = Self::portable_request(request, route);
         let response = model.invoke_with_observer(&portable, observer).await?;
         Ok(Self::annotate(response, model, route))
@@ -263,6 +277,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: None,
             phase: Some(ModelPhase::Investigation),
+            route: None,
         };
         let first = router
             .invoke(&request)
@@ -277,6 +292,18 @@ mod tests {
             .unwrap_or_else(|error| unreachable!("primary: {error}"));
         assert_eq!(second.text, "strong");
         assert_eq!(second.extensions["route"], "primary");
+        request.route = Some(ModelRoute::Investigation);
+        assert!(
+            !router
+                .capabilities_for_route(ModelPhase::Implementation, request.route)
+                .native_tools
+        );
+        let override_response = router
+            .invoke(&request)
+            .await
+            .unwrap_or_else(|error| unreachable!("explicit route: {error}"));
+        assert_eq!(override_response.text, "economical");
+        assert_eq!(override_response.extensions["route"], "investigation");
     }
 
     #[test]
@@ -317,6 +344,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: None,
             phase: Some(ModelPhase::Implementation),
+            route: None,
         };
         let same = PhaseModelRouter::portable_request(&request, "investigation");
         let cross = PhaseModelRouter::portable_request(&request, "primary");

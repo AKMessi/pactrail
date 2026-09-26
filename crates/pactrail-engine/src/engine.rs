@@ -1205,6 +1205,7 @@ impl<'a> RunEngine<'a> {
                 max_output_tokens: runtime_profile.turn_output_tokens,
                 temperature: Some(0.0),
                 phase: Some(model_phase),
+                route: None,
             };
             let cost_reservation = match self.reserve_cost_budget(&contract, cost_spent, &request) {
                 Ok(reservation) => reservation,
@@ -2113,6 +2114,7 @@ impl<'a> RunEngine<'a> {
             max_output_tokens: turn_output_tokens,
             temperature: Some(0.0),
             phase: Some(ModelPhase::Recovery),
+            route: None,
         })
     }
 

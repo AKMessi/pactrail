@@ -1146,6 +1146,7 @@ mod tests {
             max_output_tokens: 512,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let body = request_body(&config(), &request, true)
             .unwrap_or_else(|error| unreachable!("native request: {error}"));
@@ -1167,6 +1168,7 @@ mod tests {
             max_output_tokens: 256,
             temperature: None,
             phase: None,
+            route: None,
         };
         let cached = request_body(&config, &request, false)
             .unwrap_or_else(|error| unreachable!("cached request: {error}"));
@@ -1194,6 +1196,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let mut config = config();
         config.capabilities.vision = true;
@@ -1357,6 +1360,7 @@ mod tests {
                     max_output_tokens: 32,
                     temperature: None,
                     phase: None,
+                    route: None,
                 },
                 &RecordingObserver::default(),
             )

@@ -1106,6 +1106,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let mut vision = config("https://api.example.com/v1");
         vision.capabilities.vision = true;
@@ -1130,6 +1131,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: Some(0.0),
             phase: None,
+            route: None,
         };
         let default_body = request_body(&config("https://api.example.com/v1"), &request, false)
             .unwrap_or_else(|error| unreachable!("valid request: {error}"));
@@ -1150,6 +1152,7 @@ mod tests {
             max_output_tokens: 128,
             temperature: None,
             phase: None,
+            route: None,
         };
         let mut streaming = config("https://api.example.com/v1");
         streaming.stream = true;
@@ -1484,6 +1487,7 @@ mod tests {
                     max_output_tokens: 32,
                     temperature: None,
                     phase: None,
+                    route: None,
                 },
                 &observer,
             )
