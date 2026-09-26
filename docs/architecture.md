@@ -535,6 +535,22 @@ failed evidence. Missing process permission also creates inconclusive evidence.
 `ReadyToApply` means an isolated candidate is available for review, not that
 every task obligation has been proven.
 
+A task TOML contract may declare up to 32 `[[acceptance_checks]]`, each bound
+to an existing obligation ID from `pactrail task-template`. Pactrail passes the
+declared executable and argument vector through the same process policy,
+approval, disposable workspace, cancellation, output bound, and trace as
+discovered checks. A passing declared check marks only its bound obligation as
+passed; every check bound to that obligation must pass. An obligation without
+a declared check remains inconclusive after generic checks pass. For example:
+
+```toml
+[[acceptance_checks]]
+obligation_id = "<copy the obligation ID from the generated task template>"
+program = "cargo"
+args = ["test", "--offline", "-p", "my-crate", "specific_behavior"]
+description = "requested behavior"
+```
+
 When a tool turn first changes the isolated candidate and another model turn is
 available, the controller runs the discovered checks immediately when process
 authority is already allowed or covered by run-wide approval. Prompt-only

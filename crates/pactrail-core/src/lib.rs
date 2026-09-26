@@ -10,7 +10,7 @@ mod receipt;
 
 pub use approval::{ApprovalBinding, ApprovalDecision, ApprovalRecord, ApprovalRequest};
 pub use contract::{
-    Budget, ContractError, Obligation, ObligationKind, PermissionSet, TaskContract,
+    AcceptanceCheck, Budget, ContractError, Obligation, ObligationKind, PermissionSet, TaskContract,
 };
 pub use event::{
     ActionRecord, EffectCompleted, EffectPrepared, EventEnvelope, EventHash, RunEvent, RunSnapshot,

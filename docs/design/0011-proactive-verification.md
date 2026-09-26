@@ -23,7 +23,8 @@ run. A check is eligible only when:
 - at least one model turn remains;
 - process authority was explicitly granted or covered by a run-wide approval
   without another prompt;
-- a supported non-installing manifest check exists; and
+- a supported non-installing manifest check or caller-declared acceptance
+  check exists; and
 - the exact candidate digest has not already been checked.
 
 The first candidate consumes attempt one. If it fails with a normal non-zero
@@ -45,9 +46,9 @@ repair decision, and the complete candidate digest. Raw stdout and stderr are
 not added to the portable trace.
 
 A passing repository check remains in memory and becomes final receipt evidence
-only if the final candidate digest is identical. It records the required task
-obligation as inconclusive because a generic suite cannot prove task-specific
-behavior. Any later mutation invalidates the result automatically. When no
+only if the final candidate digest is identical. Generic suite results leave
+task obligations inconclusive; a passing caller-declared acceptance check can
+prove its specifically bound obligation. Any later mutation invalidates the result automatically. When no
 accepted result matches, final verification runs normally.
 
 ## Repair feedback

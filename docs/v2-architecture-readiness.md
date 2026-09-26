@@ -16,7 +16,7 @@ another coding agent on real tasks.
 | Cost control | Explicit rate cards and provenance, worst-case reservation before model I/O, durable per-route ledger, resume reconciliation, and bounded investigation routing | Engine cost and checkpoint tests |
 | Action control | Deterministic discovery allowance, phase guidance without hiding ordinary tools, repeated-evidence detection, and a bounded edit deadline | Controller and scripted-model tests |
 | Safe edits | Typed capability-gated tools, exact patch application, isolated candidate, source-drift checks, and explicit review/apply | Tool, workspace, and recovery tests |
-| Verification and honest evidence | Digest-bound candidate checks, bounded repair, approval-aware disposable verification workspace, and inconclusive task obligations when only general repository tests pass | Engine verification tests and compatibility fixtures |
+| Verification and honest evidence | Digest-bound candidate checks, bounded repair, approval-aware disposable verification workspace, optional contract-bound acceptance checks, and inconclusive task obligations when only general repository tests pass | Engine verification tests and compatibility fixtures |
 | Durable recovery | Hash-linked events, versioned checkpoint and request codecs, effect fences, crash replay, and uncertainty refusal | Checkpoint, event, transaction, and historical fixture tests |
 | Process and plugin containment | Explicit native/OCI backend, exact process and MCP approvals, schema/output limits, no ambient OCI authority | Docker hostile-repository gate and dependency policy |
 | Public compatibility | Documented CLI, SDK, contract, receipt, and trace formats with historical fixtures | `cargo test --workspace compatibility_fixture` and CI |
@@ -39,6 +39,6 @@ synthetic architecture check, not the deferred model benchmark session.
 
 Generic repository tests are not proof of the requested behavior. A receipt can
 be ready for human review while its functional obligation is inconclusive.
-Only an explicit task-specific check or later independent evaluation can raise
-that conclusion. No benchmark success rate, model ranking, or superiority claim
+Only a contract-bound task-specific check or later independent evaluation can
+raise that conclusion. No benchmark success rate, model ranking, or superiority claim
 is part of this readiness gate.
