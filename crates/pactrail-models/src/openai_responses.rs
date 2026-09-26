@@ -188,20 +188,24 @@ fn request_body(
 fn input_items(conversation: &[ConversationItem]) -> Result<Vec<Value>, ModelError> {
     let mut input = Vec::new();
     let mut systems = Vec::new();
+    let mut prefix_ended = false;
     for item in conversation {
         match item {
             ConversationItem::Message(message) => {
                 let role = match message.role {
-                    Role::System => {
+                    Role::System if !prefix_ended => {
                         systems.push(message.content.as_str());
                         continue;
                     }
+                    Role::System => "system",
                     Role::User => "user",
                     Role::Assistant => "assistant",
                 };
+                prefix_ended = true;
                 input.push(json!({"role": role, "content": message.content}));
             }
             ConversationItem::UserContent(content) => {
+                prefix_ended = true;
                 let mut parts = vec![json!({"type": "input_text", "text": content.text})];
                 for image in &content.images {
                     parts.push(json!({
@@ -220,6 +224,7 @@ fn input_items(conversation: &[ConversationItem]) -> Result<Vec<Value>, ModelErr
                 input.push(json!({"role": "user", "content": parts}));
             }
             ConversationItem::AssistantToolCalls { text, calls } => {
+                prefix_ended = true;
                 if let Some(items) = calls
                     .first()
                     .and_then(|call| call.extensions.get(REPLAY_KEY))
@@ -244,11 +249,14 @@ fn input_items(conversation: &[ConversationItem]) -> Result<Vec<Value>, ModelErr
                     }
                 }
             }
-            ConversationItem::ToolResult(result) => input.push(json!({
-                "type": "function_call_output",
-                "call_id": result.call_id,
-                "output": serde_json::to_string(&result.content).map_err(ModelError::Json)?,
-            })),
+            ConversationItem::ToolResult(result) => {
+                prefix_ended = true;
+                input.push(json!({
+                    "type": "function_call_output",
+                    "call_id": result.call_id,
+                    "output": serde_json::to_string(&result.content).map_err(ModelError::Json)?,
+                }));
+            }
         }
     }
     if !systems.is_empty() {
@@ -438,6 +446,31 @@ mod tests {
             timeout: Duration::from_secs(30),
             capabilities: ModelCapabilities::default(),
         }
+    }
+
+    #[test]
+    fn late_system_directive_remains_in_turn_order() {
+        let base = vec![
+            ConversationItem::Message(Message::system("base policy")),
+            ConversationItem::Message(Message::user("task")),
+            ConversationItem::Message(Message::assistant("working")),
+        ];
+        let initial = input_items(&base).unwrap_or_else(|error| unreachable!("initial: {error}"));
+        let mut continued = base;
+        continued.push(ConversationItem::Message(Message::system(
+            "validate candidate",
+        )));
+        let later =
+            input_items(&continued).unwrap_or_else(|error| unreachable!("continued: {error}"));
+        assert_eq!(&later[..initial.len()], initial);
+        assert_eq!(
+            later.last().map(|item| &item["role"]),
+            Some(&json!("system"))
+        );
+        assert_eq!(
+            later.last().map(|item| &item["content"]),
+            Some(&json!("validate candidate"))
+        );
     }
 
     #[test]

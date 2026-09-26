@@ -13,6 +13,10 @@ use thiserror::Error;
 /// Current schema of Pactrail's provider-neutral conversation and request IR.
 pub const MODEL_IR_SCHEMA_VERSION: u32 = 1;
 
+pub(crate) fn late_system_directive(content: &str) -> String {
+    format!("Pactrail controller directive: {content}")
+}
+
 /// Maximum number of image artifacts accepted on one user turn.
 pub const MAX_INPUT_IMAGES: usize = 4;
 /// Maximum decoded bytes accepted for one image artifact.

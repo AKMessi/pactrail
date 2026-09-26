@@ -276,6 +276,15 @@ turns when the configured budget permits. Each `ModelRequest` advertises the
 same configured tool catalog. Tool dispatch rejects calls outside that catalog
 before registry or policy execution.
 
+The initial contiguous system messages form the stable provider instruction
+prefix. Later controller messages remain at their original turn boundary:
+Responses sends them as ordered system items, while Anthropic, Gemini, and
+OpenAI-compatible transports render them as labelled user turns because their
+portable request shape does not require a mid-conversation system role. The
+initial policy names phase announcements and forbids them from expanding tool
+authority. Adding a phase therefore appends to the provider transcript instead
+of rewriting its initial system prefix.
+
 Change tasks receive bounded initial discovery. Once its allowance is reached,
 the controller asks for a supported edit, a targeted missing fact, or a precise
 blocker without removing read tools. As soon as an isolated candidate exists
