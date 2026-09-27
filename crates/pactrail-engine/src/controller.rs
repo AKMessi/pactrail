@@ -417,34 +417,44 @@ pub(crate) fn classify_goal(goal: &str) -> GoalIntent {
     ) {
         return GoalIntent::Informational;
     }
-    let requests_change = words.iter().any(|word| {
-        matches!(
-            *word,
-            "add"
-                | "build"
-                | "change"
-                | "create"
-                | "delete"
-                | "edit"
-                | "fix"
-                | "generate"
-                | "implement"
-                | "migrate"
-                | "modify"
-                | "refactor"
-                | "remove"
-                | "rename"
-                | "update"
-                | "write"
-        )
+    let requests_change = words.iter().enumerate().any(|(index, word)| {
+        let previous = index
+            .checked_sub(1)
+            .and_then(|previous| words.get(previous))
+            .copied()
+            .unwrap_or_default();
+        !matches!(previous, "not" | "never" | "without" | "dont")
+            && matches!(
+                *word,
+                "add"
+                    | "build"
+                    | "change"
+                    | "create"
+                    | "delete"
+                    | "edit"
+                    | "fix"
+                    | "generate"
+                    | "implement"
+                    | "migrate"
+                    | "modify"
+                    | "refactor"
+                    | "remove"
+                    | "rename"
+                    | "update"
+                    | "write"
+            )
     });
     if requests_change {
         return GoalIntent::Change;
     }
     if matches!(
         first,
-        "analyze" | "describe" | "explain" | "inspect" | "review" | "show" | "summarize"
+        "analyze" | "describe" | "explain" | "inspect" | "read" | "review" | "show" | "summarize"
     ) || normalized.ends_with('?')
+        || words.windows(2).any(|pair| {
+            matches!(pair[0], "not" | "never" | "without" | "dont")
+                && matches!(pair[1], "change" | "edit" | "modify" | "write")
+        })
     {
         GoalIntent::Informational
     } else {
@@ -460,6 +470,22 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[test]
+    fn negated_edit_words_do_not_turn_a_read_only_request_into_a_change_task() {
+        assert_eq!(
+            classify_goal("Explain the architecture. Do not change files."),
+            GoalIntent::Informational
+        );
+        assert_eq!(
+            classify_goal("Read README.md and answer. Do not edit files."),
+            GoalIntent::Informational
+        );
+        assert_eq!(
+            classify_goal("Inspect the parser, then fix the regression."),
+            GoalIntent::Change
+        );
+    }
 
     fn descriptor(name: &str, annotations: ToolAnnotations) -> ToolDescriptor {
         ToolDescriptor {
