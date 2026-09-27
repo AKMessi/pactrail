@@ -41,6 +41,35 @@ pactrail ❯ Fix the parser regression and add a test.
   ╰─ ✓ complete  2 turns · 4 tools · 6,104 tokens · 2.9s model · 3.2s
 ```
 
+## Local web app
+
+Run Pactrail in your browser with the same transaction and receipt rules as the CLI:
+
+```bash
+cargo run -p pactrail -- web
+# Open http://127.0.0.1:4173
+```
+
+Use `pactrail --workspace /path/to/project web --port 4173` with an installed
+binary. The server binds to `127.0.0.1` only. It serves its own assets, checks
+the request host and mutation origin, and keeps API keys on the server. It loads
+the selected workspace's `.env` without overriding exported environment
+variables; the file is never sent to the browser.
+
+The interface lets you configure a provider and model, launch a task, follow
+durable run history and trace events, inspect the receipt and integrity-checked
+diff, then apply or discard a ready candidate. Runs execute with process access
+disabled unless you explicitly choose a backend. The page can stop its own
+active run. Closing the browser does not stop a run. Use Stop to cancel an
+active run before shutting down the server. The browser session keeps its job status in server
+memory, while completed run history and browser-run summaries remain durable in
+`.pactrail`. Summaries are separate from the integrity-checked receipt and are
+presented as the agent's account of its work.
+
+No Node.js build, external assets, browser extension, or cloud account is
+required. Provider credentials are only needed when you run a task against a
+hosted model; Ollama can be used locally.
+
 ## Why Pactrail is different
 
 - **The model proposes; the kernel disposes.** Models never receive a raw host
