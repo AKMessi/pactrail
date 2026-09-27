@@ -11,6 +11,7 @@ mod output;
 mod settings;
 mod theme;
 mod upgrade;
+mod web;
 
 use std::io::IsTerminal;
 use std::process::ExitCode;

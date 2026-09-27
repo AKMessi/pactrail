@@ -55,6 +55,9 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
     match cli.command.ok_or_else(|| {
         CliError::Argument("a command is required outside interactive mode".to_owned())
     })? {
+        Command::Web { port } => crate::web::serve(&cli.workspace, cli.state_dir.as_deref(), port)
+            .await
+            .map_err(CliError::Argument),
         Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), *args).await,
         Command::Resume(args) => resume(&cli.workspace, cli.state_dir.as_deref(), args).await,
         Command::Probe(args) => probe(args).await,
@@ -1931,7 +1934,7 @@ pub(crate) fn inspect(state: &Path, workspace: &Path, args: &RunIdArgs) -> Resul
         return write_human_stdout(&text).map_err(CliError::Output);
     }
     let _events = load_trace(state, run_id)?;
-    let store = EventStore::open(state.join("events.sqlite3"))?;
+    let store = EventStore::open_read_only(state.join("events.sqlite3"))?;
     let snapshot = store.snapshot(run_id)?;
     let value = json!({
         "run_id": run_id,
@@ -2003,7 +2006,7 @@ pub(crate) fn load_trace(state: &Path, run_id: RunId) -> Result<Vec<EventEnvelop
             "run {run_id} was not found in the selected state directory"
         )));
     }
-    let events = EventStore::open(database)?.load(run_id)?;
+    let events = EventStore::open_read_only(database)?.load(run_id)?;
     if events.is_empty() {
         return Err(CliError::Argument(format!(
             "run {run_id} was not found in the selected state directory"
@@ -2681,7 +2684,7 @@ pub(crate) fn run_history(state_root: &Path) -> Result<Vec<RunHistoryEntry>, Cli
     if !database.is_file() {
         return Ok(Vec::new());
     }
-    let store = EventStore::open(database)?;
+    let store = EventStore::open_read_only(database)?;
     let mut history = Vec::new();
     for run_id in store.list_run_ids()? {
         let events = store.load(run_id)?;

@@ -30,6 +30,12 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Serve the local browser interface for this workspace.
+    Web {
+        /// Loopback port for the web interface.
+        #[arg(long, default_value_t = 4173)]
+        port: u16,
+    },
     /// Execute a task in an isolated transaction.
     Run(Box<RunArgs>),
     /// Continue an interrupted run from its latest safe checkpoint.
