@@ -1598,3 +1598,34 @@ dialog p {
     display: flex;
   }
 }
+.pricing-model {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.pricing-model label {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.pricing-model input,
+.pricing-model select {
+  margin-top: 5px;
+}
+@media (max-width: 719px) {
+  .pricing-model {
+    grid-template-columns: 1fr;
+  }
+}
+.candidate-panel.review-opened {
+  animation: review-open 0.18s ease-out;
+}
+@keyframes review-open {
+  from {
+    outline: 2px solid var(--ok);
+    outline-offset: -2px;
+  }
+  to {
+    outline: 0 solid transparent;
+    outline-offset: -2px;
+  }
+}

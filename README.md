@@ -64,7 +64,9 @@ cooperative interrupt and records a partial receipt. Closing the browser does no
 stop the run. Job status lives in server memory, while run history and receipts
 remain durable in `.pactrail`. Run titles and appearance preferences are stored
 in the browser. Fonts and icons are served locally; the interface needs no
-external assets at runtime.
+external assets at runtime. Optional model price cards are stored in the
+browser and passed to the engine for new runs; a cost cap is available only
+when all four token prices are configured.
 
 No Node.js build, external assets, browser extension, or cloud account is
 required. Provider credentials are only needed when you run a task against a

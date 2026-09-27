@@ -56,6 +56,10 @@ struct RunRequest {
     process_backend: Option<String>,
     sandbox_image: Option<String>,
     max_cost_microusd: Option<u64>,
+    input_price: Option<u64>,
+    cached_input_price: Option<u64>,
+    cache_creation_price: Option<u64>,
+    output_price: Option<u64>,
     request_timeout_seconds: Option<u64>,
     apply: Option<bool>,
 }
@@ -469,6 +473,19 @@ async fn start_run(State(state): State<AppState>, Json(request): Json<RunRequest
     {
         return Err(bad("Request timeout must be between 1 and 3600 seconds"));
     }
+    let prices = [
+        request.input_price,
+        request.cached_input_price,
+        request.cache_creation_price,
+        request.output_price,
+    ];
+    if prices.iter().any(Option::is_some) && prices.iter().any(Option::is_none) {
+        return Err(bad("Provide all four model prices or none"));
+    }
+    if request.max_cost_microusd.is_some_and(|cost| cost > 0) && prices.iter().any(Option::is_none)
+    {
+        return Err(bad("A maximum cost requires all four model prices"));
+    }
     if request
         .base_url
         .as_ref()
@@ -598,6 +615,16 @@ async fn execute_run(
         && cost > 0
     {
         command.args(["--max-cost-microusd", &cost.to_string()]);
+    }
+    for (name, price) in [
+        ("--input-price", request.input_price),
+        ("--cached-input-price", request.cached_input_price),
+        ("--cache-creation-price", request.cache_creation_price),
+        ("--output-price", request.output_price),
+    ] {
+        if let Some(price) = price {
+            command.args([name, &price.to_string()]);
+        }
     }
     if let Some(seconds) = request.request_timeout_seconds {
         command.args(["--request-timeout-seconds", &seconds.to_string()]);

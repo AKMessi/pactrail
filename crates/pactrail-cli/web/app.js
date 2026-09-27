@@ -33,6 +33,7 @@ const state = {
   theme: recall("theme", null),
   diffMode: recall("diffMode", "unified"),
   titles: recall("titles", {}),
+  pricing: recall("pricing", {}),
   config: recall("config", null),
   eventSource: null,
   jobId: null,
@@ -61,6 +62,16 @@ const short = (id) => String(id || "").slice(0, 8);
 const runTitle = (r) =>
   state.titles[r?.run_id] ||
   (r?.goal ? r.goal.split(/[.!?]\s+/)[0].slice(0, 200) : short(r?.run_id));
+const priceKey = (provider, model) => `${provider}::${model}`;
+const priceCard = (provider, model) => {
+  const card = state.pricing[priceKey(provider, model)];
+  return card &&
+    ["input", "cached_input", "cache_creation", "output"].every(
+      (key) => Number.isFinite(card[key]) && card[key] >= 0,
+    )
+    ? card
+    : null;
+};
 const status = (r) => {
   const job = state.jobs.find(
     (j) => j.goal === r?.goal && j.state === "cancelled",
@@ -301,7 +312,7 @@ function renderLedger() {
 function renderDispatch() {
   const main = $("main");
   main.className = "main";
-  main.innerHTML = `<section class="dispatch"><div class="eyebrow overline">NEW RUN / TASK BRIEF</div><h1>What needs to change?</h1><form id="dispatch-form"><div class="field"><label class="field-label" for="task-title">Title <span class="optional">optional · stored in this browser</span></label><input class="text-input" id="task-title" maxlength="200" placeholder="A short name for this run"></div><div class="field"><label class="field-label" for="task-goal">Task brief</label><textarea class="brief" id="task-goal" maxlength="16000" required placeholder="Describe the change you want. Include the failing symptom, the file or area if you know it, and what 'done' looks like."></textarea><div id="dispatch-error" class="error-text" role="alert" hidden></div></div><div class="config-row"><div class="config-box"><span class="eyebrow">WORKSPACE</span><div class="config-value" title="${html(state.bootstrap?.workspace || "")}">${icon("terminal")}<span>${html(state.bootstrap?.workspace || "Connecting…")}</span></div></div><div class="config-box"><label class="eyebrow" for="provider">PROVIDER / MODEL</label><select class="select" id="provider"></select><input class="text-input mono" id="model" placeholder="Model ID" aria-label="Model ID" style="margin-top:6px"></div></div><details class="guardrails"><summary>Guardrails <span class="micro">ENFORCED BY ENGINE</span></summary><div class="guard-grid"><label>Maximum turns<input id="max-turns" class="number-input mono" type="number" min="1" max="200" value="24"></label><label>Max cost, USD<input id="max-cost" class="number-input mono" type="number" min="0" step="0.000001" placeholder="Not set"><small>Requires pricing configured in CLI.</small></label><label>Request timeout, seconds<input id="timeout" class="number-input mono" type="number" min="1" max="3600" value="300"></label><label>Process execution<select id="process-backend" class="select mono"><option value="disabled">Disabled</option><option value="oci">OCI sandbox</option><option value="native">Native host</option></select><small>Native runs commands on your host.</small></label><label id="sandbox-image-wrap" hidden>Local OCI image<input id="sandbox-image" class="text-input mono" placeholder="image:tag"></label><label>Base URL override<input id="base-url" class="text-input mono" placeholder="Provider default"></label><label>API key variable<input id="api-key-env" class="text-input mono" placeholder="Environment variable name"></label></div></details><div class="dispatch-actions"><button id="dispatch-button" class="btn solid" type="submit">${icon("arrow-right")} Dispatch run</button><span class="muted">⌘ / Ctrl + Enter</span></div></form><div class="recent-head"><span class="eyebrow">RECENT RUNS</span><a href="#ledger" id="all-runs">All runs →</a></div><div id="recent-list" class="recent-list"></div></section>`;
+  main.innerHTML = `<section class="dispatch"><div class="eyebrow overline">NEW RUN / TASK BRIEF</div><h1>What needs to change?</h1><form id="dispatch-form"><div class="field"><label class="field-label" for="task-title">Title <span class="optional">optional · stored in this browser</span></label><input class="text-input" id="task-title" maxlength="200" placeholder="A short name for this run"></div><div class="field"><label class="field-label" for="task-goal">Task brief</label><textarea class="brief" id="task-goal" maxlength="16000" required placeholder="Describe the change you want. Include the failing symptom, the file or area if you know it, and what 'done' looks like."></textarea><div id="dispatch-error" class="error-text" role="alert" hidden></div></div><div class="config-row"><div class="config-box"><span class="eyebrow">WORKSPACE</span><div class="config-value" title="${html(state.bootstrap?.workspace || "")}">${icon("terminal")}<span>${html(state.bootstrap?.workspace || "Connecting…")}</span></div></div><div class="config-box"><label class="eyebrow" for="provider">PROVIDER / MODEL</label><select class="select" id="provider"></select><input class="text-input mono" id="model" placeholder="Model ID" aria-label="Model ID" style="margin-top:6px"><small id="model-price-note" class="muted"></small></div></div><details class="guardrails"><summary>Guardrails <span class="micro">ENFORCED BY ENGINE</span></summary><div class="guard-grid"><label>Maximum turns<input id="max-turns" class="number-input mono" type="number" min="1" max="200" value="24"></label><label>Max cost, USD<input id="max-cost" class="number-input mono" type="number" min="0" step="0.000001" placeholder="Not set"><small id="price-note">Set model pricing in Settings to enable.</small></label><label>Request timeout, seconds<input id="timeout" class="number-input mono" type="number" min="1" max="3600" value="300"></label><label>Process execution<select id="process-backend" class="select mono"><option value="disabled">Disabled</option><option value="oci">OCI sandbox</option><option value="native">Native host</option></select><small>Native runs commands on your host.</small></label><label id="sandbox-image-wrap" hidden>Local OCI image<input id="sandbox-image" class="text-input mono" placeholder="image:tag"></label><label>Base URL override<input id="base-url" class="text-input mono" placeholder="Provider default"></label><label>API key variable<input id="api-key-env" class="text-input mono" placeholder="Environment variable name"></label></div></details><div class="dispatch-actions"><button id="dispatch-button" class="btn solid" type="submit">${icon("arrow-right")} Dispatch run</button><span class="muted">⌘ / Ctrl + Enter</span></div></form><div class="recent-head"><span class="eyebrow">RECENT RUNS</span><a href="#ledger" id="all-runs">All runs →</a></div><div id="recent-list" class="recent-list"></div></section>`;
   const c = state.config || state.bootstrap?.defaults || {};
   const provider = $("provider");
   for (const p of state.bootstrap?.providers || [
@@ -327,7 +338,10 @@ function renderDispatch() {
       $("base-url").value = "";
       $("api-key-env").value = "";
     }
+    syncPriceGuardrail();
   };
+  $("model").oninput = syncPriceGuardrail;
+  syncPriceGuardrail();
   $("task-goal").value = state.prefill || "";
   state.prefill = "";
   $("dispatch-form").onsubmit = dispatch;
@@ -352,6 +366,16 @@ function renderDispatch() {
     e.preventDefault();
     openLedger();
   };
+}
+function syncPriceGuardrail() {
+  const card = priceCard($("provider").value, $("model").value.trim());
+  $("max-cost").disabled = !card;
+  $("price-note").textContent = card
+    ? "Enforced by the engine using this model's price card."
+    : "Set model pricing in Settings to enable.";
+  $("model-price-note").textContent = card
+    ? `$${card.input} input / $${card.output} output per 1M tokens · browser setting`
+    : "Pricing not set";
 }
 async function dispatch(e) {
   e.preventDefault();
@@ -378,6 +402,11 @@ async function dispatch(e) {
   body.api_key_env = $("api-key-env").value.trim() || undefined;
   if (body.process_backend === "oci")
     body.sandbox_image = $("sandbox-image").value.trim();
+  const card = priceCard(provider, model);
+  if (card) {
+    for (const field of ["input", "cached_input", "cache_creation", "output"])
+      body[field + "_price"] = Math.round(card[field] * 1e6);
+  }
   if (maxCost) body.max_cost_microusd = Math.round(Number(maxCost) * 1e6);
   state.config = {
     provider,
@@ -551,11 +580,23 @@ function renderTabs() {
   const body = $("run-body");
   if (!body) return;
   body.dataset.view = state.compact;
+  const diffLines = String(state.diff?.unified_diff || "").split("\n");
+  const added = diffLines.filter(
+    (line) => line.startsWith("+") && !line.startsWith("+++"),
+  ).length;
+  const removed = diffLines.filter(
+    (line) => line.startsWith("-") && !line.startsWith("---"),
+  ).length;
+  const diffLabel = state.diff?.changes?.length
+    ? `Diff (+${added} −${removed})`
+    : "Diff";
   for (const b of document.querySelectorAll("[data-view]")) {
+    if (b.dataset.view === "diff") b.textContent = diffLabel;
     b.classList.toggle("active", b.dataset.view === state.compact);
     b.setAttribute("aria-selected", String(b.dataset.view === state.compact));
   }
   for (const b of document.querySelectorAll("[data-tab]")) {
+    if (b.dataset.tab === "diff") b.textContent = diffLabel;
     b.classList.toggle("active", b.dataset.tab === state.tab);
     b.setAttribute("aria-selected", String(b.dataset.tab === state.tab));
   }
@@ -1151,7 +1192,8 @@ function renderRecentOnly() {
 function renderSettings() {
   const main = $("main");
   main.className = "main";
-  main.innerHTML = `<section class="settings-page"><div class="eyebrow muted">LOCAL CONFIGURATION</div><h1>Settings</h1><section class="settings-section"><h2>Engine</h2><div class="settings-row"><span>Connection</span><span>${state.offline ? "Unreachable" : "Connected to localhost"}</span></div><div class="settings-row"><span>Version</span><span>${html(state.bootstrap?.version || "—")}</span></div><div class="settings-row"><span>Workspace</span><span>${html(state.bootstrap?.workspace || "—")}</span></div></section><section class="settings-section"><h2>Run defaults</h2><p class="settings-note">These values come from this local engine session. Edit them for each run on the dispatch screen.</p><div class="settings-row"><span>Provider</span><span>${html(state.bootstrap?.defaults?.provider || "—")}</span></div><div class="settings-row"><span>Model</span><span>${html(state.bootstrap?.defaults?.model || "Not configured")}</span></div><div class="settings-row"><span>Base URL</span><span>${html(state.bootstrap?.defaults?.base_url || "Provider default")}</span></div></section><section class="settings-section"><h2>Appearance</h2><div class="settings-row"><label for="theme-choice">Theme</label><select class="select" id="theme-choice"><option value="system">System</option><option value="paper">Paper</option><option value="carbon">Carbon</option></select></div><div class="settings-row"><label for="diff-choice">Diff view</label><select class="select" id="diff-choice"><option value="unified">Unified</option><option value="split">Split</option></select></div></section><section class="settings-section"><h2>Provider configuration</h2><p class="settings-note">Provider keys and model pricing are configured in the local CLI environment. The browser never receives secret values. Cost appears only when the engine reports it.</p></section></section>`;
+  main.dataset.bootstrapped = state.bootstrap ? "1" : "0";
+  main.innerHTML = `<section class="settings-page"><div class="eyebrow muted">LOCAL CONFIGURATION</div><h1>Settings</h1><section class="settings-section"><h2>Engine</h2><div class="settings-row"><span>Connection</span><span>${state.offline ? "Unreachable" : "Connected to localhost"}</span></div><div class="settings-row"><span>Version</span><span>${html(state.bootstrap?.version || "—")}</span></div><div class="settings-row"><span>Workspace</span><span>${html(state.bootstrap?.workspace || "—")}</span></div></section><section class="settings-section"><h2>Run defaults</h2><p class="settings-note">Engine defaults appear until you choose a browser default. Edit each run on Dispatch.</p><div class="settings-row"><span>Provider</span><span>${html(state.config?.provider || state.bootstrap?.defaults?.provider || "—")}</span></div><div class="settings-row"><span>Model</span><span>${html(state.config?.model || state.bootstrap?.defaults?.model || "Not configured")}</span></div><div class="settings-row"><span>Base URL</span><span>${html(state.config?.base_url || state.bootstrap?.defaults?.base_url || "Provider default")}</span></div></section><section class="settings-section"><h2>Model pricing</h2><p class="settings-note">Prices are stored in this browser and passed to the engine for each run. Enter USD per 1 million tokens for all four classes. The engine uses this card for cost estimates and caps.</p><div class="pricing-model"><label>Provider<select id="price-provider" class="select"></select></label><label>Model ID<input id="price-model" class="text-input mono" placeholder="Model ID"></label></div><div class="guard-grid"><label>Input<input id="price-input" class="number-input mono" type="number" min="0" step="0.000001" placeholder="USD / 1M"></label><label>Cached input<input id="price-cached_input" class="number-input mono" type="number" min="0" step="0.000001" placeholder="USD / 1M"></label><label>Cache creation<input id="price-cache_creation" class="number-input mono" type="number" min="0" step="0.000001" placeholder="USD / 1M"></label><label>Output<input id="price-output" class="number-input mono" type="number" min="0" step="0.000001" placeholder="USD / 1M"></label></div><div class="receipt-actions"><button class="btn solid" id="save-pricing">Save price card</button><button class="btn quiet" id="clear-pricing">Clear price card</button><button class="btn quiet" id="use-model-default">Use as new run default</button></div><p id="price-status" class="settings-note" role="status"></p></section><section class="settings-section"><h2>Appearance</h2><div class="settings-row"><label for="theme-choice">Theme</label><select class="select" id="theme-choice"><option value="system">System</option><option value="paper">Paper</option><option value="carbon">Carbon</option></select></div><div class="settings-row"><label for="diff-choice">Diff view</label><select class="select" id="diff-choice"><option value="unified">Unified</option><option value="split">Split</option></select></div></section><section class="settings-section"><h2>Provider configuration</h2><p class="settings-note">Provider keys remain in the local CLI environment. The browser stores only the variable name, never the secret. Cost appears only when the engine reports it.</p></section></section>`;
   $("theme-choice").value = state.theme || "system";
   $("theme-choice").onchange = (e) =>
     setTheme(e.target.value === "system" ? null : e.target.value);
@@ -1159,6 +1201,79 @@ function renderSettings() {
   $("diff-choice").onchange = (e) => {
     state.diffMode = e.target.value;
     store("diffMode", state.diffMode);
+  };
+  const configured = state.config || state.bootstrap?.defaults || {};
+  for (const provider of state.bootstrap?.providers || []) {
+    const option = node("option", "", provider);
+    option.value = provider;
+    $("price-provider").append(option);
+  }
+  $("price-provider").value = configured.provider || "ollama";
+  $("price-model").value = configured.model || "";
+  const fields = ["input", "cached_input", "cache_creation", "output"];
+  const fillCard = () => {
+    const card = priceCard(
+      $("price-provider").value,
+      $("price-model").value.trim(),
+    );
+    for (const field of fields)
+      $("price-" + field).value = card ? String(card[field]) : "";
+    $("price-status").textContent = card
+      ? "Saved in this browser for this provider and model."
+      : "No price card for this model.";
+  };
+  $("price-provider").onchange = fillCard;
+  $("price-model").onchange = fillCard;
+  fillCard();
+  $("save-pricing").onclick = () => {
+    const provider = $("price-provider").value;
+    const model = $("price-model").value.trim();
+    const prices = Object.fromEntries(
+      fields.map((field) => [field, Number($("price-" + field).value)]),
+    );
+    if (
+      !model ||
+      fields.some(
+        (field) =>
+          $("price-" + field).value.trim() === "" ||
+          !Number.isFinite(prices[field]) ||
+          prices[field] < 0 ||
+          prices[field] > 1_000_000,
+      )
+    ) {
+      $("price-status").textContent =
+        "Enter a model ID and all four nonnegative prices.";
+      return;
+    }
+    state.pricing[priceKey(provider, model)] = prices;
+    store("pricing", state.pricing);
+    $("price-status").textContent =
+      "Price card saved in this browser. The engine will use it for new runs.";
+  };
+  $("clear-pricing").onclick = () => {
+    delete state.pricing[
+      priceKey($("price-provider").value, $("price-model").value.trim())
+    ];
+    store("pricing", state.pricing);
+    fillCard();
+  };
+  $("use-model-default").onclick = () => {
+    const provider = $("price-provider").value;
+    const model = $("price-model").value.trim();
+    if (!model) {
+      $("price-status").textContent = "Enter a model ID first.";
+      return;
+    }
+    const prior = state.config || state.bootstrap?.defaults || {};
+    state.config = {
+      provider,
+      model,
+      base_url: provider === prior.provider ? prior.base_url : "",
+      api_key_env: provider === prior.provider ? prior.api_key_env : "",
+    };
+    store("config", state.config);
+    $("price-status").textContent =
+      "New runs will use this provider and model. Set its endpoint and key variable on Dispatch.";
   };
 }
 function openLedger() {
@@ -1207,6 +1322,7 @@ function syncDispatchAvailability() {
   if (!form) return;
   for (const control of form.querySelectorAll("input,textarea,select"))
     control.disabled = state.offline;
+  if (!state.offline) syncPriceGuardrail();
   const busy = state.jobs.some((job) =>
     ["running", "cancelling"].includes(job.state),
   );
@@ -1221,6 +1337,7 @@ function syncDispatchAvailability() {
 async function refresh() {
   if (state.loading) return;
   state.loading = true;
+  const previousPhase = state.detail ? status(selectedRun()).key : null;
   try {
     if (!state.bootstrap) state.bootstrap = await api("/api/bootstrap");
     const [runs, jobs] = await Promise.all([
@@ -1264,14 +1381,23 @@ async function refresh() {
     if (location.pathname === "/") {
       if (!document.querySelector("#dispatch-form")) renderDispatch();
       else renderRecentOnly();
-    } else if (location.pathname === "/settings") renderSettings();
-    else if (state.detail) {
+    } else if (location.pathname === "/settings") {
+      if ($("main").dataset.bootstrapped !== "1") renderSettings();
+    } else if (state.detail) {
       const r = state.runs.find((x) => x.run_id === state.detail.run_id);
       if (r && status(r).key !== status(state.detail).key) {
         state.detail = await api(`/api/runs/${r.run_id}/inspect`);
         loadDiff(r.run_id);
       }
       renderRunHead();
+      if (
+        previousPhase === "running" &&
+        status(selectedRun()).key === "ready"
+      ) {
+        const candidate = document.querySelector(".candidate-panel");
+        candidate?.classList.add("review-opened");
+        setTimeout(() => candidate?.classList.remove("review-opened"), 220);
+      }
     }
     renderLedger();
     syncDispatchAvailability();
