@@ -2643,6 +2643,7 @@ pub(crate) fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
                 "outcome": run.outcome,
                 "goal": run.goal,
                 "changes": run.changes,
+                "created_at": run.created_at,
             })
         })
         .collect::<Vec<_>>();
@@ -2677,6 +2678,7 @@ pub(crate) struct RunHistoryEntry {
     pub outcome: Option<ReceiptOutcome>,
     pub goal: String,
     pub changes: usize,
+    pub created_at: Option<String>,
 }
 
 pub(crate) fn run_history(state_root: &Path) -> Result<Vec<RunHistoryEntry>, CliError> {
@@ -2688,6 +2690,12 @@ pub(crate) fn run_history(state_root: &Path) -> Result<Vec<RunHistoryEntry>, Cli
     let mut history = Vec::new();
     for run_id in store.list_run_ids()? {
         let events = store.load(run_id)?;
+        let created_at = events.first().and_then(|event| {
+            event
+                .timestamp
+                .format(&time::format_description::well_known::Rfc3339)
+                .ok()
+        });
         let mut durable_state = RunState::Created;
         let mut goal = "(task contract unavailable)".to_owned();
         for envelope in events {
@@ -2710,6 +2718,7 @@ pub(crate) fn run_history(state_root: &Path) -> Result<Vec<RunHistoryEntry>, Cli
             outcome: receipt.as_ref().map(|receipt| receipt.outcome),
             goal,
             changes: receipt.as_ref().map_or(0, |receipt| receipt.changes.len()),
+            created_at,
         });
     }
     Ok(history)

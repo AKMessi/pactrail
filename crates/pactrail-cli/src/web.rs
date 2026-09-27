@@ -8,6 +8,7 @@ use std::sync::Arc;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -24,6 +25,7 @@ struct AppState {
     executable: PathBuf,
     port: u16,
     jobs: Arc<Mutex<HashMap<String, Job>>>,
+    read_lock: Arc<Mutex<()>>,
 }
 
 struct Job {
@@ -52,6 +54,13 @@ struct RunRequest {
     api_key_env: Option<String>,
     max_turns: Option<u16>,
     process_backend: Option<String>,
+    sandbox_image: Option<String>,
+    max_cost_microusd: Option<u64>,
+    input_price: Option<u64>,
+    cached_input_price: Option<u64>,
+    cache_creation_price: Option<u64>,
+    output_price: Option<u64>,
+    request_timeout_seconds: Option<u64>,
     apply: Option<bool>,
 }
 
@@ -80,6 +89,7 @@ pub async fn serve(
         executable: std::env::current_exe().map_err(|e| e.to_string())?,
         port,
         jobs: Arc::new(Mutex::new(HashMap::new())),
+        read_lock: Arc::new(Mutex::new(())),
     };
     let router = router(state);
     let listener = tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port))
@@ -99,10 +109,17 @@ pub async fn serve(
 fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(index))
+        .route("/settings", get(index))
+        .route("/runs/{id}", get(index))
         .route("/app.css", get(styles))
         .route("/app.js", get(script))
+        .route("/icons.svg", get(icons))
+        .route("/fonts/martian-mono-latin.woff2", get(martian_font))
+        .route("/fonts/spline-sans-latin.woff2", get(spline_font))
+        .route("/fonts/spline-sans-mono-latin.woff2", get(spline_mono_font))
         .route("/api/bootstrap", get(bootstrap))
         .route("/api/runs", get(runs).post(start_run))
+        .route("/api/runs/{id}/events", get(run_events))
         .route(
             "/api/runs/{id}/{operation}",
             get(run_detail).post(run_action),
@@ -148,6 +165,10 @@ async fn local_request_guard(
 }
 
 fn asset(content_type: &'static str, body: &'static str) -> Response {
+    asset_bytes(content_type, body.as_bytes())
+}
+
+fn asset_bytes(content_type: &'static str, body: &'static [u8]) -> Response {
     let mut headers = HeaderMap::new();
     headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -178,8 +199,81 @@ async fn script() -> Response {
         include_str!("../web/app.js"),
     )
 }
+async fn icons() -> Response {
+    asset("image/svg+xml", include_str!("../web/icons.svg"))
+}
+async fn martian_font() -> Response {
+    asset_bytes(
+        "font/woff2",
+        include_bytes!("../web/fonts/martian-mono-latin.woff2"),
+    )
+}
+async fn spline_font() -> Response {
+    asset_bytes(
+        "font/woff2",
+        include_bytes!("../web/fonts/spline-sans-latin.woff2"),
+    )
+}
+async fn spline_mono_font() -> Response {
+    asset_bytes(
+        "font/woff2",
+        include_bytes!("../web/fonts/spline-sans-mono-latin.woff2"),
+    )
+}
+
+async fn run_events(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<
+    Sse<impl futures_util::Stream<Item = Result<Event, std::convert::Infallible>>>,
+    (StatusCode, Json<Value>),
+> {
+    valid_id(&id)?;
+    let stream = futures_util::stream::unfold(
+        (
+            state,
+            id,
+            0usize,
+            tokio::time::interval(std::time::Duration::from_millis(1800)),
+        ),
+        |(state, id, mut seen, mut interval)| async move {
+            loop {
+                interval.tick().await;
+                let read_guard = state.read_lock.lock().await;
+                let state_copy = state.clone();
+                let id_copy = id.clone();
+                let events = tokio::task::spawn_blocking(move || {
+                    let root = crate::commands::state_dir(
+                        &state_copy.workspace,
+                        state_copy.state_dir.as_deref(),
+                    )
+                    .ok()?;
+                    let run_id = crate::commands::parse_run_id(&id_copy).ok()?;
+                    crate::commands::load_trace(&root, run_id).ok()
+                })
+                .await
+                .ok()
+                .flatten();
+                drop(read_guard);
+                if let Some(events) = events
+                    && events.len() > seen
+                {
+                    let fresh = &events[seen..];
+                    seen = events.len();
+                    let payload = serde_json::to_string(fresh).unwrap_or_default();
+                    return Some((
+                        Ok(Event::default().event("trace").data(payload)),
+                        (state, id, seen, interval),
+                    ));
+                }
+            }
+        },
+    );
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
+}
 
 async fn cli_json(state: &AppState, args: &[&str]) -> ApiResult {
+    let _read_guard = state.read_lock.lock().await;
     let mut command = Command::new(&state.executable);
     command.arg("--workspace").arg(&state.workspace);
     if let Some(dir) = &state.state_dir {
@@ -295,7 +389,10 @@ async fn run_action(
 
 async fn resume_run(state: AppState, run_id: String) -> ApiResult {
     let mut jobs = state.jobs.lock().await;
-    if jobs.values().any(|job| job.state == "running") {
+    if jobs
+        .values()
+        .any(|job| job.state == "running" || job.state == "cancelling")
+    {
         return Err(bad("A run is already active in this workspace"));
     }
     let id = Uuid::now_v7().to_string();
@@ -360,8 +457,34 @@ async fn start_run(State(state): State<AppState>, Json(request): Json<RunRequest
     {
         return Err(bad("Unknown process backend"));
     }
+    if request.process_backend.as_deref() == Some("oci")
+        && !request.sandbox_image.as_ref().is_some_and(|image| {
+            !image.trim().is_empty() && image.len() <= 500 && !image.starts_with('-')
+        })
+    {
+        return Err(bad("OCI process execution requires a local sandbox image"));
+    }
     if request.max_turns.is_some_and(|n| n == 0 || n > 200) {
         return Err(bad("Turns must be between 1 and 200"));
+    }
+    if request
+        .request_timeout_seconds
+        .is_some_and(|n| !(1..=3600).contains(&n))
+    {
+        return Err(bad("Request timeout must be between 1 and 3600 seconds"));
+    }
+    let prices = [
+        request.input_price,
+        request.cached_input_price,
+        request.cache_creation_price,
+        request.output_price,
+    ];
+    if prices.iter().any(Option::is_some) && prices.iter().any(Option::is_none) {
+        return Err(bad("Provide all four model prices or none"));
+    }
+    if request.max_cost_microusd.is_some_and(|cost| cost > 0) && prices.iter().any(Option::is_none)
+    {
+        return Err(bad("A maximum cost requires all four model prices"));
     }
     if request
         .base_url
@@ -376,7 +499,10 @@ async fn start_run(State(state): State<AppState>, Json(request): Json<RunRequest
         return Err(bad("Invalid key environment variable name"));
     }
     let mut jobs = state.jobs.lock().await;
-    if jobs.values().any(|job| job.state == "running") {
+    if jobs
+        .values()
+        .any(|job| job.state == "running" || job.state == "cancelling")
+    {
         return Err(bad("A run is already active in this workspace"));
     }
     let id = Uuid::now_v7().to_string();
@@ -407,7 +533,11 @@ async fn finish_job(state: &AppState, id: &str, result: Result<Value, String>) {
         job.cancel = None;
         match result {
             Ok(value) => {
-                job.state = "complete";
+                job.state = if value["outcome"] == "cancelled" {
+                    "cancelled"
+                } else {
+                    "complete"
+                };
                 job.output = Some(value);
             }
             Err(error) if error == "Run cancelled" => {
@@ -458,6 +588,18 @@ async fn execute_run(
         "--process-backend",
         request.process_backend.as_deref().unwrap_or("disabled"),
     ]);
+    if request
+        .process_backend
+        .as_deref()
+        .is_some_and(|backend| backend != "disabled")
+    {
+        command.args(["--process-approval", "allow-run"]);
+    }
+    if let Some(image) = &request.sandbox_image
+        && request.process_backend.as_deref() == Some("oci")
+    {
+        command.args(["--sandbox-image", image]);
+    }
     if let Some(url) = &request.base_url
         && !url.is_empty()
     {
@@ -468,6 +610,24 @@ async fn execute_run(
     }
     if request.apply.unwrap_or(false) {
         command.arg("--apply");
+    }
+    if let Some(cost) = request.max_cost_microusd
+        && cost > 0
+    {
+        command.args(["--max-cost-microusd", &cost.to_string()]);
+    }
+    for (name, price) in [
+        ("--input-price", request.input_price),
+        ("--cached-input-price", request.cached_input_price),
+        ("--cache-creation-price", request.cache_creation_price),
+        ("--output-price", request.output_price),
+    ] {
+        if let Some(price) = price {
+            command.args([name, &price.to_string()]);
+        }
+    }
+    if let Some(seconds) = request.request_timeout_seconds {
+        command.args(["--request-timeout-seconds", &seconds.to_string()]);
     }
     command.arg("--").arg(request.goal);
     let value = run_child(command, cancel).await?;
@@ -504,9 +664,30 @@ async fn run_child(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     let child = command.spawn().map_err(|e| e.to_string())?;
+    let child_id = child.id();
+    let mut completion = Box::pin(child.wait_with_output());
     let output = tokio::select! {
-        result = child.wait_with_output() => result.map_err(|e| e.to_string())?,
-        _ = &mut cancel => return Err("Run cancelled".to_owned()),
+        result = &mut completion => result.map_err(|e| e.to_string())?,
+        _ = &mut cancel => {
+            #[cfg(unix)]
+            if let Some(id) = child_id {
+                // The CLI translates SIGINT into a cooperative cancellation
+                // event and writes an integrity-checked partial receipt.
+                nix::sys::signal::kill(
+                    nix::unistd::Pid::from_raw(
+                        i32::try_from(id).map_err(|_| "Run process ID is invalid")?
+                    ),
+                    nix::sys::signal::Signal::SIGINT,
+                )
+                .map_err(|error| format!("Could not signal run: {error}"))?;
+            }
+            #[cfg(not(unix))]
+            return Err("Run cancelled".to_owned());
+            tokio::time::timeout(std::time::Duration::from_mins(1), &mut completion)
+                .await
+                .map_err(|_| "Run did not stop within 60 seconds".to_owned())?
+                .map_err(|e| e.to_string())?
+        },
     };
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
@@ -519,6 +700,7 @@ async fn cancel_job(State(state): State<AppState>, Path(id): Path<String>) -> Ap
     let job = jobs.get_mut(&id).ok_or_else(|| bad("Job not found"))?;
     if let Some(cancel) = job.cancel.take() {
         let _ = cancel.send(());
+        job.state = "cancelling";
     }
     Ok(Json(json!({"id": id, "state": "cancelling"})))
 }
@@ -559,6 +741,7 @@ mod tests {
             executable: std::env::current_exe()?,
             port: 4173,
             jobs: Arc::new(Mutex::new(HashMap::new())),
+            read_lock: Arc::new(Mutex::new(())),
         });
 
         let bad_host = Request::builder()
@@ -597,6 +780,7 @@ mod tests {
             executable: std::env::current_exe()?,
             port: 4173,
             jobs: Arc::new(Mutex::new(HashMap::new())),
+            read_lock: Arc::new(Mutex::new(())),
         };
         let id = uuid::Uuid::now_v7().to_string();
         save_web_result(

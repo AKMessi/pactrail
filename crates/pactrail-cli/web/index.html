@@ -2,292 +2,152 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0b0d11" />
-    <title>Pactrail — every change carries evidence</title>
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#F5F2EA" />
+    <title>Pactrail</title>
     <link rel="stylesheet" href="/app.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <div class="app-shell">
-      <aside class="sidebar" id="sidebar">
-        <div class="brand">
-          <div class="brand-mark"><span></span><span></span><span></span></div>
-          <div><strong>pactrail</strong><small>CONTROL ROOM</small></div>
-          <button
-            class="icon mobile-close"
-            id="close-sidebar"
-            aria-label="Close sidebar"
+    <a class="skip" href="#main">Skip to content</a>
+    <div id="app" class="shell">
+      <aside id="ledger" class="ledger" aria-label="Run ledger">
+        <div class="ledger-head">
+          <a class="wordmark" href="/" data-link
+            ><span class="lamp connected"></span><span>PACTRAIL</span></a
+          ><button
+            id="ledger-collapse"
+            class="icon-btn ledger-collapse"
+            aria-label="Collapse ledger"
+            title="Collapse ledger"
           >
-            ×
+            <svg><use href="/icons.svg#panel-left-close" /></svg></button
+          ><button
+            id="ledger-close"
+            class="icon-btn ledger-close"
+            aria-label="Close ledger"
+          >
+            <svg><use href="/icons.svg#x" /></svg>
           </button>
         </div>
-        <button class="new-task" id="new-task">
-          <span class="plus">＋</span> New task <kbd>⌘ K</kbd>
-        </button>
-        <div class="side-group-label">
-          WORKSPACE <span class="label-dot"></span>
-        </div>
-        <div class="workspace-card">
-          <div class="workspace-icon">⌁</div>
-          <div class="workspace-text">
-            <strong id="workspace-name">Loading…</strong
-            ><span id="workspace-path">Connecting to local engine</span>
-          </div>
-        </div>
-        <div class="side-group-label history-label">
-          RUN HISTORY <span id="run-count">0</span>
-        </div>
-        <div class="history" id="run-list">
-          <div class="history-empty">No runs yet</div>
-        </div>
-        <div class="sidebar-bottom">
-          <div class="engine-status">
-            <span class="status-led"></span><span>Engine online</span
-            ><span class="engine-version" id="version">v1</span>
-          </div>
-          <div class="sidebar-foot">LOCAL FIRST · REVIEW BEFORE APPLY</div>
-        </div>
-      </aside>
-      <main class="main">
-        <header class="topbar">
-          <div class="top-left">
-            <button
-              class="icon menu-button"
-              id="menu-button"
-              aria-label="Open sidebar"
-            >
-              ☰</button
-            ><span class="crumb">Workspace</span><span class="slash">/</span
-            ><span id="page-title">Overview</span>
-          </div>
-          <div class="top-right">
-            <span class="local-pill"
-              ><span class="status-led"></span> LOCAL SESSION</span
-            ><button
-              class="icon"
-              id="refresh"
-              aria-label="Refresh runs"
-              title="Refresh"
-            >
-              ↻
-            </button>
-          </div>
-        </header>
-        <div class="main-scroll">
-          <section class="welcome" id="welcome">
-            <div class="eyebrow">
-              <span class="eyebrow-line"></span> YOUR CODING WORKSPACE
-            </div>
-            <h1>Build with confidence.<br /><em>Ship with evidence.</em></h1>
-            <p>
-              Pactrail keeps every edit isolated until you review it. Start a
-              task, follow the trace, and decide what lands in your workspace.
-            </p>
-            <div class="welcome-points">
-              <span><i class="point-icon">◇</i> Isolated changes</span
-              ><span><i class="point-icon">◎</i> Verifiable trace</span
-              ><span><i class="point-icon">✓</i> Your approval</span>
-            </div>
-          </section>
-          <section class="session-head hidden" id="session-head">
-            <div class="eyebrow">
-              <span class="eyebrow-line"></span> RUN DETAIL
-              <span id="run-short"></span>
-            </div>
-            <h1 id="session-title"></h1>
-            <div class="session-meta">
-              <span class="state-pill" id="run-state"></span
-              ><span id="run-changes"></span><span id="run-id"></span>
-            </div>
-          </section>
-          <div class="content-heading" id="activity-heading">
-            <span>RECENT ACTIVITY</span><span class="heading-rule"></span
-            ><button id="view-all">View all runs ↗</button>
-          </div>
-          <section class="activity" id="activity">
-            <div class="empty-activity">
-              <div class="empty-orbit"><div class="orbit-inner">◇</div></div>
-              <h2>A clear trail starts here.</h2>
-              <p>
-                Your runs will appear here with their changes, evidence, and
-                decisions.
-              </p>
-            </div>
-          </section>
-          <section class="detail hidden" id="detail">
-            <div class="detail-tabs">
-              <button class="tab active" data-tab="timeline">Timeline</button
-              ><button class="tab" data-tab="diff">Changes</button
-              ><button class="tab" data-tab="receipt">Receipt</button>
-            </div>
-            <div class="detail-body" id="detail-body"></div>
-          </section>
-        </div>
-        <div class="composer-wrap" id="composer-wrap">
-          <div class="composer">
-            <label class="sr-only" for="goal">Describe a coding task</label
-            ><textarea
-              id="goal"
-              rows="2"
-              placeholder="What would you like Pactrail to work on?"
-            ></textarea>
-            <div class="composer-footer">
-              <button class="model-selector" id="settings-toggle">
-                <span class="model-dot"></span
-                ><span id="model-label">Choose a model</span
-                ><span class="chevron">⌄</span></button
-              ><span class="composer-spacer"></span
-              ><span class="composer-hint"
-                >Enter to run · Shift+Enter for a line</span
-              ><button class="send" id="submit-task" aria-label="Start task">
-                ↗
-              </button>
-            </div>
-          </div>
-          <div class="composer-caption">
-            Changes stay isolated until you review and apply them.
-          </div>
-        </div>
-      </main>
-      <aside class="inspector">
-        <div class="inspector-header">
-          <span>INSPECTOR</span><span class="inspector-header-icon">◫</span>
-        </div>
-        <div class="inspector-scroll">
-          <div class="inspector-section">
-            <div class="inspector-label">CURRENT RUN</div>
-            <div class="inspector-card" id="inspector-summary">
-              <div class="inspector-empty-icon">◇</div>
-              <strong>No active run</strong>
-              <p>Start a task to see its progress and evidence here.</p>
-            </div>
-          </div>
-          <div class="inspector-section">
-            <div class="inspector-label">THE PACTRAIL FLOW</div>
-            <div class="flow">
-              <div class="flow-step">
-                <div class="flow-marker">01</div>
-                <div>
-                  <strong>Describe</strong>
-                  <p>Give the agent a clear task.</p>
-                </div>
-              </div>
-              <div class="flow-step">
-                <div class="flow-marker">02</div>
-                <div>
-                  <strong>Investigate & edit</strong>
-                  <p>Work happens in isolation.</p>
-                </div>
-              </div>
-              <div class="flow-step">
-                <div class="flow-marker">03</div>
-                <div>
-                  <strong>Verify</strong>
-                  <p>Evidence accompanies every change.</p>
-                </div>
-              </div>
-              <div class="flow-step">
-                <div class="flow-marker">04</div>
-                <div>
-                  <strong>Review & apply</strong>
-                  <p>You control what reaches the source.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="inspector-section">
-            <div class="inspector-label">RUNTIME</div>
-            <div class="runtime-row">
-              <span>Provider</span><strong id="runtime-provider">—</strong>
-            </div>
-            <div class="runtime-row">
-              <span>Model</span><strong id="runtime-model">—</strong>
-            </div>
-            <div class="runtime-row">
-              <span>Process access</span
-              ><strong id="runtime-process">Disabled</strong>
-            </div>
-          </div>
-        </div>
-        <div class="inspector-bottom">
-          Pactrail <span>·</span> every change carries evidence
-        </div>
-      </aside>
-    </div>
-    <div class="modal-backdrop hidden" id="settings-backdrop">
-      <div
-        class="settings-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-      >
-        <div class="modal-head">
-          <div>
-            <div class="eyebrow">RUN CONFIGURATION</div>
-            <h2 id="settings-title">Model & runtime</h2>
-          </div>
-          <button class="icon" id="settings-close" aria-label="Close settings">
-            ×
-          </button>
-        </div>
-        <p class="modal-description">
-          Choose any supported provider. API keys stay in your local environment
-          and are never sent to the browser.
-        </p>
-        <div class="form-grid">
-          <label
-            >Provider<select id="provider">
-              <option value="ollama">Ollama</option>
-              <option value="open-ai-compatible">
-                OpenAI compatible / OpenRouter
-              </option>
-              <option value="open-ai">OpenAI Chat Completions</option>
-              <option value="open-ai-responses">OpenAI Responses</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="gemini">Gemini</option>
-            </select></label
-          ><label
-            >Model<input
-              id="model"
-              placeholder="Model identifier"
-              autocomplete="off" /></label
-          ><label
-            >Base URL <span class="optional">OPTIONAL</span
+        <a href="/" data-link class="new-run"
+          ><svg><use href="/icons.svg#plus" /></svg>
+          <span class="new-run-label">New run</span> <kbd>N</kbd></a
+        >
+        <div class="ledger-tools">
+          <label class="search-wrap"
+            ><svg><use href="/icons.svg#search" /></svg
+            ><span class="sr-only">Search runs</span
             ><input
-              id="base-url"
-              placeholder="https://…"
-              autocomplete="off" /></label
-          ><label
-            >API key environment variable<input
-              id="api-key-env"
-              placeholder="OPENAI_API_KEY"
-              autocomplete="off" /></label
-          ><label
-            >Maximum turns<input
-              id="max-turns"
-              type="number"
-              min="1"
-              max="200"
-              value="24" /></label
-          ><label
-            >Process access<select id="process-backend">
-              <option value="disabled">Disabled · safest</option>
-              <option value="oci">OCI sandbox</option>
-              <option value="native">Native host access</option>
-            </select></label
+              id="ledger-search"
+              type="search"
+              placeholder="Search runs"
+              autocomplete="off"
+          /></label>
+          <div
+            id="ledger-filters"
+            class="filters"
+            aria-label="Filter runs"
+          ></div>
+        </div>
+        <nav id="ledger-list" class="ledger-list" aria-label="Runs">
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+          <div class="skeleton-row"></div>
+        </nav>
+        <div class="ledger-foot">
+          <span id="engine-indicator" class="engine-indicator"
+            ><span class="lamp connected"></span>Connecting…</span
+          ><a href="/settings" data-link class="settings-link"
+            ><svg><use href="/icons.svg#settings-2" /></svg
+            ><span>Settings</span></a
           >
         </div>
-        <div class="form-note" id="process-note">
-          The agent can read and edit isolated candidate files. Process
-          execution is disabled.
+      </aside>
+      <div id="ledger-shade" class="ledger-shade" hidden></div>
+      <div class="work-area">
+        <header class="topbar">
+          <button
+            id="ledger-open"
+            class="icon-btn ledger-open"
+            aria-label="Open ledger"
+          >
+            <svg><use href="/icons.svg#menu" /></svg></button
+          ><span id="breadcrumb" class="eyebrow">DISPATCH / NEW RUN</span
+          ><span class="top-spacer"></span
+          ><button
+            id="theme-toggle"
+            class="icon-btn"
+            aria-label="Change theme"
+            title="Change theme"
+          >
+            <svg><use href="/icons.svg#moon" /></svg></button
+          ><button
+            id="help-toggle"
+            class="icon-btn"
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts"
+          >
+            <svg><use href="/icons.svg#circle-help" /></svg>?
+          </button>
+        </header>
+        <div id="offline" class="offline" role="alert" hidden>
+          Engine unreachable. Retrying in 5s.
+          <button id="retry-now">Retry now</button>
         </div>
-        <div class="modal-actions">
-          <button class="secondary" id="settings-cancel">Cancel</button
-          ><button class="primary" id="settings-save">Save settings</button>
-        </div>
+        <main id="main" tabindex="-1"></main>
       </div>
     </div>
-    <div class="toast hidden" id="toast" role="status"></div>
+    <dialog id="confirm-dialog">
+      <form method="dialog">
+        <div class="eyebrow" id="dialog-kicker"></div>
+        <h2 id="dialog-title"></h2>
+        <p id="dialog-copy"></p>
+        <label id="reason-wrap" hidden
+          >Reason (optional)<input
+            id="discard-reason"
+            placeholder="Why? Optional — kept in history."
+            disabled
+          /><small>This engine does not store discard reasons.</small></label
+        >
+        <div class="dialog-actions">
+          <button value="cancel" class="btn quiet">Keep reviewing</button
+          ><button id="dialog-confirm" value="confirm" class="btn solid">
+            Confirm
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="help-dialog">
+      <form method="dialog">
+        <div class="eyebrow">KEYBOARD</div>
+        <h2>Shortcuts</h2>
+        <dl class="shortcuts">
+          <dt>N</dt>
+          <dd>New run</dd>
+          <dt>/</dt>
+          <dd>Search ledger</dd>
+          <dt>J / K</dt>
+          <dd>Next / previous run</dd>
+          <dt>1 / 2 / 3</dt>
+          <dd>Trace / Diff / Receipt</dd>
+          <dt>E</dt>
+          <dd>Apply</dd>
+          <dt>X</dt>
+          <dd>Discard</dd>
+          <dt>⌘ / Ctrl + Enter</dt>
+          <dd>Dispatch</dd>
+          <dt>Esc</dt>
+          <dd>Close</dd>
+        </dl>
+        <div class="dialog-actions">
+          <button class="btn solid" value="close">Close</button>
+        </div>
+      </form>
+    </dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   </body>
 </html>

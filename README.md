@@ -56,15 +56,17 @@ the request host and mutation origin, and keeps API keys on the server. It loads
 the selected workspace's `.env` without overriding exported environment
 variables; the file is never sent to the browser.
 
-The interface lets you configure a provider and model, launch a task, follow
-durable run history and trace events, inspect the receipt and integrity-checked
-diff, then apply or discard a ready candidate. Runs execute with process access
-disabled unless you explicitly choose a backend. The page can stop its own
-active run. Closing the browser does not stop a run. Use Stop to cancel an
-active run before shutting down the server. The browser session keeps its job status in server
-memory, while completed run history and browser-run summaries remain durable in
-`.pactrail`. Summaries are separate from the integrity-checked receipt and are
-presented as the agent's account of its work.
+The interface lets you configure a provider and model, dispatch a task, watch
+the live trace, review the receipt and integrity-checked diff, then apply or
+discard a candidate. Process execution is disabled by default; expand
+Guardrails to choose a native or OCI backend for a run. On Unix, Stop sends a
+cooperative interrupt and records a partial receipt. Closing the browser does not
+stop the run. Job status lives in server memory, while run history and receipts
+remain durable in `.pactrail`. Run titles and appearance preferences are stored
+in the browser. Fonts and icons are served locally; the interface needs no
+external assets at runtime. Optional model price cards are stored in the
+browser and passed to the engine for new runs; a cost cap is available only
+when all four token prices are configured.
 
 No Node.js build, external assets, browser extension, or cloud account is
 required. Provider credentials are only needed when you run a task against a
