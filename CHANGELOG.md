@@ -15,6 +15,7 @@ follow [Semantic Versioning](https://semver.org/).
   and trace-derived stale-evidence notices before applying a candidate.
 - Compact startup and live detail, Unicode cell-aware wrapping, readable byte deltas,
   neutral outcome colors, and explicit engine-counter/cost reporting.
+- A proposed V3 durable workspace runtime design, separate from shipped behavior.
 
 - Normalized model usage now has a bounded versioned codec. Checkpoint loading rejects impossible cache counters before a run resumes, while historical valid checkpoints remain readable.
 - Large observations can now deduplicate against an earlier compacted result when its exact run-local artifact passes integrity validation; unavailable artifacts leave the new observation intact.

@@ -157,6 +157,14 @@ Pactrail 1.0 is not a label applied solely because the CLI is polished. The
 version means downstream users can rely on the public contracts and migration
 policy as well as the runtime behavior.
 
+## Proposed V3 — durable, evidence-driven workspace runtime
+
+The next architecture recommendation is [design 0016](design/0016-durable-evidence-runtime.md).
+It proposes one runtime for CLI/browser/SDK, durable job identity and command
+admission, complete usage coverage, safe steering, obligation-driven context,
+and guided acceptance checks. It is not implemented or benchmark-proven.
+Its staged exit gates preserve V2 isolation, replay, policy, and public formats.
+
 ## Beyond 1.0
 
 - Independent external security review and remediation of any accepted report.
