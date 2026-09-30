@@ -58,15 +58,22 @@ variables; the file is never sent to the browser.
 
 The interface lets you configure a provider and model, dispatch a task, watch
 the live trace, review the receipt and integrity-checked diff, then apply or
-discard a candidate. Process execution is disabled by default; expand
-Guardrails to choose a native or OCI backend for a run. On Unix, Stop sends a
+discard a candidate. The Ledger Rail keeps run history beside the composer and
+review views. The Commands selector exposes None, Sandbox, and Host with an
+explicit consequence preview; Host requires a fresh acknowledgment for each run. On Unix, Stop sends a
 cooperative interrupt and records a partial receipt. Closing the browser does not
 stop the run. Job status lives in server memory, while run history and receipts
-remain durable in `.pactrail`. Run titles and appearance preferences are stored
-in the browser. Fonts and icons are served locally; the interface needs no
+remain durable in `.pactrail`. Drafts, titles, viewed-file marks, discard notes,
+and preferences are stored in the browser and labeled as local data. Fonts and icons are served locally; the interface needs no
 external assets at runtime. Optional model price cards are stored in the
 browser and passed to the engine for new runs; a cost cap is available only
-when all four token prices are configured.
+when all four token prices are configured. Missing usage appears as `—`, partial
+usage as `≥`, and a reported zero remains zero. Apply always opens a dialog;
+unverified, failed, or stale evidence requires an explicit acknowledgment.
+Only deterministic passing evidence uses green.
+
+See [Ledger Rail verification](docs/ledger-rail-ui.md) for test commands and the
+limits of what the interface can show.
 
 No Node.js build, external assets, browser extension, or cloud account is
 required. Provider credentials are only needed when you run a task against a

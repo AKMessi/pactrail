@@ -6,148 +6,141 @@
       name="viewport"
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
-    <meta name="theme-color" content="#F5F2EA" />
+    <meta
+      name="theme-color"
+      content="#F4F3EE"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#121311"
+      media="(prefers-color-scheme: dark)"
+    />
     <title>Pactrail</title>
+    <script src="/boot.js"></script>
+    <link
+      rel="preload"
+      href="/fonts/ibm-plex-sans-400-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/ibm-plex-mono-400-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <link rel="stylesheet" href="/app.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
-    <div id="app" class="shell">
-      <aside id="ledger" class="ledger" aria-label="Run ledger">
-        <div class="ledger-head">
+    <div class="app-shell" id="app">
+      <aside class="rail" id="rail" aria-label="Run history">
+        <div class="rail-head">
           <a class="wordmark" href="/" data-link
-            ><span class="lamp connected"></span><span>PACTRAIL</span></a
+            ><svg class="rail-logo" viewBox="0 0 16 20" aria-hidden="true">
+              <path d="M8 2v16" />
+              <circle cx="8" cy="3" r="2" />
+              <circle cx="8" cy="10" r="2" />
+              <circle cx="8" cy="17" r="2" /></svg
+            ><span>pactrail</span></a
           ><button
-            id="ledger-collapse"
-            class="icon-btn ledger-collapse"
-            aria-label="Collapse ledger"
-            title="Collapse ledger"
+            class="icon-button"
+            id="rail-toggle"
+            aria-label="Collapse run history"
+            title="Collapse run history"
           >
-            <svg><use href="/icons.svg#panel-left-close" /></svg></button
-          ><button
-            id="ledger-close"
-            class="icon-btn ledger-close"
-            aria-label="Close ledger"
-          >
-            <svg><use href="/icons.svg#x" /></svg>
+            ‹
           </button>
         </div>
-        <a href="/" data-link class="new-run"
-          ><svg><use href="/icons.svg#plus" /></svg>
-          <span class="new-run-label">New run</span> <kbd>N</kbd></a
+        <button
+          class="workspace-chip mono"
+          id="workspace-copy"
+          title="Copy workspace path"
         >
-        <div class="ledger-tools">
-          <label class="search-wrap"
-            ><svg><use href="/icons.svg#search" /></svg
-            ><span class="sr-only">Search runs</span
-            ><input
-              id="ledger-search"
-              type="search"
-              placeholder="Search runs"
-              autocomplete="off"
-          /></label>
-          <div
-            id="ledger-filters"
-            class="filters"
-            aria-label="Filter runs"
-          ></div>
-        </div>
-        <nav id="ledger-list" class="ledger-list" aria-label="Runs">
-          <div class="skeleton-row"></div>
-          <div class="skeleton-row"></div>
-          <div class="skeleton-row"></div>
+          Connecting…
+        </button>
+        <a class="new-run button primary" href="/" data-link
+          ><span>＋</span><span class="rail-label">New run</span><kbd>N</kbd></a
+        >
+        <label class="rail-search"
+          ><span class="sr-only">Search runs</span
+          ><input
+            id="rail-search"
+            type="search"
+            placeholder="Search runs ⌘K"
+            autocomplete="off"
+        /></label>
+        <div id="rail-filters" class="segments" aria-label="Filter runs"></div>
+        <select
+          id="rail-filter-select"
+          aria-label="Filter runs"
+          hidden
+        ></select>
+        <nav id="run-list" aria-label="Runs">
+          <p class="muted rail-empty">Connecting to the engine…</p>
         </nav>
-        <div class="ledger-foot">
-          <span id="engine-indicator" class="engine-indicator"
-            ><span class="lamp connected"></span>Connecting…</span
-          ><a href="/settings" data-link class="settings-link"
-            ><svg><use href="/icons.svg#settings-2" /></svg
-            ><span>Settings</span></a
+        <footer class="rail-footer">
+          <span id="engine-indicator" class="caption">Connecting…</span
+          ><a
+            href="/settings"
+            data-link
+            class="settings-link"
+            aria-label="Settings"
+            ><span aria-hidden="true">⚙</span
+            ><span class="rail-label">Settings</span></a
           >
-        </div>
+        </footer>
       </aside>
-      <div id="ledger-shade" class="ledger-shade" hidden></div>
+      <button
+        id="rail-scrim"
+        class="scrim"
+        aria-label="Close run history"
+        hidden
+      ></button>
       <div class="work-area">
-        <header class="topbar">
+        <header class="app-bar">
           <button
-            id="ledger-open"
-            class="icon-btn ledger-open"
-            aria-label="Open ledger"
+            class="icon-button"
+            id="open-rail"
+            aria-label="Open runs"
+            title="Open runs"
           >
-            <svg><use href="/icons.svg#menu" /></svg></button
-          ><span id="breadcrumb" class="eyebrow">DISPATCH / NEW RUN</span
-          ><span class="top-spacer"></span
+            ☰</button
+          ><span id="breadcrumb">New task</span><span class="bar-spacer"></span
+          ><span
+            class="connection-dot"
+            id="connection-dot"
+            title="Connecting"
+            aria-label="Connecting"
+          ></span
+          ><a
+            class="icon-button"
+            href="/"
+            data-link
+            aria-label="New task"
+            title="New task"
+            >＋</a
           ><button
-            id="theme-toggle"
-            class="icon-btn"
-            aria-label="Change theme"
-            title="Change theme"
-          >
-            <svg><use href="/icons.svg#moon" /></svg></button
-          ><button
-            id="help-toggle"
-            class="icon-btn"
+            class="icon-button"
+            id="shortcuts"
             aria-label="Keyboard shortcuts"
             title="Keyboard shortcuts"
           >
-            <svg><use href="/icons.svg#circle-help" /></svg>?
+            ?
           </button>
         </header>
-        <div id="offline" class="offline" role="alert" hidden>
-          Engine unreachable. Retrying in 5s.
-          <button id="retry-now">Retry now</button>
-        </div>
+        <div id="connection-banner" hidden></div>
         <main id="main" tabindex="-1"></main>
       </div>
     </div>
-    <dialog id="confirm-dialog">
-      <form method="dialog">
-        <div class="eyebrow" id="dialog-kicker"></div>
-        <h2 id="dialog-title"></h2>
-        <p id="dialog-copy"></p>
-        <label id="reason-wrap" hidden
-          >Reason (optional)<input
-            id="discard-reason"
-            placeholder="Why? Optional — kept in history."
-            disabled
-          /><small>This engine does not store discard reasons.</small></label
-        >
-        <div class="dialog-actions">
-          <button value="cancel" class="btn quiet">Keep reviewing</button
-          ><button id="dialog-confirm" value="confirm" class="btn solid">
-            Confirm
-          </button>
-        </div>
-      </form>
-    </dialog>
-    <dialog id="help-dialog">
-      <form method="dialog">
-        <div class="eyebrow">KEYBOARD</div>
-        <h2>Shortcuts</h2>
-        <dl class="shortcuts">
-          <dt>N</dt>
-          <dd>New run</dd>
-          <dt>/</dt>
-          <dd>Search ledger</dd>
-          <dt>J / K</dt>
-          <dd>Next / previous run</dd>
-          <dt>1 / 2 / 3</dt>
-          <dd>Trace / Diff / Receipt</dd>
-          <dt>E</dt>
-          <dd>Apply</dd>
-          <dt>X</dt>
-          <dd>Discard</dd>
-          <dt>⌘ / Ctrl + Enter</dt>
-          <dd>Dispatch</dd>
-          <dt>Esc</dt>
-          <dd>Close</dd>
-        </dl>
-        <div class="dialog-actions">
-          <button class="btn solid" value="close">Close</button>
-        </div>
-      </form>
-    </dialog>
-    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+    <div id="popover" class="popover" hidden></div>
+    <div id="toast" class="toast" hidden></div>
+    <div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+    <div id="alert" class="sr-only" role="alert" aria-atomic="true"></div>
   </body>
 </html>
