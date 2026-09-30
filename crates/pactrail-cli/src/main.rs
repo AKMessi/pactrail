@@ -9,6 +9,7 @@ mod mcp;
 mod migration;
 mod output;
 mod settings;
+mod terminal;
 mod theme;
 mod upgrade;
 mod web;

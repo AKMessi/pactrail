@@ -10,11 +10,17 @@ use serde::{Deserialize, Serialize};
     version,
     about,
     propagate_version = true,
-    after_help = "Run `pactrail` without a command to start the interactive coding session."
+    after_help = "Start: pactrail\nTask:  pactrail \"Explain this repository\"\nWork:  pactrail -C /path/to/project\n\nIn the session: Ctrl+P commands · Alt+Enter newline · Ctrl+G editor · /help\nAutomation: pactrail run <goal> --output json"
 )]
 pub struct Cli {
     /// Workspace used to resolve the default state directory.
-    #[arg(long, global = true, default_value = ".")]
+    #[arg(
+        short = 'C',
+        long,
+        global = true,
+        value_name = "DIRECTORY",
+        default_value = "."
+    )]
     pub workspace: PathBuf,
 
     /// Override the default WORKSPACE/.pactrail state directory.

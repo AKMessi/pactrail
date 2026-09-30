@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU16, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
@@ -16,8 +16,10 @@ use pactrail_engine::{RunObserver, RunProgress};
 use pactrail_memory::{MemoryDraft, MemoryKind};
 use pactrail_tools::{ToolDescriptor, ToolRisk, builtin_registry};
 use reedline::{
-    DefaultCompleter, DefaultValidator, FileBackedHistory, Prompt, PromptEditMode,
-    PromptHistorySearch, PromptHistorySearchStatus, PromptViMode, Reedline, Signal,
+    Completer, EditCommand, Emacs, FileBackedHistory, IdeMenu, KeyCode, KeyModifiers, MenuBuilder,
+    Prompt, PromptEditMode, PromptHistorySearch, PromptHistorySearchStatus, PromptViMode, Reedline,
+    ReedlineEvent, ReedlineMenu, Signal, Span, Suggestion, ValidationResult, Validator,
+    default_emacs_keybindings,
 };
 use reqwest::{StatusCode, Url};
 use serde_json::Value;
@@ -39,7 +41,7 @@ const MAX_MODEL_LIST_BYTES: usize = 1024 * 1024;
 const MAX_DISCOVERED_MODELS: usize = 1_000;
 const MAX_DISCOVERED_MODEL_BYTES: usize = 512;
 const DEFAULT_TERMINAL_COLUMNS: usize = 100;
-const MIN_TERMINAL_COLUMNS: usize = 40;
+const MIN_TERMINAL_COLUMNS: usize = 32;
 const MAX_TERMINAL_COLUMNS: usize = 240;
 const IMAGE_TIMELINE_MARKER: &str = "◈";
 const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Kernel", "Safety", "Session"];
@@ -57,7 +59,11 @@ const COMMANDS: &[CommandHelp] = &[
         "/discard [run]",
         "reject a candidate; retain evidence",
     ),
-    CommandHelp::new("Work", "/runs", "browse durable run history"),
+    CommandHelp::new(
+        "Work",
+        "/runs [query]",
+        "browse or filter durable run history",
+    ),
     CommandHelp::new(
         "Work",
         "/trace [run]",
@@ -88,7 +94,11 @@ const COMMANDS: &[CommandHelp] = &[
         "/forget <id>",
         "remove a memory by ID or unique prefix",
     ),
-    CommandHelp::new("Model", "/models", "discover models from the endpoint"),
+    CommandHelp::new(
+        "Model",
+        "/models [query]",
+        "discover or filter models from the endpoint",
+    ),
     CommandHelp::new("Model", "/model <name|#>", "select and persist a model"),
     CommandHelp::new(
         "Model",
@@ -154,6 +164,41 @@ const COMMANDS: &[CommandHelp] = &[
         "/help [command]",
         "show commands or focused help",
     ),
+    CommandHelp::new(
+        "Work",
+        "/evidence [run]",
+        "inspect obligations, check grades, and reproduction commands",
+    ),
+    CommandHelp::new(
+        "Work",
+        "/focus <run>",
+        "select the run used by review, trace, and decisions",
+    ),
+    CommandHelp::new(
+        "Work",
+        "/retry",
+        "restore the last task to the composer without executing it",
+    ),
+    CommandHelp::new(
+        "Session",
+        "/editor [text]",
+        "compose a task in VISUAL or EDITOR; return it for review",
+    ),
+    CommandHelp::new(
+        "Session",
+        "/task <path>",
+        "load a UTF-8 task file into the composer without executing it",
+    ),
+    CommandHelp::new(
+        "Session",
+        "/pager auto|off",
+        "page long reviews with PAGER (default: less -FRX)",
+    ),
+    CommandHelp::new(
+        "Session",
+        "/detail compact|full",
+        "choose live detail; durable /trace always retains every event",
+    ),
     CommandHelp::new("Session", "/clear", "clear the terminal"),
     CommandHelp::new("Session", "/quit", "close the session; retain all receipts"),
 ];
@@ -175,6 +220,120 @@ impl CommandHelp {
 
     fn name(&self) -> &'static str {
         self.usage.split_whitespace().next().unwrap_or(self.usage)
+    }
+}
+
+struct TaskValidator;
+impl Validator for TaskValidator {
+    fn validate(&self, _line: &str) -> ValidationResult {
+        ValidationResult::Complete
+    }
+}
+
+struct CompletionEntry {
+    value: String,
+    description: String,
+    kind: &'static str,
+}
+struct CommandCompleter(Arc<Mutex<Vec<CompletionEntry>>>);
+impl Completer for CommandCompleter {
+    fn complete(&mut self, line: &str, pos: usize) -> Vec<Suggestion> {
+        let Some(input) = line.get(..pos) else {
+            return Vec::new();
+        };
+        let mut suggestions = Vec::new();
+        let trimmed = input.trim_start();
+        let start = input.len() - trimmed.len();
+        if !trimmed.contains(char::is_whitespace) {
+            if !trimmed.is_empty() && !trimmed.starts_with('/') {
+                return suggestions;
+            }
+            for command in COMMANDS.iter().filter(|c| c.name().starts_with(trimmed)) {
+                suggestions.push(Suggestion {
+                    value: command.name().to_owned(),
+                    description: Some(format!("{} · {}", command.group, command.description)),
+                    span: Span::new(start, pos),
+                    append_whitespace: command.usage.contains(' '),
+                    ..Suggestion::default()
+                });
+            }
+            return suggestions;
+        }
+        let (command, arguments) = split_command(trimmed);
+        if arguments.contains(char::is_whitespace) {
+            return suggestions;
+        }
+        let prefix = arguments;
+        let start = pos - prefix.len();
+        let choices: &[&str] = match command {
+            "/process" => &["off", "native", "sandbox"],
+            "/stream" => &["on", "off"],
+            "/pager" => &["auto", "off"],
+            "/detail" => &["compact", "full"],
+            "/provider" => &[
+                "ollama",
+                "open-ai-compatible",
+                "open-ai",
+                "open-ai-responses",
+                "anthropic",
+                "gemini",
+            ],
+            _ => &[],
+        };
+        for choice in choices.iter().filter(|v| v.starts_with(prefix)) {
+            suggestions.push(Suggestion {
+                value: (*choice).to_owned(),
+                span: Span::new(start, pos),
+                ..Suggestion::default()
+            });
+        }
+        if command == "/help" {
+            for c in COMMANDS
+                .iter()
+                .filter(|c| c.name().trim_start_matches('/').starts_with(prefix))
+            {
+                suggestions.push(Suggestion {
+                    value: c.name().trim_start_matches('/').to_owned(),
+                    description: Some(c.description.to_owned()),
+                    span: Span::new(start, pos),
+                    ..Suggestion::default()
+                });
+            }
+        }
+        let kind = if command == "/model" {
+            "model"
+        } else if [
+            "/focus",
+            "/review",
+            "/diff",
+            "/trace",
+            "/inspect",
+            "/apply",
+            "/discard",
+            "/evidence",
+            "/resume",
+        ]
+        .contains(&command)
+        {
+            "run"
+        } else {
+            return suggestions;
+        };
+        if let Ok(entries) = self.0.lock() {
+            for entry in entries
+                .iter()
+                .filter(|e| e.kind == kind && e.value.starts_with(prefix))
+                .take(100)
+            {
+                suggestions.push(Suggestion {
+                    value: entry.value.clone(),
+                    description: Some(entry.description.clone()),
+                    span: Span::new(start, pos),
+                    ..Suggestion::default()
+                });
+            }
+        }
+        suggestions
     }
 }
 
@@ -201,17 +360,55 @@ pub(crate) async fn launch(
     let memory_count = commands::list_memories(&state, 100)?.len();
     let history = FileBackedHistory::with_file(HISTORY_CAPACITY, preferences.history_path())
         .map_err(|error| CliError::Argument(format!("history failed: {error}")))?;
-    let mut completer = DefaultCompleter::with_inclusions(&['/', '-']);
-    completer.insert(
-        COMMANDS
-            .iter()
-            .map(|command| command.name().to_owned())
-            .collect(),
+    let completion_data = Arc::new(Mutex::new(Vec::new()));
+    let mut keys = default_emacs_keybindings();
+    keys.add_binding(
+        KeyModifiers::NONE,
+        KeyCode::Tab,
+        ReedlineEvent::UntilFound(vec![
+            ReedlineEvent::Menu("commands".to_owned()),
+            ReedlineEvent::MenuNext,
+        ]),
+    );
+    keys.add_binding(
+        KeyModifiers::SHIFT,
+        KeyCode::BackTab,
+        ReedlineEvent::MenuPrevious,
+    );
+    for (modifiers, key) in [
+        (KeyModifiers::ALT, KeyCode::Enter),
+        (KeyModifiers::SHIFT, KeyCode::Enter),
+        (KeyModifiers::CONTROL, KeyCode::Char('j')),
+    ] {
+        keys.add_binding(
+            modifiers,
+            key,
+            ReedlineEvent::Edit(vec![EditCommand::InsertNewline]),
+        );
+    }
+    keys.add_binding(
+        KeyModifiers::CONTROL,
+        KeyCode::Char('p'),
+        ReedlineEvent::Menu("commands".to_owned()),
+    );
+    keys.add_binding(
+        KeyModifiers::CONTROL,
+        KeyCode::Char('g'),
+        ReedlineEvent::ExecuteHostCommand("/editor-buffer".to_owned()),
     );
     let editor = Reedline::create()
         .with_history(Box::new(history))
-        .with_completer(Box::new(completer))
-        .with_validator(Box::new(DefaultValidator));
+        .with_completer(Box::new(CommandCompleter(Arc::clone(&completion_data))))
+        .with_menu(ReedlineMenu::EngineCompleter(Box::new(
+            IdeMenu::default()
+                .with_name("commands")
+                .with_max_completion_height(10)
+                .with_max_completion_width(40)
+                .with_max_description_width(52),
+        )))
+        .with_edit_mode(Box::new(Emacs::new(keys)))
+        .with_ansi_colors(Theme::detect().has_color())
+        .with_validator(Box::new(TaskValidator));
 
     let mut session = Session {
         workspace,
@@ -225,6 +422,10 @@ pub(crate) async fn launch(
         memory_count,
         known_models: Vec::new(),
         pending_images: Vec::new(),
+        completion_data,
+        last_goal: None,
+        pager: true,
+        detailed: false,
     };
     session.bootstrap().await?;
     if let Some(goal) = initial_goal {
@@ -245,6 +446,10 @@ struct Session {
     memory_count: usize,
     known_models: Vec<String>,
     pending_images: Vec<PathBuf>,
+    completion_data: Arc<Mutex<Vec<CompletionEntry>>>,
+    last_goal: Option<String>,
+    pager: bool,
+    detailed: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -265,7 +470,7 @@ impl TimelineTone {
             Self::Muted => theme.muted(value),
             Self::Brand => theme.brand(value),
             Self::Accent => theme.accent(value),
-            Self::Success => theme.success(value),
+            Self::Success => theme.heading(value),
             Self::Warning => theme.warning(value),
             Self::Danger => theme.danger(value),
         }
@@ -281,6 +486,21 @@ fn timeline_row(
     detail: &str,
     tone: TimelineTone,
 ) -> Vec<String> {
+    if columns < 60 {
+        let mut lines = vec![format!(
+            "  {} {} {} · {}",
+            theme.muted("│"),
+            tone.paint(theme, marker),
+            tone.paint(theme, label),
+            theme.muted(&trace_duration(elapsed_ms))
+        )];
+        lines.extend(
+            wrap_text(detail, content_width(columns, 6, 96))
+                .into_iter()
+                .map(|l| format!("      {}", theme.text(&l))),
+        );
+        return lines;
+    }
     let time = theme.muted(&format!("{:>7}", trace_duration(elapsed_ms)));
     let marker = tone.paint(theme, marker);
     let label = tone.paint(theme, &format!("{label:<9}"));
@@ -335,20 +555,25 @@ struct RunActivity {
     truncated_outputs: AtomicUsize,
     run_approvals: Mutex<BTreeSet<String>>,
     started: Instant,
-    columns: usize,
+    detailed: bool,
 }
 
 impl RunActivity {
-    fn new(model: &str, theme: Theme) -> Self {
+    fn new(model: &str, theme: Theme, detailed: bool) -> Self {
         let progress = ProgressBar::new_spinner();
-        let style = ProgressStyle::with_template(
-            "  {spinner:.cyan}  {msg}  {elapsed_precise:.bright_black}",
-        )
-        .unwrap_or_else(|_| ProgressStyle::default_spinner())
-        .tick_strings(&["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"]);
+        let template = if theme.has_color() {
+            "  {spinner:.cyan}  {msg}  {elapsed_precise:.bright_black}"
+        } else {
+            "  {spinner}  {msg}  {elapsed_precise}"
+        };
+        let style = ProgressStyle::with_template(template)
+            .unwrap_or_else(|_| ProgressStyle::default_spinner())
+            .tick_strings(&["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"]);
         progress.set_style(style);
         progress.set_message("starting isolated transaction");
-        progress.enable_steady_tick(Duration::from_millis(90));
+        if std::env::var_os("PACTRAIL_NO_ANIMATION").is_none() {
+            progress.enable_steady_tick(Duration::from_millis(120));
+        }
         Self {
             progress,
             theme,
@@ -361,7 +586,7 @@ impl RunActivity {
             truncated_outputs: AtomicUsize::new(0),
             run_approvals: Mutex::new(BTreeSet::new()),
             started: Instant::now(),
-            columns: terminal_columns(),
+            detailed,
         }
     }
 
@@ -379,7 +604,6 @@ impl RunActivity {
             self.model_time_ms.load(Ordering::Relaxed),
         ));
         let elapsed = format_duration(self.started.elapsed());
-        let duration = self.theme.muted(&elapsed);
         let truncated = self.truncated_outputs.load(Ordering::Relaxed);
         let truncation_text = if truncated == 0 {
             String::new()
@@ -387,46 +611,41 @@ impl RunActivity {
             format!(" · {truncated} bounded")
         };
         let outcome = if succeeded {
-            self.theme.success("✓ complete")
+            self.theme.heading("◇ finished")
         } else {
-            self.theme.danger("× stopped")
+            self.theme.warning("■ ended · inspect the result below")
         };
         let metrics = format!(
-            "{turns} {turn_word} · {tools} {tool_word} · {} tokens · {model_time} model · {elapsed}{truncation_text}",
+            "{turns} {turn_word} · {tools} {tool_word} · {} engine-counted tokens · {model_time} model · {elapsed}{truncation_text}",
             format_count(tokens),
         );
-        if self.columns < 80 {
-            let mut lines = vec![format!("  {} {outcome}", self.theme.muted("╰─"))];
-            lines.extend(
-                wrap_text(&metrics, content_width(self.columns, 5, 96))
-                    .into_iter()
-                    .map(|line| format!("     {}", self.theme.muted(&line))),
-            );
-            format!("{}\n", lines.join("\n"))
-        } else {
-            format!(
-                "  {} {outcome}  {turns} {turn_word} · {tools} {tool_word} · {} tokens · {} model · {duration}{truncation}\n",
-                self.theme.muted("╰─"),
-                format_count(tokens),
-                self.theme.muted(&model_time),
-                truncation = if truncated == 0 {
-                    String::new()
-                } else {
-                    format!("  {}", self.theme.warning(&format!("{truncated} bounded")))
-                },
-            )
-        }
+        let mut lines = vec![format!("  {} {outcome}", self.theme.muted("╰─"))];
+        lines.extend(
+            wrap_text(&metrics, content_width(terminal_columns(), 5, 110))
+                .into_iter()
+                .map(|line| format!("     {}", self.theme.muted(&line))),
+        );
+        format!("{}\n", lines.join("\n"))
     }
 
     fn set_message(&self, message: impl AsRef<str>) {
-        self.progress
-            .set_message(sanitize_terminal_text(message.as_ref()));
+        self.progress.set_message(truncate(
+            message.as_ref(),
+            content_width(terminal_columns(), 16, 160),
+        ));
     }
 
     fn row(&self, marker: &str, label: &str, detail: &str, tone: TimelineTone) {
+        if !self.detailed
+            && matches!(label, "profile" | "context" | "control")
+            && !matches!(tone, TimelineTone::Warning | TimelineTone::Danger)
+        {
+            return;
+        }
+
         for line in timeline_row(
             &self.theme,
-            self.columns,
+            terminal_columns(),
             elapsed_millis(self.started),
             marker,
             label,
@@ -445,13 +664,18 @@ impl RunActivity {
         } = progress
         {
             self.progress.println(format!(
-                "\n  {} {}  {}",
-                self.theme.brand("╭─ RUN"),
-                self.theme.code(&short_run_id(*run_id)),
-                self.theme
-                    .muted(&truncate(model, content_width(self.columns, 26, 42))),
+                "\n  {} {}",
+                self.theme.brand("╭─ Run"),
+                self.theme.code(&short_run_id(*run_id))
             ));
-            for line in wrap_text(goal, content_width(self.columns, 4, 88)) {
+            for line in wrap_text(model, content_width(terminal_columns(), 4, 88)) {
+                self.progress.println(format!(
+                    "  {} {}",
+                    self.theme.muted("│"),
+                    self.theme.muted(&line)
+                ));
+            }
+            for line in wrap_text(goal, content_width(terminal_columns(), 4, 88)) {
                 self.progress.println(format!(
                     "  {} {}",
                     self.theme.muted("│"),
@@ -1182,7 +1406,12 @@ impl Session {
 
     async fn run(&mut self) -> Result<(), CliError> {
         loop {
-            let prompt = SessionPrompt::new(self.settings.effective_model(), self.pending_runs);
+            self.update_completions()?;
+            let prompt = SessionPrompt::new(
+                self.settings.effective_model(),
+                self.pending_runs,
+                self.settings.process_backend,
+            );
             match self.editor.read_line(&prompt) {
                 Ok(Signal::Success(line)) => {
                     let line = line.trim();
@@ -1208,6 +1437,20 @@ impl Session {
                             .muted("Input cancelled. Use /quit to leave Pactrail.")
                     ))?;
                 }
+                Ok(Signal::HostCommand(command)) => match command.as_str() {
+                    "/palette" => self.editor.run_edit_commands(&[
+                        EditCommand::Clear,
+                        EditCommand::InsertString("/".to_owned()),
+                    ]),
+                    "/editor-buffer" => {
+                        let draft = self.editor.current_buffer_contents().to_owned();
+                        match crate::terminal::edit_draft(&draft, &self.workspace) {
+                            Ok(text) => self.restore_draft(&text),
+                            Err(error) => self.render_error(&error)?,
+                        }
+                    }
+                    _ => {}
+                },
                 Ok(Signal::CtrlD) => break,
                 Ok(_) => {}
                 Err(error) => {
@@ -1224,16 +1467,105 @@ impl Session {
         ))
     }
 
+    fn handle_composer_command(
+        &mut self,
+        command: &str,
+        arguments: &str,
+    ) -> Result<bool, CliError> {
+        match command {
+            "/editor" | "/edit" => {
+                let text = crate::terminal::edit_draft(arguments, &self.workspace)
+                    .map_err(CliError::Argument)?;
+                self.restore_draft(&text);
+                self.emit(
+                    "Draft restored. Review it and press Enter to dispatch; Ctrl-C clears it.\n",
+                )?;
+            }
+            "/task" => {
+                let path = parse_image_path(arguments)?;
+                let path = if path.is_absolute() {
+                    path
+                } else {
+                    self.workspace.join(path)
+                };
+                let text = crate::terminal::read_draft(&path).map_err(CliError::Argument)?;
+                self.restore_draft(&text);
+                self.emit("Task loaded into the composer. Enter dispatches; Ctrl-C clears it.\n")?;
+            }
+            "/retry" => {
+                let goal = self.last_goal.clone().ok_or_else(|| {
+                    CliError::Argument("No task has been submitted in this session.".to_owned())
+                })?;
+                self.restore_draft(&goal);
+                self.emit("Previous task restored; edit it before dispatching.\n")?;
+            }
+            "/detail" => {
+                self.detailed = match arguments {
+                    "compact" => false,
+                    "full" => true,
+                    _ => {
+                        return Err(CliError::Argument(
+                            "usage: /detail compact|full (this session only)".to_owned(),
+                        ));
+                    }
+                };
+                self.emit(if self.detailed {"Full live detail enabled.\n"} else {"Compact live detail enabled. Warnings stay visible; /trace retains every event.\n"})?;
+            }
+            "/pager" => {
+                self.pager = match arguments {
+                    "auto" => true,
+                    "off" => false,
+                    _ => {
+                        return Err(CliError::Argument(
+                            "usage: /pager auto|off (this session only)".to_owned(),
+                        ));
+                    }
+                };
+                self.emit(if self.pager {
+                    "Long reviews use PAGER (default: less -FRX). /pager off disables it.\n"
+                } else {
+                    "Pager disabled for this session. Reviews stay in scrollback.\n"
+                })?;
+            }
+            _ => return Ok(false),
+        }
+        Ok(true)
+    }
+
     async fn handle_command(&mut self, line: &str) -> Result<SessionControl, CliError> {
         let (command, arguments) = split_command(line);
+        if self.handle_composer_command(command, arguments)? {
+            return Ok(SessionControl::Continue);
+        }
         match command {
             "/help" | "/?" => self.render_help(arguments)?,
+            "/" => self.render_help("")?,
+            "/focus" => {
+                if arguments.is_empty() {
+                    return Err(CliError::Argument(
+                        "usage: /focus <run-id or unique prefix>".to_owned(),
+                    ));
+                }
+                let run = self.resolve_run(arguments)?;
+                let runs = commands::run_history(&self.state)?;
+                if !runs.iter().any(|r| r.run_id == run) {
+                    return Err(CliError::Argument(
+                        "That run is not in this workspace.".to_owned(),
+                    ));
+                }
+                self.last_run = Some(run);
+                self.emit(&format!(
+                    "Focused run {}. /review, /trace, /evidence and decisions use this run.\n",
+                    short_run_id(run)
+                ))?;
+            }
+            "/evidence" => self.render_evidence(self.resolve_run(arguments)?)?,
             "/status" | "/settings" | "/config" => self.render_status()?,
             "/doctor" => commands::doctor(false)?,
             "/tools" => self.render_tools()?,
             "/image" | "/images" | "/attach" => self.handle_images(arguments)?,
             "/mcp" => self.handle_mcp(arguments).await?,
-            "/models" => self.refresh_models().await?,
+            "/models" => self.refresh_models(arguments).await?,
             "/model" => self.set_model(arguments)?,
             "/connect" => self.connect(arguments)?,
             "/provider" => self.set_provider(arguments)?,
@@ -1248,7 +1580,7 @@ impl Session {
             "/output-tokens" => self.set_output_tokens(arguments)?,
             "/turns" => self.set_turns(arguments)?,
             "/process" => self.set_process_access(arguments)?,
-            "/runs" | "/history" => self.render_runs()?,
+            "/runs" | "/history" => self.render_runs(arguments)?,
             "/resume" => {
                 self.resume_run(self.resolve_resumable_run(arguments)?)
                     .await?;
@@ -1277,13 +1609,14 @@ impl Session {
     }
 
     async fn execute_goal(&mut self, goal: String) -> Result<(), CliError> {
+        self.last_goal = Some(goal.clone());
         let Some(model) = self.settings.effective_model() else {
             self.render_error(
                 "No model is configured. Use /models and /model, or /connect <base-url> <model>.",
             )?;
             return Ok(());
         };
-        let activity = RunActivity::new(&model, self.theme.clone());
+        let activity = RunActivity::new(&model, self.theme.clone(), self.detailed);
         let mut args = run_args_from_settings(&self.settings, Some(goal), model);
         args.images.clone_from(&self.pending_images);
 
@@ -1323,7 +1656,7 @@ impl Session {
     }
 
     async fn resume_run(&mut self, run_id: RunId) -> Result<(), CliError> {
-        let activity = RunActivity::new("durable session", self.theme.clone());
+        let activity = RunActivity::new("durable session", self.theme.clone(), self.detailed);
         activity.set_message("validating checkpoint identity");
         let cancellation = CancellationToken::new();
         let mut execution = Box::pin(commands::execute_resume_with_observer_and_cancellation(
@@ -1394,22 +1727,12 @@ impl Session {
         let model = self
             .settings
             .effective_model()
-            .unwrap_or_else(|| "not configured".to_owned());
-        let process = banner_process(self.settings.process_backend);
-        let review = banner_review(self.pending_runs);
-        let memory = banner_memory(self.memory_count);
-        let mcp = self.mcp_status();
+            .unwrap_or_else(|| "not configured · /models or /connect".to_owned());
         let mut lines = vec![format!(
             "  {}  {}",
-            self.theme.brand("╭─ P A C T R A I L"),
+            self.theme.brand("╭─ pactrail"),
             self.theme.muted(&format!("v{}", env!("CARGO_PKG_VERSION")))
         )];
-        lines.extend(frame_note(
-            &self.theme,
-            columns,
-            "verification-native coding · every change carries evidence",
-        ));
-        lines.push(format!("  {}", self.theme.muted("├─")));
         lines.extend(frame_field(
             &self.theme,
             columns,
@@ -1420,70 +1743,35 @@ impl Session {
         lines.extend(frame_field(
             &self.theme,
             columns,
-            "runtime",
+            "model",
             &format!("{} · {}", model, provider_label(self.settings.provider)),
             TimelineTone::Accent,
         ));
+        let process = banner_process(self.settings.process_backend);
         lines.extend(frame_field(
             &self.theme,
             columns,
-            "safety",
+            "commands",
             &process.0,
             process.1,
         ));
-        lines.extend(frame_field(
-            &self.theme,
-            columns,
-            "trace",
-            "live timeline · durable hash chain · /trace",
-            TimelineTone::Brand,
-        ));
-        lines.extend(frame_field(&self.theme, columns, "mcp", &mcp.0, mcp.1));
-        lines.extend(frame_field(
-            &self.theme,
-            columns,
-            "review",
-            &review.0,
-            review.1,
-        ));
-        lines.extend(frame_field(
-            &self.theme,
-            columns,
-            "memory",
-            &memory.0,
-            memory.1,
-        ));
-        if !self.pending_images.is_empty() {
+        if self.pending_runs > 0 {
             lines.extend(frame_field(
                 &self.theme,
                 columns,
-                "images",
-                &format!("{} queued for next task", self.pending_images.len()),
-                TimelineTone::Accent,
+                "review",
+                &banner_review(self.pending_runs).0,
+                TimelineTone::Warning,
             ));
         }
-        let footer = if columns < 76 {
-            "Task · /help · // escapes /"
-        } else {
-            "Describe a task · /help commands · // escapes a leading slash"
-        };
-        lines.push(format!(
-            "  {}  {}",
-            self.theme.muted("╰─"),
-            self.theme.muted(footer)
+        lines.extend(frame_note(
+            &self.theme,
+            columns,
+            "Work stays isolated until you review and apply a candidate.",
         ));
-        self.emit(&format!("\n{}\n", lines.join("\n")))?;
-        if self.settings.effective_model().is_none() {
-            self.emit(&format!(
-                "\n  {}\n  {}\n\n",
-                self.theme.warning("No model configured."),
-                self.theme.muted(
-                    "Use /models for local Ollama, or /connect <url> <model> for any compatible API."
-                )
-            ))
-        } else {
-            self.emit("\n")
-        }
+        lines.push(format!("  {}", self.theme.muted("╰─")));
+        lines.extend(wrap_text("Enter dispatch · Alt+Enter / Ctrl+J newline · Tab commands · Ctrl+P palette · Ctrl+G editor · /help", content_width(columns, 2, 110)).into_iter().map(|l|format!("  {}",self.theme.muted(&l))));
+        self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn render_help(&self, topic: &str) -> Result<(), CliError> {
@@ -1628,7 +1916,7 @@ impl Session {
                 self.pending_images = candidate;
                 self.emit(&format!(
                     "\n{}\n  {}\n",
-                    self.theme.success("Image ready"),
+                    self.theme.heading("Image ready"),
                     detail
                 ))?;
                 if self.settings.vision.resolve(false) {
@@ -1762,6 +2050,15 @@ impl Session {
                     format_count(self.settings.context_tokens),
                     format_count(self.settings.max_output_tokens),
                     self.settings.max_turns
+                ),
+                TimelineTone::Normal,
+            ),
+            (
+                "display",
+                format!(
+                    "{} live detail · pager {} (this session)",
+                    if self.detailed { "full" } else { "compact" },
+                    if self.pager { "auto" } else { "off" }
                 ),
                 TimelineTone::Normal,
             ),
@@ -1923,7 +2220,7 @@ impl Session {
         for memory in memories {
             let marker = match memory.kind {
                 MemoryKind::Convention => self.theme.accent("◆"),
-                MemoryKind::Decision => self.theme.success("●"),
+                MemoryKind::Decision => self.theme.heading("●"),
                 MemoryKind::Warning => self.theme.warning("!"),
                 MemoryKind::AppliedRun => self.theme.muted("✓"),
             };
@@ -1991,7 +2288,7 @@ impl Session {
         self.refresh_memory_count()?;
         self.emit(&format!(
             "\n{} Remembered for this workspace\n  {}  {}\n\n",
-            self.theme.success("✓"),
+            self.theme.heading("✓"),
             self.theme.code(&memory.id.to_string()[..8]),
             self.theme.text(&memory.title)
         ))
@@ -2011,7 +2308,7 @@ impl Session {
         ))
     }
 
-    async fn refresh_models(&mut self) -> Result<(), CliError> {
+    async fn refresh_models(&mut self, query: &str) -> Result<(), CliError> {
         let spinner = ProgressBar::new_spinner();
         spinner.enable_steady_tick(Duration::from_millis(100));
         spinner.set_message("discovering models");
@@ -2039,23 +2336,41 @@ impl Session {
         }
         let mut lines = vec![self.theme.heading("Models")];
         let selected = self.settings.effective_model();
-        for (index, model) in self.known_models.iter().enumerate() {
+        let query = query.to_lowercase();
+        let mut found = 0;
+        for (index, model) in self
+            .known_models
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.to_lowercase().contains(&query))
+        {
+            found += 1;
             let marker = if selected.as_deref() == Some(model.as_str()) {
-                self.theme.success("\u{25cf}")
+                self.theme.heading("\u{25cf}")
             } else {
                 self.theme.muted("\u{25cb}")
             };
-            lines.push(format!(
-                "  {marker} {:>2}  {}",
-                index + 1,
-                self.theme.text(model)
-            ));
+            for (line_index, line) in wrap_text(model, content_width(terminal_columns(), 9, 120))
+                .into_iter()
+                .enumerate()
+            {
+                if line_index == 0 {
+                    lines.push(format!(
+                        "  {marker} {:>2}  {}",
+                        index + 1,
+                        self.theme.text(&line)
+                    ));
+                } else {
+                    lines.push(format!("         {}", self.theme.text(&line)));
+                }
+            }
         }
-        lines.push(
-            self.theme
-                .muted("Use /model <number> or /model <name> to select one."),
-        );
-        self.emit(&format!("\n{}\n\n", lines.join("\n")))
+        if found == 0 {
+            lines
+                .push("No models match this filter. The configured model is unchanged.".to_owned());
+        }
+        lines.extend(wrap_text("Use /model <number> or /model <name> to select one. Numbers retain their discovery order.",terminal_columns()).into_iter().map(|l|self.theme.muted(&l)));
+        self.view(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn set_model(&mut self, argument: &str) -> Result<(), CliError> {
@@ -2081,7 +2396,7 @@ impl Session {
         self.persist(settings)?;
         self.emit(&format!(
             "{} {}\n",
-            self.theme.success("Model selected:"),
+            self.theme.heading("Model selected:"),
             self.theme.accent(&selected)
         ))
     }
@@ -2108,7 +2423,7 @@ impl Session {
         self.known_models.clear();
         self.emit(&format!(
             "{} {} via {}\n",
-            self.theme.success("Connected configuration saved:"),
+            self.theme.heading("Connected configuration saved:"),
             self.theme.accent(model),
             self.theme.text(base_url)
         ))
@@ -2151,7 +2466,7 @@ impl Session {
         self.known_models.clear();
         self.emit(&format!(
             "{} {}\n",
-            self.theme.success("Provider selected:"),
+            self.theme.heading("Provider selected:"),
             provider_label(provider)
         ))
     }
@@ -2167,7 +2482,7 @@ impl Session {
         self.known_models.clear();
         self.emit(&format!(
             "{} {}\n",
-            self.theme.success("Endpoint saved:"),
+            self.theme.heading("Endpoint saved:"),
             self.theme.text(argument)
         ))
     }
@@ -2183,7 +2498,7 @@ impl Session {
         self.persist(settings)?;
         self.emit(&format!(
             "{} {}\n",
-            self.theme.success("API key environment variable saved:"),
+            self.theme.heading("API key environment variable saved:"),
             self.theme.code(argument)
         ))
     }
@@ -2203,7 +2518,7 @@ impl Session {
         self.persist(settings)?;
         self.emit(&format!(
             "{} {}\n",
-            self.theme.success("Model transport selected:"),
+            self.theme.heading("Model transport selected:"),
             if streaming {
                 self.theme.accent("streaming · bounded SSE")
             } else {
@@ -2252,7 +2567,7 @@ impl Session {
         self.persist(settings)?;
         self.emit(&format!(
             "{} {} = {}\n",
-            self.theme.success("Capability override saved:"),
+            self.theme.heading("Capability override saved:"),
             self.theme.code(name),
             capability_setting_label(setting)
         ))
@@ -2344,7 +2659,7 @@ impl Session {
         self.persist(settings)?;
         self.emit(&format!(
             "{} {} tokens\n",
-            self.theme.success("Context set to"),
+            self.theme.heading("Context set to"),
             format_count(value)
         ))
     }
@@ -2356,7 +2671,7 @@ impl Session {
         self.persist(settings)?;
         self.emit(&format!(
             "{} {} tokens\n",
-            self.theme.success("Output limit set to"),
+            self.theme.heading("Output limit set to"),
             format_count(value)
         ))
     }
@@ -2370,7 +2685,7 @@ impl Session {
         self.persist(settings)?;
         self.emit(&format!(
             "{} {value}\n",
-            self.theme.success("Maximum turns set to")
+            self.theme.heading("Maximum turns set to")
         ))
     }
 
@@ -2383,7 +2698,7 @@ impl Session {
                 self.persist(settings)?;
                 self.emit(&format!(
                     "{}\n",
-                    self.theme.success("Process execution disabled.")
+                    self.theme.heading("Process execution disabled.")
                 ))
             }
             ["native"] => {
@@ -2412,7 +2727,7 @@ impl Session {
                 self.persist(settings)?;
                 self.emit(&format!(
                     "{} {}\n{}\n",
-                    self.theme.success("Restricted Docker execution configured with"),
+                    self.theme.heading("Restricted Docker execution configured with"),
                     self.theme.accent(image),
                     self.theme.muted("Candidate-only mount · network denied · bounded resources · local image only")
                 ))
@@ -2424,7 +2739,7 @@ impl Session {
                 self.persist(settings)?;
                 self.emit(&format!(
                     "{} {}\n{}\n",
-                    self.theme.success("Restricted Podman execution configured with"),
+                    self.theme.heading("Restricted Podman execution configured with"),
                     self.theme.accent(image),
                     self.theme.muted("Candidate-only mount · network denied · bounded resources · local image only")
                 ))
@@ -2435,7 +2750,7 @@ impl Session {
         }
     }
 
-    fn render_runs(&self) -> Result<(), CliError> {
+    fn render_runs(&self, query: &str) -> Result<(), CliError> {
         let columns = terminal_columns();
         let runs = commands::run_history(&self.state)?;
         if runs.is_empty() {
@@ -2457,7 +2772,17 @@ impl Session {
             .iter()
             .map(|run| run.run_id.to_string())
             .collect::<Vec<_>>();
-        for run in runs.iter().take(12) {
+        let query = query.to_lowercase();
+        let matches = runs.iter().filter(|run| {
+            query.is_empty()
+                || run.goal.to_lowercase().contains(&query)
+                || run.run_id.to_string().starts_with(&query)
+        });
+        let matches = matches.collect::<Vec<_>>();
+        if matches.is_empty() {
+            lines.push(self.theme.muted("No runs match this filter."));
+        }
+        for run in matches {
             let marker = if self.last_run == Some(run.run_id) {
                 self.theme.accent("●")
             } else {
@@ -2468,12 +2793,15 @@ impl Session {
                 |outcome| outcome_text(&self.theme, outcome),
             );
             lines.push(format!(
-                "  {marker} {}  {}  {} {}",
+                "  {marker} {}",
                 self.theme
-                    .code(&unique_id_prefix(&run.run_id.to_string(), &run_ids)),
-                status,
+                    .code(&unique_id_prefix(&run.run_id.to_string(), &run_ids))
+            ));
+            lines.push(format!("      {status}"));
+            lines.push(format!(
+                "      {} {}",
                 run.changes,
-                plural(run.changes, "file", "files"),
+                plural(run.changes, "file", "files")
             ));
             lines.extend(
                 wrapped_preview(&run.goal, content_width(columns, 6, 82), 2)
@@ -2483,13 +2811,13 @@ impl Session {
         }
         lines.extend(
             wrap_text(
-                "Commands accept a full run ID or the unique prefix shown above.",
+                "/focus <id> selects a run. /runs <text> filters goals and IDs. Commands accept these unique prefixes.",
                 content_width(columns, 2, 96),
             )
             .into_iter()
             .map(|line| self.theme.muted(&line)),
         );
-        self.emit(&format!("\n{}\n\n", lines.join("\n")))
+        self.view(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn render_trace(&self, run_id: RunId) -> Result<(), CliError> {
@@ -2526,7 +2854,7 @@ impl Session {
         let mut lines = vec![
             format!(
                 "{} {}",
-                self.theme.brand("╭─ EXECUTION TRACE"),
+                self.theme.brand("╭─ Execution trace"),
                 self.theme.code(&short_run_id(run_id)),
             ),
             format!(
@@ -2546,7 +2874,7 @@ impl Session {
             format!(
                 "{} {}",
                 self.theme.muted("╰─"),
-                self.theme.success("BLAKE3 hash chain verified")
+                self.theme.heading("BLAKE3 hash chain verified")
             ),
             String::new(),
         ];
@@ -2573,7 +2901,7 @@ impl Session {
             .into_iter()
             .map(|line| self.theme.muted(&line)),
         );
-        self.emit(&format!("\n{}\n\n", lines.join("\n")))
+        self.view(&format!("\n{}\n\n", lines.join("\n")))
     }
 
     fn inspect_run(&self, argument: &str, include_diff: bool) -> Result<(), CliError> {
@@ -2619,17 +2947,53 @@ impl Session {
             output.push('\n');
         }
         output.push('\n');
-        self.emit(&output)
+        self.view(&output)
     }
 
     fn apply_run(&mut self, run_id: RunId) -> Result<(), CliError> {
+        let candidate = commands::read_bound_receipt(&self.state, &self.workspace, run_id)?;
+        if candidate.outcome == ReceiptOutcome::ReadyToApply {
+            self.render_receipt(&candidate)?;
+            let events = commands::load_trace(&self.state, run_id)?;
+            let cautions = crate::terminal::review_cautions(&candidate, &events);
+            if cautions.unverified {
+                self.emit(&format!(
+                    "{}\n",
+                    self.theme
+                        .warning("! No deterministic passed check backs this candidate.")
+                ))?;
+            }
+            if cautions.failed > 0 {
+                self.emit(&format!(
+                    "{}\n",
+                    self.theme
+                        .warning(&format!("! {} checks failed.", cautions.failed))
+                ))?;
+            }
+            if cautions.stale {
+                self.emit(&format!(
+                    "{}\n",
+                    self.theme.warning(
+                        "! Evidence predates the last recorded write (derived from trace order)."
+                    )
+                ))?;
+            }
+            self.emit("Apply writes these candidate files to your workspace. The engine will recheck the source baseline. There is no CLI undo.\n")?;
+            if !self.confirm(
+                "apply",
+                "Type apply to acknowledge the review notices and write the files. Enter cancels.",
+            )? {
+                return self
+                    .emit("Apply cancelled. The candidate is still available for review.\n");
+            }
+        }
         let receipt = commands::apply_run(&self.state, &self.workspace, run_id)?;
         self.last_run = Some(run_id);
         self.refresh_pending_runs()?;
         self.refresh_memory_count()?;
         self.emit(&format!(
             "\n{} Applied {} {}\n  {}\n\n",
-            self.theme.success("✓"),
+            self.theme.heading("✓"),
             receipt.changes.len(),
             plural(receipt.changes.len(), "file", "files"),
             self.theme
@@ -2638,6 +3002,8 @@ impl Session {
     }
 
     fn discard_run(&mut self, run_id: RunId) -> Result<(), CliError> {
+        let candidate = commands::read_bound_receipt(&self.state, &self.workspace, run_id)?;
+        if candidate.outcome == ReceiptOutcome::ReadyToApply && !self.confirm("discard", "Discard this isolated candidate? Workspace files stay unchanged. Type discard; Enter cancels.")? {return self.emit("Discard cancelled. Candidate retained.\n");}
         commands::discard_run(&self.state, &self.workspace, run_id)?;
         self.last_run = Some(run_id);
         self.refresh_pending_runs()?;
@@ -2651,26 +3017,19 @@ impl Session {
     }
 
     fn render_completed(&self, completed: &CompletedRun) -> Result<(), CliError> {
-        self.render_receipt(&completed.receipt)?;
-        let summary = if completed.model_summary.trim().is_empty() {
-            "(model returned no summary)"
-        } else {
-            completed.model_summary.trim()
-        };
-        let tokens = format_count(completed.tokens);
-        let report_title = if completed.receipt.outcome == ReceiptOutcome::Answered {
-            "Answer"
-        } else {
-            "Model report"
-        };
+        let lines = completion_lines(
+            &self.theme,
+            terminal_columns(),
+            &completed.receipt,
+            &completed.model_summary,
+            completed.tokens,
+            completed.cost_microusd,
+        )?;
+        self.emit(&format!("\n{}\n\n", lines.join("\n")))?;
         self.emit(&format!(
-            "{} {}\n{}\n\n{} {tokens} tokens  {}  {}\n",
-            self.theme.accent("◆"),
-            self.theme.heading(report_title),
-            self.theme.text(summary),
-            self.theme.muted("usage"),
+            "{}  {}\n",
             self.theme.code("/trace full timeline"),
-            self.theme.code("/runs history"),
+            self.theme.code("/runs history")
         ))?;
         if completed.receipt.outcome == ReceiptOutcome::ReadyToApply {
             let message = if completed.receipt.changes.is_empty() {
@@ -2691,94 +3050,10 @@ impl Session {
     }
 
     fn render_receipt(&self, receipt: &ChangeReceipt) -> Result<(), CliError> {
-        let columns = terminal_columns();
-        let integrity = receipt.verify_integrity()?;
-        let (bytes_added, bytes_removed) = change_bytes(receipt);
-        let mut lines = vec![format!(
-            "{} {}  {}",
-            self.theme.muted("╭─"),
-            outcome_text(&self.theme, receipt.outcome),
-            self.theme.code(&receipt.run_id.to_string())
-        )];
-        for (index, line) in wrap_text(&receipt.contract.goal, content_width(columns, 13, 88))
-            .iter()
-            .enumerate()
-        {
-            lines.push(format!(
-                "{} {} {}",
-                self.theme.muted("│"),
-                self.theme
-                    .muted(if index == 0 { "goal     " } else { "         " }),
-                self.theme.text(line)
-            ));
-        }
-        if receipt.outcome != ReceiptOutcome::Answered {
-            lines.push(format!(
-                "{} {} {} {} · {} added · {} removed",
-                self.theme.muted("│"),
-                self.theme.muted("candidate"),
-                receipt.changes.len(),
-                plural(receipt.changes.len(), "file", "files"),
-                format_bytes(bytes_added),
-                format_bytes(bytes_removed),
-            ));
-        }
-        lines.push(format!(
-            "{} {} {}",
-            self.theme.muted("│"),
-            self.theme.muted("evidence "),
-            evidence_summary(&self.theme, receipt)
-        ));
-        lines.push(format!(
-            "{} {} {}",
-            self.theme.muted("╰─"),
-            self.theme.muted("receipt integrity"),
-            if integrity {
-                self.theme.success("verified")
-            } else {
-                self.theme.danger("INVALID")
-            }
-        ));
-
-        if receipt.outcome != ReceiptOutcome::Answered {
-            lines.push(String::new());
-            lines.push(self.theme.heading("Changes"));
-            if receipt.changes.is_empty() {
-                lines.push(format!("  {}", self.theme.muted("(none)")));
-            }
-            for change in &receipt.changes {
-                let path_width = content_width(columns, 24, 62);
-                let path = format!(
-                    "{:<width$}",
-                    truncate(&change.path, path_width),
-                    width = path_width
-                );
-                lines.push(format!(
-                    "  {}  {} {}",
-                    change_marker(&self.theme, change),
-                    self.theme.code(&path),
-                    self.theme.muted(&change_delta(change)),
-                ));
-            }
-        }
-
-        if !receipt.unresolved_risks.is_empty() {
-            lines.push(String::new());
-            lines.push(self.theme.heading("Review notes"));
-            for risk in &receipt.unresolved_risks {
-                for (index, line) in wrap_text(risk, content_width(columns, 6, 86))
-                    .iter()
-                    .enumerate()
-                {
-                    lines.push(format!(
-                        "  {} {}",
-                        self.theme.warning(if index == 0 { "!" } else { " " }),
-                        self.theme.text(line)
-                    ));
-                }
-            }
-        }
-        self.emit(&format!("\n{}\n\n", lines.join("\n")))
+        self.emit(&format!(
+            "\n{}\n\n",
+            receipt_lines(&self.theme, terminal_columns(), receipt)?.join("\n")
+        ))
     }
 
     fn resolve_run(&self, argument: &str) -> Result<RunId, CliError> {
@@ -2863,6 +3138,155 @@ impl Session {
         ))
     }
 
+    fn view(&self, value: &str) -> Result<(), CliError> {
+        match crate::terminal::page(value, self.pager) {
+            Ok(true) => Ok(()),
+            Ok(false) => self.emit(value),
+            Err(error) => {
+                self.emit(&format!("{}\n", self.theme.warning(&error)))?;
+                self.emit(value)
+            }
+        }
+    }
+
+    fn restore_draft(&mut self, text: &str) {
+        self.editor.run_edit_commands(&[
+            EditCommand::Clear,
+            EditCommand::InsertString(sanitize_terminal_text(text)),
+        ]);
+    }
+
+    fn confirm(&self, expected: &str, explanation: &str) -> Result<bool, CliError> {
+        self.emit(&format!(
+            "\n{}\n",
+            wrap_text(explanation, terminal_columns()).join("\n")
+        ))?;
+        let prompt = SessionPrompt {
+            left: "Confirm (default: cancel)".to_owned(),
+            right: String::new(),
+        };
+        let mut editor = Reedline::create()
+            .with_ansi_colors(self.theme.has_color())
+            .with_validator(Box::new(TaskValidator));
+        match editor.read_line(&prompt) {
+            Ok(Signal::Success(text)) => Ok(text.trim() == expected),
+            Ok(_) => Ok(false),
+            Err(error) => Err(CliError::Argument(format!("confirmation failed: {error}"))),
+        }
+    }
+
+    fn update_completions(&self) -> Result<(), CliError> {
+        let runs = commands::run_history(&self.state)?;
+        let ids = runs
+            .iter()
+            .map(|r| r.run_id.to_string())
+            .collect::<Vec<_>>();
+        let mut entries = Vec::new();
+        for run in &runs {
+            entries.push(CompletionEntry {
+                value: unique_id_prefix(&run.run_id.to_string(), &ids),
+                description: format!("{} · {}", format_state(run.state), truncate(&run.goal, 52)),
+                kind: "run",
+            });
+        }
+        for model in &self.known_models {
+            entries.push(CompletionEntry {
+                value: model.clone(),
+                description: "discovered model".to_owned(),
+                kind: "model",
+            });
+        }
+        if let Ok(mut data) = self.completion_data.lock() {
+            *data = entries;
+        }
+        Ok(())
+    }
+
+    fn render_evidence(&self, run_id: RunId) -> Result<(), CliError> {
+        let receipt = commands::read_bound_receipt(&self.state, &self.workspace, run_id)?;
+        let mut lines = vec![
+            self.theme
+                .heading(&format!("Evidence · {}", short_run_id(run_id))),
+        ];
+        for obligation in &receipt.contract.obligations {
+            lines.extend(
+                wrap_text(
+                    &format!(
+                        "{} · {:?}{}",
+                        obligation.description,
+                        obligation.kind,
+                        if obligation.required {
+                            " · required"
+                        } else {
+                            ""
+                        }
+                    ),
+                    content_width(terminal_columns(), 2, 100),
+                )
+                .into_iter()
+                .map(|l| format!("  {}", self.theme.text(&l))),
+            );
+            let records = receipt
+                .evidence
+                .iter()
+                .filter(|e| e.obligation_id == obligation.id)
+                .collect::<Vec<_>>();
+            if records.is_empty() {
+                lines.push("    ? Unverified · no evidence recorded".to_owned());
+            }
+            for evidence in records {
+                let label = format!(
+                    "{:?} · {:?} · {:?}",
+                    evidence.status, evidence.grade, evidence.kind
+                );
+                let heading = if evidence.grade == pactrail_core::EvidenceGrade::Deterministic
+                    && evidence.status == EvidenceStatus::Passed
+                {
+                    self.theme.success(&label)
+                } else if evidence.status == EvidenceStatus::Failed {
+                    self.theme.danger(&label)
+                } else {
+                    self.theme.warning(&label)
+                };
+                lines.push(format!("    {heading}"));
+                lines.extend(
+                    wrap_text(&evidence.summary, content_width(terminal_columns(), 6, 96))
+                        .into_iter()
+                        .map(|l| format!("      {}", self.theme.text(&l))),
+                );
+                if let Some(command) = &evidence.reproduction {
+                    lines.extend(
+                        wrap_text(
+                            &format!("Reproduce: {command}"),
+                            content_width(terminal_columns(), 6, 96),
+                        )
+                        .into_iter()
+                        .map(|l| format!("      {}", self.theme.code(&l))),
+                    );
+                }
+                if let Some(digest) = &evidence.artifact_digest {
+                    lines.extend(
+                        wrap_text(
+                            &format!("Artifact digest: {digest}"),
+                            content_width(terminal_columns(), 6, 96),
+                        )
+                        .into_iter()
+                        .map(|l| format!("      {}", self.theme.muted(&l))),
+                    );
+                }
+            }
+            lines.push(String::new());
+        }
+        for risk in &receipt.unresolved_risks {
+            lines.extend(
+                wrap_text(&format!("! {risk}"), terminal_columns())
+                    .into_iter()
+                    .map(|l| self.theme.warning(&l)),
+            );
+        }
+        self.view(&format!("\n{}\n", lines.join("\n")))
+    }
+
     fn emit(&self, value: &str) -> Result<(), CliError> {
         if self.theme.has_color() {
             write_stdout(value).map_err(CliError::Output)
@@ -2930,15 +3354,15 @@ fn format_duration(duration: Duration) -> String {
 fn render_tool_descriptor(theme: &Theme, columns: usize, tool: &ToolDescriptor) -> Vec<String> {
     let (marker, risk) = match tool.annotations.risk {
         ToolRisk::ReadOnly => (
-            theme.success("◇"),
-            theme.success(&format!("{:<11}", "read")),
+            theme.heading("◇"),
+            theme.heading(&format!("{:<11}", "read")),
         ),
         ToolRisk::WorkspaceMutation => {
             (theme.accent("◆"), theme.accent(&format!("{:<11}", "edit")))
         }
         ToolRisk::RestrictedExecution => (
-            theme.success("▣"),
-            theme.success(&format!("{:<11}", "sandbox")),
+            theme.heading("▣"),
+            theme.heading(&format!("{:<11}", "sandbox")),
         ),
         ToolRisk::HostExecution => (
             theme.warning("!"),
@@ -2983,6 +3407,26 @@ fn render_tool_descriptor(theme: &Theme, columns: usize, tool: &ToolDescriptor) 
 }
 
 fn render_trace_event(
+    theme: &Theme,
+    columns: usize,
+    started: &EventEnvelope,
+    envelope: &EventEnvelope,
+) -> Vec<String> {
+    if columns < 60 {
+        return render_trace_event(theme, 60, started, envelope)
+            .into_iter()
+            .flat_map(|line| {
+                crate::terminal::wrap_verbatim(&crate::terminal::strip_styles(&line), columns)
+                    .into_iter()
+                    .map(|l| theme.text(&l))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+    }
+    render_wide_trace_event(theme, columns, started, envelope)
+}
+
+fn render_wide_trace_event(
     theme: &Theme,
     columns: usize,
     started: &EventEnvelope,
@@ -3159,8 +3603,8 @@ fn render_trace_action(
         (theme.accent("●"), theme.text(&format!("{:<8}", "tool")))
     } else if action.actor == "verifier" {
         (
-            theme.success("●"),
-            theme.success(&format!("{:<8}", "verify")),
+            theme.heading("●"),
+            theme.heading(&format!("{:<8}", "verify")),
         )
     } else {
         (theme.muted("●"), theme.text(&format!("{:<8}", "action")))
@@ -3171,13 +3615,17 @@ fn render_trace_action(
     {
         theme.warning("stalled")
     } else if action.succeeded {
-        theme.success("ok")
+        theme.heading("ok")
     } else {
         theme.danger("failed")
     };
     let mut lines = vec![format!(
         "  {time} {sequence}  {marker} {label} {}  {outcome}",
-        theme.muted(&trace_duration(action.duration_ms))
+        theme.muted(&if action.duration_ms == 0 {
+            "—".to_owned()
+        } else {
+            trace_duration(action.duration_ms)
+        })
     )];
     let detail_width = content_width(columns, 18, 88);
     for summary in wrap_text(&action.summary, detail_width) {
@@ -3244,7 +3692,7 @@ fn trace_detail_rows(
 ) -> Vec<String> {
     let marker = match marker {
         "◆" => theme.accent(marker),
-        "✓" => theme.success(marker),
+        "✓" => theme.heading(marker),
         "!" => theme.warning(marker),
         _ => theme.muted(marker),
     };
@@ -3267,25 +3715,42 @@ enum SessionControl {
 }
 
 struct SessionPrompt {
+    left: String,
     right: String,
 }
 
 impl SessionPrompt {
-    fn new(model: Option<String>, pending_runs: usize) -> Self {
-        let model = truncate(&model.unwrap_or_else(|| "no model".to_owned()), 32);
+    fn new(model: Option<String>, pending_runs: usize, backend: ProcessBackendArg) -> Self {
+        let model = truncate(
+            &model.unwrap_or_else(|| "no model · /connect".to_owned()),
+            terminal_columns().saturating_sub(24).min(40),
+        );
+        let mode = match backend {
+            ProcessBackendArg::Disabled => "commands: none",
+            ProcessBackendArg::Native => "commands: host",
+            ProcessBackendArg::Oci => "commands: sandbox",
+        };
+        let text = if pending_runs == 0 {
+            format!("{mode} · {model}")
+        } else {
+            format!("{pending_runs} review · {mode} · {model}")
+        };
         Self {
-            right: if pending_runs == 0 {
-                model
-            } else {
-                format!("{pending_runs} review · {model}")
-            },
+            left: "pactrail".to_owned(),
+            right: truncate(&text, terminal_columns().saturating_sub(14)),
         }
     }
 }
 
 impl Prompt for SessionPrompt {
+    fn get_prompt_color(&self) -> reedline::Color {
+        reedline::Color::Cyan
+    }
+    fn get_prompt_right_color(&self) -> reedline::Color {
+        reedline::Color::DarkGrey
+    }
     fn render_prompt_left(&self) -> Cow<'_, str> {
-        Cow::Borrowed("pactrail")
+        Cow::Borrowed(&self.left)
     }
 
     fn render_prompt_right(&self) -> Cow<'_, str> {
@@ -3531,24 +3996,24 @@ fn provider_label(provider: ProviderKind) -> &'static str {
 
 fn outcome_text(theme: &Theme, outcome: ReceiptOutcome) -> String {
     match outcome {
-        ReceiptOutcome::Answered => theme.success("ANSWERED"),
-        ReceiptOutcome::ReadyToApply => theme.success("READY TO APPLY"),
-        ReceiptOutcome::Applied => theme.success("APPLIED"),
-        ReceiptOutcome::Discarded => theme.warning("DISCARDED"),
-        ReceiptOutcome::Failed => theme.danger("FAILED"),
-        ReceiptOutcome::Cancelled => theme.warning("CANCELLED"),
+        ReceiptOutcome::Answered => theme.heading("◇ Answered"),
+        ReceiptOutcome::ReadyToApply => theme.brand("◇ Awaiting review"),
+        ReceiptOutcome::Applied => theme.heading("✓ Applied"),
+        ReceiptOutcome::Discarded => theme.muted("◇ Discarded"),
+        ReceiptOutcome::Failed => theme.danger("× Failed"),
+        ReceiptOutcome::Cancelled => theme.warning("■ Stopped"),
     }
 }
 
 fn run_state_text(theme: &Theme, state: RunState) -> String {
     match state {
-        RunState::Failed => theme.danger("FAILED"),
-        RunState::Cancelled => theme.warning("CANCELLED"),
-        RunState::Applied => theme.success("APPLIED"),
-        RunState::Discarded => theme.warning("DISCARDED"),
-        RunState::Completed => theme.success("ANSWERED"),
-        RunState::AwaitingApply => theme.success("READY TO APPLY"),
-        _ => theme.muted(&format!("{state:?}").to_uppercase()),
+        RunState::Failed => theme.danger("× Failed"),
+        RunState::Cancelled => theme.warning("■ Stopped"),
+        RunState::Applied => theme.heading("✓ Applied"),
+        RunState::Discarded => theme.muted("◇ Discarded"),
+        RunState::Completed => theme.heading("◇ Answered"),
+        RunState::AwaitingApply => theme.brand("◇ Awaiting review"),
+        _ => theme.muted(format_state(state)),
     }
 }
 
@@ -3726,7 +4191,7 @@ fn mcp_server_argument(
     }
 }
 
-fn terminal_columns() -> usize {
+pub(crate) fn terminal_columns() -> usize {
     terminal_size()
         .map(|(Width(columns), _)| usize::from(columns))
         .or_else(|| {
@@ -3739,7 +4204,7 @@ fn terminal_columns() -> usize {
 }
 
 fn content_width(columns: usize, prefix: usize, maximum: usize) -> usize {
-    columns.saturating_sub(prefix).clamp(12, maximum)
+    columns.saturating_sub(prefix).clamp(1, maximum)
 }
 
 fn banner_process(backend: ProcessBackendArg) -> (String, TimelineTone) {
@@ -3769,20 +4234,6 @@ fn banner_review(pending: usize) -> (String, TimelineTone) {
                 plural(pending, "candidate", "candidates")
             ),
             TimelineTone::Warning,
-        )
-    }
-}
-
-fn banner_memory(count: usize) -> (String, TimelineTone) {
-    if count == 0 {
-        (
-            "empty · /remember to teach this workspace".to_owned(),
-            TimelineTone::Muted,
-        )
-    } else {
-        (
-            format!("{count} {} · /memory", plural(count, "memory", "memories")),
-            TimelineTone::Accent,
         )
     }
 }
@@ -3919,17 +4370,7 @@ fn unique_id_prefix(value: &str, candidates: &[String]) -> String {
 }
 
 fn truncate(value: &str, max_chars: usize) -> String {
-    if value.chars().count() <= max_chars {
-        return value.to_owned();
-    }
-    if max_chars == 0 {
-        return String::new();
-    }
-    let prefix = value
-        .chars()
-        .take(max_chars.saturating_sub(1))
-        .collect::<String>();
-    format!("{prefix}\u{2026}")
+    crate::terminal::truncate(value, max_chars)
 }
 
 fn run_focus(receipts: &[ChangeReceipt]) -> (Option<RunId>, usize) {
@@ -3978,42 +4419,7 @@ fn edit_distance(left: &str, right: &str) -> usize {
 }
 
 fn wrap_text(value: &str, width: usize) -> Vec<String> {
-    let width = width.max(1);
-    let mut lines = Vec::new();
-    let mut line = String::new();
-    for word in value.split_whitespace() {
-        let mut remaining = word;
-        loop {
-            let line_length = line.chars().count();
-            let separator = usize::from(!line.is_empty());
-            let capacity = width.saturating_sub(line_length + separator);
-            if remaining.chars().count() <= capacity {
-                if !line.is_empty() {
-                    line.push(' ');
-                }
-                line.push_str(remaining);
-                break;
-            }
-            if capacity == 0 || !line.is_empty() {
-                lines.push(std::mem::take(&mut line));
-                continue;
-            }
-            let split = remaining
-                .char_indices()
-                .nth(width)
-                .map_or(remaining.len(), |(index, _)| index);
-            let (chunk, rest) = remaining.split_at(split);
-            lines.push(chunk.to_owned());
-            remaining = rest;
-            if remaining.is_empty() {
-                break;
-            }
-        }
-    }
-    if !line.is_empty() || lines.is_empty() {
-        lines.push(line);
-    }
-    lines
+    crate::terminal::wrap(value, width)
 }
 
 fn wrapped_preview(value: &str, width: usize, max_lines: usize) -> Vec<String> {
@@ -4029,10 +4435,7 @@ fn wrapped_preview(value: &str, width: usize, max_lines: usize) -> Vec<String> {
     let last = lines
         .last_mut()
         .unwrap_or_else(|| unreachable!("non-zero preview always retains one line"));
-    let prefix = last
-        .chars()
-        .take(width.saturating_sub(1))
-        .collect::<String>();
+    let prefix = crate::terminal::truncate(last, width.saturating_sub(1));
     *last = format!("{}…", prefix.trim_end());
     lines
 }
@@ -4074,7 +4477,11 @@ fn change_marker(theme: &Theme, change: &FileChange) -> String {
 
 fn change_delta(change: &FileChange) -> String {
     if change.bytes_added == 0 && change.bytes_removed == 0 {
-        "mode changed".to_owned()
+        if change.before_unix_mode == change.after_unix_mode {
+            "0 bytes added · 0 bytes removed".to_owned()
+        } else {
+            "mode changed".to_owned()
+        }
     } else {
         format!(
             "+{}  -{}",
@@ -4084,21 +4491,154 @@ fn change_delta(change: &FileChange) -> String {
     }
 }
 
-fn evidence_summary(theme: &Theme, receipt: &ChangeReceipt) -> String {
-    let summary = format!(
-        "{} passed · {} failed · {} inconclusive · {} skipped",
-        receipt.verification.passed,
-        receipt.verification.failed,
-        receipt.verification.inconclusive,
-        receipt.verification.skipped,
+pub(crate) fn completion_lines(
+    theme: &Theme,
+    columns: usize,
+    receipt: &ChangeReceipt,
+    summary: &str,
+    tokens: u64,
+    cost: Option<u64>,
+) -> Result<Vec<String>, CliError> {
+    let mut lines = receipt_lines(theme, columns, receipt)?;
+    lines.push(String::new());
+    lines.push(
+        theme.heading(if receipt.outcome == ReceiptOutcome::Answered {
+            "Answer"
+        } else {
+            "Model report"
+        }),
     );
-    if receipt.verification.failed > 0 {
-        theme.danger(&summary)
-    } else if receipt.verification.inconclusive > 0 {
-        theme.warning(&summary)
+    let summary = if summary.trim().is_empty() {
+        "(model returned no summary)"
     } else {
-        theme.success(&summary)
+        summary.trim()
+    };
+    let mut code = false;
+    for line in summary.lines() {
+        if line.trim_start().starts_with("```") {
+            code = !code;
+            lines.extend(
+                crate::terminal::wrap_verbatim(line, columns)
+                    .into_iter()
+                    .map(|l| theme.muted(&l)),
+            );
+        } else if code {
+            lines.extend(
+                crate::terminal::wrap_verbatim(line, columns)
+                    .into_iter()
+                    .map(|l| theme.code(&l)),
+            );
+        } else {
+            lines.extend(wrap_text(line, columns.min(100)).into_iter().map(|l| {
+                if l.starts_with('#') {
+                    theme.heading(&l)
+                } else {
+                    theme.text(&l)
+                }
+            }));
+        }
     }
+    lines.push(String::new());
+    lines.extend(
+        wrap_text(
+            &format!(
+                "Usage: {} engine-counted tokens · priced cost estimate: {}",
+                format_count(tokens),
+                crate::terminal::format_cost(cost)
+            ),
+            columns,
+        )
+        .into_iter()
+        .map(|l| theme.muted(&l)),
+    );
+    Ok(lines)
+}
+
+fn receipt_lines(
+    theme: &Theme,
+    columns: usize,
+    receipt: &ChangeReceipt,
+) -> Result<Vec<String>, CliError> {
+    let integrity = receipt.verify_integrity()?;
+    let mut lines = vec![format!(
+        "  {} {}",
+        theme.muted("╭─"),
+        outcome_text(theme, receipt.outcome)
+    )];
+    let (added, removed) = change_bytes(receipt);
+    let fields = [
+        ("run", receipt.run_id.to_string()),
+        ("goal", receipt.contract.goal.clone()),
+        (
+            "candidate",
+            format!(
+                "{} {} · +{} / −{} bytes",
+                receipt.changes.len(),
+                plural(receipt.changes.len(), "file", "files"),
+                format_count(added),
+                format_count(removed)
+            ),
+        ),
+        (
+            "evidence",
+            format!(
+                "{} passed · {} failed · {} inconclusive · {} skipped",
+                receipt.verification.passed,
+                receipt.verification.failed,
+                receipt.verification.inconclusive,
+                receipt.verification.skipped
+            ),
+        ),
+        (
+            "integrity",
+            if integrity {
+                "Verified receipt digest".to_owned()
+            } else {
+                "INVALID receipt digest".to_owned()
+            },
+        ),
+    ];
+    for (label, value) in fields {
+        lines.extend(frame_field(
+            theme,
+            columns,
+            label,
+            &value,
+            TimelineTone::Normal,
+        ));
+    }
+    lines.push(format!("  {}", theme.muted("╰─")));
+    for change in &receipt.changes {
+        lines.extend(
+            wrap_text(&change.path, content_width(columns, 7, 100))
+                .into_iter()
+                .enumerate()
+                .map(|(i, line)| {
+                    format!(
+                        "  {} {}",
+                        if i == 0 {
+                            change_marker(theme, change)
+                        } else {
+                            " ".to_owned()
+                        },
+                        theme.code(&line)
+                    )
+                }),
+        );
+        lines.extend(
+            wrap_text(&change_delta(change), content_width(columns, 6, 100))
+                .into_iter()
+                .map(|l| format!("      {}", theme.muted(&l))),
+        );
+    }
+    for risk in &receipt.unresolved_risks {
+        lines.extend(
+            wrap_text(&format!("! {risk}"), content_width(columns, 2, 100))
+                .into_iter()
+                .map(|l| format!("  {}", theme.warning(&l))),
+        );
+    }
+    Ok(lines)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -4154,6 +4694,94 @@ mod tests {
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|error| unreachable!("receipt: {error}"))
+    }
+
+    #[test]
+    fn described_completion_never_replaces_a_task() {
+        let data = Arc::new(Mutex::new(vec![CompletionEntry {
+            value: "019f1234".to_owned(),
+            description: "Awaiting review".to_owned(),
+            kind: "run",
+        }]));
+        let mut completer = CommandCompleter(data);
+        assert!(completer.complete("Explain the parser", 18).is_empty());
+        let commands = completer.complete("/ev", 3);
+        assert_eq!(commands[0].value, "/evidence");
+        assert!(
+            commands[0]
+                .description
+                .as_deref()
+                .is_some_and(|s| s.contains("obligations"))
+        );
+        let runs = completer.complete("/apply 019", 10);
+        assert_eq!(runs[0].value, "019f1234");
+        assert_eq!(runs[0].span.start, 7);
+        assert!(matches!(
+            TaskValidator.validate("Explain 'this [parser"),
+            ValidationResult::Complete
+        ));
+    }
+
+    #[test]
+    fn receipts_and_live_rows_fit_cell_widths() {
+        let receipt = receipt(ReceiptOutcome::ReadyToApply, true);
+        for columns in [32, 40, 60, 80, 120] {
+            let lines = receipt_lines(&Theme::plain(), columns, &receipt)
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            let timeline = timeline_row(
+                &Theme::plain(),
+                columns,
+                1200,
+                "●",
+                "tool",
+                "读路径 e\u{301} 😀 · a/very/long/path/that/must/wrap",
+                TimelineTone::Normal,
+            );
+            for line in lines.iter().chain(&timeline) {
+                assert!(crate::terminal::width(line) <= columns, "{columns}: {line}");
+            }
+        }
+    }
+
+    #[test]
+    fn review_cautions_distinguish_deterministic_pass_and_trace_freshness() {
+        use pactrail_core::{EventHash, EvidenceGrade};
+        let mut receipt = receipt(ReceiptOutcome::ReadyToApply, true);
+        let passed = receipt.evidence[0].clone();
+        let envelope = |seq, event| {
+            EventEnvelope::new(
+                receipt.run_id,
+                seq,
+                time::OffsetDateTime::now_utc(),
+                EventHash::genesis(),
+                event,
+            )
+            .unwrap_or_else(|e| unreachable!("{e}"))
+        };
+        let write = envelope(
+            3,
+            RunEvent::ActionCompleted(ActionRecord {
+                actor: "tool:write_file".to_owned(),
+                action: "write_file".to_owned(),
+                summary: "write".to_owned(),
+                declared_effects: Vec::new(),
+                observed_effects: vec!["fs.write:src/lib.rs".to_owned()],
+                succeeded: true,
+                duration_ms: 1,
+                attributes: std::collections::BTreeMap::new(),
+            }),
+        );
+        let check = envelope(2, RunEvent::EvidenceRecorded(passed));
+        let cautions = crate::terminal::review_cautions(&receipt, &[write, check]);
+        assert!(cautions.stale);
+        assert!(!cautions.unverified);
+        assert_eq!(cautions.failed, 0);
+        receipt.evidence[0].grade = EvidenceGrade::ModelAssessed;
+        receipt.evidence[0].status = EvidenceStatus::Failed;
+        let cautions = crate::terminal::review_cautions(&receipt, &[]);
+        assert!(cautions.unverified);
+        assert_eq!(cautions.failed, 1);
+        assert!(!cautions.stale);
     }
 
     #[test]
@@ -4323,7 +4951,7 @@ mod tests {
             TimelineTone::Normal,
         )
         .join("\n");
-        let activity = RunActivity::new("model\u{1b}[2J", Theme::plain());
+        let activity = RunActivity::new("model\u{1b}[2J", Theme::plain(), true);
 
         assert!(!rendered.contains('\u{1b}'));
         assert!(rendered.contains("read_file\u{fffd}[2J"));

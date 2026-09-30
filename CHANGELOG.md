@@ -8,6 +8,14 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Interactive CLI command palette with descriptions, contextual model/run-ID completion,
+  multiline composition, external-editor return, and bounded UTF-8 task-file loading.
+- `/focus`, `/evidence`, `/retry`, model/run filtering, and session-only pager/detail controls.
+- Default-cancel Apply/Discard confirmations with deterministic-check, failed-check,
+  and trace-derived stale-evidence notices before applying a candidate.
+- Compact startup and live detail, Unicode cell-aware wrapping, readable byte deltas,
+  neutral outcome colors, and explicit engine-counter/cost reporting.
+
 - Normalized model usage now has a bounded versioned codec. Checkpoint loading rejects impossible cache counters before a run resumes, while historical valid checkpoints remain readable.
 - Large observations can now deduplicate against an earlier compacted result when its exact run-local artifact passes integrity validation; unavailable artifacts leave the new observation intact.
 - Model-turn traces now record a digest and size for the normalized pre-provider context plus provider-reported cache-read coverage, making cache behavior inspectable without persisting prompts.

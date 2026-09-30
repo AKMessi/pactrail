@@ -3252,40 +3252,43 @@ fn render_run(
             "trace": run_root.join("trace.jsonl"),
         })),
         OutputFormat::Human => {
-            let changes = if receipt.changes.is_empty() {
-                "  (none)".to_owned()
-            } else {
-                receipt
-                    .changes
-                    .iter()
-                    .map(|change| format!("  {}", change.path))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            };
-            let apply_hint = if receipt.outcome == ReceiptOutcome::ReadyToApply {
-                format!("pactrail apply {}", receipt.run_id)
-            } else {
-                "not applicable".to_owned()
-            };
-            let cost_line = cost_microusd.map_or_else(String::new, |cost| {
-                format!("Estimated cost: {cost} micro-USD\n")
-            });
-            write_human_stdout(&format!(
-                "Run: {}\nOutcome: {:?}\n\n{}\n\nChanged files:\n{}\n\nEvidence: {} passed, {} failed, {} inconclusive\nTokens: {}\n{}Receipt: {}\nTrace: {}\nApply: {}\n",
-                receipt.run_id,
-                receipt.outcome,
+            let theme = crate::theme::Theme::detect();
+            let columns = crate::interactive::terminal_columns();
+            let mut lines = crate::interactive::completion_lines(
+                &theme,
+                columns,
+                receipt,
                 model_summary,
-                changes,
-                receipt.verification.passed,
-                receipt.verification.failed,
-                receipt.verification.inconclusive,
                 tokens,
-                cost_line,
-                run_root.join("receipt.json").display(),
-                run_root.join("trace.jsonl").display(),
-                apply_hint,
-            ))
-            .map_err(CliError::Output)
+                cost_microusd,
+            )?;
+            for (label, value) in [
+                (
+                    "Receipt",
+                    run_root.join("receipt.json").display().to_string(),
+                ),
+                ("Trace", run_root.join("trace.jsonl").display().to_string()),
+            ] {
+                lines.extend(
+                    crate::terminal::wrap(&format!("{label}: {value}"), columns)
+                        .into_iter()
+                        .map(|l| theme.muted(&l)),
+                );
+            }
+            let hint = if receipt.outcome == ReceiptOutcome::ReadyToApply {
+                format!(
+                    "Next: pactrail diff {} · pactrail apply {}",
+                    receipt.run_id, receipt.run_id
+                )
+            } else {
+                format!("Inspect: pactrail inspect {}", receipt.run_id)
+            };
+            lines.extend(
+                crate::terminal::wrap(&hint, columns)
+                    .into_iter()
+                    .map(|l| theme.text(&l)),
+            );
+            write_stdout(&format!("\n{}\n", lines.join("\n"))).map_err(CliError::Output)
         }
     }
 }
