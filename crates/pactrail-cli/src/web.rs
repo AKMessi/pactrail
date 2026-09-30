@@ -114,9 +114,12 @@ fn router(state: AppState) -> Router {
         .route("/app.css", get(styles))
         .route("/app.js", get(script))
         .route("/icons.svg", get(icons))
-        .route("/fonts/martian-mono-latin.woff2", get(martian_font))
-        .route("/fonts/spline-sans-latin.woff2", get(spline_font))
-        .route("/fonts/spline-sans-mono-latin.woff2", get(spline_mono_font))
+        .route("/boot.js", get(boot_script))
+        .route("/fonts/ibm-plex-sans-400-latin.woff2", get(sans_400_font))
+        .route("/fonts/ibm-plex-sans-500-latin.woff2", get(sans_500_font))
+        .route("/fonts/ibm-plex-sans-600-latin.woff2", get(sans_600_font))
+        .route("/fonts/ibm-plex-mono-400-latin.woff2", get(mono_400_font))
+        .route("/fonts/ibm-plex-mono-500-latin.woff2", get(mono_500_font))
         .route("/api/bootstrap", get(bootstrap))
         .route("/api/runs", get(runs).post(start_run))
         .route("/api/runs/{id}/events", get(run_events))
@@ -202,22 +205,44 @@ async fn script() -> Response {
 async fn icons() -> Response {
     asset("image/svg+xml", include_str!("../web/icons.svg"))
 }
-async fn martian_font() -> Response {
-    asset_bytes(
-        "font/woff2",
-        include_bytes!("../web/fonts/martian-mono-latin.woff2"),
+async fn boot_script() -> Response {
+    asset(
+        "text/javascript; charset=utf-8",
+        include_str!("../web/boot.js"),
     )
 }
-async fn spline_font() -> Response {
+async fn sans_400_font() -> Response {
     asset_bytes(
         "font/woff2",
-        include_bytes!("../web/fonts/spline-sans-latin.woff2"),
+        include_bytes!("../web/fonts/ibm-plex-sans-400-latin.woff2"),
     )
 }
-async fn spline_mono_font() -> Response {
+
+async fn sans_500_font() -> Response {
     asset_bytes(
         "font/woff2",
-        include_bytes!("../web/fonts/spline-sans-mono-latin.woff2"),
+        include_bytes!("../web/fonts/ibm-plex-sans-500-latin.woff2"),
+    )
+}
+
+async fn sans_600_font() -> Response {
+    asset_bytes(
+        "font/woff2",
+        include_bytes!("../web/fonts/ibm-plex-sans-600-latin.woff2"),
+    )
+}
+
+async fn mono_400_font() -> Response {
+    asset_bytes(
+        "font/woff2",
+        include_bytes!("../web/fonts/ibm-plex-mono-400-latin.woff2"),
+    )
+}
+
+async fn mono_500_font() -> Response {
+    asset_bytes(
+        "font/woff2",
+        include_bytes!("../web/fonts/ibm-plex-mono-500-latin.woff2"),
     )
 }
 

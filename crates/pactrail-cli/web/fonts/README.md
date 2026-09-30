@@ -1,10 +1,5 @@
-# Vendored UI assets
+# Bundled fonts and icons
 
-Pactrail serves these files from its loopback web server and makes no font or icon requests to external hosts at runtime.
+IBM Plex Sans (400, 500, 600) and IBM Plex Mono (400, 500) use Latin WOFF2 subsets from `@fontsource` 5.2.6. They are distributed under SIL OFL 1.1; see `OFL-IBM-Plex.txt`.
 
-- Martian Mono (latin WOFF2): Evil Martians, OFL 1.1. License: `OFL-Martian-Mono.txt`.
-- Spline Sans (latin WOFF2): Sorkin Type, OFL 1.1. License: `OFL-Spline-Sans.txt`.
-- Spline Sans Mono (latin WOFF2): Sorkin Type, OFL 1.1. License: `OFL-Spline-Sans-Mono.txt`.
-- Lucide icons: the selected SVG paths are in `../icons.svg`. License: `ISC-Lucide.txt`.
-
-Font subsets were retrieved from the respective Google Fonts CSS responses during development. Original sources: https://github.com/evilmartians/martian-mono, https://github.com/SorkinType/SplineSans, https://github.com/SorkinType/SplineSansMono, and https://github.com/lucide-icons/lucide.
+Lucide SVG symbols are bundled locally under ISC; see `ISC-Lucide.txt`. There are no runtime CDN requests.
