@@ -3,7 +3,7 @@ import pathlib
 import tempfile
 import unittest
 from cases import CASES
-from run import ARMS, grade, setup, write
+from run import ARMS, changed_paths, grade, setup, write
 from summarize import summarize
 
 class GraderValidation(unittest.TestCase):
@@ -25,6 +25,12 @@ class GraderValidation(unittest.TestCase):
             self.assertFalse(grade(workspace,case)['passed'])
 
 class ResultAccounting(unittest.TestCase):
+    def test_empty_unrelated_files_are_still_changes(self):
+        original={'production.py':'pass\n','deleted_empty.py':''}
+        actual={'production.py':b'pass\n','added_empty.py':b''}
+        self.assertEqual(changed_paths(original,actual),['added_empty.py','deleted_empty.py'])
+        self.assertEqual(changed_paths({'same.py':''},{'same.py':b''}),[])
+
     def test_pending_and_ungraded_trials_do_not_become_zero_scores(self):
         with tempfile.TemporaryDirectory(prefix='pactrail-result-tests-') as tmp:
             folder=pathlib.Path(tmp)

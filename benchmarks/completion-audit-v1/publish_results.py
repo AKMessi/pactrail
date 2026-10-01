@@ -11,7 +11,7 @@ from summarize import summarize
 LABELS={'pactrail-baseline':'Pactrail before upgrade','pactrail-audit':'Pactrail with audit',
         'opencode':'OpenCode 1.18.34','mini':'mini-SWE-agent 2.4.6'}
 
-def publish(source,destination):
+def publish(source,destination,frozen_source=None):
     protocol=json.loads((source/'protocol.json').read_text())
     results=json.loads((source/'results.json').read_text())
     if len(results)!=len(protocol['order']):
@@ -41,14 +41,21 @@ def publish(source,destination):
                          'original_sha256':hashlib.sha256(original).hexdigest(),
                          'published_sha256':hashlib.sha256(published).hexdigest(),
                          'redacted':original!=published})
+    frozen_source=frozen_source or (source/'frozen-runner' if (source/'frozen-runner').is_dir() else pathlib.Path(__file__).resolve().parent)
+    for name,sha in protocol['files'].items():
+        path=frozen_source/name
+        raw=path.read_bytes()
+        if hashlib.sha256(raw).hexdigest()!=sha: raise RuntimeError('Frozen runner source mismatch: '+name)
+        target=destination/'frozen-runner'/name
+        target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
     write(destination/'artifact-manifest.json',manifest)
     write(destination/'protocol.json',protocol);write(destination/'results.json',results)
     write(destination/'summary.json',summary)
     rows=['# Space Bunny Alpha: completion audit comparison','',
-          'Completed the frozen 48 trials: six synthetic Python cases, four harness arms, two repetitions.',
+          f"Completed {len(results)} frozen trials: {len(set(r['case'] for r in results))} synthetic Python cases, {len(set(r['arm'] for r in results))} harness arms, {len(set(r['repetition'] for r in results))} repetitions.",
           'This measures this model on this small suite; it does not establish universal harness superiority.','',
           '## Aggregate outcomes','',
-          '| Harness | Functional passes / graded | Strict passes / retained | Model requests | Reported tokens | Median agent seconds |',
+          '| Harness | Functional passes / graded | Recorded strict passes / retained | Admitted model requests | Reported tokens | Median agent seconds |',
           '| --- | ---: | ---: | ---: | ---: | ---: |']
     for arm in ARMS:
         a=summary['arms'][arm];r=[r for r in results if r['arm']==arm]
@@ -60,8 +67,8 @@ def publish(source,destination):
         sp='—' if a['strict_passes'] is None else str(a['strict_passes'])
         rows.append(f"| {LABELS[arm]} | {fp} / {a['graded']} | {sp} / {a['retained']} | {a['requests']} | {tokens} | {seconds} |")
     rows+=['','Functional grading examines the candidate using external behavioral assertions.',
-           'Strict success additionally requires clean exit, no timeout, and no unrelated files.',
-           'Pactrail strict success also requires source isolation, verified trace, successful apply,',
+           'Recorded strict success requires clean exit, no timeout, and the frozen cleanliness check.',
+           'Pactrail strict success also checks unchanged original production-file bytes, verified trace, successful apply,',
            'and matching production-file bytes after apply. These extra assurance conditions differ',
            'from the external harness checks; use functional outcomes for the common comparison.','',
            '## Paired audit comparison','',
@@ -80,6 +87,10 @@ def publish(source,destination):
         rows.append('| '+case+' | '+' | '.join(cells)+' |')
     rows+=['','## Limits and reproducibility','',
            '- Every scored trial is retained; no replacement samples or post-result parameter tuning.',
+           '- Frozen v1 cleanliness checks missed newly added empty files. Strict scores are as recorded, not a complete file-inventory audit; functional grading is unaffected. The runner is corrected for future experiments.',
+           '- The request count is admitted upstream attempts. Local requests rejected after the cap are not counted in this ledger.',
+           '- The frozen console progress label could show the last changed filename. Result identities and frozen order use JSON, which are unaffected.',
+           '- Reproduce this scored version from commit 09e4ba6. Original runner sources are archived under frozen-runner; the current runner may contain subsequent fixes.',
            '- Six synthetic cases are not independent real repository issues; repeated trials share cases.',
            '- Exact free model, temperature 0, low reasoning, 8,192 output tokens, 12 HTTP attempts, 300-second agent deadline.',
            '- Common input bound is serialized message bytes, not equal tokenizer context windows.',
@@ -95,4 +106,5 @@ def publish(source,destination):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('source',type=pathlib.Path);parser.add_argument('destination',type=pathlib.Path)
-    args=parser.parse_args();publish(args.source,args.destination)
+    parser.add_argument('--frozen-source-dir',type=pathlib.Path,help='Original frozen runner directory when the current runner has changed.')
+    args=parser.parse_args();publish(args.source,args.destination,args.frozen_source_dir)

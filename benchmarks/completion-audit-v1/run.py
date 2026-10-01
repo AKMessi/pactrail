@@ -32,6 +32,12 @@ def grade(path,case):
         return {'passed':False,'stdout':'','stderr':'External grader exceeded 15 seconds.'}
     return {'passed':result.returncode==0 and sentinel in result.stdout.splitlines(),
             'stdout':result.stdout.replace(sentinel,'GRADER_COMPLETED'),'stderr':result.stderr}
+def changed_paths(original, actual):
+    """Include additions/deletions even when the file contents are empty."""
+    return sorted(name for name in set(original)|set(actual)
+                  if name not in original or name not in actual
+                  or actual[name] != original[name].encode())
+
 def versions(args):
     result={}
     for name,path in [('baseline',args.baseline),('pactrail',args.pactrail),('opencode',args.opencode)]:
@@ -62,7 +68,7 @@ def freeze(args):
         for index,case in enumerate(CASES):
             shift=(index+repetition)%len(ARMS)
             for arm in ARMS[shift:]+ARMS[:shift]: order.append({'case':case['id'],'arm':arm,'repetition':repetition+1})
-    protocol={'schema_version':1,'frozen_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    protocol={'schema_version':2,'frozen_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
        'description':'Exploratory controlled completeness suite; not SWE-bench and not evidence of universal superiority.',
        'base_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
        'implementation_commit':args.implementation_commit,
@@ -72,7 +78,7 @@ def freeze(args):
        'files':{name:digest(ROOT/name) for name in ['cases.py','run.py','mini_runner.py','summarize.py','test_benchmark.py']},
        'versions':versions(args),'model':MODEL,'metadata':model_metadata,'metadata_provenance':metadata_provenance,
        'controls':{'temperature':0,'reasoning_effort':'low','max_output_tokens':8192,'max_requests':12,
-         'max_request_message_bytes':131072,'max_trial_seconds':300,'retries':'No trial retries or replacement samples; every HTTP attempt counts toward 12.',
+         'max_request_message_bytes':131072,'max_trial_seconds':300,'retries':'No trial retries or replacement samples; every admitted upstream attempt counts toward 12; local denials after the cap are not in the usage ledger.',
          'permissions':'Trusted local command execution for all; sanitized environments; no root API key in agent processes.',
          'cost':'Only the exact currently-free model; no paid fallback. Zero API dollars cannot establish monetary savings.',
          'grading':'External behavioral assertions, forbidden production-path changes, and clean harness exit; no grader feedback during trials.'},
@@ -193,7 +199,7 @@ def _trial(args,spec,case,metadata,key):
             original={**case['files'],'README.md':'# Controlled repository\nStandard-library Python modules. Run checks with python3.\n'}
             actual={str(p.relative_to(candidate)):p.read_bytes() for p in candidate.rglob('*')
                     if p.is_file() and not any(part in {'.git','.pactrail','__pycache__'} for part in p.relative_to(candidate).parts)}
-            changed=[name for name in set(original)|set(actual) if actual.get(name)!=original.get(name,'').encode()]
+            changed=changed_paths(original,actual)
             forbidden=sorted(name for name in changed if name not in case['files'])
             patch=[]
             for name in sorted(changed):
