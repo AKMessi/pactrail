@@ -1,0 +1,73 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "72a4ccf48a2d53123c5d76e446d43fc269642710337f331c09c59e666fdbf884",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import batches,scalar\\nassert scalar.clip(5,1,10)==5 and scalar.clip(0,1,10)==1 and scalar.clip(11,1,10)==10\\nassert scalar.clip(1,1,10)==1 and scalar.clip(10,1,10)==10\\ntry:\\n  scalar.clip(1,10,1); assert False\\nexcept ValueError: pass\\nsrc=[-1,0,5,10,20]\\nout=batches.clip_many(src,0,10)\\nassert out==[0,0,5,10,10] and src==[-1,0,5,10,20]\\nassert batches.clip_many([],5,1 if False else 5)==[]\\ntry:\\n  batches.clip_many([],5,1); assert False\\nexcept ValueError: pass\\nassert batches.clip_many((1,2,3),0,2)==[1,2,2]\\nprint('ok')\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6ee-0fb1-73f3-9c91-01e117be0e77"
+      },
+      "created_at": "2026-10-01T10:06:40.589801165Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6ee-31cd-7051-bdc2-92e5592069fa",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "d0db84f27dda6ebf5eecf5544e699d4deb2ae12164bc56709e299b6b53de803e",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-B\",\"-c\",\"import batches, scalar\\n# boundary\\nassert [scalar.clip(v,0,10) for v in (-1,0,5,10,11)]==[0,0,5,10,10]\\nassert scalar.clip(0,0,0)==0\\nfor f,a in ((scalar.clip,(1,5,1)),(batches.clip_many,([1],5,1)),(batches.clip_many,([],5,1))):\\n  try: f(*a); assert False\\n  except ValueError: pass\\ns=[-1,0,5,10,20]; r=batches.clip_many(s,0,10)\\nassert r==[0,0,5,10,10] and s==[-1,0,5,10,20] and r is not s\\nassert batches.clip_many((1,2,3),2,2)==[2,2,2]\\nassert isinstance(batches.clip_many((1,2),0,9),list)\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6ee-0fb1-73f3-9c91-01e117be0e77"
+      },
+      "created_at": "2026-10-01T10:06:53.14578358Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6ee-62d9-71a1-8e8a-a3cc46a0f069",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "ef658ac4f33eeb9cb51d09f1eaadbc2d0ae3dd466b6f230150df4f2d9af934e7",
+      "after_unix_mode": 33152,
+      "before_digest": "224c2ffa26155c16335bd96432f90a3be4f56cda1a6638adaed0f1cd7494561e",
+      "before_unix_mode": 33204,
+      "bytes_added": 204,
+      "bytes_removed": 80,
+      "path": "batches.py"
+    },
+    {
+      "after_digest": "ea00262de290f7c0ab80517fe1dd660a4a79f1656c58ccea1569069b36f9c66b",
+      "after_unix_mode": 33152,
+      "before_digest": "960376bf577e693550a9e456fc66e86e2d1f212a67e2075e1159ed81fff76704",
+      "before_unix_mode": 33204,
+      "bytes_added": 224,
+      "bytes_removed": 60,
+      "path": "scalar.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-oimdwtlp/workspace/.pactrail/runs/01a0f6ee-0fb1-73f3-9c91-01e117be0e77/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6ee-0fb1-73f3-9c91-01e117be0e77",
+  "summary": "Audit result: current source confirmed by direct read and workspace diff, no other call paths exist (repo-wide search for `clip` returns only these two files).\n\nObserved checks (one `python3 -B -c` run, exit 0, stdout `ok`):\n- Inclusive endpoints: `clip(v,0,10)` for `(-1,0,5,10,11)` → `[0,0,5,10,10]`; `clip(0,0,0)==0`; `clip_many([1,2,3],2,2)==[2,2,2]`.\n- Reversed bounds raise `ValueError` in `scalar.clip`, `batches.clip_many([1],5,1)`, and `batches.clip_many([],5,1)` (checked before iteration, so the empty batch still raises).\n- No mutation: source list `[-1,0,5,10,20]` unchanged after `clip_many`; result is a distinct new list.\n- Order/values preserved; tuple inputs accepted and a `list` is returned.\n\nObligation coverage: inclusive clipping, ValueError on reversed bounds (including empty batch), no input mutation, order/value preservation, APIs preserved, production files only, no new files (`-B` avoided `__pycache__`; earlier artifacts removed), no history/remote/network/dependency actions.\n\nUncovered / unverified: non-numeric and `NaN` bound or value behavior is unspecified and untested; no independent oracle exists in the repo (README states only stdlib, no test suite), so the checks above are my own assertions rather than an external test run.",
+  "tokens": 83630,
+  "trace": "/tmp/pactrail-scored-oimdwtlp/workspace/.pactrail/runs/01a0f6ee-0fb1-73f3-9c91-01e117be0e77/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

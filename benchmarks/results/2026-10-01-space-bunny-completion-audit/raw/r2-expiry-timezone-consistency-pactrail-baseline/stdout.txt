@@ -1,0 +1,75 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "4b31cc14a3a3b580643c9c3588558a47ba5188b086ba5fe4bcc8c4b615055e67",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_repro_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6fa-8a56-7eb3-b3f3-e9baa8b358bd"
+      },
+      "created_at": "2026-10-01T10:20:26.312211536Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6fa-cb48-7a41-b310-3bda2ee0cc1b",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "2ce9f88c271069258812575c739c3dba32cdc7f3622bf4e4875821c8f620a260",
+      "after_unix_mode": 33152,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 1173,
+      "bytes_removed": 0,
+      "path": "__pycache__/cache.cpython-314.pyc"
+    },
+    {
+      "after_digest": "97b4a1c07fb030db77cb5989e69bd49d1b8881548fe27c8a927d55463605626b",
+      "after_unix_mode": 33152,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 905,
+      "bytes_removed": 0,
+      "path": "__pycache__/clock.cpython-314.pyc"
+    },
+    {
+      "after_digest": "de6a8317d3f610a0e655651cbc1dc9242ef86574503d1bf2749795b3a03acb8b",
+      "after_unix_mode": 33152,
+      "before_digest": "a13470fc1d562dd18638a3d75ad8bf5a02be346547cf99bce3ace93177f705ec",
+      "before_unix_mode": 33204,
+      "bytes_added": 343,
+      "bytes_removed": 262,
+      "path": "cache.py"
+    },
+    {
+      "after_digest": "96351336f473b180a4b9b13b162b0a5a760259fdfdd9bbd1b41f77a297b19395",
+      "after_unix_mode": 33152,
+      "before_digest": "e8030dc4344bda73b1cbbd623313ad69b2b71a222b9fa2c0992af87c89dff795",
+      "before_unix_mode": 33204,
+      "bytes_added": 368,
+      "bytes_removed": 58,
+      "path": "clock.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-enowke9p/workspace/.pactrail/runs/01a0f6fa-8a56-7eb3-b3f3-e9baa8b358bd/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6fa-8a56-7eb3-b3f3-e9baa8b358bd",
+  "summary": "Done.\n\n- `clock.expired(expires_at, now)` now compares instants: naive datetimes treated as UTC, aware values compared as instants, and expiry is at `now >= expires_at`.\n- `cache.Cache.get` delegates to the shared `clock.expired`, deletes expired entries, and raises `KeyError`; live values and missing-key `KeyError` unchanged. No wall-clock reads.\n\nVerified with a temporary script covering boundary/naive/aware cases (exit 0); script removed. Unverified: non-datetime or naive-local-intent inputs (treated as UTC by design).",
+  "tokens": 40925,
+  "trace": "/tmp/pactrail-scored-enowke9p/workspace/.pactrail/runs/01a0f6fa-8a56-7eb3-b3f3-e9baa8b358bd/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "1eb6ed3b39918ddafa51496183f0c5337dc8921d702a63c894e8162894fad872",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import catalog,keys\\nc=catalog.Catalog()\\nc.put('Straße',1); print(c.get('STRASSE'), c.get('straße'))\\nc.put('STRASSE',2); print(c.get('straße'), len(c.values))\\nc.put('é',3); print(c.get('é'))\\nprint(c.remove('strasse'))\\nfor f in (c.get, c.remove):\\n    try: f('nope'); print('NO ERROR')\\n    except KeyError: print('KeyError ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f1-2450-77a0-a3d4-c16feb29bc74"
+      },
+      "created_at": "2026-10-01T10:10:00.431935973Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f1-3e6f-7813-a3b3-ac7f0ac4adf6",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "19cb3e5ef7efd18ea79c4220657f761ab11825dd1b76e6dc4b1af968e1fc0035",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-B\",\"-c\",\"import catalog\\nc=catalog.Catalog()\\nc.put('Straße',1); c.put('STRASSE',2)\\nprint(c.get('STRAßE'), len(c.values))\\nc.put('é',3); print(c.get('é'), c.remove('E\\\\u0301'), len(c.values))\\nfor f in (c.get,c.remove):\\n  try: f('zz'); print('FAIL')\\n  except KeyError: print('KeyError ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f1-2450-77a0-a3d4-c16feb29bc74"
+      },
+      "created_at": "2026-10-01T10:10:11.011503023Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f1-67c3-79d2-afa9-08fdee3b4e4a",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "bc2e9d3c046a066e240191aa1143a9354cddf5a67b4588daa30bcf72e53af680",
+      "after_unix_mode": 33152,
+      "before_digest": "3fd8060765f29706cb29fa14bd65bae648a8a45490c50905cfdf8cdf6526fb34",
+      "before_unix_mode": 33204,
+      "bytes_added": 311,
+      "bytes_removed": 269,
+      "path": "catalog.py"
+    },
+    {
+      "after_digest": "a3d8d5eeb5c79809482d48e457fe5d7195bbcb25d4e870ba600bc00fe168db25",
+      "after_unix_mode": 33152,
+      "before_digest": "cd8b84a6fed289e25ef9a56769917a7580bbf77a0c71b3f45e4ec9be660efaea",
+      "before_unix_mode": 33204,
+      "bytes_added": 96,
+      "bytes_removed": 43,
+      "path": "keys.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-cfk8m2or/workspace/.pactrail/runs/01a0f6f1-2450-77a0-a3d4-c16feb29bc74/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6f1-2450-77a0-a3d4-c16feb29bc74",
+  "summary": "Final state confirmed: `canonical` is used at all three catalog call sites, and no `lower(` usage remains anywhere in the workspace.\n\nObserved checks (from `run_process` results):\n- `python3 -B` functional script: `put('Straße',1)`+`put('STRASSE',2)` → `get('STRAßE')`=2 with 1 entry (casefold equivalence + replacement).\n- NFC: `get('e\\u0301')` returns the value stored under `'é'`; `remove('E\\u0301')` returns3 and deletes the entry.\n- Missing keys: `get('zz')` and `remove('zz')` both raise `KeyError`.\n- `search` confirms only `catalog.py` consumes `canonical`; no `.lower()` remnants.\n\nChanges (2 production files):\n- `keys.py`: `canonical` = `unicodedata.normalize(\"NFC\", key).casefold()`.\n- `catalog.py`: `put`/`get`/`remove` all key on `canonical(key)`; signatures unchanged.\n\nUncovered / unverified:\n- No repository test suite exists; no project test command was run. My checks are model-authored, not an independent oracle.\n- Non-`str` key inputs (e.g. `bytes`, `int`) are unsupported both before and after the change; contract not specified or tested.\n- No blocker.",
+  "tokens": 84268,
+  "trace": "/tmp/pactrail-scored-cfk8m2or/workspace/.pactrail/runs/01a0f6f1-2450-77a0-a3d4-c16feb29bc74/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

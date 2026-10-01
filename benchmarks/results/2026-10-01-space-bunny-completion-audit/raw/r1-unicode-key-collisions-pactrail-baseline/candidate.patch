@@ -1,0 +1,19 @@
+--- a/catalog.py
++++ b/catalog.py
+@@ -2,5 +2,5 @@
+ class Catalog:
+     def __init__(self): self.values = {}
+     def put(self, key, value): self.values[canonical(key)] = value
+-    def get(self, key): return self.values[key.lower()]
+-    def remove(self, key): return self.values.pop(key.lower())
++    def get(self, key): return self.values[canonical(key)]
++    def remove(self, key): return self.values.pop(canonical(key))
+--- a/keys.py
++++ b/keys.py
+@@ -1,2 +1,5 @@
++import unicodedata
++
++
+ def canonical(key):
+-    return key.lower()
++    return unicodedata.normalize("NFC", key).casefold()

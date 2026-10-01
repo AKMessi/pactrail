@@ -1,0 +1,105 @@
+--- a/_repro.py
++++ b/_repro.py
+@@ -0,0 +1,65 @@
++from datetime import datetime, timedelta, timezone
++from cache import Cache
++from clock import expired
++
++UTC = timezone.utc
++t0 = datetime(2024, 1, 1, tzinfo=UTC)
++naive = datetime(2024, 1, 1)
++
++assert expired(t0 - timedelta(seconds=1), t0) is True
++assert expired(t0, t0) is True
++assert expired(t0 + timedelta(seconds=1), t0) is False
++assert expired(t0 + timedelta(seconds=1), t0 + timedelta(seconds=1)) is True
++# naive == UTC
++assert expired(naive, naive) is True
++assert expired(naive + timedelta(hours=1), naive) is False
++assert expired(naive - timedelta(hours=1), naive) is True
++# aware vs naive mixed, compared as instants
++assert expired(t0, naive) is True
++assert expired(t0 + timedelta(hours=1), naive) is False
++assert expired(naive + timedelta(hours=1), t0) is False
++# non-UTC offsets
++tz5 = timezone(timedelta(hours=5))
++assert expired(t0, t0.astimezone(tz5)) is True
++assert expired(t0 + timedelta(hours=5), t0) is False
++# microsecond precision
++assert expired(t0, t0 + timedelta(microseconds=1)) is True
++assert expired(t0 + timedelta(microseconds=1), t0) is False
++
++c = Cache()
++c.put("live", 1, t0 + timedelta(seconds=30))
++c.put("dead", 2, t0)
++c.put("past", 3, t0 - timedelta(seconds=30))
++assert c.get("live", t0) == 1
++assert "live" in c.entries
++for k in ("dead", "past"):
++    try:
++        c.get(k, t0)
++    except KeyError as e:
++        assert e.args[0] == k
++    else:
++        raise AssertionError(f"expected KeyError for {k}")
++    assert k not in c.entries, f"{k} should be evicted"
++try:
++    c.get("missing", t0)
++except KeyError as e:
++    assert e.args[0] == "missing"
++else:
++    raise AssertionError("expected KeyError for missing")
++assert set(c.entries) == {"live"}
++
++# naive now against aware expiry
++c2 = Cache()
++c2.put("x", "v", t0)
++assert c2.get("x", naive) == "v"
++c3 = Cache()
++c3.put("x", "v", naive)
++try:
++    c3.get("x", t0 + timedelta(hours=1))
++except KeyError:
++    pass
++else:
++    raise AssertionError("expected KeyError")
++assert c3.entries == {}
++
++print("all checks passed")
+--- a/cache.py
++++ b/cache.py
+@@ -1,7 +1,12 @@
++from clock import expired
++
++
+ class Cache:
+     def __init__(self): self.entries={}
+     def put(self,key,value,expires_at): self.entries[key]=(value,expires_at)
+     def get(self,key,now):
+         value,expiry=self.entries[key]
+-        if now > expiry: raise KeyError(key)
++        if expired(expiry,now):
++            del self.entries[key]
++            raise KeyError(key)
+         return value
+--- a/clock.py
++++ b/clock.py
+@@ -1,2 +1,17 @@
++from datetime import timezone
++
++
++def _instant(moment):
++    """Return a naive UTC datetime for a naive-or-aware datetime."""
++    if moment.tzinfo is None:
++        return moment
++    return moment.astimezone(timezone.utc).replace(tzinfo=None)
++
++
+ def expired(expires_at, now):
+-    return now > expires_at
++    """True if an entry expiring at expires_at is expired as of now.
++
++    Naive datetimes are interpreted as UTC; aware datetimes are compared as
++    instants. An entry is expired once now >= expires_at.
++    """
++    return _instant(now) >= _instant(expires_at)

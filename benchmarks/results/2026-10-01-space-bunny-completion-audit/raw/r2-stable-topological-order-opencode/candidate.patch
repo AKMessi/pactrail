@@ -1,0 +1,105 @@
+--- a/build.py
++++ b/build.py
+@@ -1,3 +1,38 @@
++"""Build planning on top of :mod:`graph`."""
++
+ from graph import order
+-def plan(graph,requested):
+-    return [n for n in order(graph) if n in requested]
++
++
++def plan(graph, requested):
++    """Return the ordered transitive prerequisite closure of ``requested``.
++
++    The result contains every requested node plus all of their
++    prerequisites (recursively), in an order where prerequisites precede
++    dependents.  Raises ValueError for unknown requested nodes, unknown
++    prerequisites, or cycles.  ``graph`` and ``requested`` are not mutated.
++    """
++    if isinstance(requested, (str, bytes)):
++        raise TypeError("requested must be a collection of node names")
++
++    wanted = []
++    for node in requested:
++        if node not in graph:
++            raise ValueError("unknown requested node %r" % (node,))
++        if node not in wanted:
++            wanted.append(node)
++
++    needed = set(wanted)
++    stack = list(wanted)
++    while stack:
++        node = stack.pop()
++        for dep in graph[node]:
++            if dep not in graph:
++                raise ValueError(
++                    "unknown prerequisite %r for node %r" % (dep, node)
++                )
++            if dep not in needed:
++                needed.add(dep)
++                stack.append(dep)
++
++    ordering = order({node: graph[node] for node in needed})
++    return [node for node in ordering if node in needed]--- a/graph.py
++++ b/graph.py
+@@ -1,2 +1,59 @@
++"""Topological ordering of a prerequisite graph.
++
++A graph is a mapping from node name to an iterable of prerequisite node
++names.  ``order`` returns a build order in which every declared node
++appears exactly once and each node's prerequisites come before it.
++"""
++
++
+ def order(graph):
+-    return sorted(graph)
++    """Return the topological order of ``graph``.
++
++    Ties are broken by choosing the lexicographically smallest node that is
++    currently ready, which makes the result deterministic.
++
++    Raises ValueError if a prerequisite is not a declared node, or if the
++    graph contains a cycle.  ``graph`` and its prerequisite iterables are
++    never mutated.
++    """
++    prereqs = {}
++    for node, required in graph.items():
++        deps = []
++        for dep in required:
++            if dep not in graph:
++                raise ValueError(
++                    "unknown prerequisite %r for node %r" % (dep, node)
++                )
++            if dep not in deps:
++                deps.append(dep)
++        prereqs[node] = deps
++
++    # Count only prerequisites that are themselves reachable work items.
++    remaining = {}
++    dependents = {node: [] for node in prereqs}
++    for node, deps in prereqs.items():
++        pending = 0
++        for dep in deps:
++            if dep == node:
++                pending += 1
++                continue
++            dependents[dep].append(node)
++            pending += 1
++        remaining[node] = pending
++
++    ready = sorted(node for node, count in remaining.items() if count == 0)
++    result = []
++    while ready:
++        node = ready.pop(0)
++        result.append(node)
++        for child in dependents[node]:
++            remaining[child] -= 1
++            if remaining[child] == 0:
++                ready.append(child)
++                ready.sort()
++
++    if len(result) != len(prereqs):
++        stuck = sorted(set(prereqs) - set(result))
++        raise ValueError("cycle detected involving: %s" % ", ".join(map(repr, stuck)))
++
++    return result

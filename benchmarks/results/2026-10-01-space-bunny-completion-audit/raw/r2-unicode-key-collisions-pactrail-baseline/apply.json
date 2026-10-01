@@ -1,0 +1,130 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0f6f0-f7f0-7312-aba1-cff57014e9ac",
+  "created_at": "2026-10-01T10:09:53.483891963Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix case-insensitive key handling across keys.canonical and catalog.Catalog. Canonical keys must use Unicode NFC normalization and casefold, not lower. put replaces the value for equivalent keys; get and remove accept any equivalent spelling. Missing keys must still raise KeyError. Preserve the public method signatures. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+    "workspace_root": "/tmp/pactrail-scored-2cesbs8a/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0f6f0-f7e0-7e02-ad97-b10d8b6b5a9a",
+        "description": "Fix case-insensitive key handling across keys.canonical and catalog.Catalog. Canonical keys must use Unicode NFC normalization and casefold, not lower. put replaces the value for equivalent keys; get and remove accept any equivalent spelling. Missing keys must still raise KeyError. Preserve the public method signatures. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 491520,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 12
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "0a470aaaba8a902d1c1c555f6117ecdc70fd5cb5471200891301eb43cc0a8038",
+  "final_event_hash": "d621fefe4c9ba1c9d249d1f6c8a21d76c5c5ec97a05a7911f82eb0daec815d5f",
+  "changes": [
+    {
+      "path": "__pycache__/catalog.cpython-314.pyc",
+      "before_digest": null,
+      "after_digest": "9ad29517ce100255a8257a49e3c8f70aa5ea2a75152038e7039ead4a23363637",
+      "before_unix_mode": null,
+      "after_unix_mode": 33152,
+      "bytes_added": 1269,
+      "bytes_removed": 0
+    },
+    {
+      "path": "__pycache__/keys.cpython-314.pyc",
+      "before_digest": null,
+      "after_digest": "6da9833e920b94c50456896f52f2d39d49151f9f90a86bfd1a468fb1227a091f",
+      "before_unix_mode": null,
+      "after_unix_mode": 33152,
+      "bytes_added": 645,
+      "bytes_removed": 0
+    },
+    {
+      "path": "catalog.py",
+      "before_digest": "3fd8060765f29706cb29fa14bd65bae648a8a45490c50905cfdf8cdf6526fb34",
+      "after_digest": "bc2e9d3c046a066e240191aa1143a9354cddf5a67b4588daa30bcf72e53af680",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 311,
+      "bytes_removed": 269
+    },
+    {
+      "path": "keys.py",
+      "before_digest": "cd8b84a6fed289e25ef9a56769917a7580bbf77a0c71b3f45e4ec9be660efaea",
+      "after_digest": "9f4678fbf55252c469d24ef22cdf1f9355ccf5593fa2bb625a5f1aef90dc6442",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 295,
+      "bytes_removed": 43
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0f6f1-2276-7e32-b68a-2cb23669b80d",
+      "obligation_id": "01a0f6f0-f7e0-7e02-ad97-b10d8b6b5a9a",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix case-insensitive key handling across keys.canonical and catalog.Catalog. Canonical keys must use Unicode NFC normalization and casefold, not lower. put replaces the value for equivalent keys; get and remove accept any equivalent spelling. Missing keys must still raise KeyError. Preserve the public method signatures. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0f6f1-1755-7350-b4e6-c4bb3f90433a",
+      "binding": {
+        "run_id": "01a0f6f0-f7f0-7312-aba1-cff57014e9ac",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from keys import canonical\\nfrom catalog import Catalog\\nc=Catalog()\\nc.put('Straße','a'); c.put('STRASSE','b')\\nassert c.get('strasse')=='b' and c.get('Straße')=='b' and c.get('STRASSE')=='b'\\nc.put('Ångström',1); c.put('ÅNGSTRÖM',2)\\nassert c.get('ångström')==2\\nassert c.remove('Ångström')==2\\nfor f in (lambda: c.get('nope'), lambda: c.remove('nope')):\\n    try: f(); raise SystemExit('missing KeyError')\\n    except KeyError: pass\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "c17c6df48203d1cb429b152768fd5597f6ce46b67914ee1263f8999dbad7bf94",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:09:50.421204891Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "ee16d8d167ef93e3e78df7dc3b6bfbb7beaece3aaf3d160c964c5972877e006a"
+}

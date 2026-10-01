@@ -1,0 +1,21 @@
+--- a/invoices.py
++++ b/invoices.py
+@@ -1,2 +1,5 @@
++from money import cents
++
++
+ def total_cents(amounts):
+-    return round(sum(float(a) for a in amounts) * 100)
++    return sum(cents(a) for a in amounts)
+--- a/money.py
++++ b/money.py
+@@ -1,2 +1,8 @@
++from decimal import Decimal, ROUND_HALF_UP
++
++_CENT = Decimal("1")
++_HUNDRED = Decimal("100")
++
++
+ def cents(amount):
+-    return round(float(amount) * 100)
++    return int((Decimal(str(amount)) * _HUNDRED).quantize(_CENT, rounding=ROUND_HALF_UP))

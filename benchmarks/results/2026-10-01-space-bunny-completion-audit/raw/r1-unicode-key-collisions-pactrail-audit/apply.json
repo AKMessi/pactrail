@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0f6e1-2355-7a03-acf0-00d368bc8884",
+  "created_at": "2026-10-01T09:52:59.366922002Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix case-insensitive key handling across keys.canonical and catalog.Catalog. Canonical keys must use Unicode NFC normalization and casefold, not lower. put replaces the value for equivalent keys; get and remove accept any equivalent spelling. Missing keys must still raise KeyError. Preserve the public method signatures. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+    "workspace_root": "/tmp/pactrail-scored-9_zixaoc/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0f6e1-2332-74d0-966f-2575f6819b8d",
+        "description": "Fix case-insensitive key handling across keys.canonical and catalog.Catalog. Canonical keys must use Unicode NFC normalization and casefold, not lower. put replaces the value for equivalent keys; get and remove accept any equivalent spelling. Missing keys must still raise KeyError. Preserve the public method signatures. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 491520,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 12
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "0a470aaaba8a902d1c1c555f6117ecdc70fd5cb5471200891301eb43cc0a8038",
+  "final_event_hash": "87eb6a08ca9caae87ec66c031f7e25f7e142fc497e1c7b7c4f63b63f1fb19ef9",
+  "changes": [
+    {
+      "path": "catalog.py",
+      "before_digest": "3fd8060765f29706cb29fa14bd65bae648a8a45490c50905cfdf8cdf6526fb34",
+      "after_digest": "dc1d53cd3c565b1048d0a774617c2e51eb85eec03702090053dca3893738fa50",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33188,
+      "bytes_added": 312,
+      "bytes_removed": 269
+    },
+    {
+      "path": "keys.py",
+      "before_digest": "cd8b84a6fed289e25ef9a56769917a7580bbf77a0c71b3f45e4ec9be660efaea",
+      "after_digest": "eaa2dfa94aab567479b59155a6838acdcdefedf8109921487d0a78602aa04cba",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33188,
+      "bytes_added": 174,
+      "bytes_removed": 43
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0f6e1-a7bf-7a02-869f-9b433e16aacf",
+      "obligation_id": "01a0f6e1-2332-74d0-966f-2575f6819b8d",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix case-insensitive key handling across keys.canonical and catalog.Catalog. Canonical keys must use Unicode NFC normalization and casefold, not lower. put replaces the value for equivalent keys; get and remove accept any equivalent spelling. Missing keys must still raise KeyError. Preserve the public method signatures. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0f6e1-49a1-7731-bbe0-fd73b8070b9e",
+      "binding": {
+        "run_id": "01a0f6e1-2355-7a03-acf0-00d368bc8884",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"import catalog,keys\\nc=catalog.Catalog()\\nc.put('Stra\\\\u00dfe','a'); assert c.get('STRASSE')=='a' and c.get('strasse')=='a'\\nc.put('STRASSE','b'); assert c.get('Stra\\\\u00dfe')=='b' and len(c.values)==1\\nc.put('caf\\\\u00e9','x'); assert c.get('CAF\\\\u00c9'.lower())=='x' or c.get('CAF\\\\u00c9')=='x'\\nassert c.get('cafe\\\\u0301')=='x'\\nc.remove('Cafe\\\\u0301')\\nfor f in (c.get,c.remove):\\n    try: f('nope'); raise SystemExit('no KeyError')\\n    except KeyError: pass\\nprint('ok', keys.canonical('Stra\\\\u00dfe'))\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "357c1f397146ffdded83c066048f676f216fa0a9cd7d04f56c1d5c08de6ab68d",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T09:52:34.721563744Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6e1-8545-7ce2-8877-7dffdbbba4f2",
+      "binding": {
+        "run_id": "01a0f6e1-2355-7a03-acf0-00d368bc8884",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-B\",\"-c\",\"import catalog, keys\\nc = catalog.Catalog()\\nc.put('Stra\\\\u00dfe', 'a')\\nassert c.get('STRASSE') == 'a' and c.get('strasse') == 'a'\\nc.put('STRASSE', 'b')\\nassert c.get('Stra\\\\u00dfe') == 'b' and len(c.values) == 1\\nc.put('cafe\\\\u0301', 'x')\\nassert c.get('CAF\\\\u00c9') == 'x' and c.get('caf\\\\u00e9') == 'x'\\nassert c.remove('CAFE\\\\u0301') == 'x' and len(c.values) == 1\\nfor fn in (c.get, c.remove):\\n    try:\\n        fn('nope'); raise SystemExit('missing KeyError')\\n    except KeyError: pass\\nassert keys.canonical('\\\\u00df') == 'ss' and keys.canonical('CAF\\\\u00c9') == 'caf\\\\u00e9'\\ntry: keys.canonical(None); raise SystemExit('type err')\\nexcept TypeError: pass\\nprint('OK')\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "52d25e2c1c8b0f152dec7d8506f44260984ea22deb7eb83848f2efa488e45981",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T09:52:49.989113874Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6e1-961b-7153-afd5-06a8d0725c5d",
+      "binding": {
+        "run_id": "01a0f6e1-2355-7a03-acf0-00d368bc8884",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"import os;[os.chmod(p,0o644) for p in ('keys.py','catalog.py')];print([oct(os.stat(p).st_mode) for p in ('keys.py','catalog.py')])\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "2ecc939cca26d31862f852e230ea81fce74d68a15b0018e7dacd5394f624f907",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T09:52:54.299208649Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "Completion audit could not review the final candidate revision within the bounded audit/turn allowance; completeness remains unverified."
+  ],
+  "metadata": {},
+  "integrity_hash": "e5bae9806093545858f651237aa5ab6cfba7537dc61508b7c6dba9646818f03b"
+}

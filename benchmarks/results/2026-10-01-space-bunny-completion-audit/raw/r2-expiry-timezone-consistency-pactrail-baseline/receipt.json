@@ -1,0 +1,130 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0f6fa-8a56-7eb3-b3f3-e9baa8b358bd",
+  "created_at": "2026-10-01T10:20:32.228669014Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix clock.expired and cache.Cache. Naive datetime values mean UTC; aware values must compare as instants. Entries expire at now>=expires_at, not just after. put accepts a value and absolute expiry; get(key,now) must use the shared expiry semantics, delete expired entries and raise KeyError; live and missing entries keep their usual behavior. Do not read the wall clock implicitly. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+    "workspace_root": "/tmp/pactrail-scored-enowke9p/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0f6fa-8a42-7ea0-86f5-4516ce9b62c5",
+        "description": "Fix clock.expired and cache.Cache. Naive datetime values mean UTC; aware values must compare as instants. Entries expire at now>=expires_at, not just after. put accepts a value and absolute expiry; get(key,now) must use the shared expiry semantics, delete expired entries and raise KeyError; live and missing entries keep their usual behavior. Do not read the wall clock implicitly. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 491520,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 12
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "ready_to_apply",
+  "baseline_digest": "c01fbefeda82f4d7eb486cc13962c0eae3afb4d653e3a2ade61057be3aab248b",
+  "final_event_hash": "7b7da0284cd84fc42143c25a28764e5f4e9681733d4ff726c25566a77edf8490",
+  "changes": [
+    {
+      "path": "__pycache__/cache.cpython-314.pyc",
+      "before_digest": null,
+      "after_digest": "2ce9f88c271069258812575c739c3dba32cdc7f3622bf4e4875821c8f620a260",
+      "before_unix_mode": null,
+      "after_unix_mode": 33152,
+      "bytes_added": 1173,
+      "bytes_removed": 0
+    },
+    {
+      "path": "__pycache__/clock.cpython-314.pyc",
+      "before_digest": null,
+      "after_digest": "97b4a1c07fb030db77cb5989e69bd49d1b8881548fe27c8a927d55463605626b",
+      "before_unix_mode": null,
+      "after_unix_mode": 33152,
+      "bytes_added": 905,
+      "bytes_removed": 0
+    },
+    {
+      "path": "cache.py",
+      "before_digest": "a13470fc1d562dd18638a3d75ad8bf5a02be346547cf99bce3ace93177f705ec",
+      "after_digest": "de6a8317d3f610a0e655651cbc1dc9242ef86574503d1bf2749795b3a03acb8b",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 343,
+      "bytes_removed": 262
+    },
+    {
+      "path": "clock.py",
+      "before_digest": "e8030dc4344bda73b1cbbd623313ad69b2b71a222b9fa2c0992af87c89dff795",
+      "after_digest": "96351336f473b180a4b9b13b162b0a5a760259fdfdd9bbd1b41f77a297b19395",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 368,
+      "bytes_removed": 58
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0f6fa-e264-7021-a4aa-282d9d629d58",
+      "obligation_id": "01a0f6fa-8a42-7ea0-86f5-4516ce9b62c5",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix clock.expired and cache.Cache. Naive datetime values mean UTC; aware values must compare as instants. Entries expire at now>=expires_at, not just after. put accepts a value and absolute expiry; get(key,now) must use the shared expiry semantics, delete expired entries and raise KeyError; live and missing entries keep their usual behavior. Do not read the wall clock implicitly. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0f6fa-cb48-7a41-b310-3bda2ee0cc1b",
+      "binding": {
+        "run_id": "01a0f6fa-8a56-7eb3-b3f3-e9baa8b358bd",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"_repro_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "4b31cc14a3a3b580643c9c3588558a47ba5188b086ba5fe4bcc8c4b615055e67",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:20:26.312211536Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "acbe2516c02f0808a3c506ea65b197a55af729175dd556f39b0165c2b21fe9a9"
+}

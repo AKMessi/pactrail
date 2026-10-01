@@ -1,0 +1,74 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "0369463e84b5950876e47422dbeaebd427ccf145f1a94b35d14e347cabe1b578",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_check_tmp.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f3-f19c-7a22-b329-2f6058af541f"
+      },
+      "created_at": "2026-10-01T10:13:06.279659609Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f4-1467-7323-86b9-ba33f0611dc2",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "cd586ce72e4a934dbbada49b1b5c17c34d5f63ff89a51ff223bbe566db82b7e6",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-B\",\"-c\",\"from pages import page\\nfrom api import collect\\nimport copy\\nassert page((1,2,3),0,2)==([1,2],2)\\nassert page([1,2,3],2,2)==([3],None)\\nassert page([],0,5)==([],None)\\nassert page([1,2,3],3,5)==([],None)\\nassert page([1,2,3],1,1)==([2],2)\\nfor args in [([1,2],0,0),([1,2],0,-1),([1,2],-1,1),([1,2],3,1),([],1,1)]:\\n    try:\\n        page(*args); raise SystemExit('no raise %r'%(args,))\\n    except ValueError: pass\\nfor n in range(0,12):\\n    for s in range(1,7):\\n        it=list(range(n)); snap=copy.deepcopy(it)\\n        assert collect(it,s)==snap==it\\n        assert it==snap\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f3-f19c-7a22-b329-2f6058af541f"
+      },
+      "created_at": "2026-10-01T10:13:27.110516453Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f4-65c6-7fd1-96ab-1b761a04047b",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "a7fa1e58575712cab2039bc8559f4d6f352046782327b76eeb4ee4fe8708c13c",
+      "after_unix_mode": 33152,
+      "before_digest": "e3c503875769dcef332325a6160be18389e9af1ff75857e95f3cd084ebc3d2ea",
+      "before_unix_mode": 33204,
+      "bytes_added": 272,
+      "bytes_removed": 193,
+      "path": "api.py"
+    },
+    {
+      "after_digest": "71b661a7baaaffabe320e69a5e308f158d3e8093a01224cafb03d21c9c1f9289",
+      "after_unix_mode": 33152,
+      "before_digest": "bcf35902bf1148bc23e15225fb0757d21f078218bbcb3349a532b06ae0bf7224",
+      "before_unix_mode": 33204,
+      "bytes_added": 551,
+      "bytes_removed": 126,
+      "path": "pages.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-1r3ci9ac/workspace/.pactrail/runs/01a0f6f3-f19c-7a22-b329-2f6058af541f/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "model reached the 12-turn limit after producing candidate changes; the model did not attest completeness, so the candidate requires explicit human review"
+  ],
+  "run_id": "01a0f6f3-f19c-7a22-b329-2f6058af541f",
+  "summary": "The model reached the 12-turn limit without a final summary. Candidate changes were preserved for deterministic verification and explicit review.",
+  "tokens": 95280,
+  "trace": "/tmp/pactrail-scored-1r3ci9ac/workspace/.pactrail/runs/01a0f6f3-f19c-7a22-b329-2f6058af541f/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

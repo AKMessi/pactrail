@@ -1,0 +1,40 @@
+--- a/catalog.py
++++ b/catalog.py
+@@ -1,6 +1,15 @@
+ from keys import canonical
++
++
+ class Catalog:
+-    def __init__(self): self.values = {}
+-    def put(self, key, value): self.values[canonical(key)] = value
+-    def get(self, key): return self.values[key.lower()]
+-    def remove(self, key): return self.values.pop(key.lower())
++    def __init__(self):
++        self.values = {}
++
++    def put(self, key, value):
++        self.values[canonical(key)] = value
++
++    def get(self, key):
++        return self.values[canonical(key)]
++
++    def remove(self, key):
++        return self.values.pop(canonical(key))
+--- a/keys.py
++++ b/keys.py
+@@ -1,2 +1,14 @@
++import unicodedata
++
++
+ def canonical(key):
+-    return key.lower()
++    """Return the canonical form of ``key``.
++
++    The canonical form is the Unicode NFC normalization of the key
++    followed by ``str.casefold()``, so that keys differing only by
++    Unicode composition or by case (including casefold expansions such
++    as ``ß`` -> ``ss``) map to the same canonical key.
++    """
++    if not isinstance(key, str):
++        raise TypeError("key must be str, got %r" % type(key).__name__)
++    return unicodedata.normalize("NFC", key).casefold()

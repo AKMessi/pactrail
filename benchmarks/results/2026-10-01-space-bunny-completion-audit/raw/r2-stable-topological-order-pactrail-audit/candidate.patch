@@ -1,0 +1,66 @@
+--- a/build.py
++++ b/build.py
+@@ -1,3 +1,23 @@
+ from graph import order
+-def plan(graph,requested):
+-    return [n for n in order(graph) if n in requested]
++
++
++def plan(graph, requested):
++    """Return the ordered transitive prerequisite closure of requested nodes."""
++    needed = set()
++    stack = []
++    for node in requested:
++        if node not in graph:
++            raise ValueError("unknown requested node %r" % (node,))
++        stack.append(node)
++    while stack:
++        node = stack.pop()
++        if node in needed:
++            continue
++        needed.add(node)
++        for prereq in graph[node]:
++            if prereq not in graph:
++                raise ValueError(
++                    "unknown prerequisite %r for node %r" % (prereq, node)
++                )
++            stack.append(prereq)
++    return [node for node in order(graph) if node in needed]--- a/graph.py
++++ b/graph.py
+@@ -1,2 +1,35 @@
+ def order(graph):
+-    return sorted(graph)
++    """Return every declared node exactly once, prerequisites first.
++
++    Each step picks the lexicographically smallest currently-ready node so
++    the result is deterministic. Unknown prerequisites and cycles raise
++    ValueError. The input graph is never mutated.
++    """
++    remaining = {node: list(prereqs) for node, prereqs in graph.items()}
++    pending = {node: len(set(prereqs)) for node, prereqs in remaining.items()}
++    dependents = {node: set() for node in remaining}
++    for node, prereqs in remaining.items():
++        for prereq in set(prereqs):
++            if prereq not in remaining:
++                raise ValueError(
++                    "unknown prerequisite %r for node %r" % (prereq, node)
++                )
++            dependents[prereq].add(node)
++
++    ready = sorted(node for node in pending if pending[node] == 0)
++    result = []
++    while ready:
++        node = ready.pop(0)
++        result.append(node)
++        del remaining[node]
++        for dependent in dependents.pop(node, ()):
++            pending[dependent] -= 1
++            if pending[dependent] == 0:
++                ready.append(dependent)
++                ready.sort()
++
++    if remaining:
++        raise ValueError(
++            "cycle detected involving: %s" % ", ".join(sorted(remaining))
++        )
++    return result

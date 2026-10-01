@@ -1,0 +1,124 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "39ef69662dbcc93f4ef6fa36c0247d418dd6da55783424589091bba98353b402",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"from money import cents\\nfrom invoices import total_cents\\nassert cents(0.005)==1\\nassert cents(1.005)==100\\nassert cents(-0.005)==0\\nassert cents(2.675)==268\\nassert cents(-1.005)==-100\\nassert cents(10)==1000\\nassert total_cents([])==0\\nassert total_cents([0.005,0.005,-0.005])==1\\nassert isinstance(cents(1.0),int) and isinstance(total_cents([1.0]),int)\\nprint('ok', total_cents([1.005,2.675,-1.005]))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976"
+      },
+      "created_at": "2026-10-01T10:11:21.783771945Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f2-7c37-7882-92ab-2574fb123265",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "d209f55ac396e814665d7df82f2b40c8a9a4b5a6e3e63b1f78da855200f62d18",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"from money import cents\\nfrom invoices import total_cents\\nassert cents(0.005)==1\\nassert cents(1.005)==101\\nassert cents(-0.005)==0\\nassert cents(2.675)==268\\nassert cents(-1.005)==-101\\nassert cents(10)==1000\\nassert total_cents([])==0\\nassert total_cents([0.005,0.005,-0.005])==1\\nassert isinstance(cents(1.0),int) and isinstance(total_cents([1.0]),int)\\nprint('ok', total_cents([1.005,2.675,-1.005]))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976"
+      },
+      "created_at": "2026-10-01T10:11:24.205282235Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f2-85ad-7e32-a211-a4c0e33bebd6",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "f7982daab9c3d54c86a06a2e6da745137eea41ce5e617e3a85978be6730f8527",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"from money import cents\\nfrom invoices import total_cents\\nassert cents(0.005)==1 and cents(1.005)==101 and cents(-1.005)==-101\\nassert cents(2.675)==268 and cents(10)==1000 and cents(0)==0\\nassert total_cents([])==0\\nassert total_cents([0.005,0.005,-0.005])==1\\nassert isinstance(cents(1.0),int) and isinstance(total_cents([1.0]),int)\\nassert total_cents([0.004,0.004])==0\\nprint('ok', total_cents([1.005,2.675,-1.005]))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976"
+      },
+      "created_at": "2026-10-01T10:11:26.771168589Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f2-8fb3-7d02-bec0-e3e76d2a0707",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "b76e46bc5535341ab2d0619daf48c99b3a7df80bde775ac0de3f1ec2a04fffab",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"from money import cents\\nfrom invoices import total_cents\\nassert cents(0.005)==1 and cents(1.005)==101 and cents(-1.005)==-101\\nassert cents(2.675)==268 and cents(10)==1000 and cents(0)==0\\nassert cents('1.005')==101 and cents(2)==200\\nassert total_cents([])==0\\nassert total_cents([0.005,0.005,-0.005])==1\\nassert total_cents([0.004,0.004])==0\\nassert isinstance(cents(1.0),int) and isinstance(total_cents([1.0]),int)\\nprint('ok', total_cents([1.005,2.675,-1.005]))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976"
+      },
+      "created_at": "2026-10-01T10:11:35.438712701Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f2-b18e-7241-99f6-b8f9e0119a45",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "a34b31e5321ab870a344c30bbf74db0b1a22fb77b6c6ad67bb5aada06ac7aa02",
+      "after_unix_mode": 33152,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 689,
+      "bytes_removed": 0,
+      "path": "__pycache__/invoices.cpython-314.pyc"
+    },
+    {
+      "after_digest": "0fe68657e8192710dc366bdb52e028480eb86c040350f147b4c9eed5986911c5",
+      "after_unix_mode": 33152,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 703,
+      "bytes_removed": 0,
+      "path": "__pycache__/money.cpython-314.pyc"
+    },
+    {
+      "after_digest": "ea571233d9de8418bfb1c2d9aaf4054f8793974edecc40fc63107826a817f705",
+      "after_unix_mode": 33152,
+      "before_digest": "1951d3556f59caf17492e4f2ea1eff2ecce8647c2a6a99abd3dde53dbed22913",
+      "before_unix_mode": 33204,
+      "bytes_added": 185,
+      "bytes_removed": 81,
+      "path": "invoices.py"
+    },
+    {
+      "after_digest": "7b031a494a52ad5d7ef350b141a82ec4f0bd34fc255af35759a99a086b1e7d3c",
+      "after_unix_mode": 33152,
+      "before_digest": "5de7e22d69f1733187c096bd3f323909de0ff3e88e0fd8a6973b21bdc78d15da",
+      "before_unix_mode": 33204,
+      "bytes_added": 245,
+      "bytes_removed": 57,
+      "path": "money.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-11k15nfm/workspace/.pactrail/runs/01a0f6f2-561f-7131-971b-d1bf5b35a976/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "model reached the 12-turn limit after producing candidate changes; the model did not attest completeness, so the candidate requires explicit human review"
+  ],
+  "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976",
+  "summary": "The model reached the 12-turn limit without a final summary. Candidate changes were preserved for deterministic verification and explicit review.",
+  "tokens": 89800,
+  "trace": "/tmp/pactrail-scored-11k15nfm/workspace/.pactrail/runs/01a0f6f2-561f-7131-971b-d1bf5b35a976/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

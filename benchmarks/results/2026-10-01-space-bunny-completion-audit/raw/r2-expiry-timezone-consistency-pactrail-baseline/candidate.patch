@@ -1,0 +1,32 @@
+--- a/cache.py
++++ b/cache.py
+@@ -1,7 +1,12 @@
++from clock import expired
++
++
+ class Cache:
+     def __init__(self): self.entries={}
+     def put(self,key,value,expires_at): self.entries[key]=(value,expires_at)
+     def get(self,key,now):
+         value,expiry=self.entries[key]
+-        if now > expiry: raise KeyError(key)
+-        return value
++        if expired(expiry, now):
++            del self.entries[key]
++            raise KeyError(key)
++        return value--- a/clock.py
++++ b/clock.py
+@@ -1,2 +1,12 @@
++from datetime import timezone
++
++
++def _as_instant(value):
++    """Return a POSIX timestamp; naive datetimes are interpreted as UTC."""
++    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
++        value = value.replace(tzinfo=timezone.utc)
++    return value.timestamp()
++
++
+ def expired(expires_at, now):
+-    return now > expires_at
++    return _as_instant(now) >= _as_instant(expires_at)

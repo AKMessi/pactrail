@@ -60,10 +60,22 @@ and execution. Interrupted trials are retained without replacement; rerunning
 continues only not-yet-started trials. Unexpected exceptions are retained as
 orchestration failures, not functional passes. Raw artifacts accompany each trial.
 
-## Execution status
+## Completed pilot and reproduction
 
-See `preregistered/protocol.json` and the final experiment report. The original
-managed session blocked execution before any scored request; full access was
-subsequently enabled and the frozen run resumed. Historical mock transport checks
-are excluded from scored results. Do not promote the audit policy from opt-in
-without reviewing the complete comparison and its limitations.
+The frozen v1 comparison finished all 48 trials. See
+[results and rollout decision](../results/2026-10-01-space-bunny-completion-audit/README.md).
+Audits did not improve functional outcomes here and used 70.5% more reported
+tokens than baseline. The engine policy stays opt-in.
+
+The scored runner is commit `09e4ba6`; exact frozen source copies accompany the
+results. The current runner fixes empty-file detection and console labels and
+freezes schema version 2. **Use a fresh experiment directory for new runs.**
+Do not run the modified runner against the completed v1 protocol. Reproducing
+v1 requires its original source version and pinned executables. API model
+behavior may change even with the same public model identifier.
+
+V1 strict scores are preserved as recorded: its cleanliness detector missed
+newly added empty files. Functional grading is unaffected. Source-isolation
+measurements checked the original production-file bytes, not a full inventory
+of unrelated original workspace paths. Request counts represent admitted
+upstream attempts, excluding local rejections after the cap.

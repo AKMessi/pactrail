@@ -1,0 +1,16 @@
+--- a/batches.py
++++ b/batches.py
+@@ -1,2 +1,4 @@
+ def clip_many(values, lower, upper):
+-    return [max(v, lower) for v in values]
++    if lower > upper:
++        raise ValueError("lower must not be greater than upper")
++    return [min(max(v, lower), upper) for v in values]
+--- a/scalar.py
++++ b/scalar.py
+@@ -1,2 +1,4 @@
+ def clip(value, lower, upper):
+-    return min(value, upper)
++    if lower > upper:
++        raise ValueError("lower must not be greater than upper")
++    return min(max(value, lower), upper)

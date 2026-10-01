@@ -1,0 +1,179 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976",
+  "created_at": "2026-10-01T10:11:37.232100149Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix money.cents and invoices.total_cents. Convert input values using Decimal(str(value)); round each line independently to integral cents with ROUND_HALF_UP, including negative ties, then sum. Do not round only the invoice total. Preserve empty total 0 and the integer return types. No binary floating-point intermediate should determine rounding. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+    "workspace_root": "/tmp/pactrail-scored-11k15nfm/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0f6f2-560b-7551-92c3-831e13250e4f",
+        "description": "Fix money.cents and invoices.total_cents. Convert input values using Decimal(str(value)); round each line independently to integral cents with ROUND_HALF_UP, including negative ties, then sum. Do not round only the invoice total. Preserve empty total 0 and the integer return types. No binary floating-point intermediate should determine rounding. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 491520,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 12
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "ready_to_apply",
+  "baseline_digest": "e26e4e4b217e2211ed563694830306a6a9646ec9688bf4cfe52241b45897aa87",
+  "final_event_hash": "502d65a73f6a97c5c8802ad9040990af8f735f80a1beedb22b5665d5e3a32cc6",
+  "changes": [
+    {
+      "path": "__pycache__/invoices.cpython-314.pyc",
+      "before_digest": null,
+      "after_digest": "a34b31e5321ab870a344c30bbf74db0b1a22fb77b6c6ad67bb5aada06ac7aa02",
+      "before_unix_mode": null,
+      "after_unix_mode": 33152,
+      "bytes_added": 689,
+      "bytes_removed": 0
+    },
+    {
+      "path": "__pycache__/money.cpython-314.pyc",
+      "before_digest": null,
+      "after_digest": "0fe68657e8192710dc366bdb52e028480eb86c040350f147b4c9eed5986911c5",
+      "before_unix_mode": null,
+      "after_unix_mode": 33152,
+      "bytes_added": 703,
+      "bytes_removed": 0
+    },
+    {
+      "path": "invoices.py",
+      "before_digest": "1951d3556f59caf17492e4f2ea1eff2ecce8647c2a6a99abd3dde53dbed22913",
+      "after_digest": "ea571233d9de8418bfb1c2d9aaf4054f8793974edecc40fc63107826a817f705",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 185,
+      "bytes_removed": 81
+    },
+    {
+      "path": "money.py",
+      "before_digest": "5de7e22d69f1733187c096bd3f323909de0ff3e88e0fd8a6973b21bdc78d15da",
+      "after_digest": "7b031a494a52ad5d7ef350b141a82ec4f0bd34fc255af35759a99a086b1e7d3c",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 245,
+      "bytes_removed": 57
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0f6f2-b88f-77b3-9e0c-969cc5b5ef41",
+      "obligation_id": "01a0f6f2-560b-7551-92c3-831e13250e4f",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix money.cents and invoices.total_cents. Convert input values using Decimal(str(value)); round each line independently to integral cents with ROUND_HALF_UP, including negative ties, then sum. Do not round only the invoice total. Preserve empty total 0 and the integer return types. No binary floating-point intermediate should determine rounding. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0f6f2-7c37-7882-92ab-2574fb123265",
+      "binding": {
+        "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from money import cents\\nfrom invoices import total_cents\\nassert cents(0.005)==1\\nassert cents(1.005)==100\\nassert cents(-0.005)==0\\nassert cents(2.675)==268\\nassert cents(-1.005)==-100\\nassert cents(10)==1000\\nassert total_cents([])==0\\nassert total_cents([0.005,0.005,-0.005])==1\\nassert isinstance(cents(1.0),int) and isinstance(total_cents([1.0]),int)\\nprint('ok', total_cents([1.005,2.675,-1.005]))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "39ef69662dbcc93f4ef6fa36c0247d418dd6da55783424589091bba98353b402",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:11:21.783771945Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6f2-85ad-7e32-a211-a4c0e33bebd6",
+      "binding": {
+        "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from money import cents\\nfrom invoices import total_cents\\nassert cents(0.005)==1\\nassert cents(1.005)==101\\nassert cents(-0.005)==0\\nassert cents(2.675)==268\\nassert cents(-1.005)==-101\\nassert cents(10)==1000\\nassert total_cents([])==0\\nassert total_cents([0.005,0.005,-0.005])==1\\nassert isinstance(cents(1.0),int) and isinstance(total_cents([1.0]),int)\\nprint('ok', total_cents([1.005,2.675,-1.005]))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "d209f55ac396e814665d7df82f2b40c8a9a4b5a6e3e63b1f78da855200f62d18",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:11:24.205282235Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6f2-8fb3-7d02-bec0-e3e76d2a0707",
+      "binding": {
+        "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from money import cents\\nfrom invoices import total_cents\\nassert cents(0.005)==1 and cents(1.005)==101 and cents(-1.005)==-101\\nassert cents(2.675)==268 and cents(10)==1000 and cents(0)==0\\nassert total_cents([])==0\\nassert total_cents([0.005,0.005,-0.005])==1\\nassert isinstance(cents(1.0),int) and isinstance(total_cents([1.0]),int)\\nassert total_cents([0.004,0.004])==0\\nprint('ok', total_cents([1.005,2.675,-1.005]))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "f7982daab9c3d54c86a06a2e6da745137eea41ce5e617e3a85978be6730f8527",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:11:26.771168589Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6f2-b18e-7241-99f6-b8f9e0119a45",
+      "binding": {
+        "run_id": "01a0f6f2-561f-7131-971b-d1bf5b35a976",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from money import cents\\nfrom invoices import total_cents\\nassert cents(0.005)==1 and cents(1.005)==101 and cents(-1.005)==-101\\nassert cents(2.675)==268 and cents(10)==1000 and cents(0)==0\\nassert cents('1.005')==101 and cents(2)==200\\nassert total_cents([])==0\\nassert total_cents([0.005,0.005,-0.005])==1\\nassert total_cents([0.004,0.004])==0\\nassert isinstance(cents(1.0),int) and isinstance(total_cents([1.0]),int)\\nprint('ok', total_cents([1.005,2.675,-1.005]))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "b76e46bc5535341ab2d0619daf48c99b3a7df80bde775ac0de3f1ec2a04fffab",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:11:35.438712701Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "model reached the 12-turn limit after producing candidate changes; the model did not attest completeness, so the candidate requires explicit human review"
+  ],
+  "metadata": {},
+  "integrity_hash": "80e02bafb7bcd718345e816fe21b260daf992b411051a951baf08e9969232af5"
+}

@@ -1,0 +1,64 @@
+--- a/build.py
++++ b/build.py
+@@ -1,3 +1,29 @@
+ from graph import order
+-def plan(graph,requested):
+-    return [n for n in order(graph) if n in requested]
++
++
++def plan(graph, requested):
++    """Return the ordered prerequisite closure of the requested nodes."""
++    wanted = set(requested)
++    for node in wanted:
++        if node not in graph:
++            raise ValueError("unknown requested node %r" % (node,))
++
++    closure = set()
++    stack = list(wanted)
++    while stack:
++        node = stack.pop()
++        if node in closure:
++            continue
++        closure.add(node)
++        for prereq in graph[node]:
++            if prereq not in graph:
++                raise ValueError(
++                    "unknown prerequisite %r for %r" % (prereq, node)
++                )
++            stack.append(prereq)
++
++    subset = {
++        node: [p for p in graph[node] if p in closure]
++        for node in closure
++    }
++    return order(subset)--- a/graph.py
++++ b/graph.py
+@@ -1,2 +1,27 @@
+ def order(graph):
+-    return sorted(graph)
++    """Return every declared node once, prerequisites before dependents.
++
++    Nodes without unmet prerequisites are emitted smallest-first.
++    """
++    pending = {}
++    for node, prereqs in graph.items():
++        pending[node] = set(prereqs)
++        for prereq in prereqs:
++            if prereq not in graph:
++                raise ValueError("unknown prerequisite %r for %r" % (prereq, node))
++
++    result = []
++    remaining = dict(pending)
++    done = set()
++    while remaining:
++        ready = sorted(
++            node for node, prereqs in remaining.items()
++            if prereqs <= done
++        )
++        if not ready:
++            raise ValueError("cycle detected among: %s" % ", ".join(sorted(remaining)))
++        node = ready[0]
++        result.append(node)
++        done.add(node)
++        del remaining[node]
++    return result

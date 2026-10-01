@@ -1,0 +1,2 @@
+warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run
+2026-10-01T10:24:18.932426Z  WARN pactrail_engine::engine: tool call failed tool=run_process error=invalid input for run_process: invalid type: integer `1`, expected a string

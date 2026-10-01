@@ -1,0 +1,160 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0f6e9-2df5-7552-b6f9-829e2a1875a7",
+  "created_at": "2026-10-01T10:01:50.548694036Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix clock.expired and cache.Cache. Naive datetime values mean UTC; aware values must compare as instants. Entries expire at now>=expires_at, not just after. put accepts a value and absolute expiry; get(key,now) must use the shared expiry semantics, delete expired entries and raise KeyError; live and missing entries keep their usual behavior. Do not read the wall clock implicitly. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+    "workspace_root": "/tmp/pactrail-scored-voh4z3n5/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0f6e9-2ddf-7463-9755-5580e85e3eff",
+        "description": "Fix clock.expired and cache.Cache. Naive datetime values mean UTC; aware values must compare as instants. Entries expire at now>=expires_at, not just after. put accepts a value and absolute expiry; get(key,now) must use the shared expiry semantics, delete expired entries and raise KeyError; live and missing entries keep their usual behavior. Do not read the wall clock implicitly. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 491520,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 12
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "ready_to_apply",
+  "baseline_digest": "c01fbefeda82f4d7eb486cc13962c0eae3afb4d653e3a2ade61057be3aab248b",
+  "final_event_hash": "85e55f924d70a13443ed9cc023ad821b44d5411f6a2cbc26d9dda5863bcc5370",
+  "changes": [
+    {
+      "path": "cache.py",
+      "before_digest": "a13470fc1d562dd18638a3d75ad8bf5a02be346547cf99bce3ace93177f705ec",
+      "after_digest": "47bc276f3e29699eb5aa2c6bb14259f4427015c74794c6443f20268e7597cbdf",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 342,
+      "bytes_removed": 262
+    },
+    {
+      "path": "clock.py",
+      "before_digest": "e8030dc4344bda73b1cbbd623313ad69b2b71a222b9fa2c0992af87c89dff795",
+      "after_digest": "73a7d1e5e0d9add0fa1e3c66833913ea6bbe402c91694a956fda5e2c9a325fa8",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 307,
+      "bytes_removed": 58
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0f6e9-c4d4-7873-8ff3-82d93c747f39",
+      "obligation_id": "01a0f6e9-2ddf-7463-9755-5580e85e3eff",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix clock.expired and cache.Cache. Naive datetime values mean UTC; aware values must compare as instants. Entries expire at now>=expires_at, not just after. put accepts a value and absolute expiry; get(key,now) must use the shared expiry semantics, delete expired entries and raise KeyError; live and missing entries keep their usual behavior. Do not read the wall clock implicitly. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0f6e9-615f-77d3-adf8-5b59c3ce403f",
+      "binding": {
+        "run_id": "01a0f6e9-2df5-7552-b6f9-829e2a1875a7",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from datetime import datetime, timezone, timedelta\\nfrom clock import expired\\nfrom cache import Cache\\nn=datetime(2024,1,1,12); e=datetime(2024,1,1,12,0,1)\\nassert expired(e, n) is False\\nassert expired(n, n) is True\\na=n.replace(tzinfo=timezone(timedelta(hours=2)))\\nassert expired(n, a) is True\\nb=timezone(timedelta(hours=-5)).localize if 0 else None\\nassert expired(n.replace(tzinfo=timezone.utc), n.replace(tzinfo=timezone(timedelta(hours=2)))) is True\\nc=Cache(); c.put('k','v',e)\\nassert c.get('k', n)=='v'\\ntry: c.get('k', e)\\nexcept KeyError: pass\\nelse: raise AssertionError\\nassert 'k' not in c.entries\\ntry: c.get('zz', n)\\nexcept KeyError: pass\\nelse: raise AssertionError\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "ef040096bd4e83a272ea78d99317f6316042c2619b9ede7a835ba91cac3e55cd",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:01:25.087878227Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6e9-718a-72f1-a581-36ae3ba59b37",
+      "binding": {
+        "run_id": "01a0f6e9-2df5-7552-b6f9-829e2a1875a7",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from datetime import datetime, timezone, timedelta\\nfrom clock import expired\\nfrom cache import Cache\\nn=datetime(2024,1,1,12); e=datetime(2024,1,1,12,0,1)\\nutc=timezone.utc; plus2=timezone(timedelta(hours=2))\\nassert expired(e, n) is False\\nassert expired(n, n) is True\\nassert expired(n.replace(tzinfo=utc), n.replace(tzinfo=plus2)) is False\\nassert expired(n.replace(tzinfo=utc), n.replace(tzinfo=timezone(timedelta(hours=-5)))) is True\\nassert expired(e, e.replace(tzinfo=plus2)) is False\\nc=Cache(); c.put('k','v',e)\\nassert c.get('k', n)=='v'\\nassert c.get('k', e.replace(tzinfo=utc)) is None or True\\ntry: c.get('k', e)\\nexcept KeyError: pass\\nelse: raise AssertionError\\nassert 'k' not in c.entries\\ntry: c.get('zz', n)\\nexcept KeyError: pass\\nelse: raise AssertionError\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "a4138be1e471de1f3974a34d28701b554fd2ea4ddcb94b9d64aed2470eaa9cd6",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:01:29.226986126Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6e9-8bdd-73a3-a930-e9520c2c1261",
+      "binding": {
+        "run_id": "01a0f6e9-2df5-7552-b6f9-829e2a1875a7",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from datetime import datetime, timezone, timedelta\\nfrom clock import expired\\nfrom cache import Cache\\nn=datetime(2024,1,1,12); e=datetime(2024,1,1,12,0,1)\\nutc=timezone.utc; plus2=timezone(timedelta(hours=2))\\nassert expired(e, n) is False\\nassert expired(n, n) is True\\nassert expired(n.replace(tzinfo=utc), n.replace(tzinfo=plus2)) is False\\nassert expired(n.replace(tzinfo=utc), n.replace(tzinfo=timezone(timedelta(hours=-5)))) is True\\nassert expired(e, e.replace(tzinfo=plus2)) is False\\nc=Cache(); c.put('k','v',e)\\nassert c.get('k', n)=='v'\\nassert c.get('k', e.replace(tzinfo=plus2))=='v'\\ntry: c.get('k', e)\\nexcept KeyError: pass\\nelse: raise AssertionError\\nassert 'k' not in c.entries\\ntry: c.get('zz', n)\\nexcept KeyError: pass\\nelse: raise AssertionError\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "e731a4b324b81840bc46b6cb30885da30c128de5e4b94d2d0b75b6801f3ece21",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:01:35.965477503Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6e9-ae5e-7b60-83e3-b88c9c7e40cf",
+      "binding": {
+        "run_id": "01a0f6e9-2df5-7552-b6f9-829e2a1875a7",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"import shutil, os\\nshutil.rmtree('__pycache__', ignore_errors=True)\\nprint(os.listdir('.'))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "573940145df2903f2e652059616c0e5ab78db0410828cd4250f457062270181d",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:01:44.798708137Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "b9ea90ef9d178db9877cdf088633861d8f00875d47c0a229dc44b92ecbe767bf"
+}

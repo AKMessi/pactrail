@@ -1,0 +1,73 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "ddb9891b4cdf083f67c471049883d0c4fbd64ebb75f5c3b68e5a8d92641e40bd",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_tmp_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f1-ee69-77c0-b629-22efa415b209"
+      },
+      "created_at": "2026-10-01T10:10:59.118471776Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f2-23ae-7ba0-95e2-3b5405abe531",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "ddb9891b4cdf083f67c471049883d0c4fbd64ebb75f5c3b68e5a8d92641e40bd",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_tmp_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f1-ee69-77c0-b629-22efa415b209"
+      },
+      "created_at": "2026-10-01T10:11:02.616454685Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f2-3158-7be0-ac03-638371264603",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "a6821afeea10edd548a8367a519547ba8f39a31cd918e37f1ac5ed67026c4593",
+      "after_unix_mode": 33152,
+      "before_digest": "1951d3556f59caf17492e4f2ea1eff2ecce8647c2a6a99abd3dde53dbed22913",
+      "before_unix_mode": 33204,
+      "bytes_added": 423,
+      "bytes_removed": 81,
+      "path": "invoices.py"
+    },
+    {
+      "after_digest": "5b4698f681de75fb10892f9bbf50a6878f8dfec28fe578641a713938732e9eeb",
+      "after_unix_mode": 33152,
+      "before_digest": "5de7e22d69f1733187c096bd3f323909de0ff3e88e0fd8a6973b21bdc78d15da",
+      "before_unix_mode": 33204,
+      "bytes_added": 888,
+      "bytes_removed": 57,
+      "path": "money.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-t50ze2hw/workspace/.pactrail/runs/01a0f6f1-ee69-77c0-b629-22efa415b209/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6f1-ee69-77c0-b629-22efa415b209",
+  "summary": "Done.\n\n**Changes**\n- `money.py`: added `to_cents(value)` — converts via `Decimal(str(value))`, quantizes to `Decimal(\"0.01\")` with `ROUND_HALF_UP` (ties away from zero, so `-0.005 → -1`), returns an `int`. Precision is raised inside a `localcontext` so large/exact values don't hit `InvalidOperation`. `cents(amount)` is preserved as a thin wrapper.\n- `invoices.py`: `total_cents(amounts)` now rounds **each line independently** through `to_cents` and sums the integers, instead of summing floats then rounding once. Empty input still returns `int` `0`; works with any iterable (including generators). Public API and return types unchanged.\n\n**Verification** — ran a temporary assertion script under `python3` covering positive/negative ties, `0.005`/`-0.005`, `1.005`/`2.675` (cases where `round(float*100)` gives the wrong answer), string inputs, zero, empty invoice, generator input, and `int` return types; it exited 0. The script was removed afterward, along with the `__pycache__` artifacts it generated.\n\n**Unverified**: no test suite or linter exists in the workspace (only README's \"run checks with python3\"), so my ad-hoc script was the only check; and `str(value)` for float inputs uses Python's shortest-repr conversion, which is by design but means e.g. a float that was already perturbed upstream still carries that perturbation.",
+  "tokens": 84781,
+  "trace": "/tmp/pactrail-scored-t50ze2hw/workspace/.pactrail/runs/01a0f6f1-ee69-77c0-b629-22efa415b209/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "mini-swe-agent": "2.4.6",
+  "litellm": "1.103.2",
+  "PyYAML": "6.0.3",
+  "python": "3.14.4"
+}

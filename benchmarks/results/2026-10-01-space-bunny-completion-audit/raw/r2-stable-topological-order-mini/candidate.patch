@@ -1,0 +1,80 @@
+--- a/build.py
++++ b/build.py
+@@ -1,3 +1,34 @@
++"""Build planning over a prerequisite graph."""
++
+ from graph import order
+-def plan(graph,requested):
+-    return [n for n in order(graph) if n in requested]
++
++
++def plan(graph, requested):
++    """Return the ordered transitive prerequisite closure of ``requested``."""
++    if isinstance(requested, str):
++        requested = [requested]
++    requested = list(requested)
++
++    ordered = order(graph)
++    known = set(ordered)
++    for node in requested:
++        if node not in known:
++            raise ValueError("unknown requested node: %r" % (node,))
++
++    # Transitive closure of prerequisites.
++    prereqs = {node: list(deps) for node, deps in graph.items()}
++    needed = set()
++
++    def visit(node):
++        stack = [node]
++        while stack:
++            current = stack.pop()
++            if current in needed:
++                continue
++            needed.add(current)
++            stack.extend(prereqs[current])
++
++    for node in requested:
++        visit(node)
++
++    return [node for node in ordered if node in needed]
+--- a/graph.py
++++ b/graph.py
+@@ -1,2 +1,37 @@
++"""Topological ordering of a prerequisite graph."""
++
++
+ def order(graph):
+-    return sorted(graph)
++    """Return every declared node exactly once, prerequisites first.
++
++    ``graph`` maps a node name to an iterable of its prerequisite node names.
++    Each step emits the lexicographically smallest currently-ready node, so
++    the result is deterministic.  Unknown prerequisites and cycles raise
++    ``ValueError``.  The graph and its prerequisite lists are not mutated.
++    """
++    prereqs = {}
++    for node, deps in graph.items():
++        deps = list(deps)
++        prereqs[node] = deps
++        for dep in deps:
++            if dep not in prereqs and dep not in graph:
++                raise ValueError("unknown prerequisite: %r (of %r)" % (dep, node))
++
++    remaining = {node: set(deps) for node, deps in prereqs.items()}
++    dependents = {node: set() for node in prereqs}
++    for node, deps in prereqs.items():
++        for dep in deps:
++            dependents[dep].add(node)
++
++    result = []
++    while remaining:
++        ready = [n for n, deps in remaining.items() if not deps]
++        if not ready:
++            raise ValueError("cycle detected in graph")
++        node = min(ready)
++        del remaining[node]
++        for dependent in dependents[node]:
++            if dependent in remaining:
++                remaining[dependent].discard(node)
++        result.append(node)
++    return result

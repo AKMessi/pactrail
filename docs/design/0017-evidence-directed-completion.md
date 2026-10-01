@@ -1,6 +1,6 @@
 # Design 0017: evidence-directed completion
 
-Status: implementation and evaluation in progress. October 1, 2026.
+Status: opt-in implementation tested; controlled pilot completed; broader evaluation pending. October 1, 2026.
 
 ## Decision
 
@@ -77,3 +77,16 @@ budget/recovery gates, not unconditional extra model calls.
 - Freeze tasks, gold grader validation, versions, model parameters, order and
   failure retention before scored calls; compare both pre-upgrade and audited
   Pactrail with external harnesses. Report exploratory small-suite limits.
+
+## October 1 pilot decision
+
+[The frozen 48-trial Space Bunny comparison](../../benchmarks/results/2026-10-01-space-bunny-completion-audit/README.md)
+finished with 12/12 functional passes for both baseline and audited Pactrail,
+12/12 for OpenCode, and 11/12 for mini-SWE-agent. Audit used 70.5% more reported
+tokens than baseline and left a temporary check file in one candidate. Keep the
+policy opt-in: this suite does not justify unconditional default auditing.
+
+The next stage should test independently specified acceptance checks and
+separate reviewer context on harder real repository issues. It must beat this
+measured baseline under total-budget controls before default promotion. These
+are future evaluation targets, not proven or implemented capabilities.

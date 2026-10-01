@@ -1,0 +1,105 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "9f690661d6d404e6a87c538632dfc2a1ca1abbb58d1e68391b4f645c0d5b1205",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import sys; sys.path.insert(0,'.')\\nfrom datetime import datetime, timezone, timedelta\\nfrom clock import expired\\nfrom cache import Cache\\nn=datetime(2024,1,1,12,0,0)\\nassert expired(n, n)\\nassert not expired(n+timedelta(seconds=1), n)\\ntz=timezone(timedelta(hours=2))\\nassert expired(n, datetime(2024,1,1,14,0,0,tzinfo=tz))\\nassert not expired(datetime(2024,1,1,14,0,0,tzinfo=tz), n)\\nc=Cache()\\nc.put('a',1,n+timedelta(seconds=1))\\nassert c.get('a',n)==1\\ntry:\\n    c.get('a',n+timedelta(seconds=1)); raise AssertionError\\nexcept KeyError: pass\\nassert 'a' not in c.entries\\ntry:\\n    c.get('zz',n); raise AssertionError\\nexcept KeyError: pass\\nprint('ok')\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489"
+      },
+      "created_at": "2026-10-01T10:14:46.774495754Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f5-9cf6-7942-b724-74c8897f9789",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "c9084d0f3dcad8d0f791423088dd8ca7b6f876b84b8e82e39e1e77bd9cb8a474",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"from datetime import datetime, timezone, timedelta\\nfrom clock import expired\\nfrom cache import Cache\\nn=datetime(2024,1,1,12,0,0)\\nassert expired(n,n) and not expired(n+timedelta(seconds=1),n)\\ntz=timezone(timedelta(hours=2))\\nassert expired(n, datetime(2024,1,1,14,0,0,tzinfo=tz))\\nassert not expired(datetime(2024,1,1,14,0,1,tzinfo=tz), n)\\nc=Cache(); c.put('a',1,n+timedelta(seconds=1))\\nassert c.get('a',n)==1\\nfor args,exp in ((('a',n+timedelta(seconds=1)),True),):\\n    try: c.get(*args); raise AssertionError\\n    except KeyError: pass\\nassert 'a' not in c.entries\\ntry: c.get('zz',n); raise AssertionError\\nexcept KeyError: pass\\nprint('ok')\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489"
+      },
+      "created_at": "2026-10-01T10:14:50.344255939Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f5-aae8-7061-9983-033f040b5059",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "294ebed8f764423c9a661536ae8f2e195920124d32d7c9f2d7bd5d50ca0d91b7",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import shutil; shutil.rmtree('__pycache__', ignore_errors=True); print('cleaned')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489"
+      },
+      "created_at": "2026-10-01T10:14:55.120695431Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f5-bd90-7a50-b18c-3c472d3e6586",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "9acdf9b203a8703e25deffe74e2bb961c4ecd482340846e7eaad53b159d0a765",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import shutil\\nfrom datetime import datetime, timezone, timedelta\\nfrom clock import expired, as_utc\\nfrom cache import Cache\\nn=datetime(2024,1,1,12,0,0); tz=timezone(timedelta(hours=2))\\n# boundary + naive/aware\\nassert expired(n,n) and not expired(n+timedelta(microseconds=1),n)\\nassert expired(n, datetime(2024,1,1,14,0,0,tzinfo=tz))\\nassert not expired(datetime(2024,1,1,14,0,1,tzinfo=tz), n)\\nassert expired(datetime(2024,1,1,12,0,0,tzinfo=timezone.utc), n)\\n# cache\\nc=Cache(); c.put('a',1,n+timedelta(seconds=1))\\nassert c.get('a',n)==1\\nc.get('a',n)\\ntry: c.get('a',n+timedelta(seconds=1)); raise AssertionError\\nexcept KeyError: pass\\nassert 'a' not in c.entries\\ntry: c.get('zz',n); raise AssertionError\\nexcept KeyError: pass\\n# aware entry live via aware now\\nc.put('b',2,datetime(2024,1,1,14,0,1,tzinfo=tz))\\nassert c.get('b',n)==2\\nshutil.rmtree('__pycache__',ignore_errors=True)\\nprint('all checks ok')\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489"
+      },
+      "created_at": "2026-10-01T10:15:06.211647948Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6f5-e8e3-7540-8170-40cda18a362b",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "b19aaecbe4212fcef128f0fef402dd57ae344f8c204b769b50f418272b37aa73",
+      "after_unix_mode": 33152,
+      "before_digest": "a13470fc1d562dd18638a3d75ad8bf5a02be346547cf99bce3ace93177f705ec",
+      "before_unix_mode": 33204,
+      "bytes_added": 406,
+      "bytes_removed": 262,
+      "path": "cache.py"
+    },
+    {
+      "after_digest": "be1c23bb8d040314f2d2cb53827cd1026919b443f84dc9533b9f141fe9f98f28",
+      "after_unix_mode": 33152,
+      "before_digest": "e8030dc4344bda73b1cbbd623313ad69b2b71a222b9fa2c0992af87c89dff795",
+      "before_unix_mode": 33204,
+      "bytes_added": 755,
+      "bytes_removed": 58,
+      "path": "clock.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-bckvtbuk/workspace/.pactrail/runs/01a0f6f5-7481-75c0-a0cc-0f11bafa9489/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489",
+  "summary": "Audit complete; no defects found requiring repair.\n\n**Obligation → behavior mapping**\n- Naive = UTC, aware compared as instants: `clock.as_utc` attaches UTC to naive values and converts aware values via `astimezone(UTC)`; `clock.expired` compares only after that normalization.\n- Expire at `now >= expires_at`: `expired` uses `>=` (was `>`).\n- Shared semantics in cache: `Cache.get` calls `clock.expired` (single definition, no duplicated comparison).\n- Expired entry deleted then `KeyError`; live entry returned; missing key still `KeyError` from the dict lookup before any mutation.\n- No implicit wall clock: no `datetime.now()`/`utcnow()` anywhere; `now` is a required parameter.\n- APIs preserved: `Cache()`, `put(key, value, expires_at)`, `get(key, now)`, `expired(expires_at, now)` signatures unchanged; `as_utc`/`UTC` are additions.\n\n**Observed checks** (one `python3 -c` invocation, exit code 0, stdout `all checks ok`): equality boundary is expired; `now+1µs` not expired; naive-vs-`+02:00`-aware equal instant treated as expired; aware entry one second in the future not expired; UTC-aware entry vs naive `now` at boundary; cache live read returns value; expired read raises `KeyError` and removes the key from `entries`; missing key raises `KeyError`; aware-expiry entry read with naive `now` returns the value. Workspace contains only the two intended file changes (`workspace_changes`), and the generated `__pycache__` was removed.\n\n**Uncovered / not proven**\n- No independent oracle: the repo contains only `README.md`, `clock.py`, `cache.py` — no test suite exists, so all evidence above is from checks I authored, not an external specification.\n- Non-datetime expiry values (e.g. numeric timestamps) now raise `AttributeError`/`TypeError` from `tzinfo` access; the prior code had no stated support for them, so I did not add conversion.\n- `put` does not validate `expires_at` type or ordering; unchanged by design since the contract does not specify it.",
+  "tokens": 97242,
+  "trace": "/tmp/pactrail-scored-bckvtbuk/workspace/.pactrail/runs/01a0f6f5-7481-75c0-a0cc-0f11bafa9489/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

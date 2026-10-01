@@ -1,0 +1,104 @@
+--- a/build.py
++++ b/build.py
+@@ -1,3 +1,45 @@
++"""Build planning helpers."""
++
+ from graph import order
+-def plan(graph,requested):
+-    return [n for n in order(graph) if n in requested]
++
++
++def plan(graph, requested):
++    """Return the ordered transitive prerequisite closure of ``requested``.
++
++    Uses the same deterministic ordering as graph.order.  Unknown requested
++    nodes raise ValueError.  The graph and its prerequisite lists are not
++    mutated.
++    """
++    if graph is None:
++        raise ValueError("graph must be a mapping of node -> prerequisites")
++    if requested is None:
++        requested = ()
++    if isinstance(requested, str):
++        requested = (requested,)
++    try:
++        wanted = list(requested)
++    except TypeError:
++        raise ValueError("requested must be an iterable of node names")
++
++    for node in wanted:
++        if node not in graph:
++            raise ValueError("unknown requested node %r" % (node,))
++
++    targets = set(wanted)
++    closure = set()
++    stack = list(wanted)
++    while stack:
++        node = stack.pop()
++        if node in closure:
++            continue
++        closure.add(node)
++        deps = graph[node] or ()
++        if isinstance(deps, str):
++            deps = (deps,)
++        for dep in deps:
++            if dep not in closure:
++                stack.append(dep)
++
++    # Validate prerequisites/cycles and get the canonical ordering.
++    ordered = order(graph)
++    return [node for node in ordered if node in closure or node in targets]
+--- a/graph.py
++++ b/graph.py
+@@ -1,2 +1,50 @@
++"""Topological ordering of a node -> prerequisites mapping."""
++
++
+ def order(graph):
+-    return sorted(graph)
++    """Return every declared node exactly once, prerequisites first.
++
++    Ties between simultaneously ready nodes are broken by choosing the
++    lexicographically smallest name, making the result deterministic.
++    Raises ValueError for unknown prerequisites or dependency cycles.
++    """
++    if graph is None:
++        raise ValueError("graph must be a mapping of node -> prerequisites")
++
++    # Snapshot the graph so the caller's mapping is never mutated.
++    prereqs = {}
++    for node, deps in graph.items():
++        if deps is None:
++            deps = ()
++        if isinstance(deps, str):
++            deps = (deps,)
++        try:
++            dep_list = list(deps)
++        except TypeError:
++            raise ValueError(
++                "prerequisites for %r must be an iterable of node names" % (node,)
++            )
++        prereqs[node] = dep_list
++
++    # Validate prerequisites refer to declared nodes.
++    for node, deps in prereqs.items():
++        for dep in deps:
++            if dep not in prereqs:
++                raise ValueError(
++                    "unknown prerequisite %r for node %r" % (dep, node)
++                )
++
++    remaining = {node: set(deps) for node, deps in prereqs.items()}
++    result = []
++    while remaining:
++        ready = sorted(n for n, deps in remaining.items() if not deps)
++        if not ready:
++            raise ValueError(
++                "cycle detected among nodes: %s" % (sorted(remaining),)
++            )
++        chosen = ready[0]
++        del remaining[chosen]
++        result.append(chosen)
++        for deps in remaining.values():
++            deps.discard(chosen)
++    return result

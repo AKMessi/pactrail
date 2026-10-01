@@ -1,0 +1,90 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "357c1f397146ffdded83c066048f676f216fa0a9cd7d04f56c1d5c08de6ab68d",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import catalog,keys\\nc=catalog.Catalog()\\nc.put('Stra\\\\u00dfe','a'); assert c.get('STRASSE')=='a' and c.get('strasse')=='a'\\nc.put('STRASSE','b'); assert c.get('Stra\\\\u00dfe')=='b' and len(c.values)==1\\nc.put('caf\\\\u00e9','x'); assert c.get('CAF\\\\u00c9'.lower())=='x' or c.get('CAF\\\\u00c9')=='x'\\nassert c.get('cafe\\\\u0301')=='x'\\nc.remove('Cafe\\\\u0301')\\nfor f in (c.get,c.remove):\\n    try: f('nope'); raise SystemExit('no KeyError')\\n    except KeyError: pass\\nprint('ok', keys.canonical('Stra\\\\u00dfe'))\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e1-2355-7a03-acf0-00d368bc8884"
+      },
+      "created_at": "2026-10-01T09:52:34.721563744Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e1-49a1-7731-bbe0-fd73b8070b9e",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "52d25e2c1c8b0f152dec7d8506f44260984ea22deb7eb83848f2efa488e45981",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-B\",\"-c\",\"import catalog, keys\\nc = catalog.Catalog()\\nc.put('Stra\\\\u00dfe', 'a')\\nassert c.get('STRASSE') == 'a' and c.get('strasse') == 'a'\\nc.put('STRASSE', 'b')\\nassert c.get('Stra\\\\u00dfe') == 'b' and len(c.values) == 1\\nc.put('cafe\\\\u0301', 'x')\\nassert c.get('CAF\\\\u00c9') == 'x' and c.get('caf\\\\u00e9') == 'x'\\nassert c.remove('CAFE\\\\u0301') == 'x' and len(c.values) == 1\\nfor fn in (c.get, c.remove):\\n    try:\\n        fn('nope'); raise SystemExit('missing KeyError')\\n    except KeyError: pass\\nassert keys.canonical('\\\\u00df') == 'ss' and keys.canonical('CAF\\\\u00c9') == 'caf\\\\u00e9'\\ntry: keys.canonical(None); raise SystemExit('type err')\\nexcept TypeError: pass\\nprint('OK')\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e1-2355-7a03-acf0-00d368bc8884"
+      },
+      "created_at": "2026-10-01T09:52:49.989113874Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e1-8545-7ce2-8877-7dffdbbba4f2",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "2ecc939cca26d31862f852e230ea81fce74d68a15b0018e7dacd5394f624f907",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import os;[os.chmod(p,0o644) for p in ('keys.py','catalog.py')];print([oct(os.stat(p).st_mode) for p in ('keys.py','catalog.py')])\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e1-2355-7a03-acf0-00d368bc8884"
+      },
+      "created_at": "2026-10-01T09:52:54.299208649Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e1-961b-7153-afd5-06a8d0725c5d",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "dc1d53cd3c565b1048d0a774617c2e51eb85eec03702090053dca3893738fa50",
+      "after_unix_mode": 33188,
+      "before_digest": "3fd8060765f29706cb29fa14bd65bae648a8a45490c50905cfdf8cdf6526fb34",
+      "before_unix_mode": 33204,
+      "bytes_added": 312,
+      "bytes_removed": 269,
+      "path": "catalog.py"
+    },
+    {
+      "after_digest": "eaa2dfa94aab567479b59155a6838acdcdefedf8109921487d0a78602aa04cba",
+      "after_unix_mode": 33188,
+      "before_digest": "cd8b84a6fed289e25ef9a56769917a7580bbf77a0c71b3f45e4ec9be660efaea",
+      "before_unix_mode": 33204,
+      "bytes_added": 174,
+      "bytes_removed": 43,
+      "path": "keys.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-9_zixaoc/workspace/.pactrail/runs/01a0f6e1-2355-7a03-acf0-00d368bc8884/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "Completion audit could not review the final candidate revision within the bounded audit/turn allowance; completeness remains unverified."
+  ],
+  "run_id": "01a0f6e1-2355-7a03-acf0-00d368bc8884",
+  "summary": "Audit result:\n\n- Current source confirmed: `keys.canonical` = `unicodedata.normalize(\"NFC\", key).casefold()`; `Catalog.put/get/remove` all index via `canonical`. Signatures unchanged, no other callers exist in the repo.\n- `__pycache__/*.pyc` artifacts from the first run were present in the candidate transaction; I removed them, and the candidate now contains only `keys.py` and `catalog.py`. I also restored mode 0o644 on both (the write tool had set 0o600).\n- Evidence from a `python3 -B -c` run (exit 0, printed `OK`): ß/SS equivalence, `put` overwrite collapsing to one entry, composed vs decomposed é lookup and removal, `KeyError` from both `get` and `remove` on a missing key, `canonical('ß') == 'ss'`, `TypeError` on a non-string key.\n\nUncovered / unverified:\n- No independent test suite or grader exists in the workspace, so the above is my own reproduction, not an independent oracle.\n- Behavior for keys of non-`str` type (e.g. ints) is unchanged: `canonical` raises `TypeError` via `unicodedata.normalize`. That is a pre-existing constraint, not specified by the task.\n- Unicode edge cases beyond NFC+casefold semantics (e.g. Turkish dotted/dotless I, which are not merged by casefold) are unverified.",
+  "tokens": 90957,
+  "trace": "/tmp/pactrail-scored-9_zixaoc/workspace/.pactrail/runs/01a0f6e1-2355-7a03-acf0-00d368bc8884/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

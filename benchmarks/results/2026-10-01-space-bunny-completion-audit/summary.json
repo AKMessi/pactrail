@@ -1,0 +1,128 @@
+{
+  "planned_trials": 48,
+  "retained_trials": 48,
+  "pending_trials": 0,
+  "arms": {
+    "pactrail-baseline": {
+      "planned": 12,
+      "retained": 12,
+      "graded": 12,
+      "functional_passes": 12,
+      "strict_passes": 12,
+      "requests": 93,
+      "token_usage": {
+        "prompt_tokens": {
+          "reported_sum": 671770,
+          "reported_requests": 93,
+          "total_requests": 93
+        },
+        "completion_tokens": {
+          "reported_sum": 13442,
+          "reported_requests": 93,
+          "total_requests": 93
+        },
+        "total_tokens": {
+          "reported_sum": 685212,
+          "reported_requests": 93,
+          "total_requests": 93
+        }
+      }
+    },
+    "pactrail-audit": {
+      "planned": 12,
+      "retained": 12,
+      "graded": 12,
+      "functional_passes": 12,
+      "strict_passes": 11,
+      "requests": 141,
+      "token_usage": {
+        "prompt_tokens": {
+          "reported_sum": 1144767,
+          "reported_requests": 141,
+          "total_requests": 141
+        },
+        "completion_tokens": {
+          "reported_sum": 23553,
+          "reported_requests": 141,
+          "total_requests": 141
+        },
+        "total_tokens": {
+          "reported_sum": 1168320,
+          "reported_requests": 141,
+          "total_requests": 141
+        }
+      }
+    },
+    "opencode": {
+      "planned": 12,
+      "retained": 12,
+      "graded": 12,
+      "functional_passes": 12,
+      "strict_passes": 9,
+      "requests": 117,
+      "token_usage": {
+        "prompt_tokens": {
+          "reported_sum": 922346,
+          "reported_requests": 117,
+          "total_requests": 117
+        },
+        "completion_tokens": {
+          "reported_sum": 22397,
+          "reported_requests": 117,
+          "total_requests": 117
+        },
+        "total_tokens": {
+          "reported_sum": 944743,
+          "reported_requests": 117,
+          "total_requests": 117
+        }
+      }
+    },
+    "mini": {
+      "planned": 12,
+      "retained": 12,
+      "graded": 12,
+      "functional_passes": 11,
+      "strict_passes": 11,
+      "requests": 85,
+      "token_usage": {
+        "prompt_tokens": {
+          "reported_sum": 184409,
+          "reported_requests": 85,
+          "total_requests": 85
+        },
+        "completion_tokens": {
+          "reported_sum": 16256,
+          "reported_requests": 85,
+          "total_requests": 85
+        },
+        "total_tokens": {
+          "reported_sum": 200665,
+          "reported_requests": 85,
+          "total_requests": 85
+        }
+      }
+    }
+  },
+  "paired_functional": {
+    "pactrail-baseline": {
+      "pairs": 12,
+      "audit_wins": 0,
+      "ties": 12,
+      "audit_losses": 0
+    },
+    "opencode": {
+      "pairs": 12,
+      "audit_wins": 0,
+      "ties": 12,
+      "audit_losses": 0
+    },
+    "mini": {
+      "pairs": 12,
+      "audit_wins": 1,
+      "ties": 11,
+      "audit_losses": 0
+    }
+  },
+  "limitations": "Six synthetic cases; repeated samples share cases. No global superiority, true streaming latency, or monetary savings claim."
+}

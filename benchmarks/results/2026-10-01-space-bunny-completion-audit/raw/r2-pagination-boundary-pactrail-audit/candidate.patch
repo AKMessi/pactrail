@@ -1,0 +1,34 @@
+--- a/api.py
++++ b/api.py
+@@ -1,8 +1,11 @@
+ from pages import page
++
++
+ def collect(items, size):
++    """Gather every item exactly once, in order, using page()."""
+     cursor = 0
+     result = []
+-    while cursor:
++    while cursor is not None:
+         rows, cursor = page(items, cursor, size)
+         result.extend(rows)
+-    return result
++    return result--- a/pages.py
++++ b/pages.py
+@@ -1,3 +1,14 @@
+ def page(items, cursor, size):
+-    end = cursor + size
+-    return list(items[cursor:end]), end if end <= len(items) else None
++    """Return (slice, next_cursor) for a cursor-based page of items.
++
++    The first cursor is 0. next_cursor is None when the items are exhausted,
++    i.e. when the returned slice reaches the end of items.
++    """
++    total = len(items)
++    if size <= 0:
++        raise ValueError("size must be positive")
++    if cursor < 0 or cursor > total:
++        raise ValueError("cursor out of range")
++    end = min(cursor + size, total)
++    next_cursor = end if end < total else None
++    return list(items[cursor:end]), next_cursor

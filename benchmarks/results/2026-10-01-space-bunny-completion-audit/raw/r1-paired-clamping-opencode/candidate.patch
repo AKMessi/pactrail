@@ -1,0 +1,22 @@
+--- a/batches.py
++++ b/batches.py
+@@ -1,2 +1,7 @@
++from scalar import clip
++
++
+ def clip_many(values, lower, upper):
+-    return [max(v, lower) for v in values]
++    if lower > upper:
++        raise ValueError("lower bound must not exceed upper bound")
++    return [clip(value, lower, upper) for value in values]--- a/scalar.py
++++ b/scalar.py
+@@ -1,2 +1,8 @@
+ def clip(value, lower, upper):
+-    return min(value, upper)
++    if lower > upper:
++        raise ValueError("lower bound must not exceed upper bound")
++    if value < lower:
++        return lower
++    if value > upper:
++        return upper
++    return value

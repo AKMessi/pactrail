@@ -1,0 +1,1 @@
+warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run

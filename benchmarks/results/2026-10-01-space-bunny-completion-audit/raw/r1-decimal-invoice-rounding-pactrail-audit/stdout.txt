@@ -1,0 +1,74 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "0369463e84b5950876e47422dbeaebd427ccf145f1a94b35d14e347cabe1b578",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_check_tmp.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e6-cd30-7120-a1b5-fed8df187a91"
+      },
+      "created_at": "2026-10-01T09:59:00.964760647Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e7-2e64-78b1-804e-ecc025801660",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "3eaa4b3f8a0c089d78eb581f9b170947a8d84d86bee31cdcd50c77cd18dcbaa1",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import shutil; shutil.rmtree('__pycache__')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e6-cd30-7120-a1b5-fed8df187a91"
+      },
+      "created_at": "2026-10-01T09:59:07.033748133Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e7-4619-7473-8779-711cd784e7fd",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "38d0d5689f6db21409314521b6007e5eb97e273f6588b330ac7434f4e033802c",
+      "after_unix_mode": 33152,
+      "before_digest": "1951d3556f59caf17492e4f2ea1eff2ecce8647c2a6a99abd3dde53dbed22913",
+      "before_unix_mode": 33204,
+      "bytes_added": 168,
+      "bytes_removed": 81,
+      "path": "invoices.py"
+    },
+    {
+      "after_digest": "7cf49bf812f0e6547dcd6a46421ded273bfb08cbe6f71eb4ed0eb28458b13daf",
+      "after_unix_mode": 33152,
+      "before_digest": "5de7e22d69f1733187c096bd3f323909de0ff3e88e0fd8a6973b21bdc78d15da",
+      "before_unix_mode": 33204,
+      "bytes_added": 455,
+      "bytes_removed": 57,
+      "path": "money.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-p69opqbd/workspace/.pactrail/runs/01a0f6e6-cd30-7120-a1b5-fed8df187a91/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "model reached the 12-turn limit after producing candidate changes; the model did not attest completeness, so the candidate requires explicit human review"
+  ],
+  "run_id": "01a0f6e6-cd30-7120-a1b5-fed8df187a91",
+  "summary": "The model reached the 12-turn limit without a final summary. Candidate changes were preserved for deterministic verification and explicit review.",
+  "tokens": 91715,
+  "trace": "/tmp/pactrail-scored-p69opqbd/workspace/.pactrail/runs/01a0f6e6-cd30-7120-a1b5-fed8df187a91/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

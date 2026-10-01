@@ -1,0 +1,48 @@
+--- a/invoices.py
++++ b/invoices.py
+@@ -1,2 +1,16 @@
++"""Invoice totals."""
++
++from money import to_cents
++
++
+ def total_cents(amounts):
+-    return round(sum(float(a) for a in amounts) * 100)
++    """Sum line amounts, rounding each line independently, as an ``int``.
++
++    An empty invoice totals ``0``. Lines are rounded before summing so that the
++    result does not depend on their order or on accumulated representation
++    error.
++    """
++    total = 0
++    for amount in amounts:
++        total += to_cents(amount)
++    return int(total)--- a/money.py
++++ b/money.py
+@@ -1,2 +1,25 @@
++"""Currency helpers.
++
++All conversions go through ``Decimal(str(value))`` so that no binary
++floating-point intermediate ever determines the rounding, and each amount is
++rounded independently to integral cents with ROUND_HALF_UP (ties away from
++zero, which is what Decimal's ROUND_HALF_UP means for negative values).
++"""
++
++from decimal import Decimal, ROUND_HALF_UP, localcontext
++
++_CENTS = Decimal("0.01")
++
++
++def to_cents(value):
++    """Return ``value`` rounded to an integral number of cents."""
++    amount = Decimal(str(value))
++    with localcontext() as ctx:
++        # Avoid InvalidOperation on very large inputs; rounding is exact.
++        ctx.prec = max(ctx.prec, len(amount.as_tuple().digits) + 10)
++        return int(amount.quantize(_CENTS, rounding=ROUND_HALF_UP) * 100)
++
++
+ def cents(amount):
+-    return round(float(amount) * 100)
++    """Convert a single amount to an ``int`` number of cents."""
++    return to_cents(amount)

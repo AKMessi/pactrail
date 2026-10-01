@@ -1,0 +1,43 @@
+--- a/cache.py
++++ b/cache.py
+@@ -1,7 +1,16 @@
++from clock import expired
++
++
+ class Cache:
+-    def __init__(self): self.entries={}
+-    def put(self,key,value,expires_at): self.entries[key]=(value,expires_at)
+-    def get(self,key,now):
+-        value,expiry=self.entries[key]
+-        if now > expiry: raise KeyError(key)
++    def __init__(self):
++        self.entries = {}
++
++    def put(self, key, value, expires_at):
++        self.entries[key] = (value, expires_at)
++
++    def get(self, key, now):
++        value, expiry = self.entries[key]
++        if expired(expiry, now):
++            del self.entries[key]
++            raise KeyError(key)
+         return value
+--- a/clock.py
++++ b/clock.py
+@@ -1,2 +1,15 @@
++from datetime import datetime, timezone
++
++
++def _as_utc(dt):
++    """Interpret naive datetimes as UTC and normalize aware ones to UTC."""
++    if not isinstance(dt, datetime):
++        raise TypeError("expected datetime, got %r" % type(dt).__name__)
++    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
++        return dt.replace(tzinfo=timezone.utc)
++    return dt.astimezone(timezone.utc)
++
++
+ def expired(expires_at, now):
+-    return now > expires_at
++    """True when ``now`` has reached the expiry instant (now >= expires_at)."""
++    return _as_utc(now) >= _as_utc(expires_at)
