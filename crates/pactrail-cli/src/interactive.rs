@@ -4094,6 +4094,7 @@ fn run_args_from_settings(
         model: Some(model),
         investigation_model: None,
         adaptive_routing: false,
+        completion_audit: false,
         investigation_provider: None,
         investigation_base_url: None,
         investigation_api_key_env: None,

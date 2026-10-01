@@ -189,3 +189,9 @@ Material changes should start as a design issue containing the user problem,
 threat-boundary impact, contract/API shape, durable-state impact, failure and
 recovery behavior, observability, test plan, and compatibility strategy. See
 [CONTRIBUTING.md](../CONTRIBUTING.md).
+
+## Evidence-directed completion
+
+[Design 0017](design/0017-evidence-directed-completion.md) adds an opt-in bounded
+completion audit on the existing engine. This is separate from the shared runtime
+proposal; promotion to a default policy requires outcome/cost evidence.

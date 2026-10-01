@@ -457,6 +457,11 @@ pub struct RunArgs {
     #[arg(long)]
     pub apply: bool,
 
+    /// Audit candidate completeness with up to two budgeted review requests.
+    #[arg(long)]
+    #[serde(default)]
+    pub completion_audit: bool,
+
     /// Maximum model turns.
     #[arg(long, default_value_t = 24)]
     pub max_turns: u16,

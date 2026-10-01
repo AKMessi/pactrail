@@ -349,3 +349,12 @@ fixture in disposable workspaces, checks composition and decision workflows,
 exercises pager/editor return and NO_COLOR/TERM=dumb, and saves terminal captures
 under `/tmp/pactrail-cli-qa`. Those Python packages are not runtime dependencies
 of Pactrail. The local fixture uses port 4190.
+
+## Budgeted completion audit in automation
+
+`pactrail run "Fix both call paths" --completion-audit` requests up to two
+revision-bound reviews before accepting a change summary. Reviews consume the
+existing turn/token/cost/time allowances and preserve all tool permissions.
+The option is opt-in and stored with the run for resume; interactive sessions
+retain their existing policy. Review requests are advisory, never deterministic
+passes. Use caller-declared acceptance checks for independent behavioral evidence.

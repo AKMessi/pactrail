@@ -218,6 +218,7 @@ fn probe_run_args(args: ProbeArgs) -> RunArgs {
         model: Some(args.model),
         investigation_model: None,
         adaptive_routing: false,
+        completion_audit: false,
         investigation_provider: None,
         investigation_base_url: None,
         investigation_api_key_env: None,
@@ -1448,6 +1449,7 @@ fn configure_engine_pricing<'a>(
     }
     Ok(engine
         .with_adaptive_routing(args.adaptive_routing)
+        .with_completion_audit(args.completion_audit)
         .with_price_provenance(
             price_provenance(
                 args.price_source.as_deref(),
