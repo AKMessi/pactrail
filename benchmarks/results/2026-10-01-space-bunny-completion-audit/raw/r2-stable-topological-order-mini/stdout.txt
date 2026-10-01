@@ -1,0 +1,5 @@
+This is mini-swe-agent version 2.4.6.
+Check the v2 migration guide at https://klieret.short.gy/mini-v2-migration
+Loading global config from 
+'/tmp/pactrail-scored-_p2_f2sy/home/config/mini-swe-agent/.env'
+{"result": {"exit_status": "Submitted", "submission": ""}}

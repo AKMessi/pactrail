@@ -1,0 +1,19 @@
+--- a/invoices.py
++++ b/invoices.py
+@@ -1,2 +1,6 @@
++from money import cents
++
++
+ def total_cents(amounts):
+-    return round(sum(float(a) for a in amounts) * 100)
++    """Sum per-line cent amounts; each line is rounded independently with ROUND_HALF_UP."""
++    return sum(cents(a) for a in amounts)--- a/money.py
++++ b/money.py
+@@ -1,2 +1,6 @@
++from decimal import Decimal, ROUND_HALF_UP
++
++
+ def cents(amount):
+-    return round(float(amount) * 100)
++    """Round one amount to integral cents using ROUND_HALF_UP on Decimal(str(amount))."""
++    return int(Decimal(str(amount)).scaleb(2).quantize(Decimal(1), rounding=ROUND_HALF_UP))

@@ -1,0 +1,133 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "ddb9891b4cdf083f67c471049883d0c4fbd64ebb75f5c3b68e5a8d92641e40bd",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_tmp_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e9-c7bf-75c0-bdb0-6647916b82af"
+      },
+      "created_at": "2026-10-01T10:02:06.060925754Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6ea-016c-71a2-ae94-64c1c1e8b92e",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "ddb9891b4cdf083f67c471049883d0c4fbd64ebb75f5c3b68e5a8d92641e40bd",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_tmp_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e9-c7bf-75c0-bdb0-6647916b82af"
+      },
+      "created_at": "2026-10-01T10:02:20.322211906Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6ea-3922-7bd1-97a0-96b8d9bb25d5",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "ddb9891b4cdf083f67c471049883d0c4fbd64ebb75f5c3b68e5a8d92641e40bd",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_tmp_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e9-c7bf-75c0-bdb0-6647916b82af"
+      },
+      "created_at": "2026-10-01T10:02:26.044848133Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6ea-4f7c-7030-b29c-c6fed4b5a9b3",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "ddb9891b4cdf083f67c471049883d0c4fbd64ebb75f5c3b68e5a8d92641e40bd",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_tmp_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e9-c7bf-75c0-bdb0-6647916b82af"
+      },
+      "created_at": "2026-10-01T10:02:33.541393752Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6ea-6cc5-7570-acc7-a0b1a85f35e5",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "824e73bf86b3a5b857d3861cb1943c9ff96335ca84a725907308d9597e4b5485",
+      "after_unix_mode": 33152,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 1253,
+      "bytes_removed": 0,
+      "path": "__pycache__/cache.cpython-314.pyc"
+    },
+    {
+      "after_digest": "61422191504f9e7e9f93e14108275e9e22cb788119516cef70383092b1b6adb8",
+      "after_unix_mode": 33152,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 1074,
+      "bytes_removed": 0,
+      "path": "__pycache__/clock.cpython-314.pyc"
+    },
+    {
+      "after_digest": "a4c8226cf25602b0362a7ecd0e2cd76d6453fa0ecc5e2f669e92514c1210167c",
+      "after_unix_mode": 33152,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 1140,
+      "bytes_removed": 0,
+      "path": "_tmp_check.py"
+    },
+    {
+      "after_digest": "8127628457be340570498b71a72507e0510fc9912c2b5e14b5e02a9378bf18a4",
+      "after_unix_mode": 33152,
+      "before_digest": "a13470fc1d562dd18638a3d75ad8bf5a02be346547cf99bce3ace93177f705ec",
+      "before_unix_mode": 33204,
+      "bytes_added": 443,
+      "bytes_removed": 262,
+      "path": "cache.py"
+    },
+    {
+      "after_digest": "f5267225fef1b261d4b3d01f5d6f6ac91f1fb8135f98fd8e800ff3811c9282ee",
+      "after_unix_mode": 33152,
+      "before_digest": "e8030dc4344bda73b1cbbd623313ad69b2b71a222b9fa2c0992af87c89dff795",
+      "before_unix_mode": 33204,
+      "bytes_added": 542,
+      "bytes_removed": 58,
+      "path": "clock.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-abmibai2/workspace/.pactrail/runs/01a0f6e9-c7bf-75c0-bdb0-6647916b82af/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "model reached the 12-turn limit after producing candidate changes; the model did not attest completeness, so the candidate requires explicit human review"
+  ],
+  "run_id": "01a0f6e9-c7bf-75c0-bdb0-6647916b82af",
+  "summary": "The model reached the 12-turn limit without a final summary. Candidate changes were preserved for deterministic verification and explicit review.",
+  "tokens": 111881,
+  "trace": "/tmp/pactrail-scored-abmibai2/workspace/.pactrail/runs/01a0f6e9-c7bf-75c0-bdb0-6647916b82af/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

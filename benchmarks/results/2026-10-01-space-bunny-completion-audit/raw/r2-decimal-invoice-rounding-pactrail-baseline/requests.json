@@ -1,0 +1,322 @@
+[
+  {
+    "attempt": 1,
+    "started": 1790849445.488186,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 5018,
+      "completion_tokens": 66,
+      "total_tokens": 5084,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 128,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849445-xlPmU9Jig8oru7tlU2qN",
+    "elapsed_seconds": 1.5647532939910889
+  },
+  {
+    "attempt": 2,
+    "started": 1790849447.0605903,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 5215,
+      "completion_tokens": 469,
+      "total_tokens": 5684,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 5018,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849447-1tG3ske0b2pH0v2GmFGE",
+    "elapsed_seconds": 5.144357919692993
+  },
+  {
+    "attempt": 3,
+    "started": 1790849452.2170482,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 6928,
+      "completion_tokens": 456,
+      "total_tokens": 7384,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 5215,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849452-CDdheFjzgYYizmfzUlmX",
+    "elapsed_seconds": 5.273083209991455
+  },
+  {
+    "attempt": 4,
+    "started": 1790849457.5061772,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 8521,
+      "completion_tokens": 48,
+      "total_tokens": 8569,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 6928,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849457-KJ70MLJkuEP8e9HlpzN2",
+    "elapsed_seconds": 1.6069364547729492
+  },
+  {
+    "attempt": 5,
+    "started": 1790849459.265933,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 8804,
+      "completion_tokens": 142,
+      "total_tokens": 8946,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 8521,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849459-FHiR1G41b4px2rq1Ejfx",
+    "elapsed_seconds": 2.111225128173828
+  },
+  {
+    "attempt": 6,
+    "started": 1790849461.4125783,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 9299,
+      "completion_tokens": 48,
+      "total_tokens": 9347,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 8804,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849461-uAponaR09xFvhrHMUeVL",
+    "elapsed_seconds": 1.1983039379119873
+  },
+  {
+    "attempt": 7,
+    "started": 1790849462.6496532,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 9484,
+      "completion_tokens": 30,
+      "total_tokens": 9514,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 9299,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849462-df6TMRXCNbSo3iIPvE7W",
+    "elapsed_seconds": 1.1917743682861328
+  },
+  {
+    "attempt": 8,
+    "started": 1790849463.8544695,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 9569,
+      "completion_tokens": 19,
+      "total_tokens": 9588,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 9484,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849463-JI1ZW64eowcxd8HbZkqm",
+    "elapsed_seconds": 0.982468843460083
+  },
+  {
+    "attempt": 9,
+    "started": 1790849464.8541892,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 10036,
+      "completion_tokens": 72,
+      "total_tokens": 10108,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 9569,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849464-3L2okJbmDzoVhRMxKcNQ",
+    "elapsed_seconds": 2.8545897006988525
+  },
+  {
+    "attempt": 10,
+    "started": 1790849467.7408981,
+    "requested_model": "stealth/space-bunny-alpha",
+    "requested_max_tokens": 4096,
+    "usage": {
+      "prompt_tokens": 10226,
+      "completion_tokens": 331,
+      "total_tokens": 10557,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 10036,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0,
+        "upstream_inference_prompt_cost": 0,
+        "upstream_inference_completions_cost": 0
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "status": 200,
+    "provider_id": "gen-1790849467-g6rdvzkba8r80OXgZCI3",
+    "elapsed_seconds": 3.8923349380493164
+  }
+]

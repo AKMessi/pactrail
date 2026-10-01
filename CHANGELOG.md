@@ -8,6 +8,12 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Opt-in revision-bound completion audits: up to two ordinary budgeted review
+  requests, durable event-derived allowance, unchanged tool authority, and
+  explicit unreviewed-revision risks. Model review never creates passing evidence.
+- Research design and a controlled comparison framework for completeness
+  against pre-upgrade Pactrail, OpenCode, and mini-SWE-agent.
+
 - Interactive CLI command palette with descriptions, contextual model/run-ID completion,
   multiline composition, external-editor return, and bounded UTF-8 task-file loading.
 - `/focus`, `/evidence`, `/retry`, model/run filtering, and session-only pager/detail controls.

@@ -1,0 +1,29 @@
+--- a/api.py
++++ b/api.py
+@@ -1,8 +1,12 @@
+ from pages import page
++
++
+ def collect(items, size):
+     cursor = 0
+     result = []
+-    while cursor:
++    while True:
+         rows, cursor = page(items, cursor, size)
+         result.extend(rows)
+-    return result
++        if cursor is None:
++            break
++    return result--- a/pages.py
++++ b/pages.py
+@@ -1,3 +1,9 @@
+ def page(items, cursor, size):
++    if size <= 0:
++        raise ValueError("size must be positive")
++    if cursor < 0 or cursor > len(items):
++        raise ValueError("cursor out of range")
++
+     end = cursor + size
+-    return list(items[cursor:end]), end if end <= len(items) else None
++    rows = list(items[cursor:end])
++    return rows, end if end < len(items) else None

@@ -1,0 +1,437 @@
+{
+  "schema_version": 1,
+  "frozen_at": "2026-10-01T09:38:58.779832+00:00",
+  "description": "Exploratory controlled completeness suite; not SWE-bench and not evidence of universal superiority.",
+  "base_commit": "8936e799c26cef105487a2a28f46c3adcf104929",
+  "implementation_commit": null,
+  "implementation_sources": {
+    "crates/pactrail-engine/src/engine.rs": "5e40039eb07c7a5c2f4917b3f7bf21fe4bd2cff15e6c70f9f9970e4e8ad32d42",
+    "crates/pactrail-engine/src/completion.rs": "4cbbf4d7b3fffac52bffecf72f0db8a9f5833f9015b8e34ee899675e48910a4c",
+    "crates/pactrail-cli/src/cli.rs": "04f61e1a07350ea83e607b3b112539f596a2082035d53554aa6b92d4db43e08a",
+    "crates/pactrail-cli/src/commands.rs": "35237f145762160aaccf28b2a2bbf42be52d03da37ebd8a77dc15f880634b0d3"
+  },
+  "files": {
+    "cases.py": "1473afbe9bb66b48302e09ac6437bf2efe7e8f57286cc226e7fdd2ced0982de0",
+    "run.py": "4620c6e047344c0fe9357b5ea8e8cb23938a7ae12171187fbaa65e4c93b11371",
+    "mini_runner.py": "6c12ec29db7366d996ed2518af1ca04a064dba72a1b2243ea8f7fb5df4e09fd6",
+    "summarize.py": "32070e916da62f60f88cb5c5cf8e4142d83691707d61de901193d4940f712e70",
+    "test_benchmark.py": "fb4d6a41abf690401f31fe1aceac44dac0dfba3d8d41d4ab47eb50fa7935a0b2"
+  },
+  "versions": {
+    "baseline": {
+      "sha256": "d458d4494e277a56bcf4cb040f022e29eac0c0381a2c31ea9125d4ddcf2ea8db",
+      "version": "pactrail 1.0.0"
+    },
+    "pactrail": {
+      "sha256": "59e714cc70c1020cfe2951467ddc9091a82d723c7bb85da04c0db4821d3b4f47",
+      "version": "pactrail 1.0.0"
+    },
+    "opencode": {
+      "sha256": "9ca0b9953d49997601655e54f846a3efa464f237e47c6f1b04716d0f2e64c4c2",
+      "version": "1.18.34"
+    },
+    "mini": {
+      "version": "2.4.6"
+    }
+  },
+  "model": "stealth/space-bunny-alpha",
+  "metadata": {
+    "id": "stealth/space-bunny-alpha",
+    "canonical_slug": "stealth/space-bunny-alpha",
+    "hugging_face_id": null,
+    "name": "Space Bunny Alpha",
+    "created": 1790174884,
+    "description": "Space Bunny Alpha is an anonymous large model with blazing-fast inference, strong coding capabilities and native multimodal input support. It delivers adjustable reasoning effort, and a 1M-token context window. Space...",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Other",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0",
+      "completion": "0"
+    },
+    "top_provider": {
+      "context_length": 1000000,
+      "max_completion_tokens": 524288,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_p"
+    ],
+    "default_parameters": {},
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": "2026-10-05",
+    "links": {
+      "details": "/api/v1/models/stealth/space-bunny-alpha/endpoints"
+    },
+    "reasoning": {
+      "mandatory": true,
+      "supported_efforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "default_effort": "max"
+    }
+  },
+  "metadata_provenance": {
+    "source": "Captured OpenRouter API metadata; pricing is rechecked live before each scored trial.",
+    "captured_at": "2026-10-01T08:54:44.264916+00:00"
+  },
+  "controls": {
+    "temperature": 0,
+    "reasoning_effort": "low",
+    "max_output_tokens": 8192,
+    "max_requests": 12,
+    "max_request_message_bytes": 131072,
+    "max_trial_seconds": 300,
+    "retries": "No trial retries or replacement samples; every HTTP attempt counts toward 12.",
+    "permissions": "Trusted local command execution for all; sanitized environments; no root API key in agent processes.",
+    "cost": "Only the exact currently-free model; no paid fallback. Zero API dollars cannot establish monetary savings.",
+    "grading": "External behavioral assertions, forbidden production-path changes, and clean harness exit; no grader feedback during trials."
+  },
+  "order": [
+    {
+      "case": "paired-clamping",
+      "arm": "pactrail-baseline",
+      "repetition": 1
+    },
+    {
+      "case": "paired-clamping",
+      "arm": "pactrail-audit",
+      "repetition": 1
+    },
+    {
+      "case": "paired-clamping",
+      "arm": "opencode",
+      "repetition": 1
+    },
+    {
+      "case": "paired-clamping",
+      "arm": "mini",
+      "repetition": 1
+    },
+    {
+      "case": "unicode-key-collisions",
+      "arm": "pactrail-audit",
+      "repetition": 1
+    },
+    {
+      "case": "unicode-key-collisions",
+      "arm": "opencode",
+      "repetition": 1
+    },
+    {
+      "case": "unicode-key-collisions",
+      "arm": "mini",
+      "repetition": 1
+    },
+    {
+      "case": "unicode-key-collisions",
+      "arm": "pactrail-baseline",
+      "repetition": 1
+    },
+    {
+      "case": "decimal-invoice-rounding",
+      "arm": "opencode",
+      "repetition": 1
+    },
+    {
+      "case": "decimal-invoice-rounding",
+      "arm": "mini",
+      "repetition": 1
+    },
+    {
+      "case": "decimal-invoice-rounding",
+      "arm": "pactrail-baseline",
+      "repetition": 1
+    },
+    {
+      "case": "decimal-invoice-rounding",
+      "arm": "pactrail-audit",
+      "repetition": 1
+    },
+    {
+      "case": "pagination-boundary",
+      "arm": "mini",
+      "repetition": 1
+    },
+    {
+      "case": "pagination-boundary",
+      "arm": "pactrail-baseline",
+      "repetition": 1
+    },
+    {
+      "case": "pagination-boundary",
+      "arm": "pactrail-audit",
+      "repetition": 1
+    },
+    {
+      "case": "pagination-boundary",
+      "arm": "opencode",
+      "repetition": 1
+    },
+    {
+      "case": "expiry-timezone-consistency",
+      "arm": "pactrail-baseline",
+      "repetition": 1
+    },
+    {
+      "case": "expiry-timezone-consistency",
+      "arm": "pactrail-audit",
+      "repetition": 1
+    },
+    {
+      "case": "expiry-timezone-consistency",
+      "arm": "opencode",
+      "repetition": 1
+    },
+    {
+      "case": "expiry-timezone-consistency",
+      "arm": "mini",
+      "repetition": 1
+    },
+    {
+      "case": "stable-topological-order",
+      "arm": "pactrail-audit",
+      "repetition": 1
+    },
+    {
+      "case": "stable-topological-order",
+      "arm": "opencode",
+      "repetition": 1
+    },
+    {
+      "case": "stable-topological-order",
+      "arm": "mini",
+      "repetition": 1
+    },
+    {
+      "case": "stable-topological-order",
+      "arm": "pactrail-baseline",
+      "repetition": 1
+    },
+    {
+      "case": "paired-clamping",
+      "arm": "pactrail-audit",
+      "repetition": 2
+    },
+    {
+      "case": "paired-clamping",
+      "arm": "opencode",
+      "repetition": 2
+    },
+    {
+      "case": "paired-clamping",
+      "arm": "mini",
+      "repetition": 2
+    },
+    {
+      "case": "paired-clamping",
+      "arm": "pactrail-baseline",
+      "repetition": 2
+    },
+    {
+      "case": "unicode-key-collisions",
+      "arm": "opencode",
+      "repetition": 2
+    },
+    {
+      "case": "unicode-key-collisions",
+      "arm": "mini",
+      "repetition": 2
+    },
+    {
+      "case": "unicode-key-collisions",
+      "arm": "pactrail-baseline",
+      "repetition": 2
+    },
+    {
+      "case": "unicode-key-collisions",
+      "arm": "pactrail-audit",
+      "repetition": 2
+    },
+    {
+      "case": "decimal-invoice-rounding",
+      "arm": "mini",
+      "repetition": 2
+    },
+    {
+      "case": "decimal-invoice-rounding",
+      "arm": "pactrail-baseline",
+      "repetition": 2
+    },
+    {
+      "case": "decimal-invoice-rounding",
+      "arm": "pactrail-audit",
+      "repetition": 2
+    },
+    {
+      "case": "decimal-invoice-rounding",
+      "arm": "opencode",
+      "repetition": 2
+    },
+    {
+      "case": "pagination-boundary",
+      "arm": "pactrail-baseline",
+      "repetition": 2
+    },
+    {
+      "case": "pagination-boundary",
+      "arm": "pactrail-audit",
+      "repetition": 2
+    },
+    {
+      "case": "pagination-boundary",
+      "arm": "opencode",
+      "repetition": 2
+    },
+    {
+      "case": "pagination-boundary",
+      "arm": "mini",
+      "repetition": 2
+    },
+    {
+      "case": "expiry-timezone-consistency",
+      "arm": "pactrail-audit",
+      "repetition": 2
+    },
+    {
+      "case": "expiry-timezone-consistency",
+      "arm": "opencode",
+      "repetition": 2
+    },
+    {
+      "case": "expiry-timezone-consistency",
+      "arm": "mini",
+      "repetition": 2
+    },
+    {
+      "case": "expiry-timezone-consistency",
+      "arm": "pactrail-baseline",
+      "repetition": 2
+    },
+    {
+      "case": "stable-topological-order",
+      "arm": "opencode",
+      "repetition": 2
+    },
+    {
+      "case": "stable-topological-order",
+      "arm": "mini",
+      "repetition": 2
+    },
+    {
+      "case": "stable-topological-order",
+      "arm": "pactrail-baseline",
+      "repetition": 2
+    },
+    {
+      "case": "stable-topological-order",
+      "arm": "pactrail-audit",
+      "repetition": 2
+    }
+  ],
+  "grader_validation": [
+    {
+      "case": "paired-clamping",
+      "baseline": {
+        "passed": false,
+        "stdout": "",
+        "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 6, in <module>\nAssertionError\n"
+      },
+      "gold": {
+        "passed": true,
+        "stdout": "GRADER_COMPLETED\n",
+        "stderr": ""
+      }
+    },
+    {
+      "case": "unicode-key-collisions",
+      "baseline": {
+        "passed": false,
+        "stdout": "",
+        "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 5, in <module>\nAssertionError\n"
+      },
+      "gold": {
+        "passed": true,
+        "stdout": "GRADER_COMPLETED\n",
+        "stderr": ""
+      }
+    },
+    {
+      "case": "decimal-invoice-rounding",
+      "baseline": {
+        "passed": false,
+        "stdout": "",
+        "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 6, in <module>\nAssertionError: ('1.005', 100)\n"
+      },
+      "gold": {
+        "passed": true,
+        "stdout": "GRADER_COMPLETED\n",
+        "stderr": ""
+      }
+    },
+    {
+      "case": "pagination-boundary",
+      "baseline": {
+        "passed": false,
+        "stdout": "",
+        "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 7, in <module>\nAssertionError\n"
+      },
+      "gold": {
+        "passed": true,
+        "stdout": "GRADER_COMPLETED\n",
+        "stderr": ""
+      }
+    },
+    {
+      "case": "expiry-timezone-consistency",
+      "baseline": {
+        "passed": false,
+        "stdout": "",
+        "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 7, in <module>\n  File \"/tmp/pactrail-grader-validation-itcojefa/expiry-timezone-consistency-broken/clock.py\", line 2, in expired\n    return now > expires_at\n           ^^^^^^^^^^^^^^^^\nTypeError: can't compare offset-naive and offset-aware datetimes\n"
+      },
+      "gold": {
+        "passed": true,
+        "stdout": "GRADER_COMPLETED\n",
+        "stderr": ""
+      }
+    },
+    {
+      "case": "stable-topological-order",
+      "baseline": {
+        "passed": false,
+        "stdout": "",
+        "stderr": "Traceback (most recent call last):\n  File \"<stdin>\", line 7, in <module>\nAssertionError\n"
+      },
+      "gold": {
+        "passed": true,
+        "stdout": "GRADER_COMPLETED\n",
+        "stderr": ""
+      }
+    }
+  ]
+}

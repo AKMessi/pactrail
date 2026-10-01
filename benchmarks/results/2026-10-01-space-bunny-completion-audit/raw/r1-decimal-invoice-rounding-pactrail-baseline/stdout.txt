@@ -1,0 +1,57 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "c70ea78ca7bd35051864bf6033432954f46aa7bc0c786449b78ffe24ee8ace9d",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e5-f315-7a43-b6ac-ff20b8f60f59"
+      },
+      "created_at": "2026-10-01T09:58:16.106312027Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e6-7f2a-7651-9296-53c125f8d8f5",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "a218dd23acab0e063ab4c05d6d80de48a190e107ddb193a0a1505272f0795bcb",
+      "after_unix_mode": 33152,
+      "before_digest": "1951d3556f59caf17492e4f2ea1eff2ecce8647c2a6a99abd3dde53dbed22913",
+      "before_unix_mode": 33204,
+      "bytes_added": 163,
+      "bytes_removed": 81,
+      "path": "invoices.py"
+    },
+    {
+      "after_digest": "7d400c3aee5e34e1706f53574f844a077343ead27651691b698493f86b23e2a9",
+      "after_unix_mode": 33152,
+      "before_digest": "5de7e22d69f1733187c096bd3f323909de0ff3e88e0fd8a6973b21bdc78d15da",
+      "before_unix_mode": 33204,
+      "bytes_added": 246,
+      "bytes_removed": 57,
+      "path": "money.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-8t0nhq87/workspace/.pactrail/runs/01a0f6e5-f315-7a43-b6ac-ff20b8f60f59/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6e5-f315-7a43-b6ac-ff20b8f60f59",
+  "summary": "Done.\n\n**Changes**\n- `money.py`: `cents(amount)` now does `int((Decimal(str(amount)) * 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))` — exact decimal path, no float.\n- `invoices.py`: `total_cents(amounts)` sums `cents(a)` per line, so each line rounds independently before summing (no total-only rounding).\n\n**Verified** (temporary script run, then deleted along with generated `__pycache__`):\n- `1.005→101`, `-1.005→-101`, `2.675→268`, `-0.5→-50` (negative ties round away from zero), string `\"1.005\"→101`, `10→1000`, `0→0`.\n- Return types are `int`; `total_cents([]) == 0`; `total_cents([0.1,0.2]) == 30`; `total_cents([1.005,2.675]) == 369` (per-line: 101+268, not a total round).\n\n**Unverified:** no test suite exists in this repo, and I did not run `money.py`/`invoices.py` under any non-default `decimal` context (`getcontext().prec`, e.g. values with >28 significant digits, could raise `InvalidOperation`). Behavior with non-numeric input raises `decimal.InvalidOperation` instead of the old `ValueError`/`TypeError` from `float()` — that API surface change is a consequence of the required `Decimal(str(value))` conversion.",
+  "tokens": 66262,
+  "trace": "/tmp/pactrail-scored-8t0nhq87/workspace/.pactrail/runs/01a0f6e5-f315-7a43-b6ac-ff20b8f60f59/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

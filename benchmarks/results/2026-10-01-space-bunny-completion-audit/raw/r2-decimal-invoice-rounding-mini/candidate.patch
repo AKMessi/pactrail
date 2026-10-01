@@ -1,0 +1,26 @@
+--- a/invoices.py
++++ b/invoices.py
+@@ -1,2 +1,9 @@
++from money import cents
++
++
+ def total_cents(amounts):
+-    return round(sum(float(a) for a in amounts) * 100)
++    """Sum per-line cents (each line rounded independently) as an int."""
++    total = 0
++    for amount in amounts:
++        total += cents(amount)
++    return total
+--- a/money.py
++++ b/money.py
+@@ -1,2 +1,9 @@
++from decimal import Decimal, ROUND_HALF_UP
++
++_CENT = Decimal("1")
++
++
+ def cents(amount):
+-    return round(float(amount) * 100)
++    """Convert ``amount`` to integral cents using ROUND_HALF_UP."""
++    value = amount if isinstance(amount, Decimal) else Decimal(str(amount))
++    return int((value * 100).quantize(_CENT, rounding=ROUND_HALF_UP))

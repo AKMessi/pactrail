@@ -1,0 +1,137 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "962912447146ed84ab5e4cdda473700795d765a6ed097fed9cc78d448f7584c2",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"from pages import page\\nfrom api import collect\\nassert page(list(range(5)),0,2)==([0,1],2)\\nassert page(list(range(5)),4,2)==([4],None)\\nassert page(list(range(5)),5,2)==([],None)\\nassert page([],0,3)==([],None)\\nfor bad in [(0,0),(5,3),(-1,2)]:\\n    try: page(list(range(5)),bad[0],bad[1]); assert False,bad\\n    except ValueError: pass\\ntry: page(list(range(5)),0,0); assert False\\nexcept ValueError: pass\\nsrc=list(range(7))\\nfor s in range(1,10):\\n    assert collect(src,s)==src, s\\n    assert src==list(range(7))\\nassert collect([],3)==[]\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e8-15f5-7890-a638-3dde784eab48"
+      },
+      "created_at": "2026-10-01T10:00:09.712171093Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e8-3af0-79b2-b9a7-22bad7ca50d0",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "5f044614f6436363fc406cf791a670aaff2afdd71edd93577c29b52bd9544f09",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"from pages import page\\nfrom api import collect\\nassert page(list(range(5)),0,2)==([0,1],2)\\nassert page(list(range(5)),4,2)==([4],None)\\nassert page(list(range(5)),5,2)==([],None)\\nassert page([],0,3)==([],None)\\nfor bad in [(0,0),(6,2),(-1,2)]:\\n    try: page(list(range(5)),bad[0],bad[1]); raise SystemExit('no raise %r'%(bad,))\\n    except ValueError: pass\\ntry: page(list(range(5)),0,0); raise SystemExit('no raise size')\\nexcept ValueError: pass\\nsrc=list(range(7))\\nfor s in range(1,10):\\n    assert collect(src,s)==src, s\\n    assert src==list(range(7))\\nassert collect([],3)==[]\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e8-15f5-7890-a638-3dde784eab48"
+      },
+      "created_at": "2026-10-01T10:00:12.627685751Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e8-4653-7270-9b39-a1d23d196d23",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "f4a689e2a0a7a71db33760911cbb6fa534f44263839cc677826533957600bd84",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import shutil; shutil.rmtree('__pycache__', ignore_errors=True); print('done')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e8-15f5-7890-a638-3dde784eab48"
+      },
+      "created_at": "2026-10-01T10:00:15.582568522Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e8-51de-7d00-8bdd-2e96ead49b74",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "26ea147fa8c7c360c1020f2270225a1f60ac5e388335c597f41cc6e0de8543ba",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import api, pages, collections\\n# tuple input, str input\\nassert api.collect((1,2,3,4),2)==[1,2,3,4]\\nassert api.collect('abc',2)==['a','b','c']\\nassert pages.page('abc',1,1)==(['b'],2)\\n# custom sized sequence\\nS=collections.deque(range(6))\\nassert api.collect(S,4)==list(range(6)); assert list(S)==list(range(6))\\n# duplicate-preserving exactness, multi-round\\nd=[7,7,8,7,9,7,7,7]\\nfor s in range(1,12): assert api.collect(d,s)==d\\n# page cursor chain terminates\\nc=0; n=0\\nwhile True:\\n    rows,c=pages.page(list(range(10)),c,3); n+=len(rows)\\n    if c is None: break\\nassert n==10\\nprint('ok2')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e8-15f5-7890-a638-3dde784eab48"
+      },
+      "created_at": "2026-10-01T10:00:24.84955485Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e8-7611-7ba0-8833-28c3663fef38",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "e23d44f44505f40e8cd370c3dfc39304578ea1da24904b52bd459f2ddbb6ad02",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import api, pages\\nassert api.collect((1,2,3,4),2)==[1,2,3,4]\\nassert api.collect('abc',2)==['a','b','c']\\nassert pages.page('abc',1,1)==(['b'],2)\\nd=[7,7,8,7,9,7,7,7]\\nfor s in range(1,12): assert api.collect(d,s)==d\\nc=0;n=0\\nwhile True:\\n    rows,c=pages.page(list(range(10)),c,3); n+=len(rows)\\n    if c is None: break\\nassert n==10\\nassert api.collect([],1)==[]\\ntry: api.collect([1],0); raise SystemExit('no raise')\\nexcept ValueError: pass\\nprint('ok3')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e8-15f5-7890-a638-3dde784eab48"
+      },
+      "created_at": "2026-10-01T10:00:27.811754999Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e8-81a3-72e1-9e59-d67cead69f71",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "7018aa2d0a0388a36e15c65f8c1ecad57d7bd2c262a86c20a4766d5e723596d1",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import shutil; shutil.rmtree('__pycache__', ignore_errors=True); print('clean')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e8-15f5-7890-a638-3dde784eab48"
+      },
+      "created_at": "2026-10-01T10:00:29.54943132Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e8-886d-7463-ab38-ac31350fc303",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "6967d544ca4ddba1c5c83c60c3a4fd1063ead6d74b0f6d5778c719e14101e152",
+      "after_unix_mode": 33152,
+      "before_digest": "e3c503875769dcef332325a6160be18389e9af1ff75857e95f3cd084ebc3d2ea",
+      "before_unix_mode": 33204,
+      "bytes_added": 305,
+      "bytes_removed": 193,
+      "path": "api.py"
+    },
+    {
+      "after_digest": "d72edf47ef5d9c39fadb604dbd4f171a3fa9f113fa22425eb13f0f3f03d7ddd7",
+      "after_unix_mode": 33152,
+      "before_digest": "bcf35902bf1148bc23e15225fb0757d21f078218bbcb3349a532b06ae0bf7224",
+      "before_unix_mode": 33204,
+      "bytes_added": 535,
+      "bytes_removed": 126,
+      "path": "pages.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-yzv5lssv/workspace/.pactrail/runs/01a0f6e8-15f5-7890-a638-3dde784eab48/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6e8-15f5-7890-a638-3dde784eab48",
+  "summary": "Audit result: the two-file candidate stands; no further defects found.\n\nCurrent source (re-read): `pages.page` validates `size <= 0` and `cursor < 0 or cursor > len(items)` → `ValueError`, returns `list(items[cursor:end])` with `None` when `end >= len(items)`, else the integer next cursor. `api.collect` loops `while True` from cursor `0` and stops only on `None`.\n\nChecks actually run (all via `python3` tool results, exit 0):\n- Paging: first/middle/final pages, cursor == len(items) → `([], None)`, empty input → `([], None)`.\n- Rejection: size 0, negative cursor, cursor > len → `ValueError`.\n- `collect` for sizes 1–9 on `range(7)` and on a duplicate-heavy list → exact order/equality; input list unchanged after each call; `collect([], n) == []`; `collect([1], 0)` raises.\n- Multi-step cursor chain terminates and emits exactly 10 items.\n- Sequence types: tuple and `str` inputs work.\n\nFalsification attempt that failed (documented, not a defect): non-sliceable `Sized` sequences (e.g. `collections.deque`) raise `TypeError: sequence index must be integer, not 'slice'`. The contract doesn't require support for non-sliceable sequences and the original code had the same constraint, so I left the API unchanged rather than widening scope.\n\nUncovered obligations / blockers: none outstanding. The repo has no test suite (only `README.md`, `pages.py`, `api.py`), so behavior is verified only by my own assertions derived from the contract — not an independent oracle. Temporary bytecode cache from running the checks was removed; `workspace_changes` shows exactly two changed files.",
+  "tokens": 103459,
+  "trace": "/tmp/pactrail-scored-yzv5lssv/workspace/.pactrail/runs/01a0f6e8-15f5-7890-a638-3dde784eab48/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

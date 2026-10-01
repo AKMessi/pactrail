@@ -1,0 +1,47 @@
+--- a/invoices.py
++++ b/invoices.py
+@@ -1,2 +1,3 @@
+-def total_cents(amounts):
+-    return round(sum(float(a) for a in amounts) * 100)
++from money import total_cents
++
++__all__ = ["total_cents"]
+--- a/money.py
++++ b/money.py
+@@ -1,2 +1,35 @@
++"""Exact money rounding helpers.
++
++All conversions go through ``Decimal(str(value))`` so that no binary
++floating-point intermediate can influence the rounding result.
++"""
++from decimal import Decimal, ROUND_HALF_UP, localcontext, Context
++
++
+ def cents(amount):
+-    return round(float(amount) * 100)
++    """Return ``amount`` as an integer number of cents.
++
++    Rounding uses ROUND_HALF_UP (ties away from zero), which also applies to
++    negative amounts.
++    """
++    return _to_cents(amount)
++
++
++def total_cents(amounts):
++    """Return the sum of ``amounts`` in cents.
++
++    Each amount is rounded to integral cents independently and the rounded
++    integer cents are then summed. An empty iterable yields ``0``.
++    """
++    total = 0
++    for amount in amounts:
++        total += _to_cents(amount)
++    return total
++
++
++def _to_cents(amount):
++    value = Decimal(str(amount)) * 100
++    # Use a generous precision so large/precise inputs never raise.
++    ctx = Context(prec=max(len(value.as_tuple().digits) + abs(value.as_tuple().exponent) + 10, 40))
++    with localcontext(ctx):
++        return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))

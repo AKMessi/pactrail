@@ -1,0 +1,89 @@
+--- a/_tmp_check.py
++++ b/_tmp_check.py
+@@ -0,0 +1,38 @@
++from datetime import datetime, timedelta, timezone
++from cache import Cache
++from clock import expired
++
++n = datetime(2024, 1, 1, 12, 0, 0)
++plus2 = timezone(timedelta(hours=2))
++
++# inclusive expiry, naive values
++assert not expired(n + timedelta(seconds=1), n)
++assert expired(n, n)
++assert expired(n, n + timedelta(seconds=1))
++
++# naive vs aware-UTC treat naive as UTC
++assert expired(n.replace(tzinfo=timezone.utc), n)
++assert expired(n, n.replace(tzinfo=timezone.utc))
++assert not expired((n + timedelta(seconds=1)).replace(tzinfo=timezone.utc), n)
++
++# aware values compare as instants
++assert not expired(n.replace(tzinfo=timezone.utc), n.replace(tzinfo=plus2))
++# now=14:00+02:00 == 12:00Z, expiry 12:00Z -> expired at equality
++assert expired(n.replace(tzinfo=timezone.utc),
++               (n + timedelta(hours=2)).replace(tzinfo=plus2))
++
++c = Cache()
++c.put("k", "v", n)
++assert c.get("k", n - timedelta(seconds=1)) == "v"
++try:
++    c.get("k", n)
++    raise SystemExit("expected KeyError")
++except KeyError:
++    pass
++assert "k" not in c.entries
++try:
++    c.get("missing", n)
++    raise SystemExit("expected KeyError")
++except KeyError:
++    pass
++print("ok")
+--- a/cache.py
++++ b/cache.py
+@@ -1,7 +1,18 @@
++from clock import expired
++
++
+ class Cache:
+-    def __init__(self): self.entries={}
+-    def put(self,key,value,expires_at): self.entries[key]=(value,expires_at)
+-    def get(self,key,now):
+-        value,expiry=self.entries[key]
+-        if now > expiry: raise KeyError(key)
++    def __init__(self):
++        self.entries = {}
++
++    def put(self, key, value, expires_at):
++        self.entries[key] = (value, expires_at)
++
++    def get(self, key, now):
++        if key not in self.entries:
++            raise KeyError(key)
++        value, expiry = self.entries[key]
++        if expired(expiry, now):
++            del self.entries[key]
++            raise KeyError(key)
+         return value
+--- a/clock.py
++++ b/clock.py
+@@ -1,2 +1,18 @@
++"""Shared expiry semantics for absolute datetimes.
++
++Naive datetimes are interpreted as UTC; aware datetimes are compared as
++instants. Expiry is inclusive: an entry is expired once
++``now >= expires_at``.
++"""
++from datetime import datetime, timezone
++
++
++def _as_utc(value):
++    if value.tzinfo is None:
++        return value.replace(tzinfo=timezone.utc)
++    return value.astimezone(timezone.utc)
++
++
+ def expired(expires_at, now):
+-    return now > expires_at
++    """Return True when ``now`` has reached or passed ``expires_at``."""
++    return _as_utc(now) >= _as_utc(expires_at)

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+/preregistered/raw/
+/preregistered/results.json
+/preregistered/summary.json
+/preregistered/execution-status.json

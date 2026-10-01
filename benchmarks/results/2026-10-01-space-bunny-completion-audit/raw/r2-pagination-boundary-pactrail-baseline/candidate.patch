@@ -1,0 +1,40 @@
+--- a/api.py
++++ b/api.py
+@@ -1,8 +1,11 @@
+-from pages import page
++from pages import page, _iter_pages
++
++
+ def collect(items, size):
+-    cursor = 0
++    if size <= 0:
++        raise ValueError("size must be positive")
++    source = list(items)
+     result = []
+-    while cursor:
+-        rows, cursor = page(items, cursor, size)
++    for rows in _iter_pages(source, size):
+         result.extend(rows)
+-    return result
++    return result--- a/pages.py
++++ b/pages.py
+@@ -1,3 +1,17 @@
+ def page(items, cursor, size):
+-    end = cursor + size
+-    return list(items[cursor:end]), end if end <= len(items) else None
++    if size <= 0:
++        raise ValueError("size must be positive")
++    if cursor < 0 or cursor > len(items):
++        raise ValueError("cursor out of range")
++    end = min(cursor + size, len(items))
++    rows = list(items[cursor:end])
++    return rows, end if end < len(items) else None
++
++
++def _iter_pages(items, size):
++    cursor = 0
++    while True:
++        rows, cursor = page(items, cursor, size)
++        yield rows
++        if cursor is None:
++            return

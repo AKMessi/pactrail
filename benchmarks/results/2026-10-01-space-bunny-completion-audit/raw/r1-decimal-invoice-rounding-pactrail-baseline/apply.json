@@ -1,0 +1,112 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0f6e5-f315-7a43-b6ac-ff20b8f60f59",
+  "created_at": "2026-10-01T09:58:35.617752187Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix money.cents and invoices.total_cents. Convert input values using Decimal(str(value)); round each line independently to integral cents with ROUND_HALF_UP, including negative ties, then sum. Do not round only the invoice total. Preserve empty total 0 and the integer return types. No binary floating-point intermediate should determine rounding. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+    "workspace_root": "/tmp/pactrail-scored-8t0nhq87/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0f6e5-f302-7221-8b31-1df93747ab5f",
+        "description": "Fix money.cents and invoices.total_cents. Convert input values using Decimal(str(value)); round each line independently to integral cents with ROUND_HALF_UP, including negative ties, then sum. Do not round only the invoice total. Preserve empty total 0 and the integer return types. No binary floating-point intermediate should determine rounding. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 491520,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 12
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "e26e4e4b217e2211ed563694830306a6a9646ec9688bf4cfe52241b45897aa87",
+  "final_event_hash": "a7cc448f2baa16b4bb63a2e47265f0c104cb4264d432acf30e1f155bab67e296",
+  "changes": [
+    {
+      "path": "invoices.py",
+      "before_digest": "1951d3556f59caf17492e4f2ea1eff2ecce8647c2a6a99abd3dde53dbed22913",
+      "after_digest": "a218dd23acab0e063ab4c05d6d80de48a190e107ddb193a0a1505272f0795bcb",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 163,
+      "bytes_removed": 81
+    },
+    {
+      "path": "money.py",
+      "before_digest": "5de7e22d69f1733187c096bd3f323909de0ff3e88e0fd8a6973b21bdc78d15da",
+      "after_digest": "7d400c3aee5e34e1706f53574f844a077343ead27651691b698493f86b23e2a9",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 246,
+      "bytes_removed": 57
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0f6e6-ca2c-7942-802d-130ba9477f8f",
+      "obligation_id": "01a0f6e5-f302-7221-8b31-1df93747ab5f",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix money.cents and invoices.total_cents. Convert input values using Decimal(str(value)); round each line independently to integral cents with ROUND_HALF_UP, including negative ties, then sum. Do not round only the invoice total. Preserve empty total 0 and the integer return types. No binary floating-point intermediate should determine rounding. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0f6e6-7f2a-7651-9296-53c125f8d8f5",
+      "binding": {
+        "run_id": "01a0f6e5-f315-7a43-b6ac-ff20b8f60f59",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "c70ea78ca7bd35051864bf6033432954f46aa7bc0c786449b78ffe24ee8ace9d",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T09:58:16.106312027Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "389618adc486aeabf9a0a768c85e351f1a8c4641c493406e9e89f07c4f3b49b6"
+}

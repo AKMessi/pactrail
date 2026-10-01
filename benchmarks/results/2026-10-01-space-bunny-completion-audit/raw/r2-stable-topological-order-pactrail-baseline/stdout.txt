@@ -1,0 +1,91 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "c70ea78ca7bd35051864bf6033432954f46aa7bc0c786449b78ffe24ee8ace9d",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6fd-74d1-7b31-b8a6-58e74a622449"
+      },
+      "created_at": "2026-10-01T10:23:33.191675996Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6fd-a547-72d3-9e37-5f5458a26dd4",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "c70ea78ca7bd35051864bf6033432954f46aa7bc0c786449b78ffe24ee8ace9d",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6fd-74d1-7b31-b8a6-58e74a622449"
+      },
+      "created_at": "2026-10-01T10:23:36.998670006Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6fd-b426-73a3-80c9-9dad633a8b72",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "b992f0202c4553515a457ee2d94bd266d5320ec316e29f3168b31497004b9d34",
+      "after_unix_mode": 33152,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 1069,
+      "bytes_removed": 0,
+      "path": "__pycache__/build.cpython-314.pyc"
+    },
+    {
+      "after_digest": "b175d050c654bb615219146b073f6693e97222a881b2d67a6ad0181bc67941d8",
+      "after_unix_mode": 33152,
+      "before_digest": null,
+      "before_unix_mode": null,
+      "bytes_added": 2042,
+      "bytes_removed": 0,
+      "path": "__pycache__/graph.cpython-314.pyc"
+    },
+    {
+      "after_digest": "c8ca8904c3bc860701be2aa1441c94f02226d34ce6a1488b406e37dec5a3d0aa",
+      "after_unix_mode": 33152,
+      "before_digest": "2e07e0b286cff95bd058023d57685c290b08b3d7c6a5c21099c5342ae2260a2f",
+      "before_unix_mode": 33204,
+      "bytes_added": 569,
+      "bytes_removed": 106,
+      "path": "build.py"
+    },
+    {
+      "after_digest": "5a68979ae55e975537603f2bfcca026571efc778f2a8ec99c93f4481eabb5f04",
+      "after_unix_mode": 33152,
+      "before_digest": "f4573dab5e46ff843e89cbbd529f57a1b88e10a65393d1a360432f4f7741d23b",
+      "before_unix_mode": 33204,
+      "bytes_added": 1248,
+      "bytes_removed": 43,
+      "path": "graph.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-o526qmkx/workspace/.pactrail/runs/01a0f6fd-74d1-7b31-b8a6-58e74a622449/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6fd-74d1-7b31-b8a6-58e74a622449",
+  "summary": "Done.\n\n- `graph.order`: copies prerequisite lists (no mutation), validates all prerequisites exist (else `ValueError`), then repeatedly emits the lexicographically smallest ready node; empty ready set → `ValueError` for cycles. Every declared node appears exactly once.\n- `build.plan`: raises `ValueError` on unknown requested nodes, computes the transitive closure with an iterative stack, and returns it filtered through `order` so it is topologically valid and deterministic. Does not mutate inputs.\n\nVerified via a temporary script (since removed): ordering, no-mutation, plan closure, and all three `ValueError` paths behaved as expected.\n\nUnverified: no test suite exists in the repo, so I could not run project-level tests.",
+  "tokens": 63200,
+  "trace": "/tmp/pactrail-scored-o526qmkx/workspace/.pactrail/runs/01a0f6fd-74d1-7b31-b8a6-58e74a622449/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

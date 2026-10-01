@@ -36,6 +36,7 @@ use tracing::{info, warn};
 use crate::checkpoint::{
     CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint, contract_digest,
 };
+use crate::completion::{CompletionLedger, review_prompt};
 use crate::context_window::{
     CompactionReport, ContextWindow, DeduplicationReport, PreparedContext,
     append_deduplicated_result_with_artifacts,
@@ -316,6 +317,7 @@ pub struct RunEngine<'a> {
     price_provenance: Option<(String, String)>,
     investigation_price_provenance: Option<(String, String)>,
     adaptive_routing: bool,
+    completion_audit: bool,
 }
 
 impl<'a> RunEngine<'a> {
@@ -345,6 +347,7 @@ impl<'a> RunEngine<'a> {
             price_provenance: None,
             investigation_price_provenance: None,
             adaptive_routing: false,
+            completion_audit: false,
         }
     }
 
@@ -352,6 +355,14 @@ impl<'a> RunEngine<'a> {
     #[must_use]
     pub const fn with_max_turns(mut self, max_turns: u16) -> Self {
         self.max_turns = max_turns;
+        self
+    }
+
+    /// Enables at most two revision-bound completion review turns for change tasks.
+    /// Review consumes ordinary budgets and never grants tool authority or passing evidence.
+    #[must_use]
+    pub const fn with_completion_audit(mut self, enabled: bool) -> Self {
+        self.completion_audit = enabled;
         self
     }
 
@@ -1100,6 +1111,11 @@ impl<'a> RunEngine<'a> {
             ]),
         }))?;
         let mut accepted_completion_gate = None;
+        let mut completion_ledger = if self.completion_audit {
+            CompletionLedger::restore(&journal.store.load(run_id)?)
+        } else {
+            CompletionLedger::default()
+        };
         let mut controller = ControllerKernel::restore_with_discovery_cap(
             &contract.goal,
             max_turns,
@@ -1587,8 +1603,58 @@ impl<'a> RunEngine<'a> {
                             )?;
                             continue;
                         } else if validation.passed() {
-                            accepted_completion_gate = Some((candidate_digest, validation));
+                            accepted_completion_gate = Some((candidate_digest.clone(), validation));
                         }
+                    }
+                }
+                if self.completion_audit && goal_intent == GoalIntent::Change {
+                    let remaining = max_turns.saturating_sub(turn.saturating_add(1));
+                    if completion_ledger.can_review(&candidate_digest, remaining) {
+                        journal.append(RunEvent::ActionCompleted(
+                            completion_ledger.record(&candidate_digest),
+                        ))?;
+                        conversation
+                            .push(ConversationItem::Message(Message::assistant(response.text)));
+                        conversation.push(ConversationItem::Message(Message::system(
+                            review_prompt(&contract, &candidate_changes, &candidate_digest),
+                        )));
+                        previous_tool_signature = None;
+                        repeated_tool_turns = 0;
+                        consecutive_failed_tool_turns = 0;
+                        self.persist_checkpoint(
+                            &mut durable_checkpoint,
+                            transaction,
+                            &mut journal,
+                            CheckpointLoopState {
+                                phase: ResumePhase::BeforeModel,
+                                next_turn: turn.saturating_add(1),
+                                elapsed_active_ms: active_base_ms
+                                    .saturating_add(elapsed_millis(active_started)),
+                                conversation: &conversation,
+                                usage,
+                                cost_spent_microusd: cost_spent,
+                                active_route,
+                                call_ids: &call_ids,
+                                previous_tool_signature: previous_tool_signature.as_ref(),
+                                repeated_tool_turns,
+                                consecutive_failed_tool_turns,
+                                automatic_repair_cycles,
+                                final_text: &final_text,
+                                recovery_risk: recovery_risk.as_deref(),
+                            },
+                        )?;
+                        continue;
+                    }
+                    if completion_ledger.needs_review(&candidate_digest) {
+                        let risk = "Completion audit could not review the final candidate revision within the bounded audit/turn allowance; completeness remains unverified.".to_owned();
+                        journal.append(RunEvent::NoteRecorded {
+                            message: risk.clone(),
+                        })?;
+                        recovery_risk =
+                            Some(recovery_risk.map_or_else(
+                                || risk.clone(),
+                                |previous| format!("{previous} {risk}"),
+                            ));
                     }
                 }
                 final_text = response.text;
@@ -1810,7 +1876,7 @@ impl<'a> RunEngine<'a> {
                     )));
                     last_proactive_candidate_digest = Some(candidate_digest.clone());
                     if validation.passed() {
-                        accepted_completion_gate = Some((candidate_digest, validation));
+                        accepted_completion_gate = Some((candidate_digest.clone(), validation));
                     } else if repair_feedback {
                         automatic_repair_cycles = automatic_repair_cycles.saturating_add(1);
                         self.append_verification_repair_request(
@@ -3191,6 +3257,10 @@ impl RunEngine<'_> {
             investigation_price_provenance: Option<&'a (String, String)>,
             #[serde(skip_serializing_if = "is_false")]
             adaptive_routing: bool,
+            #[serde(skip_serializing_if = "is_false")]
+            completion_audit: bool,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            completion_audit_version: Option<u16>,
             #[serde(skip_serializing_if = "Option::is_none")]
             observation_root: Option<&'a Path>,
             max_turns: u16,
@@ -3211,6 +3281,8 @@ impl RunEngine<'_> {
             price_provenance: self.price_provenance.as_ref(),
             investigation_price_provenance: self.investigation_price_provenance.as_ref(),
             adaptive_routing: self.adaptive_routing,
+            completion_audit: self.completion_audit,
+            completion_audit_version: self.completion_audit.then_some(1),
             observation_root: self.observation_root.as_deref(),
             max_turns: self.max_turns,
             runtime_identity: self.runtime_identity.as_deref(),
@@ -4454,6 +4526,36 @@ mod tests {
         capabilities: ModelCapabilities,
     }
 
+    struct SuspendAfterScriptModel {
+        script: ScriptedModel,
+    }
+
+    #[async_trait]
+    impl ModelDriver for SuspendAfterScriptModel {
+        fn name(&self) -> &str {
+            &self.script.name
+        }
+        fn model(&self) -> &str {
+            &self.script.model
+        }
+        fn capabilities(&self) -> &ModelCapabilities {
+            &self.script.capabilities
+        }
+        async fn invoke(&self, _request: &ModelRequest) -> Result<ModelResponse, ModelError> {
+            let response = self
+                .script
+                .responses
+                .lock()
+                .map_err(|_| ModelError::InvalidRequest("script lock poisoned".to_owned()))?
+                .pop_front();
+            if let Some(response) = response {
+                Ok(response)
+            } else {
+                std::future::pending().await
+            }
+        }
+    }
+
     struct InspectingModel {
         responses: Mutex<VecDeque<ModelResponse>>,
         requests: Mutex<Vec<ModelRequest>>,
@@ -4751,6 +4853,183 @@ mod tests {
         (source, control, transaction)
     }
 
+    #[tokio::test]
+    async fn completion_audit_can_repair_a_second_path_without_fabricating_evidence() {
+        let reply = || ModelResponse {
+            text: "The change is complete.".to_owned(),
+            tool_calls: Vec::new(),
+            finish_reason: FinishReason::Complete,
+            usage: Usage::default(),
+            provider_request_id: None,
+            extensions: serde_json::Map::new(),
+        };
+        let model = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "completion-test".to_owned(),
+            capabilities: ModelCapabilities::default(),
+            responses: Mutex::new(VecDeque::from([
+                tool_response(
+                    "first-path",
+                    "write_file",
+                    json!({"path":"a.txt", "content":"fixed"}),
+                ),
+                reply(),
+                tool_response(
+                    "second-path",
+                    "write_file",
+                    json!({"path":"b.txt", "content":"fixed"}),
+                ),
+                reply(),
+                reply(),
+            ])),
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let control = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        let registry = pactrail_tools::builtin_registry().unwrap_or_else(|e| unreachable!("{e}"));
+        let mut contract = TaskContract::new("Fix both paths", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let mut store = EventStore::open_in_memory().unwrap_or_else(|e| unreachable!("{e}"));
+        let run_id = RunId::new();
+        let outcome = RunEngine::new(&model, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .execute_with_id(run_id, contract, &transaction, &mut store)
+            .await
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(outcome.receipt.changes.len(), 2);
+        assert!(!source.path().join("a.txt").exists());
+        assert!(
+            !outcome
+                .receipt
+                .evidence
+                .iter()
+                .any(|e| e.status == EvidenceStatus::Passed)
+        );
+        let events = store.load(run_id).unwrap_or_else(|e| unreachable!("{e}"));
+        let ledger = CompletionLedger::restore(&events);
+        let revisions = events
+            .iter()
+            .filter_map(|e| match &e.event {
+                RunEvent::ActionCompleted(a) if a.action == crate::completion::AUDIT_ACTION => {
+                    a.attributes.get("candidate_digest")
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(revisions.len(), 2);
+        assert_ne!(revisions[0], revisions[1]);
+        assert!(!ledger.can_review("another-revision", 8));
+        assert!(!ledger.needs_review(revisions[1]));
+    }
+
+    #[tokio::test]
+    async fn interrupted_completion_audit_resumes_without_resetting_its_allowance() {
+        let reply = || ModelResponse {
+            text: "The change is complete.".to_owned(),
+            tool_calls: Vec::new(),
+            finish_reason: FinishReason::Complete,
+            usage: Usage::default(),
+            provider_request_id: None,
+            extensions: serde_json::Map::new(),
+        };
+        let suspended = SuspendAfterScriptModel {
+            script: ScriptedModel {
+                name: "scripted".to_owned(),
+                model: "audit-resume".to_owned(),
+                capabilities: ModelCapabilities::default(),
+                responses: Mutex::new(VecDeque::from([
+                    tool_response(
+                        "write-once",
+                        "write_file",
+                        json!({"path":"a.txt", "content":"fixed"}),
+                    ),
+                    reply(),
+                ])),
+            },
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let control = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        let checkpoints = CheckpointStore::open(control.path().join("checkpoints"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let registry = pactrail_tools::builtin_registry().unwrap_or_else(|e| unreachable!("{e}"));
+        let mut contract = TaskContract::new("Fix a.txt", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let mut store = EventStore::open_in_memory().unwrap_or_else(|e| unreachable!("{e}"));
+        let run_id = RunId::new();
+        let engine = RunEngine::new(&suspended, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints);
+        let interrupted = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            engine.execute_inner(
+                run_id,
+                contract.clone(),
+                &transaction,
+                &mut store,
+                &SilentRunObserver,
+                None,
+            ),
+        )
+        .await;
+        assert!(interrupted.is_err());
+        let checkpoint = checkpoints
+            .load_head(&store, run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(checkpoint.phase, ResumePhase::BeforeModel);
+        assert_eq!(checkpoint.next_turn, 2);
+        let resumed = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "audit-resume".to_owned(),
+            capabilities: ModelCapabilities::default(),
+            responses: Mutex::new(VecDeque::from([reply()])),
+        };
+        let outcome = RunEngine::new(&resumed, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints)
+            .resume(run_id, contract, &transaction, &mut store, checkpoint)
+            .await
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(outcome.receipt.outcome, ReceiptOutcome::ReadyToApply);
+        let snapshot = store
+            .snapshot(run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            snapshot
+                .actions
+                .iter()
+                .filter(|a| a.action == crate::completion::AUDIT_ACTION)
+                .count(),
+            1
+        );
+        assert_eq!(
+            snapshot
+                .actions
+                .iter()
+                .filter(|a| a.actor == "tool:write_file")
+                .count(),
+            1
+        );
+        assert!(!source.path().join("a.txt").exists());
+    }
+
     #[test]
     fn informational_goal_classification_is_conservative() {
         assert_eq!(
@@ -4912,6 +5191,13 @@ mod tests {
 
         assert_ne!(first.0, second.0);
         assert_eq!(first.1, second.1);
+        let audited = RunEngine::new(&model, &registry, &policy)
+            .with_runtime_identity("a".repeat(64))
+            .with_completion_audit(true)
+            .checkpoint_profile_digests(&tools)
+            .unwrap_or_else(|error| unreachable!("audit profile: {error}"));
+        assert_ne!(first.0, audited.0, "resume must bind audit policy");
+        assert_eq!(first.1, audited.1, "audit grants no new tool authority");
     }
 
     #[tokio::test]

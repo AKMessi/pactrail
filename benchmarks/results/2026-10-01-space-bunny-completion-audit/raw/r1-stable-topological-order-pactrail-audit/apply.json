@@ -1,0 +1,193 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0f6ec-07a7-7f21-8226-68a3b6d4f2e4",
+  "created_at": "2026-10-01T10:05:00.376521475Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix graph.order and build.plan. graph.order takes a mapping from node to prerequisite node names and returns every declared node exactly once, prerequisites before dependents. Choose the lexicographically smallest currently-ready node each step for deterministic results. Unknown prerequisites and cycles must raise ValueError. build.plan(graph,requested) returns the ordered transitive prerequisite closure of requested nodes; unknown requested nodes raise ValueError. Do not mutate the graph or prerequisite lists. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+    "workspace_root": "/tmp/pactrail-scored-kojg62q3/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0f6ec-0793-71a2-9a0d-f5a9a4cf1835",
+        "description": "Fix graph.order and build.plan. graph.order takes a mapping from node to prerequisite node names and returns every declared node exactly once, prerequisites before dependents. Choose the lexicographically smallest currently-ready node each step for deterministic results. Unknown prerequisites and cycles must raise ValueError. build.plan(graph,requested) returns the ordered transitive prerequisite closure of requested nodes; unknown requested nodes raise ValueError. Do not mutate the graph or prerequisite lists. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 491520,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 12
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "applied",
+  "baseline_digest": "fe33a7e9e3c8a51a334bc7872f746a8e3955207851ab308791bbfdf301944654",
+  "final_event_hash": "ceec4a7ffc852d21e4a18fe15893b5dbc45abf74b820e14ccf88bc04f125898a",
+  "changes": [
+    {
+      "path": "build.py",
+      "before_digest": "2e07e0b286cff95bd058023d57685c290b08b3d7c6a5c21099c5342ae2260a2f",
+      "after_digest": "8dca079f85c614ee34a432db8f39c426d57ead83160637225c108c75d03f37ea",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33188,
+      "bytes_added": 798,
+      "bytes_removed": 106
+    },
+    {
+      "path": "graph.py",
+      "before_digest": "f4573dab5e46ff843e89cbbd529f57a1b88e10a65393d1a360432f4f7741d23b",
+      "after_digest": "657861eaa7e9e949d8471b4f2a11efdc93c459996f29dbe7dfa4c1e683ade90e",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33188,
+      "bytes_added": 847,
+      "bytes_removed": 43
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0f6ec-a8e4-72b0-81f1-cbad3e005c43",
+      "obligation_id": "01a0f6ec-0793-71a2-9a0d-f5a9a4cf1835",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix graph.order and build.plan. graph.order takes a mapping from node to prerequisite node names and returns every declared node exactly once, prerequisites before dependents. Choose the lexicographically smallest currently-ready node each step for deterministic results. Unknown prerequisites and cycles must raise ValueError. build.plan(graph,requested) returns the ordered transitive prerequisite closure of requested nodes; unknown requested nodes raise ValueError. Do not mutate the graph or prerequisite lists. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0f6ec-330b-7733-99be-e0f04b6eb4c8",
+      "binding": {
+        "run_id": "01a0f6ec-07a7-7f21-8226-68a3b6d4f2e4",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from graph import order\\nfrom build import plan\\ng={'b':['a'],'a':[],'c':['a','b'],'d':[]}\\nprint(order(g), g)\\nprint(plan(g,['c']), plan(g,[]))\\nfor bad in [{'a':['z']},{'a':['b'],'b':['a']}]:\\n  try: order(bad)\\n  except ValueError as e: print('ok',e)\\ntry: plan(g,['q'])\\nexcept ValueError as e: print('ok',e)\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "f6d52fd5b60148f902f8f9ba156f539c42d49e6246e4801790c66f4c7f5ab947",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:04:29.835510371Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6ec-523b-7160-8729-fd4517d9ff29",
+      "binding": {
+        "run_id": "01a0f6ec-07a7-7f21-8226-68a3b6d4f2e4",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from graph import order\\nfrom build import plan\\ng={'b':['a'],'a':[],'c':['a','b'],'d':[]}\\nsnap=dict(g)\\nprint(plan(g,['c']), plan(g,[]), plan(g,['a','d']))\\nprint(g==snap)\\nprint(order(g), order({}))\\ntry: plan(g,['q'])\\nexcept ValueError as e: print('ok',e)\\ntry: plan({'a':['z'],'b':['a']},['b'])\\nexcept ValueError as e: print('ok',e)\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "a65b331f44aa65edd86fe84f7b5501f14ee09780196de5d2202df5de3a9a07b1",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:04:37.819890363Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6ec-6b40-7b13-b6ec-628371852a60",
+      "binding": {
+        "run_id": "01a0f6ec-07a7-7f21-8226-68a3b6d4f2e4",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from graph import order\\nfrom build import plan\\ng={'b':['a'],'a':[],'c':['a','b'],'d':[]}\\nsnap=dict((k,list(v)) for k,v in g.items())\\nassert plan(g,['c'])==['a','b','c']\\nassert plan(g,[])==[]\\nassert plan(g,['a','d'])==['a','d']\\nassert order(g)==['a','b','c','d'] and order({})==[]\\nassert g==snap\\nfor f,args in [(order,({'a':['z']},)),(order,({'a':['b'],'b':['a']},)),(plan,(g,['q'])),(plan,({'a':['z'],'b':['a']},['b']))]:\\n  try: f(*args); print('FAIL')\\n  except ValueError: pass\\nprint('all ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "2b8dcf9c5b6d2c164f7020eea30bca5a3349b6609c9dddde822626cc9c863059",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:04:44.224733282Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6ec-8082-78a2-8d23-4508f63be02a",
+      "binding": {
+        "run_id": "01a0f6ec-07a7-7f21-8226-68a3b6d4f2e4",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"import shutil,os\\nshutil.rmtree('__pycache__',ignore_errors=True)\\nfor f in ('build.py','graph.py'): os.chmod(f,0o644)\\nprint(sorted(os.listdir('.')))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "ca05e2cbc33e0dc870617fffa38c6982884d247eca0c280b12b1a3d865f5e38e",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:04:49.666389437Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6ec-a061-7db0-a5c8-14430b542743",
+      "binding": {
+        "run_id": "01a0f6ec-07a7-7f21-8226-68a3b6d4f2e4",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from graph import order\\nfrom build import plan\\n# tuples, duplicates, tuple requested, self-cycle, duplicate prereq\\nprint(order({'b':('a','a'),'a':()}))\\nprint(plan({'b':('a','a'),'a':()},('b',)))\\ntry: order({'a':['a']})\\nexcept ValueError as e: print('ok self', e)\\n# deterministic smallest-ready across independent nodes\\nprint(order({'z':[],'y':[],'m':['z']}))\\n# no mutation of prereq lists (identity check)\\npr=['x']; g={'x':[],'n':pr}\\norder(g); plan(g,['n']); assert pr is g['n'] and pr==['x']\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "eb3fbcc8b6c86a8ca1b8280befb80bf25164a10408af790f3ea79d9fb3918946",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:04:57.825444481Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6ec-a8c3-7141-9c46-e9ff434002fd",
+      "binding": {
+        "run_id": "01a0f6ec-07a7-7f21-8226-68a3b6d4f2e4",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"import shutil,os\\nshutil.rmtree('__pycache__',ignore_errors=True)\\nfor f in ('build.py','graph.py'): os.chmod(f,0o644)\\nprint(sorted(os.listdir('.')))\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "ca05e2cbc33e0dc870617fffa38c6982884d247eca0c280b12b1a3d865f5e38e",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:04:59.971120383Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected",
+    "model reached the 12-turn limit after producing candidate changes; the model did not attest completeness, so the candidate requires explicit human review"
+  ],
+  "metadata": {},
+  "integrity_hash": "68cc548ee4833ecca2eb97321cd5215d49e7e96accda3a16e7965c93703be0a7"
+}

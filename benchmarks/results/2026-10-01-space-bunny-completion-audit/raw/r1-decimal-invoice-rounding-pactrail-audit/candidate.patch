@@ -1,0 +1,25 @@
+--- a/invoices.py
++++ b/invoices.py
+@@ -1,2 +1,6 @@
++from money import cents
++
++
+ def total_cents(amounts):
+-    return round(sum(float(a) for a in amounts) * 100)
++    """Sum per-line cent roundings; 0 for an empty iterable."""
++    return sum(cents(amount) for amount in amounts)
+--- a/money.py
++++ b/money.py
+@@ -1,2 +1,11 @@
++from decimal import Decimal, ROUND_HALF_UP, localcontext
++
++
+ def cents(amount):
+-    return round(float(amount) * 100)
++    """Round one amount to integral cents using ROUND_HALF_UP."""
++    value = Decimal(str(amount))
++    exponent = value.as_tuple().exponent
++    digits = len(value.as_tuple().digits) + (exponent if exponent < 0 else 0) + 4
++    with localcontext() as ctx:
++        ctx.prec = max(ctx.prec, digits)
++        return int(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) * 100)

@@ -1,0 +1,104 @@
+--- a/_repro_check.py
++++ b/_repro_check.py
+@@ -0,0 +1,67 @@
++import unicodedata
++
++from catalog import Catalog
++from keys import canonical
++
++# canonical: NFC + casefold, not lower
++assert canonical("ABC") == "abc"
++assert canonical("Straße") == canonical("STRASSE"), canonical("Straße")
++# lower() would not fold ß -> "straße"; casefold gives "strasse"
++assert "Straße".lower() == "straße"
++assert canonical("Straße") == "strasse"
++# NFD input normalizes to NFC
++nfd = unicodedata.normalize("NFD", "café")
++assert canonical(nfd) == canonical("café") == "café"
++assert canonical(nfd) == canonical("CAFÉ"), "casefold after NFC"
++# stable for inputs whose casefold result has a composed NFC form
++for s in ["", "MiXeD", "ﬁle", "Straße", "café", "ÀÉÎ"]:
++    assert canonical(canonical(s)) == canonical(s), s
++
++# equivalent spellings must agree on a single canonical key
++pairs = [("Key", "KEY", "kEy"), ("Straße", "STRASSE"),
++         ("café", nfd), ("café", "CAFÉ"), ("ﬁle", "FILE")]
++for group in pairs:
++    assert len({canonical(k) for k in group}) == 1, group
++
++c = Catalog()
++
++# put replaces value for equivalent keys
++c.put("Key", 1)
++c.put("KEY", 2)
++assert len(c.values) == 1, c.values
++assert c.get("kEy") == 2
++
++# get/remove accept any equivalent spelling
++c.put("Café", "v")
++assert c.get(nfd) == "v"          # NFD spelling
++assert c.get("CAFÉ") == "v"        # case variant
++assert c.remove("cAfE") == "v"
++try:
++    c.get("Café")
++except KeyError:
++    pass
++else:
++    raise AssertionError("expected KeyError after remove")
++
++# removal by equivalent spelling leaves nothing behind
++c.put("Foo", 1)
++assert c.remove("fOO") == 1
++assert not c.values
++
++# missing keys raise KeyError from all accessors
++for fn in (c.get, c.remove):
++    try:
++        fn("absent")
++    except KeyError:
++        pass
++    else:
++        raise AssertionError("expected KeyError from %s" % fn.__name__)
++
++# signatures unchanged
++import inspect
++assert str(inspect.signature(canonical)) == "(key)"
++assert str(inspect.signature(Catalog.get)) == "(self, key)"
++assert str(inspect.signature(Catalog.remove)) == "(self, key)"
++assert str(inspect.signature(Catalog.put)) == "(self, key, value)"
++
++print("all checks passed")--- a/catalog.py
++++ b/catalog.py
+@@ -1,6 +1,15 @@
+ from keys import canonical
++
++
+ class Catalog:
+-    def __init__(self): self.values = {}
+-    def put(self, key, value): self.values[canonical(key)] = value
+-    def get(self, key): return self.values[key.lower()]
+-    def remove(self, key): return self.values.pop(key.lower())
++    def __init__(self):
++        self.values = {}
++
++    def put(self, key, value):
++        self.values[canonical(key)] = value
++
++    def get(self, key):
++        return self.values[canonical(key)]
++
++    def remove(self, key):
++        return self.values.pop(canonical(key))--- a/keys.py
++++ b/keys.py
+@@ -1,2 +1,10 @@
++import unicodedata
++
++
+ def canonical(key):
+-    return key.lower()
++    """Return the canonical form of a key.
++
++    Applies Unicode NFC normalization followed by casefolding so that keys
++    differing only in normalization form or casing map to the same value.
++    """
++    return unicodedata.normalize("NFC", key).casefold()

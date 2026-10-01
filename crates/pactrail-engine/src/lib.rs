@@ -2,6 +2,7 @@
 
 mod adaptive;
 mod checkpoint;
+mod completion;
 mod context_window;
 mod controller;
 mod engine;

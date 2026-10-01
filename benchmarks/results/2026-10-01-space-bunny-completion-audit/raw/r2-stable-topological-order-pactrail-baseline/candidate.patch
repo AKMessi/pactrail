@@ -1,0 +1,68 @@
+--- a/build.py
++++ b/build.py
+@@ -1,3 +1,21 @@
+ from graph import order
+-def plan(graph,requested):
+-    return [n for n in order(graph) if n in requested]
++
++
++def plan(graph, requested):
++    """Return the ordered transitive prerequisite closure of ``requested``."""
++    wanted = list(requested)
++    known = set(graph)
++    for node in wanted:
++        if node not in known:
++            raise ValueError("unknown requested node %r" % (node,))
++
++    closure = set()
++    stack = list(wanted)
++    while stack:
++        node = stack.pop()
++        if node in closure:
++            continue
++        closure.add(node)
++        stack.extend(graph[node])
++
++    return [node for node in order(graph) if node in closure]
+--- a/graph.py
++++ b/graph.py
+@@ -1,2 +1,38 @@
++"""Deterministic topological ordering for node dependency graphs."""
++
++
+ def order(graph):
+-    return sorted(graph)
++    """Return every node in ``graph`` exactly once, prerequisites first.
++
++    ``graph`` maps a node name to an iterable of its prerequisite node names.
++    At each step the lexicographically smallest currently ready node (all of
++    whose prerequisites have already been emitted) is chosen.  The input
++    mapping and the prerequisite collections are never mutated.
++    """
++    pending = {}
++    for node, prereqs in graph.items():
++        pending[node] = list(prereqs)
++
++    for node, prereqs in pending.items():
++        for prereq in prereqs:
++            if prereq not in pending:
++                raise ValueError(
++                    "unknown prerequisite %r for node %r" % (prereq, node)
++                )
++
++    result = []
++    emitted = set()
++    remaining = set(pending)
++    while remaining:
++        ready = [
++            node
++            for node in remaining
++            if all(prereq in emitted for prereq in pending[node])
++        ]
++        if not ready:
++            raise ValueError("cycle detected in dependency graph")
++        node = min(ready)
++        result.append(node)
++        emitted.add(node)
++        remaining.discard(node)
++    return result

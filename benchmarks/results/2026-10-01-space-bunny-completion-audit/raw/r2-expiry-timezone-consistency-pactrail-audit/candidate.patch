@@ -1,0 +1,47 @@
+--- a/cache.py
++++ b/cache.py
+@@ -1,7 +1,14 @@
++"""A tiny in-memory cache with absolute expiry timestamps."""
++
++from clock import expired
++
++
+ class Cache:
+     def __init__(self): self.entries={}
+     def put(self,key,value,expires_at): self.entries[key]=(value,expires_at)
+     def get(self,key,now):
+         value,expiry=self.entries[key]
+-        if now > expiry: raise KeyError(key)
++        if expired(expiry,now):
++            del self.entries[key]
++            raise KeyError(key)
+         return value
+--- a/clock.py
++++ b/clock.py
+@@ -1,2 +1,25 @@
++"""Expiry helpers shared by the cache and its callers.
++
++Datetime values are interpreted as follows: naive values are assumed to be in
++UTC, while aware values are compared as absolute instants.  No wall clock is
++read implicitly: callers always supply ``now`` explicitly.
++"""
++
++from datetime import timezone
++
++UTC = timezone.utc
++
++
++def as_utc(value):
++    """Return ``value`` as an aware UTC datetime."""
++    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
++        return value.replace(tzinfo=UTC)
++    return value.astimezone(UTC)
++
++
+ def expired(expires_at, now):
+-    return now > expires_at
++    """Return True when the entry is expired at ``now``.
++
++    An entry is considered expired as soon as ``now >= expires_at``.
++    """
++    return as_utc(now) >= as_utc(expires_at)

@@ -1,0 +1,112 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0f6de-c18f-7b10-adf2-9bfabe323b5a",
+  "created_at": "2026-10-01T09:50:14.894003691Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix numeric range clipping consistently in scalar.clip and batches.clip_many. Both endpoints are inclusive; reversed bounds must raise ValueError, including for an empty batch. Do not mutate the input sequence. Preserve input order and numeric values within range. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+    "workspace_root": "/tmp/pactrail-scored-gjwsx34n/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0f6de-c17b-7741-b5f0-49be2166475e",
+        "description": "Fix numeric range clipping consistently in scalar.clip and batches.clip_many. Both endpoints are inclusive; reversed bounds must raise ValueError, including for an empty batch. Do not mutate the input sequence. Preserve input order and numeric values within range. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 491520,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 12
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "ready_to_apply",
+  "baseline_digest": "0f16ee83534b8d88ec62d04d6ed25f65f1b25c32242219264b022e9e6633b733",
+  "final_event_hash": "297fcaff1867b091aef8032d8ad2aa0b0032ae870fde64b248ab6a0ced73b83e",
+  "changes": [
+    {
+      "path": "batches.py",
+      "before_digest": "224c2ffa26155c16335bd96432f90a3be4f56cda1a6638adaed0f1cd7494561e",
+      "after_digest": "f27f01025e552fe424c39473ae7575b411db84eb25944499d395a5f24054e025",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 179,
+      "bytes_removed": 80
+    },
+    {
+      "path": "scalar.py",
+      "before_digest": "960376bf577e693550a9e456fc66e86e2d1f212a67e2075e1159ed81fff76704",
+      "after_digest": "c08124c30eabbe8184d6edeb14b24cfd5163fe81932a40a5da291be7c799b572",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 159,
+      "bytes_removed": 60
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0f6df-276d-7c21-b15b-8797b360436b",
+      "obligation_id": "01a0f6de-c17b-7741-b5f0-49be2166475e",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix numeric range clipping consistently in scalar.clip and batches.clip_many. Both endpoints are inclusive; reversed bounds must raise ValueError, including for an empty batch. Do not mutate the input sequence. Preserve input order and numeric values within range. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0f6de-f96e-7dc2-9261-84ad1e17107d",
+      "binding": {
+        "run_id": "01a0f6de-c18f-7b10-adf2-9bfabe323b5a",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"_check.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "c70ea78ca7bd35051864bf6033432954f46aa7bc0c786449b78ffe24ee8ace9d",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T09:50:03.118193507Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "724a24d12ce0df841cd41946523363b0745133facb51900ae9fb0894ee5ae737"
+}

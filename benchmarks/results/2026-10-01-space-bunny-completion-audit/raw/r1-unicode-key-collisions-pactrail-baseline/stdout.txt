@@ -1,0 +1,73 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "bf6d47d0237f26d00818c3c699734f3a82dc936abd3c9e0ef4f5d8b17923f42c",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-c\",\"import catalog, keys\\nc=catalog.Catalog()\\nc.put('Straße',1)\\nassert c.get('STRASSE')==1\\nassert c.get('strasse')==1\\nc.put('STRASSE',2)\\nassert len(c.values)==1 and c.get('straße')==2\\n# NFC: composed vs decomposed\\nc2=catalog.Catalog(); c2.put('é',7)\\nassert c2.get('é')==7\\nc3=catalog.Catalog(); c3.put('é','x')\\nassert c3.get('é')=='x'\\n# KeyError on missing\\nfor m in ('get','remove'):\\n    try: getattr(c3,m)('nope')\\n    except KeyError: pass\\n    else: raise AssertionError(m)\\nassert c3.remove('é')=='x' and not c3.values\\nassert keys.canonical('İ')=='i̇'\\nprint('ok')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e4-7acb-7223-a0de-103e46aaca3d"
+      },
+      "created_at": "2026-10-01T09:56:14.608578979Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e4-a490-7042-89f7-335113c95e4b",
+      "schema_version": 1
+    },
+    {
+      "binding": {
+        "actor_fingerprint": "cca4c91e6cd9c1bd875589a1ae4d0d6335eabba0e835c2dee50c9faf3a3d1bf6",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"-B\",\"-c\",\"import shutil; shutil.rmtree('__pycache__', ignore_errors=True); print('cleaned')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6e4-7acb-7223-a0de-103e46aaca3d"
+      },
+      "created_at": "2026-10-01T09:56:19.982628492Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6e4-b98e-7600-a13c-4da7cc347370",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "cbd953b3c9bc9b692e5eba886c61a57e2b69a034d037b1975a7d091a819852a1",
+      "after_unix_mode": 33152,
+      "before_digest": "3fd8060765f29706cb29fa14bd65bae648a8a45490c50905cfdf8cdf6526fb34",
+      "before_unix_mode": 33204,
+      "bytes_added": 275,
+      "bytes_removed": 269,
+      "path": "catalog.py"
+    },
+    {
+      "after_digest": "46f2bbf3056034dad061f110bf13f47134b67c108d1025f415c8c67ab70a2734",
+      "after_unix_mode": 33152,
+      "before_digest": "cd8b84a6fed289e25ef9a56769917a7580bbf77a0c71b3f45e4ec9be660efaea",
+      "before_unix_mode": 33204,
+      "bytes_added": 97,
+      "bytes_removed": 43,
+      "path": "keys.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-j96a4p1g/workspace/.pactrail/runs/01a0f6e4-7acb-7223-a0de-103e46aaca3d/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6e4-7acb-7223-a0de-103e46aaca3d",
+  "summary": "Done.\n\n- `keys.py`: `canonical` now applies `unicodedata.normalize(\"NFC\", key).casefold()`.\n- `catalog.py`: `get` and `remove` now route keys through `canonical` instead of `key.lower()`; `put` already did.\n\nVerified by a temporary in-line check (no file created): casefold equivalence (`Straße`/`STRASSE`), replace-on-equivalent-put, composed vs decomposed `é` matching, `KeyError` for missing keys on both `get` and `remove`, and `canonical('İ') == 'i̇'`. It printed `ok`. The `__pycache__` byproducts were removed afterward.\n\nUnverified: no test suite exists in the repo (only `README.md`, `keys.py`, `catalog.py`), so this is behavior-level verification only, not the project's own checks.",
+  "tokens": 44594,
+  "trace": "/tmp/pactrail-scored-j96a4p1g/workspace/.pactrail/runs/01a0f6e4-7acb-7223-a0de-103e46aaca3d/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

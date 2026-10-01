@@ -1,0 +1,33 @@
+--- a/batches.py
++++ b/batches.py
+@@ -1,2 +1,14 @@
++from scalar import clip
++
++
+ def clip_many(values, lower, upper):
+-    return [max(v, lower) for v in values]
++    """Clamp each element of ``values`` to the inclusive range [lower, upper].
++
++    Returns a new list, preserving input order. The input sequence is not
++    mutated, so any iterable (including a tuple or generator) is accepted.
++    """
++    if lower > upper:
++        raise ValueError(
++            "lower bound %r must not exceed upper bound %r" % (lower, upper)
++        )
++    return [clip(value, lower, upper) for value in values]
+--- a/scalar.py
++++ b/scalar.py
+@@ -1,2 +1,11 @@
+ def clip(value, lower, upper):
+-    return min(value, upper)
++    """Clamp ``value`` to the inclusive range [lower, upper]."""
++    if lower > upper:
++        raise ValueError(
++            "lower bound %r must not exceed upper bound %r" % (lower, upper)
++        )
++    if value < lower:
++        return lower
++    if value > upper:
++        return upper
++    return value

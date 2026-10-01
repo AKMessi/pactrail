@@ -1,0 +1,57 @@
+{
+  "approvals": [
+    {
+      "binding": {
+        "actor_fingerprint": "0974b24f8cd4541813115492856114e00d7be107fbc5bff8458d15f4f794c47b",
+        "backend_identity": null,
+        "backend_kind": "native_trusted",
+        "capability": "process_spawn",
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9",
+        "resource": "{\"args\":[\"_check_clip.py\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "run_id": "01a0f6ef-536e-7973-b7e7-9afbe050ceb9"
+      },
+      "created_at": "2026-10-01T10:08:05.439901887Z",
+      "decision": "allow_run",
+      "expires_at": null,
+      "id": "01a0f6ef-7d3f-7bd0-9dbd-29205cae0e87",
+      "schema_version": 1
+    }
+  ],
+  "changes": [
+    {
+      "after_digest": "d60144b0e629f355d2dedb355a33e31dd0c172827d0827540370aab811faeeb0",
+      "after_unix_mode": 33152,
+      "before_digest": "224c2ffa26155c16335bd96432f90a3be4f56cda1a6638adaed0f1cd7494561e",
+      "before_unix_mode": 33204,
+      "bytes_added": 287,
+      "bytes_removed": 80,
+      "path": "batches.py"
+    },
+    {
+      "after_digest": "ea1abbaad11b8ba68f5535318249094286697456a305fc9b7cef6db6a002183e",
+      "after_unix_mode": 33152,
+      "before_digest": "960376bf577e693550a9e456fc66e86e2d1f212a67e2075e1159ed81fff76704",
+      "before_unix_mode": 33204,
+      "bytes_added": 290,
+      "bytes_removed": 60,
+      "path": "scalar.py"
+    }
+  ],
+  "cost_microusd": 0,
+  "outcome": "ready_to_apply",
+  "receipt": "/tmp/pactrail-scored-4w8tkk08/workspace/.pactrail/runs/01a0f6ef-536e-7973-b7e7-9afbe050ceb9/receipt.json",
+  "risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "run_id": "01a0f6ef-536e-7973-b7e7-9afbe050ceb9",
+  "summary": "Done.\n\n**Changes**\n- `scalar.py:clip` — now validates bounds (`lower > upper` → `ValueError`) and clamps inclusively on both ends, returning the original value when in range.\n- `batches.py:clip_many` — validates bounds up front (so an empty batch also raises on reversed bounds) and delegates per-element clipping to `clip`, building a new list so the input is never mutated and order is preserved. API signatures unchanged.\n\n**Verification** — temporary script covering in-range passthrough, both endpoints inclusive, float values, reversed bounds for `clip`/`clip_many` (empty and non-empty), and input non-mutation; it passed (`exit_code 0`, stdout `ok`). Script and generated `__pycache__` byte-code files were removed afterward; `workspace_changes` now lists only the two production files.\n\n**Unverified** — no test suite or packaging manifest exists in this workspace (only `README.md` and the two modules), so behavior outside real numbers (e.g. `Decimal`, `NaN`, non-numeric types) and non-list iterables was not exercised.",
+  "tokens": 56314,
+  "trace": "/tmp/pactrail-scored-4w8tkk08/workspace/.pactrail/runs/01a0f6ef-536e-7973-b7e7-9afbe050ceb9/trace.jsonl",
+  "verification": {
+    "failed": 0,
+    "highest_grade": "unverified",
+    "inconclusive": 1,
+    "passed": 0,
+    "skipped": 0
+  }
+}

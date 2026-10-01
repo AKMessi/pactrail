@@ -1,0 +1,35 @@
+--- a/batches.py
++++ b/batches.py
+@@ -1,2 +1,11 @@
++from scalar import _validate_bounds
++
++
+ def clip_many(values, lower, upper):
+-    return [max(v, lower) for v in values]
++    """Clip each element of ``values`` into the inclusive range [lower, upper].
++
++    Input order is preserved and ``values`` is not mutated. An empty batch
++    still validates the bounds.
++    """
++    _validate_bounds(lower, upper)
++    return [min(max(v, lower), upper) for v in values]
+--- a/scalar.py
++++ b/scalar.py
+@@ -1,2 +1,16 @@
++def _validate_bounds(lower, upper):
++    """Both endpoints are inclusive; reversed bounds are invalid."""
++    if lower > upper:
++        raise ValueError(
++            f"lower bound ({lower!r}) must be less than or equal to upper bound ({upper!r})"
++        )
++
++
+ def clip(value, lower, upper):
+-    return min(value, upper)
++    """Clip ``value`` into the inclusive range [lower, upper]."""
++    _validate_bounds(lower, upper)
++    if value < lower:
++        return lower
++    if value > upper:
++        return upper
++    return value

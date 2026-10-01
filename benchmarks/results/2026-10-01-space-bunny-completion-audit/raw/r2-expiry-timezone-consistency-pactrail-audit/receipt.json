@@ -1,0 +1,160 @@
+{
+  "schema_version": 2,
+  "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489",
+  "created_at": "2026-10-01T10:15:15.081278715Z",
+  "contract": {
+    "schema_version": 1,
+    "goal": "Fix clock.expired and cache.Cache. Naive datetime values mean UTC; aware values must compare as instants. Entries expire at now>=expires_at, not just after. put accepts a value and absolute expiry; get(key,now) must use the shared expiry semantics, delete expired entries and raise KeyError; live and missing entries keep their usual behavior. Do not read the wall clock implicitly. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+    "workspace_root": "/tmp/pactrail-scored-bckvtbuk/workspace",
+    "allowed_write_paths": [
+      "."
+    ],
+    "out_of_scope": [],
+    "obligations": [
+      {
+        "id": "01a0f6f5-746b-7341-b810-7970b7aa99d4",
+        "description": "Fix clock.expired and cache.Cache. Naive datetime values mean UTC; aware values must compare as instants. Entries expire at now>=expires_at, not just after. put accepts a value and absolute expiry; get(key,now) must use the shared expiry semantics, delete expired entries and raise KeyError; live and missing entries keep their usual behavior. Do not read the wall clock implicitly. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.",
+        "kind": "functional",
+        "required": true
+      }
+    ],
+    "budget": {
+      "wall_time_seconds": 3600,
+      "model_tokens": 491520,
+      "cost_microusd": 0,
+      "max_concurrency": 4,
+      "max_model_attempts": 12
+    },
+    "permissions": {
+      "allow": [
+        "file_read",
+        "file_write",
+        "memory_read",
+        "network",
+        "secret_use",
+        "external_write"
+      ],
+      "ask": [
+        "process_spawn"
+      ],
+      "deny": [
+        "mcp_invoke"
+      ]
+    },
+    "provider": null,
+    "model": null
+  },
+  "outcome": "ready_to_apply",
+  "baseline_digest": "c01fbefeda82f4d7eb486cc13962c0eae3afb4d653e3a2ade61057be3aab248b",
+  "final_event_hash": "6ee41f33a58c770edc0ba14c15b197d9797d7b758361e9c9298f57a3f392f123",
+  "changes": [
+    {
+      "path": "cache.py",
+      "before_digest": "a13470fc1d562dd18638a3d75ad8bf5a02be346547cf99bce3ace93177f705ec",
+      "after_digest": "b19aaecbe4212fcef128f0fef402dd57ae344f8c204b769b50f418272b37aa73",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 406,
+      "bytes_removed": 262
+    },
+    {
+      "path": "clock.py",
+      "before_digest": "e8030dc4344bda73b1cbbd623313ad69b2b71a222b9fa2c0992af87c89dff795",
+      "after_digest": "be1c23bb8d040314f2d2cb53827cd1026919b443f84dc9533b9f141fe9f98f28",
+      "before_unix_mode": 33204,
+      "after_unix_mode": 33152,
+      "bytes_added": 755,
+      "bytes_removed": 58
+    }
+  ],
+  "evidence": [
+    {
+      "id": "01a0f6f6-0b88-70d0-8d1b-182339b43f09",
+      "obligation_id": "01a0f6f5-746b-7341-b810-7970b7aa99d4",
+      "grade": "unverified",
+      "kind": "other",
+      "status": "inconclusive",
+      "summary": "Fix clock.expired and cache.Cache. Naive datetime values mean UTC; aware values must compare as instants. Entries expire at now>=expires_at, not just after. put accepts a value and absolute expiry; get(key,now) must use the shared expiry semantics, delete expired entries and raise KeyError; live and missing entries keep their usual behavior. Do not read the wall clock implicitly. Work offline in this workspace only. Do not inspect history, remotes, other directories or benchmark graders. Do not install dependencies. Preserve the APIs and fix production files only. You may add temporary reproduction scripts but remove them before finishing. Run relevant checks and report any unverified behavior.: No supported test manifest was detected",
+      "artifact_digest": null,
+      "reproduction": null
+    }
+  ],
+  "approvals": [
+    {
+      "schema_version": 1,
+      "id": "01a0f6f5-9cf6-7942-b724-74c8897f9789",
+      "binding": {
+        "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"import sys; sys.path.insert(0,'.')\\nfrom datetime import datetime, timezone, timedelta\\nfrom clock import expired\\nfrom cache import Cache\\nn=datetime(2024,1,1,12,0,0)\\nassert expired(n, n)\\nassert not expired(n+timedelta(seconds=1), n)\\ntz=timezone(timedelta(hours=2))\\nassert expired(n, datetime(2024,1,1,14,0,0,tzinfo=tz))\\nassert not expired(datetime(2024,1,1,14,0,0,tzinfo=tz), n)\\nc=Cache()\\nc.put('a',1,n+timedelta(seconds=1))\\nassert c.get('a',n)==1\\ntry:\\n    c.get('a',n+timedelta(seconds=1)); raise AssertionError\\nexcept KeyError: pass\\nassert 'a' not in c.entries\\ntry:\\n    c.get('zz',n); raise AssertionError\\nexcept KeyError: pass\\nprint('ok')\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "9f690661d6d404e6a87c538632dfc2a1ca1abbb58d1e68391b4f645c0d5b1205",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:14:46.774495754Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6f5-aae8-7061-9983-033f040b5059",
+      "binding": {
+        "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"from datetime import datetime, timezone, timedelta\\nfrom clock import expired\\nfrom cache import Cache\\nn=datetime(2024,1,1,12,0,0)\\nassert expired(n,n) and not expired(n+timedelta(seconds=1),n)\\ntz=timezone(timedelta(hours=2))\\nassert expired(n, datetime(2024,1,1,14,0,0,tzinfo=tz))\\nassert not expired(datetime(2024,1,1,14,0,1,tzinfo=tz), n)\\nc=Cache(); c.put('a',1,n+timedelta(seconds=1))\\nassert c.get('a',n)==1\\nfor args,exp in ((('a',n+timedelta(seconds=1)),True),):\\n    try: c.get(*args); raise AssertionError\\n    except KeyError: pass\\nassert 'a' not in c.entries\\ntry: c.get('zz',n); raise AssertionError\\nexcept KeyError: pass\\nprint('ok')\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "c9084d0f3dcad8d0f791423088dd8ca7b6f876b84b8e82e39e1e77bd9cb8a474",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:14:50.344255939Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6f5-bd90-7a50-b18c-3c472d3e6586",
+      "binding": {
+        "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"import shutil; shutil.rmtree('__pycache__', ignore_errors=True); print('cleaned')\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "294ebed8f764423c9a661536ae8f2e195920124d32d7c9f2d7bd5d50ca0d91b7",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:14:55.120695431Z",
+      "expires_at": null
+    },
+    {
+      "schema_version": 1,
+      "id": "01a0f6f5-e8e3-7540-8170-40cda18a362b",
+      "binding": {
+        "run_id": "01a0f6f5-7481-75c0-a0cc-0f11bafa9489",
+        "capability": "process_spawn",
+        "resource": "{\"args\":[\"-c\",\"import shutil\\nfrom datetime import datetime, timezone, timedelta\\nfrom clock import expired, as_utc\\nfrom cache import Cache\\nn=datetime(2024,1,1,12,0,0); tz=timezone(timedelta(hours=2))\\n# boundary + naive/aware\\nassert expired(n,n) and not expired(n+timedelta(microseconds=1),n)\\nassert expired(n, datetime(2024,1,1,14,0,0,tzinfo=tz))\\nassert not expired(datetime(2024,1,1,14,0,1,tzinfo=tz), n)\\nassert expired(datetime(2024,1,1,12,0,0,tzinfo=timezone.utc), n)\\n# cache\\nc=Cache(); c.put('a',1,n+timedelta(seconds=1))\\nassert c.get('a',n)==1\\nc.get('a',n)\\ntry: c.get('a',n+timedelta(seconds=1)); raise AssertionError\\nexcept KeyError: pass\\nassert 'a' not in c.entries\\ntry: c.get('zz',n); raise AssertionError\\nexcept KeyError: pass\\n# aware entry live via aware now\\nc.put('b',2,datetime(2024,1,1,14,0,1,tzinfo=tz))\\nassert c.get('b',n)==2\\nshutil.rmtree('__pycache__',ignore_errors=True)\\nprint('all checks ok')\\n\"],\"environment_names\":[],\"max_output_bytes\":1048576,\"program\":\"python3\",\"timeout_seconds\":120}",
+        "actor_fingerprint": "9acdf9b203a8703e25deffe74e2bb961c4ecd482340846e7eaad53b159d0a765",
+        "backend_kind": "native_trusted",
+        "backend_identity": null,
+        "profile_digest": "7d96c74c4b96f2f08e4d59e4eef85ea1cc2971bceff689f088d392397d7f47b9"
+      },
+      "decision": "allow_run",
+      "created_at": "2026-10-01T10:15:06.211647948Z",
+      "expires_at": null
+    }
+  ],
+  "verification": {
+    "passed": 0,
+    "failed": 0,
+    "inconclusive": 1,
+    "skipped": 0,
+    "highest_grade": "unverified"
+  },
+  "unresolved_risks": [
+    "Verification incomplete: No supported test manifest was detected"
+  ],
+  "metadata": {},
+  "integrity_hash": "34fb2bc1cb0b49ec29d436697c41cbf8d0b047993acc79ea51933c0b988760d9"
+}
