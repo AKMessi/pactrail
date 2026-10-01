@@ -6,6 +6,17 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Retry truncated buffered OpenAI-compatible response/tool-argument JSON and interrupted
+  response bodies with a shared three-retry limit. Invalid syntax, authentication
+  failures, and response-size violations still fail closed.
+- Explicit resume of failed runs only at an adjacent, validated pre-model
+  checkpoint, preserving completed effects, candidate identity, and remaining
+  budgets. Unknown billing prevents cost-capped failed-run recovery.
+- Explain missing receipts during Apply and show checkpoint recovery guidance
+  after failures instead of only a missing-file error.
+
 ### Added
 
 - Opt-in revision-bound completion audits: up to two ordinary budgeted review

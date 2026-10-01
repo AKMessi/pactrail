@@ -307,3 +307,9 @@ results, redact secrets from errors, enforce bounded response bodies and event
 frames, reject insecure remote transport, and provide deterministic buffered
 and fragmented-stream fixtures. Native adapters must preserve protocol-specific
 continuation data without allowing it to influence tool policy or execution.
+
+## Recovering incomplete responses
+
+See [provider failure recovery](provider-failure-recovery.md) for bounded
+OpenAI-compatible retries, explicit checkpoint recovery, unknown billing,
+and the checks that prevent replaying completed tool effects.

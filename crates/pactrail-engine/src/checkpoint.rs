@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use pactrail_core::{EventHash, RunEvent, RunId, TaskContract};
+use pactrail_core::{EventHash, RunEvent, RunId, RunState, TaskContract};
 use pactrail_models::{ConversationItem, ModelRoute, Usage, validate_image_set};
 use pactrail_store::{ArtifactError, ArtifactStore, EventStore, StoreError, StoredArtifact};
 use serde::{Deserialize, Serialize};
@@ -235,7 +235,8 @@ impl CheckpointStore {
             .map_err(CheckpointError::Artifact)
     }
 
-    /// Loads the checkpoint named by the current hash-linked event head.
+    /// Loads a head-bound checkpoint, or the immediately adjacent pre-model
+    /// checkpoint of an executing-to-failed transition.
     ///
     /// # Errors
     ///
@@ -247,7 +248,25 @@ impl CheckpointStore {
         run_id: RunId,
     ) -> Result<RunCheckpoint, CheckpointError> {
         let envelopes = events.load(run_id)?;
-        let head = envelopes.last().ok_or(CheckpointError::NotFound(run_id))?;
+        let last = envelopes.last().ok_or(CheckpointError::NotFound(run_id))?;
+        // A failed provider call has executed no tools. Accept only the exact
+        // adjacent checkpoint, never search backwards across effects or notes.
+        let failed_model_boundary = matches!(
+            last.event,
+            RunEvent::StateChanged {
+                from: RunState::Executing,
+                to: RunState::Failed
+            }
+        );
+        let head = if failed_model_boundary {
+            envelopes
+                .iter()
+                .rev()
+                .nth(1)
+                .ok_or(CheckpointError::NotFound(run_id))?
+        } else {
+            last
+        };
         let RunEvent::CheckpointCreated { checkpoint } = &head.event else {
             let snapshot = events.snapshot(run_id)?;
             if let Some(effect) = snapshot.pending_effects.values().next() {
@@ -263,6 +282,14 @@ impl CheckpointStore {
                 head_sequence: head.sequence,
             });
         };
+        if let Some(effect) = events.snapshot(run_id)?.pending_effects.values().next() {
+            return Err(CheckpointError::UncertainEffect {
+                run_id,
+                call_id: effect.call_id.clone(),
+                tool: effect.tool.clone(),
+                risk: effect.risk.clone(),
+            });
+        }
         let digest = checkpoint
             .strip_prefix(CHECKPOINT_EVENT_PREFIX)
             .ok_or_else(|| CheckpointError::InvalidEventReference(checkpoint.clone()))?;
@@ -271,6 +298,12 @@ impl CheckpointStore {
         let checkpoint: RunCheckpoint =
             serde_json::from_slice(&bytes).map_err(CheckpointError::Decoding)?;
         checkpoint.validate()?;
+        if failed_model_boundary && checkpoint.phase != ResumePhase::BeforeModel {
+            return Err(CheckpointError::NotAtHead {
+                run_id,
+                head_sequence: last.sequence,
+            });
+        }
         if checkpoint.run_id != run_id {
             return Err(CheckpointError::WrongRun {
                 expected: run_id,
@@ -556,6 +589,87 @@ mod tests {
             Some(historical)
         );
         assert_eq!(checkpoints.validate_all(&events, run_id).ok(), Some(1));
+    }
+
+    #[test]
+    fn failed_recovery_requires_adjacent_before_model_checkpoint() {
+        for phase in [
+            ResumePhase::BeforeModel,
+            ResumePhase::BeforeTools,
+            ResumePhase::BeforeVerification,
+        ] {
+            let root = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+            let checkpoints =
+                CheckpointStore::open(root.path()).unwrap_or_else(|e| unreachable!("{e}"));
+            let mut events = EventStore::open_in_memory().unwrap_or_else(|e| unreachable!("{e}"));
+            let run_id = RunId::new();
+            let mut head = events
+                .append(
+                    run_id,
+                    0,
+                    RunEvent::ContractRegistered(TaskContract::new("fix it", ".")),
+                )
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            for (from, to) in [
+                (RunState::Created, RunState::Contracting),
+                (RunState::Contracting, RunState::Investigating),
+                (RunState::Investigating, RunState::Executing),
+            ] {
+                head = events
+                    .append(
+                        run_id,
+                        head.sequence + 1,
+                        RunEvent::StateChanged { from, to },
+                    )
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+            }
+            let mut value = checkpoint(run_id, head.sequence, head.hash);
+            value.phase = phase;
+            if phase == ResumePhase::BeforeTools {
+                value
+                    .conversation
+                    .push(ConversationItem::AssistantToolCalls {
+                        text: String::new(),
+                        calls: Vec::new(),
+                    });
+            }
+            let artifact = checkpoints
+                .put(&value)
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            let named = events
+                .append(
+                    run_id,
+                    4,
+                    RunEvent::CheckpointCreated {
+                        checkpoint: CheckpointStore::event_reference(&artifact),
+                    },
+                )
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            events
+                .append(
+                    run_id,
+                    named.sequence + 1,
+                    RunEvent::StateChanged {
+                        from: RunState::Executing,
+                        to: RunState::Failed,
+                    },
+                )
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            assert_eq!(
+                checkpoints.load_head(&events, run_id).is_ok(),
+                phase == ResumePhase::BeforeModel
+            );
+            events
+                .append(
+                    run_id,
+                    6,
+                    RunEvent::NoteRecorded {
+                        message: "intervening event".to_owned(),
+                    },
+                )
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            assert!(checkpoints.load_head(&events, run_id).is_err());
+        }
     }
 
     #[test]

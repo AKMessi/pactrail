@@ -44,7 +44,7 @@ pub enum RunState {
 }
 
 impl RunState {
-    /// Whether no further state transition is valid.
+    /// Whether the run has ended (failed runs may explicitly recover from a validated checkpoint).
     #[must_use]
     pub const fn is_terminal(self) -> bool {
         matches!(
@@ -63,7 +63,7 @@ impl RunState {
                 | (Self::Contracting, Self::Investigating)
                 | (Self::Investigating, Self::Planning | Self::Executing)
                 | (
-                    Self::Planning | Self::Verifying | Self::Reviewing,
+                    Self::Failed | Self::Planning | Self::Verifying | Self::Reviewing,
                     Self::Executing
                 )
                 | (Self::Executing, Self::Verifying)

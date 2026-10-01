@@ -1031,13 +1031,24 @@ fn failed_run_error(
     source: EngineError,
 ) -> CliError {
     let trace_path = run_root.join("trace.jsonl");
-    let trace_status = match write_trace_artifact(run_root, store, run_id) {
+    let mut trace_status = match write_trace_artifact(run_root, store, run_id) {
         Ok(()) => format!("Portable trace: {}", trace_path.display()),
         Err(error) => format!(
             "Portable trace export failed ({error}); authoritative events remain in {}",
             state.join("events.sqlite3").display()
         ),
     };
+    if CheckpointStore::open(state.join("artifacts").join("checkpoints"))
+        .and_then(|checkpoints| checkpoints.load_head(store, run_id))
+        .is_ok()
+    {
+        let _write = std::fmt::Write::write_fmt(
+            &mut trace_status,
+            format_args!(
+                "\nCandidate files preserved. Retry from the validated checkpoint with `pactrail resume {run_id}` (remaining budgets and permissions still apply)."
+            ),
+        );
+    }
     CliError::RunFailed {
         run_id,
         source: Box::new(source),
@@ -2375,6 +2386,11 @@ pub(crate) fn apply_run(
     run_id: RunId,
 ) -> Result<ChangeReceipt, CliError> {
     let run_root = run_root(state, run_id);
+    if !run_root.join("receipt.json").exists() {
+        return Err(CliError::Argument(format!(
+            "run {run_id} has no completed receipt and cannot be applied. Its candidate files are preserved. Try `pactrail resume {run_id}`; recovery requires a validated checkpoint before a model call."
+        )));
+    }
     let receipt = read_receipt(&run_root)?;
     require_receipt_integrity(&receipt)?;
     require_receipt_workspace(&receipt, workspace)?;

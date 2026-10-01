@@ -587,7 +587,11 @@ impl<'a> RunEngine<'a> {
     ) -> Result<RunOutcome, EngineError> {
         contract.validate()?;
         let wall_time_seconds = contract.budget.wall_time_seconds;
-        let elapsed_active_ms = resume.as_ref().map_or(0, |value| value.elapsed_active_ms);
+        let failure_elapsed_ms = failed_model_elapsed_ms(store, run_id)?;
+        let elapsed_active_ms = resume
+            .as_ref()
+            .map_or(0, |value| value.elapsed_active_ms)
+            .saturating_add(failure_elapsed_ms);
         let wall_time_ms = wall_time_seconds.saturating_mul(1_000);
         let remaining_ms = wall_time_ms.saturating_sub(elapsed_active_ms);
         if remaining_ms == 0 {
@@ -778,10 +782,21 @@ impl<'a> RunEngine<'a> {
             } else {
                 self.resume_cost_spent(store, run_id, checkpoint.usage)?
             };
+            let recovering_failure = store.snapshot(run_id)?.state == RunState::Failed;
+            let failure_elapsed_ms = failed_model_elapsed_ms(store, run_id)?;
             let mut journal = Journal::resume(run_id, store)?;
+            if recovering_failure {
+                let mut failed = RunState::Failed;
+                transition(&mut journal, &mut failed, RunState::Executing, observer)?;
+            }
+            let recovery_notice = if recovering_failure {
+                "; failed provider call usage was not reported; completed tool effects are retained"
+            } else {
+                ""
+            };
             journal.append(RunEvent::NoteRecorded {
                 message: format!(
-                    "resumed from safe session checkpoint at model turn {}",
+                    "resumed from safe session checkpoint at model turn {}{recovery_notice}",
                     checkpoint.next_turn.saturating_add(1)
                 ),
             })?;
@@ -804,7 +819,9 @@ impl<'a> RunEngine<'a> {
                 Some(checkpoint.clone()),
                 checkpoint.next_turn,
                 checkpoint.phase,
-                checkpoint.elapsed_active_ms,
+                checkpoint
+                    .elapsed_active_ms
+                    .saturating_add(failure_elapsed_ms),
             )
         } else {
             let mut journal = Journal::new(run_id, store);
@@ -3013,11 +3030,17 @@ impl RunEngine<'_> {
         let snapshot = events
             .snapshot(run_id)
             .map_err(|error| reject(error.to_string()))?;
-        if snapshot.state != RunState::Executing {
+        if !matches!(snapshot.state, RunState::Executing | RunState::Failed) {
             return Err(reject(format!(
-                "durable lifecycle is {:?}; only executing runs can resume",
+                "durable lifecycle is {:?}; only executing runs or checkpoint-bound failed model calls can resume",
                 snapshot.state
             )));
+        }
+        if snapshot.state == RunState::Failed && contract.budget.cost_microusd > 0 {
+            return Err(reject("failed provider call has unknown billed usage; cost-capped recovery requires billing reconciliation".to_owned()));
+        }
+        if !snapshot.pending_effects.is_empty() {
+            return Err(reject("unreconciled tool effects forbid resume".to_owned()));
         }
         let expected_contract =
             contract_digest(contract).map_err(|error| reject(error.to_string()))?;
@@ -4102,6 +4125,31 @@ fn compaction_action(report: &CompactionReport) -> ActionRecord {
     }
 }
 
+// Charge time spent in the failed invocation, but never idle time before
+// the user explicitly resumes. Checkpoint hashes remain untouched.
+fn failed_model_elapsed_ms(store: &EventStore, run_id: RunId) -> Result<u64, EngineError> {
+    let events = store.load(run_id)?;
+    let Some(last) = events.last() else {
+        return Ok(0);
+    };
+    if !matches!(
+        last.event,
+        RunEvent::StateChanged {
+            from: RunState::Executing,
+            to: RunState::Failed
+        }
+    ) {
+        return Ok(0);
+    }
+    let Some(checkpoint) = events.iter().rev().nth(1) else {
+        return Ok(0);
+    };
+    if !matches!(checkpoint.event, RunEvent::CheckpointCreated { .. }) {
+        return Ok(0);
+    }
+    Ok(u64::try_from((last.timestamp - checkpoint.timestamp).whole_milliseconds()).unwrap_or(0))
+}
+
 fn transition(
     journal: &mut Journal<'_>,
     state: &mut RunState,
@@ -5000,6 +5048,161 @@ mod tests {
             capabilities: ModelCapabilities::default(),
             responses: Mutex::new(VecDeque::from([reply()])),
         };
+        let outcome = RunEngine::new(&resumed, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints)
+            .resume(run_id, contract, &transaction, &mut store, checkpoint)
+            .await
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(outcome.receipt.outcome, ReceiptOutcome::ReadyToApply);
+        let snapshot = store
+            .snapshot(run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            snapshot
+                .actions
+                .iter()
+                .filter(|a| a.action == crate::completion::AUDIT_ACTION)
+                .count(),
+            1
+        );
+        assert_eq!(
+            snapshot
+                .actions
+                .iter()
+                .filter(|a| a.actor == "tool:write_file")
+                .count(),
+            1
+        );
+        assert!(!source.path().join("a.txt").exists());
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)] // Full recovery scenario includes identity and billing rejection gates.
+    async fn failed_model_boundary_resumes_without_replaying_completed_tools() {
+        let reply = || ModelResponse {
+            text: "The change is complete.".to_owned(),
+            tool_calls: Vec::new(),
+            finish_reason: FinishReason::Complete,
+            usage: Usage::default(),
+            provider_request_id: None,
+            extensions: serde_json::Map::new(),
+        };
+        let suspended = SuspendAfterScriptModel {
+            script: ScriptedModel {
+                name: "scripted".to_owned(),
+                model: "audit-resume".to_owned(),
+                capabilities: ModelCapabilities::default(),
+                responses: Mutex::new(VecDeque::from([
+                    tool_response(
+                        "write-once",
+                        "write_file",
+                        json!({"path":"a.txt", "content":"fixed"}),
+                    ),
+                    reply(),
+                ])),
+            },
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let control = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        let checkpoints = CheckpointStore::open(control.path().join("checkpoints"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let registry = pactrail_tools::builtin_registry().unwrap_or_else(|e| unreachable!("{e}"));
+        let mut contract = TaskContract::new("Fix a.txt", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let mut store = EventStore::open_in_memory().unwrap_or_else(|e| unreachable!("{e}"));
+        let run_id = RunId::new();
+        let engine = RunEngine::new(&suspended, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints);
+        let interrupted = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            engine.execute_inner(
+                run_id,
+                contract.clone(),
+                &transaction,
+                &mut store,
+                &SilentRunObserver,
+                None,
+            ),
+        )
+        .await;
+        assert!(interrupted.is_err());
+        let checkpoint = checkpoints
+            .load_head(&store, run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(checkpoint.phase, ResumePhase::BeforeModel);
+        assert_eq!(checkpoint.next_turn, 2);
+        let next = store
+            .load(run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .last()
+            .unwrap_or_else(|| unreachable!("head"))
+            .sequence
+            + 1;
+        store
+            .append(
+                run_id,
+                next,
+                RunEvent::StateChanged {
+                    from: RunState::Executing,
+                    to: RunState::Failed,
+                },
+            )
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            checkpoints.load_head(&store, run_id).ok(),
+            Some(checkpoint.clone())
+        );
+        let resumed = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "audit-resume".to_owned(),
+            capabilities: ModelCapabilities::default(),
+            responses: Mutex::new(VecDeque::from([reply()])),
+        };
+        fs::write(transaction.workspace_root().join("a.txt"), "tampered")
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let rejected = RunEngine::new(&resumed, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints)
+            .resume(
+                run_id,
+                contract.clone(),
+                &transaction,
+                &mut store,
+                checkpoint.clone(),
+            )
+            .await;
+        assert!(matches!(rejected, Err(EngineError::ResumeRejected(_))));
+        fs::write(transaction.workspace_root().join("a.txt"), "fixed")
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let mut capped = contract.clone();
+        capped.budget.cost_microusd = 1;
+        let rejected = RunEngine::new(&resumed, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints)
+            .validate_resume_checkpoint(
+                run_id,
+                &capped,
+                &transaction,
+                &store,
+                &registry.descriptors(),
+                &checkpoint,
+                8,
+            );
+        assert!(matches!(rejected, Err(EngineError::ResumeRejected(_))));
         let outcome = RunEngine::new(&resumed, &registry, &policy)
             .with_completion_audit(true)
             .with_max_turns(8)

@@ -3102,9 +3102,9 @@ impl Session {
             .find(|run| run.run_id == run_id)
             .map(|run| run.state)
             .ok_or_else(|| CliError::Argument(format!("run {run_id} is not discoverable")))?;
-        if state != RunState::Executing {
+        if !matches!(state, RunState::Executing | RunState::Failed) {
             return Err(CliError::Argument(format!(
-                "run {run_id} is {state:?}, not an interrupted executing run"
+                "run {run_id} is {state:?}, not an interrupted or recoverable failed run"
             )));
         }
         Ok(run_id)
