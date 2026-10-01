@@ -39,6 +39,9 @@ secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 similar.workspace = true
+shell-words.workspace = true
+unicode-width.workspace = true
+unicode-segmentation.workspace = true
 tempfile.workspace = true
 tower = { version = "0.5", features = ["util"] }
 terminal_size.workspace = true

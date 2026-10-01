@@ -15,13 +15,18 @@ pactrail "Refactor the parser error type and add regression coverage"
 The interface keeps the direct coding-agent flow—describe a change and press
 Enter—while preserving an explicit transaction boundary. The model works in a
 run-local candidate. Source files change only after `/apply` validates the
-receipt, candidate contents, file modes, and source baseline.
+receipt, candidate contents, file modes, and source baseline. Interactive Apply
+first displays the candidate and evidence cautions, then asks you to type `apply`.
+Enter, Ctrl-C, Ctrl-D, and any other response cancel. Discard similarly requires
+`discard`. Scriptable `pactrail apply`/`discard` retain their existing semantics.
 
 ## What the UI reports
 
-The default run view is a persistent live execution timeline backed by engine
+The default run view is a compact, persistent live execution timeline backed by engine
 events rather than simulated activity. Completed rows remain visible above one
-animated current-operation line. It shows:
+current-operation line. `/detail full` includes the lower-level context and
+controller diagnostics; warnings remain visible in compact mode. The underlying
+durable trace is unchanged. Across these views it reports:
 
 - repository context size, cited/indexed files, warm/cold index reuse,
   kernel-derived citation coverage, graph evidence, compilation time, and
@@ -75,7 +80,7 @@ and remaining budgets before any model request. Two live Pactrail processes
 cannot own one run. If the trace ends inside an effect fence, Pactrail names the
 uncertain tool/risk and refuses automatic replay; use `/trace` to inspect it.
 
-Informational prompts are first-class runs. They terminate as `ANSWERED`, issue
+Informational prompts are first-class runs. They terminate as `Answered`, issue
 an integrity-checked receipt with no candidate changes, and never ask for
 `/apply`. Broad workspace overviews begin with a deterministic profile derived
 from root manifests and conventional entrypoints, followed by a separately
@@ -85,6 +90,28 @@ presenting model prose as kernel evidence.
 Internal logs stay out of the normal transcript even when another tool exports
 `RUST_LOG`. Set `PACTRAIL_LOG` for interactive diagnostics; non-interactive
 commands continue to honor `RUST_LOG`.
+
+## Compose without losing your place
+
+- **Enter** dispatches a task. **Alt+Enter** or **Ctrl+J** inserts a newline.
+  Shift+Enter also works when the terminal reports it as a distinct key.
+- **Ctrl+P** opens described command completion; **Tab** opens/cycles it and
+  Shift+Tab goes back. Escape closes the menu without executing an action.
+  Run arguments complete known IDs, and `/model` completes discovered models.
+- **Ctrl+G** sends the current draft to `VISUAL` or `EDITOR` and restores it when
+  you exit. `/editor [text]` opens a fresh draft. Neither dispatches automatically.
+- `/task "path with spaces.md"` loads a UTF-8 task file up to 64 KiB into the
+  composer. Review it before pressing Enter. `/retry` restores the last submitted
+  task for editing; it does not spend another model turn by itself.
+- Arrow keys and **Ctrl+R** retain persistent input-history navigation.
+  Ctrl+P is reserved for commands; Up remains available for history.
+
+Editor and pager settings are trusted local executable/argument configurations,
+parsed without shell evaluation. Quote a program path that contains spaces.
+Editor invocation uses the selected workspace as its working directory and a
+private temporary draft file. Task files must be regular files. Draft controls
+are neutralized before display. These actions do not alter the agent's process
+permissions.
 
 ## First session
 
@@ -126,8 +153,28 @@ Fix the parser error conversion and add a regression test.
 When the run stops, Pactrail prints the receipt outcome, evidence counts,
 integrity status, changed paths, risks, model summary, and token usage. `/review`
 combines receipt and diff. `/discard` idempotently rejects the candidate while
-retaining the receipt, immutable diff, and trace; repeating it is safe. `/runs`
-browses recent history.
+retaining the receipt, immutable diff, and trace; repeating it is safe. `/runs [text]`
+browses or filters history. `/focus <run-id-or-prefix>` explicitly selects the
+run used by `/review`, `/trace`, `/evidence`, `/inspect`, and decisions.
+
+Long run lists, traces, diffs, model lists, and evidence views use `PAGER`, defaulting
+to `less -FRX`, when they exceed the terminal height. With less, `/` searches,
+Space advances, and `q` returns to the composer. Set `PAGER` to an empty value or
+use `/pager off` for ordinary scrollback. A missing/failing pager explains the
+failure and displays the full output. Less runs without shell escapes or external
+preprocessors. `/pager auto|off` and `/detail compact|full` affect this session only.
+
+`/evidence` displays each obligation's grade, status, summary, reproduction
+command, and artifact digest. Deterministic-passed evidence is the only green
+verdict; completion, application, integrity, and configured permissions do not
+use pass coloring. Apply notices include missing deterministic checks, failed
+checks, and evidence preceding the latest write, derived from trace order.
+
+Token figures are labeled **engine-counted tokens**. The current normalized
+backend counters do not preserve field-presence coverage for every provider;
+zero cannot always prove that a provider reported zero. Cost without a report
+is `—`, not an invented zero. Complete presence-aware accounting is proposed
+in [design 0016](design/0016-durable-evidence-runtime.md), not claimed as shipped.
 
 For a repository question, use the same prompt directly:
 
@@ -204,13 +251,16 @@ serially.
 | Work | `/trace [run]` | Show the verified execution timeline. |
 | Work | `/apply [run]` | Land a ready candidate after safety checks. |
 | Work | `/discard [run]` | Reject a candidate and preserve evidence. |
-| Work | `/runs` | Browse durable history. |
+| Work | `/runs [query]` | Browse or filter durable history. |
+| Work | `/focus <run>` | Select the run used by review and decisions. |
+| Work | `/evidence [run]` | Inspect obligation support and reproduction commands. |
+| Work | `/retry` | Restore the last task to the composer without dispatch. |
 | Work | `/inspect [run]` | Show a receipt without its diff. |
 | Work | `/image add <path>\|list\|clear` | Manage sealed image evidence for the next task. |
 | Memory | `/memory [query]` | Browse or search active workspace memory. |
 | Memory | `/remember [kind] <text>` | Save a human-authored memory. |
 | Memory | `/forget <id>` | Soft-delete a memory by full/unique ID prefix. |
-| Model | `/models` | Discover models from the endpoint. |
+| Model | `/models [query]` | Discover or filter models from the endpoint. |
 | Model | `/model <name\|number>` | Select and persist a model. |
 | Model | `/connect <url> <model>` | Configure a compatible endpoint and model. |
 | Model | `/provider <kind> [url]` | Switch provider adapter. |
@@ -229,6 +279,10 @@ serially.
 | Session | `/status` | Show model, limits, policy, queued images, memory, and review state. |
 | Session | `/doctor` | Inspect runtimes and isolation boundaries. |
 | Session | `/help [command]` | Browse grouped or focused help. |
+| Session | `/editor [text]` | Compose in VISUAL/EDITOR and return for review. |
+| Session | `/task <path>` | Load a bounded UTF-8 task file into the composer. |
+| Session | `/pager auto\|off` | Choose paging for long review views in this session. |
+| Session | `/detail compact\|full` | Choose live diagnostic detail in this session. |
 | Session | `/clear` | Clear the terminal. |
 | Session | `/quit` | End the session. |
 
@@ -283,3 +337,15 @@ effects, and long integrity digests.
 
 Generate native completion with `pactrail completion <shell>`. Supported shells
 are Bash, Elvish, Fish, PowerShell (`powershell` or `pwsh`), and Zsh.
+
+## Development verification
+
+`cargo test -p pactrail` covers presentation, Unicode cells, described completion,
+review cautions, bounded task files, safe executable parsing, CLI JSON contracts,
+and engine integration. The optional development check
+`devtools/check_cli_experience.py` uses pexpect/pyte in an external Python
+virtual environment. It runs the real binary and a local deterministic model
+fixture in disposable workspaces, checks composition and decision workflows,
+exercises pager/editor return and NO_COLOR/TERM=dumb, and saves terminal captures
+under `/tmp/pactrail-cli-qa`. Those Python packages are not runtime dependencies
+of Pactrail. The local fixture uses port 4190.

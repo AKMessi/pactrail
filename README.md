@@ -157,20 +157,28 @@ hosted model; Ollama can be used locally.
 
 ### Interactive experience
 
-- Start from any repository with `pactrail`; optionally pass the first task.
+- Start from any repository with `pactrail`; optionally pass the first task or
+  use `pactrail -C /path/to/project`. Ctrl+P opens described commands; Alt+Enter
+  or Ctrl+J adds a line; Ctrl+G edits the draft in VISUAL/EDITOR.
+- `/task` loads a bounded task file; `/retry` restores a task for editing;
+  `/focus` selects a run; `/evidence` shows obligation support. Apply/Discard
+  cancel by default and require explicit words before changing the candidate.
+- Long reviews use PAGER (default: less -FRX), with `/pager off` for scrollback.
+  `/detail compact|full` controls live diagnostics; the durable trace is complete.
 - Persistent history, completion, typo suggestions, review-aware prompt, and
   a persistent live execution timeline instead of simulated or disappearing
   activity. Completed context, model, tool, recovery, state, and verification
   rows stay visible above one current-operation spinner. Runtime profile,
   controller budget, input/output/cache tokens, tool result size, mutation
-  count, and proactive checks have distinct readable lanes.
+  count, and proactive checks have distinct readable lanes. Compact detail is the
+  default; `/detail full` shows context/controller diagnostics.
 - Width-aware rendering keeps dashboards, receipts, tools, help, history, and
   complete trace continuations legible in narrow or wide terminals.
 - `/tools` risk/capability inspector, `/trace` execution timeline, `/memory`
   browser, `/runs`, `/resume`, `/review`, immutable `/diff`, explicit `/apply` and
   `/discard`, `/doctor`, model discovery, and persistent provider settings.
 - Human-readable output by default and stable JSON for scripts.
-- Informational prompts finish as `ANSWERED` with no fake apply step. Kernel
+- Informational prompts finish as `Answered` with no fake apply step. Kernel
   facts and model explanation remain visibly distinct for broad workspace
   overviews.
 
@@ -363,7 +371,7 @@ checkpoint state; the original path does not. The bytes are sent to the chosen
 model provider on every turn, so do not attach secrets you would not send to
 that provider.
 
-You can also ask normal repository questions. They produce terminal `ANSWERED`
+You can also ask normal repository questions. They produce terminal `Answered`
 runs with integrity-checked receipts and traces, but no candidate or apply step:
 
 ```text
