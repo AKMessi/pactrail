@@ -78,4 +78,4 @@ real project tasks are used.
 Plain `continue` needs durable task selection and engine-bound recovery semantics,
 not a string alias for sending another new task. Handle ambiguity, terminal
 results, unsafe checkpoints, revision-bound context and permissions explicitly.
-This will be a separate tested change after the composer/navigation work.
+Implemented as the separate [persistent task continuation](persistent-task-continuation.md) upgrade after the composer/navigation commit.

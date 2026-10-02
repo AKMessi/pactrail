@@ -7,6 +7,7 @@ use tempfile::NamedTempFile;
 
 const MAX_BYTES: usize = 64 * 1024;
 
+#[derive(Clone)]
 pub(crate) struct ComposerStore {
     directory: PathBuf,
     workspace_key: String,

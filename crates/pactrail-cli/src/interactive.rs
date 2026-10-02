@@ -10,7 +10,7 @@ use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use pactrail_core::{
     ActionRecord, ApprovalDecision, ApprovalRequest, ChangeReceipt, EventEnvelope, EvidenceStatus,
-    FileChange, ReceiptOutcome, RunEvent, RunId, RunState,
+    FileChange, ReceiptOutcome, RunEvent, RunId, RunState, TaskContract,
 };
 use pactrail_engine::{RunObserver, RunProgress};
 use pactrail_memory::{MemoryDraft, MemoryKind};
@@ -46,6 +46,11 @@ const MAX_TERMINAL_COLUMNS: usize = 240;
 const IMAGE_TIMELINE_MARKER: &str = "◈";
 const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Kernel", "Safety", "Session"];
 const COMMANDS: &[CommandHelp] = &[
+    CommandHelp::new(
+        "Work",
+        "/continue [run|forget]",
+        "Continue the selected task safely; forget removes its local answer memory.",
+    ),
     CommandHelp::new(
         "Session",
         "/draft [clear]",
@@ -290,6 +295,7 @@ impl Completer for CommandCompleter {
             "/pager" => &["auto", "off"],
             "/detail" => &["compact", "full"],
             "/draft" => &["clear"],
+            "/continue" => &["forget"],
             "/provider" => &[
                 "ollama",
                 "open-ai-compatible",
@@ -332,6 +338,7 @@ impl Completer for CommandCompleter {
             "/discard",
             "/evidence",
             "/resume",
+            "/continue",
         ]
         .contains(&command)
         {
@@ -452,10 +459,16 @@ pub(crate) async fn launch(
         completion_data,
         last_goal,
         composer,
+        continuation_parent: None,
+        followup_contract: None,
+        followup_context: Vec::new(),
         pager: true,
         detailed: false,
     };
     session.bootstrap().await?;
+    if let Err(error) = session.restore_task_focus() {
+        session.render_error(&error.to_string())?;
+    }
     if let Err(error) = previous_task {
         session.render_error(&format!("Saved retry task could not be read: {error}"))?;
     }
@@ -466,7 +479,11 @@ pub(crate) async fn launch(
         Err(error) => session.render_error(&format!("Saved draft could not be read: {error}"))?,
     }
     if let Some(goal) = initial_goal {
-        session.execute_goal(goal.to_owned()).await?;
+        if goal.trim().eq_ignore_ascii_case("continue") {
+            session.continue_task("").await?;
+        } else {
+            session.execute_goal(goal.to_owned()).await?;
+        }
     }
     session.run().await
 }
@@ -555,6 +572,9 @@ struct Session {
     completion_data: Arc<Mutex<Vec<CompletionEntry>>>,
     last_goal: Option<String>,
     composer: crate::composer::ComposerStore,
+    continuation_parent: Option<crate::continuation::TaskMemory>,
+    followup_contract: Option<TaskContract>,
+    followup_context: Vec<pactrail_context::ContextFragment>,
     pager: bool,
     detailed: bool,
 }
@@ -661,6 +681,10 @@ struct RunActivity {
     stream_bytes: AtomicUsize,
     truncated_outputs: AtomicUsize,
     run_approvals: Mutex<BTreeSet<String>>,
+    task_context: Option<(
+        crate::composer::ComposerStore,
+        Option<crate::continuation::TaskMemory>,
+    )>,
     started: Instant,
     detailed: bool,
 }
@@ -692,6 +716,7 @@ impl RunActivity {
             stream_bytes: AtomicUsize::new(0),
             truncated_outputs: AtomicUsize::new(0),
             run_approvals: Mutex::new(BTreeSet::new()),
+            task_context: None,
             started: Instant::now(),
             detailed,
         }
@@ -763,6 +788,39 @@ impl RunActivity {
         }
     }
 
+    fn with_task_context(
+        mut self,
+        store: crate::composer::ComposerStore,
+        parent: Option<crate::continuation::TaskMemory>,
+    ) -> Self {
+        self.task_context = Some((store, parent));
+        self
+    }
+
+    fn persist_started_task(&self, run_id: RunId, goal: &str) {
+        if let Some((store, parent)) = &self.task_context {
+            let result = store
+                .save("focus", &run_id.to_string())
+                .map_err(|e| e.to_string())
+                .and_then(|()| {
+                    crate::continuation::TaskMemory::record_active(
+                        store,
+                        run_id,
+                        goal,
+                        parent.as_ref(),
+                    )
+                });
+            if let Err(error) = result {
+                self.row(
+                    "!",
+                    "memory",
+                    &format!("Restart context not saved: {error}"),
+                    TimelineTone::Warning,
+                );
+            }
+        }
+    }
+
     fn on_run_started(&self, progress: &RunProgress) {
         if let RunProgress::RunStarted {
             run_id,
@@ -770,6 +828,7 @@ impl RunActivity {
             model,
         } = progress
         {
+            self.persist_started_task(*run_id, goal);
             self.progress.println(format!(
                 "\n  {} {}",
                 self.theme.brand("╭─ Run"),
@@ -1527,7 +1586,11 @@ impl Session {
                     if line.is_empty() {
                         continue;
                     }
-                    if let Some(goal) = line.strip_prefix("//") {
+                    if line.eq_ignore_ascii_case("continue") {
+                        if let Err(error) = self.continue_task("").await {
+                            self.render_error(&error.to_string())?;
+                        }
+                    } else if let Some(goal) = line.strip_prefix("//") {
                         self.execute_goal(format!("/{goal}")).await?;
                     } else if line.starts_with('/') {
                         match self.handle_command(line).await {
@@ -1699,7 +1762,7 @@ impl Session {
                         "That run is not in this workspace.".to_owned(),
                     ));
                 }
-                self.last_run = Some(run);
+                self.set_task_focus(run)?;
                 self.emit(&format!(
                     "Focused run {}. /review, /trace, /evidence and decisions use this run.\n",
                     short_run_id(run)
@@ -1727,6 +1790,7 @@ impl Session {
             "/turns" => self.set_turns(arguments)?,
             "/process" => self.set_process_access(arguments)?,
             "/runs" | "/history" => self.render_runs(arguments)?,
+            "/continue" => self.continue_task(arguments).await?,
             "/resume" => {
                 self.resume_run(self.resolve_resumable_run(arguments)?)
                     .await?;
@@ -1755,6 +1819,10 @@ impl Session {
     }
 
     async fn execute_goal(&mut self, goal: String) -> Result<(), CliError> {
+        if self.followup_contract.is_none() {
+            self.continuation_parent = None;
+            self.followup_context.clear();
+        }
         self.last_goal = Some(goal.clone());
         if let Err(error) = self.composer.save("last-task", &goal) {
             self.emit(&format!(
@@ -1769,17 +1837,20 @@ impl Session {
             )?;
             return Ok(());
         };
-        let activity = RunActivity::new(&model, self.theme.clone(), self.detailed);
+        let activity = RunActivity::new(&model, self.theme.clone(), self.detailed)
+            .with_task_context(self.composer.clone(), self.continuation_parent.clone());
         let mut args = run_args_from_settings(&self.settings, Some(goal), model);
         args.images.clone_from(&self.pending_images);
+        let contract_file = self.prepare_followup_contract(&mut args)?;
 
         let cancellation = CancellationToken::new();
-        let mut execution = Box::pin(commands::execute_run_with_observer_and_cancellation(
+        let mut execution = Box::pin(commands::execute_run_with_context(
             &self.workspace,
             Some(&self.state),
             args,
             &activity,
             cancellation.clone(),
+            std::mem::take(&mut self.followup_context),
         ));
         let result = tokio::select! {
             result = &mut execution => result,
@@ -1797,6 +1868,7 @@ impl Session {
             }
         };
         drop(execution);
+        drop(contract_file);
         activity.finish();
         let images_consumed = match &result {
             Ok(_) => true,
@@ -1808,8 +1880,201 @@ impl Session {
         self.finish_run_activity(&activity, result)
     }
 
+    fn set_task_focus(&mut self, run_id: RunId) -> Result<(), CliError> {
+        self.last_run = Some(run_id);
+        if let Err(error) = self.composer.save("focus", &run_id.to_string()) {
+            self.emit(&format!(
+                "{}\n",
+                self.theme.warning(&format!(
+                    "Task focus could not be saved for restart: {error}"
+                ))
+            ))?;
+        }
+        Ok(())
+    }
+
+    fn restore_task_focus(&mut self) -> Result<(), CliError> {
+        let saved = self
+            .composer
+            .load("focus")
+            .map_err(|e| CliError::Argument(format!("Cannot read saved task focus: {e}")))?;
+        let Some(saved) = saved else {
+            return Ok(());
+        };
+        let run_id: RunId = saved.parse().map_err(|_| {
+            CliError::Argument("Saved task focus is invalid. Use /focus <id>.".to_owned())
+        })?;
+        if !commands::run_history(&self.state)?
+            .iter()
+            .any(|run| run.run_id == run_id)
+        {
+            return Err(CliError::Argument(
+                "Saved task is not in this state directory. Use /runs and /focus <id>.".to_owned(),
+            ));
+        }
+        self.last_run = Some(run_id);
+        Ok(())
+    }
+
+    fn continue_target(&self, argument: &str) -> Result<RunId, CliError> {
+        if !argument.is_empty() {
+            return self.resolve_run(argument);
+        }
+        let saved = self.composer.load("focus").map_err(|e| {
+            CliError::Argument(format!(
+                "Cannot read continuation focus: {e}. Use /focus <run>."
+            ))
+        })?;
+        if let Some(saved) = saved {
+            return saved.parse().map_err(|_| {
+                CliError::Argument(
+                    "Saved continuation focus is invalid. Use /focus <run> to replace it."
+                        .to_owned(),
+                )
+            });
+        }
+        let runs = commands::run_history(&self.state)?;
+        if runs.len() == 1 {
+            return Ok(runs[0].run_id);
+        }
+        Err(CliError::Argument(if runs.is_empty() { "No task to continue in this workspace. Write a task first." } else { "Several tasks exist and none is explicitly selected. Use /runs, then /continue <id> or /focus <id>." }.to_owned()))
+    }
+
+    async fn continue_task(&mut self, argument: &str) -> Result<(), CliError> {
+        let run_id = self.continue_target(if argument == "forget" { "" } else { argument })?;
+        let history = commands::run_history(&self.state)?;
+        let run = history.iter().find(|run| run.run_id == run_id).ok_or_else(|| CliError::Argument("Selected task is not in this workspace's state directory. Use /runs and /focus <id>.".to_owned()))?;
+        if argument == "forget" {
+            self.composer
+                .clear(&format!("task-{run_id}"))
+                .and_then(|()| self.composer.clear("focus"))
+                .map_err(|e| {
+                    CliError::Argument(format!("Could not forget local task context: {e}"))
+                })?;
+            self.last_run = None;
+            return self.emit("Selected task's local answer memory and continuation focus removed. Engine receipts, traces and checkpoints remain.\n");
+        }
+        self.set_task_focus(run_id)?;
+        match crate::continuation::next_action(run.state, run.outcome) {
+            crate::continuation::NextAction::Resume => self.resume_run(run_id).await,
+            crate::continuation::NextAction::Review => {
+                self.inspect_run(&run_id.to_string(), true)?;
+                self.emit("Candidate awaiting review. Continue has not applied, discarded, or started another run. Use /diff, /evidence, then /apply or /discard explicitly.\n")
+            }
+            crate::continuation::NextAction::FollowUp => self.continue_completed(run_id).await,
+            crate::continuation::NextAction::Blocked(reason) => {
+                Err(CliError::Argument(reason.to_owned()))
+            }
+        }
+    }
+
+    async fn continue_completed(&mut self, run_id: RunId) -> Result<(), CliError> {
+        let receipt = commands::read_bound_receipt(&self.state, &self.workspace, run_id)?;
+        let memory = crate::continuation::TaskMemory::load(&self.composer, &receipt)
+            .and_then(|memory| {
+                memory.map_or_else(|| crate::continuation::TaskMemory::fallback(&receipt), Ok)
+            })
+            .map_err(CliError::Argument)?;
+        let (goal, context) =
+            crate::continuation::follow_up(&receipt, Some(&memory)).map_err(CliError::Argument)?;
+        if self.settings.effective_model().is_none() {
+            return Err(CliError::Argument(
+                "No model is configured. Use /connect or /model before continuing.".to_owned(),
+            ));
+        }
+        let mut contract = receipt.contract.clone();
+        contract.goal.clone_from(&goal);
+        self.followup_contract = Some(contract);
+        self.followup_context = vec![context];
+        self.continuation_parent = Some(memory);
+        self.emit(&format!("Continuing task {} in a new isolated run. Previous contract scope and limits are renewed; the current model and process settings are used. Historical evidence must be rechecked.\n", short_run_id(run_id)))?;
+        self.execute_goal(goal).await
+    }
+
+    fn prepare_followup_contract(
+        &mut self,
+        args: &mut RunArgs,
+    ) -> Result<Option<tempfile::NamedTempFile>, CliError> {
+        use std::io::Write;
+        let Some(contract) = self.followup_contract.take() else {
+            return Ok(None);
+        };
+        let mut file = tempfile::NamedTempFile::new().map_err(|e| {
+            CliError::Argument(format!("Cannot prepare continuation contract: {e}"))
+        })?;
+        let text = toml::to_string(&contract).map_err(|e| {
+            CliError::Argument(format!("Cannot serialize continuation contract: {e}"))
+        })?;
+        file.write_all(text.as_bytes())
+            .and_then(|()| file.as_file().sync_all())
+            .map_err(|e| CliError::Argument(format!("Cannot save continuation contract: {e}")))?;
+        args.goal = None;
+        args.task = Some(file.path().to_path_buf());
+        args.max_cost_microusd = 0; // The task file owns its preserved cost budget.
+        Ok(Some(file))
+    }
+
+    fn save_completed_task_memory(&mut self, completed: &CompletedRun) -> Result<(), CliError> {
+        let result = (|| {
+            let existing =
+                crate::continuation::TaskMemory::load(&self.composer, &completed.receipt)?;
+            let parent = self.continuation_parent.take().or(existing);
+            crate::continuation::TaskMemory::record(
+                &self.composer,
+                &completed.receipt,
+                &completed.model_summary,
+                parent.as_ref(),
+            )
+        })();
+        if let Err(error) = result {
+            self.emit(&format!(
+                "{}\n",
+                self.theme.warning(&format!(
+                    "Run result is durable, but local answer memory was not saved: {error}"
+                ))
+            ))?;
+        }
+        Ok(())
+    }
+
+    fn save_failed_task_memory(&mut self, run_id: RunId) -> Result<(), CliError> {
+        let parent = self.continuation_parent.take();
+        let result = (|| {
+            let events = commands::load_trace(&self.state, run_id).map_err(|e| e.to_string())?;
+            let Some(contract) = events.iter().find_map(|event| {
+                if let RunEvent::ContractRegistered(contract) = &event.event {
+                    Some(contract)
+                } else {
+                    None
+                }
+            }) else {
+                return Ok(());
+            };
+            let existing =
+                crate::continuation::TaskMemory::load_contract(&self.composer, run_id, contract)?;
+            let parent = parent.or(existing);
+            crate::continuation::TaskMemory::record_contract(
+                &self.composer,
+                run_id,
+                contract,
+                "No final answer was produced by this failed run.",
+                parent.as_ref(),
+            )
+        })();
+        if let Err(error) = result {
+            self.emit(&format!(
+                "{}\n",
+                self.theme.warning(&format!(
+                    "Failed run is durable, but local task context was not saved: {error}"
+                ))
+            ))?;
+        }
+        Ok(())
+    }
+
     async fn resume_run(&mut self, run_id: RunId) -> Result<(), CliError> {
-        let activity = RunActivity::new("durable session", self.theme.clone(), self.detailed);
+        let activity = RunActivity::new("durable session", self.theme.clone(), self.detailed)
+            .with_task_context(self.composer.clone(), None);
         activity.set_message("validating checkpoint identity");
         let cancellation = CancellationToken::new();
         let mut execution = Box::pin(commands::execute_resume_with_observer_and_cancellation(
@@ -1847,14 +2112,16 @@ impl Session {
         match result {
             Ok(completed) => {
                 self.emit(&activity.summary(true))?;
-                self.last_run = Some(completed.receipt.run_id);
+                self.set_task_focus(completed.receipt.run_id)?;
+                self.save_completed_task_memory(&completed)?;
                 self.refresh_pending_runs()?;
                 self.render_completed(&completed)?;
             }
             Err(error) => {
                 self.emit(&activity.summary(false))?;
                 if let Some(run_id) = error.run_id() {
-                    self.last_run = Some(run_id);
+                    self.set_task_focus(run_id)?;
+                    self.save_failed_task_memory(run_id)?;
                 }
                 self.render_error(&error.to_string())?;
                 let guidance = error.run_id().map_or_else(
@@ -3156,7 +3423,7 @@ impl Session {
             }
         }
         let receipt = commands::apply_run(&self.state, &self.workspace, run_id)?;
-        self.last_run = Some(run_id);
+        self.set_task_focus(run_id)?;
         self.refresh_pending_runs()?;
         self.refresh_memory_count()?;
         self.emit(&format!(
@@ -3173,7 +3440,7 @@ impl Session {
         let candidate = commands::read_bound_receipt(&self.state, &self.workspace, run_id)?;
         if candidate.outcome == ReceiptOutcome::ReadyToApply && !self.confirm("discard", "Discard this isolated candidate? Workspace files stay unchanged. Type discard; Enter cancels.")? {return self.emit("Discard cancelled. Candidate retained.\n");}
         commands::discard_run(&self.state, &self.workspace, run_id)?;
-        self.last_run = Some(run_id);
+        self.set_task_focus(run_id)?;
         self.refresh_pending_runs()?;
         self.emit(&format!(
             "\n{} Candidate discarded\n  {}\n  {}\n\n",
@@ -3289,7 +3556,9 @@ impl Session {
     fn refresh_pending_runs(&mut self) -> Result<(), CliError> {
         let receipts = commands::completed_runs(&self.state)?;
         let (last_run, pending_runs) = run_focus(&receipts);
-        self.last_run = last_run;
+        if self.last_run.is_none() {
+            self.last_run = last_run;
+        }
         self.pending_runs = pending_runs;
         Ok(())
     }

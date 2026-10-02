@@ -358,6 +358,7 @@ async fn run(
         args,
         None,
         cancellation.clone(),
+        Vec::new(),
     ));
     let completed = tokio::select! {
         result = &mut execution => result?,
@@ -519,12 +520,15 @@ async fn execute_resume_inner(
     )
 }
 
-pub(crate) async fn execute_run_with_observer_and_cancellation(
+/// Frontend history uses the existing advisory context compiler without becoming
+/// authoritative task instructions or granting permissions.
+pub(crate) async fn execute_run_with_context(
     cli_workspace: &Path,
     state_override: Option<&Path>,
     args: RunArgs,
     observer: &dyn RunObserver,
     cancellation: CancellationToken,
+    context: Vec<pactrail_context::ContextFragment>,
 ) -> Result<CompletedRun, CliError> {
     execute_run_inner(
         cli_workspace,
@@ -532,6 +536,7 @@ pub(crate) async fn execute_run_with_observer_and_cancellation(
         args,
         Some(observer),
         cancellation,
+        context,
     )
     .await
 }
@@ -566,6 +571,7 @@ async fn execute_run_inner(
     args: RunArgs,
     observer: Option<&dyn RunObserver>,
     cancellation: CancellationToken,
+    supplemental_context: Vec<pactrail_context::ContextFragment>,
 ) -> Result<CompletedRun, CliError> {
     let input_images = prepare_input_images(cli_workspace, &args)?;
     let process_backend = effective_process_backend(&args)?;
@@ -622,7 +628,8 @@ async fn execute_run_inner(
     registry.register(ReadObservationTool::new(observation_root.clone()))?;
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
-    let mut context_fragments = memory_context_fragments(&contract, &memory, &transaction)?;
+    let mut context_fragments = supplemental_context;
+    context_fragments.extend(memory_context_fragments(&contract, &memory, &transaction)?);
     context_fragments.extend(mcp_runtime.context_fragments());
     let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)

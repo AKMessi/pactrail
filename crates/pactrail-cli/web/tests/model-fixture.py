@@ -2,13 +2,20 @@
 No external requests, no credentials, no assertions about real model ability.
 """
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-import json, time
+import json, time, threading
+recover_lock=threading.Lock()
+recover_seen=False
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args): pass
  def do_POST(self):
   request=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
   model=request.get('model','fixture-read');messages=request.get('messages',[])
-  if model=='fixture-fail':
+  global recover_seen
+  recover_failure=False
+  if model=='fixture-recover':
+   with recover_lock:
+    recover_failure=not recover_seen;recover_seen=True
+  if model=='fixture-fail' or recover_failure:
    self.send_response(400);self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(json.dumps({'error':{'message':'Deliberate test provider failure.'}}).encode());return
   if model=='fixture-stop':time.sleep(25)
   wrote=any(m.get('role')=='assistant' and any(c.get('function',{}).get('name')=='write_file' for c in m.get('tool_calls',[])) for m in messages)
