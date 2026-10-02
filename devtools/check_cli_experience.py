@@ -60,6 +60,14 @@ allow_process = false
         self.expect('pactrail ❯')
         self.capture.snapshot(name + '-startup')
         assert any('Composer' in row and 'commands: none' in row for row in self.capture.screen.display), 'composer hid command permissions'
+    def fork_session(self, name):
+        other = object.__new__(Terminal)
+        other.root, other.workspace, other.env, other.color = self.root, self.workspace, dict(self.env), self.color
+        other.capture = Capture(100,34,name)
+        other.child = pexpect.spawn(str(BINARY), ['--workspace',str(self.workspace)], env=other.env, encoding='utf-8', dimensions=(34,100), timeout=20)
+        other.child.linesep = "\r"; other.child.logfile_read = other.capture
+        other.expect('pactrail ❯')
+        return other
     def expect(self, pattern, timeout=20):
         if self.color and pattern == 'pactrail ❯':
             pattern = r'pactrail(?:\x1b\[[0-9;]*m)* ❯'
@@ -174,6 +182,15 @@ try:
     context_actions=[e['event']['data'] for e in child_events if e['event']['type']=='action_completed' and e['event']['data']['actor']=='context']
     assert any(int(action.get('attributes',{}).get('memory_fragments','0'))>=1 for action in context_actions)
     # A provider error leaves a durable checkpoint; plain continue recovers its ID.
+    # The shared restart default must never remotely change live-session focus.
+    t.command('/focus '+first_id[:16],'Focused run')
+    discarded_id=next(json.loads(p.read_text())['run_id'] for p in (t.workspace/'.pactrail/runs').glob('*/receipt.json') if json.loads(p.read_text())['outcome']=='discarded')
+    other=t.fork_session('second-session');terminals.append(other)
+    other.command('/focus '+discarded_id[:16],'Focused run')
+    other.close()
+    before_cross_session=set((t.workspace/'.pactrail/runs').glob('*/run.json'))
+    t.command('continue','◇ Answered')
+    assert len(set((t.workspace/'.pactrail/runs').glob('*/run.json'))-before_cross_session)==1
     t.command('/model fixture-recover','Model selected')
     t.command('Explain after a transient provider failure.','Deliberate test provider failure')
     failed=[p for p in (t.workspace/'.pactrail/runs').glob('*/run.json') if not p.with_name('receipt.json').exists()]
@@ -190,7 +207,7 @@ try:
     t.command('continue','Several tasks exist')
     t.command('/continue '+failed_id[:16],'◇ Answered')
     t.close()
-    for width in [32,40,60,80,120]:
+    for width in [32,40,60,80,100,120,160]:
         narrow=Terminal(width=width,name='width-'+str(width));terminals.append(narrow)
         narrow.command('/help editor','/editor')
         narrow.close()
@@ -204,7 +221,7 @@ try:
         colored.capture.snapshot('color-'+str(width)+'-review')
         colored.close()
         assert re.search(r'\x1b\[(?:3[0-7]|9[0-7])m',colored.capture.text), 'color terminal missing palette'
-    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/120 column startup','TERM=dumb','NO_COLOR','colored startup, answer and review at 40/100 columns'],'artifacts':str(OUT)},indent=2))
+    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/100/120/160 column startup','TERM=dumb','NO_COLOR','colored startup, answer and review at 40/100 columns','simultaneous sessions cannot redirect continue'],'artifacts':str(OUT)},indent=2))
     print((OUT/'results.json').read_text())
 finally:
     for t in terminals:

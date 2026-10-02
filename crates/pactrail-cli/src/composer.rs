@@ -29,6 +29,18 @@ impl ComposerStore {
     }
 
     pub(crate) fn load(&self, kind: &str) -> io::Result<Option<String>> {
+        validate_kind(kind)?;
+        match fs::symlink_metadata(&self.directory) {
+            Ok(meta) if !meta.is_dir() => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "composer directory must be a real directory",
+                ));
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+            _ => {}
+        }
         let path = self.path(kind);
         let metadata = match fs::symlink_metadata(&path) {
             Ok(value) => value,
@@ -42,9 +54,23 @@ impl ComposerStore {
             ));
         }
         let mut bytes = Vec::new();
-        fs::File::open(path)?
-            .take(MAX_BYTES as u64 + 1)
-            .read_to_end(&mut bytes)?;
+        let mut options = fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            // Never follow a substituted link or block on a substituted FIFO.
+            options.custom_flags(nix::libc::O_NOFOLLOW | nix::libc::O_NONBLOCK);
+        }
+        let file = options.open(path)?;
+        let opened = file.metadata()?;
+        if !opened.is_file() || opened.len() > MAX_BYTES as u64 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "saved text changed before it could be read",
+            ));
+        }
+        file.take(MAX_BYTES as u64 + 1).read_to_end(&mut bytes)?;
         if bytes.len() > MAX_BYTES {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -57,6 +83,7 @@ impl ComposerStore {
     }
 
     pub(crate) fn save(&self, kind: &str, text: &str) -> io::Result<()> {
+        validate_kind(kind)?;
         if text.len() > MAX_BYTES {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -79,14 +106,49 @@ impl ComposerStore {
         file.write_all(text.as_bytes())?;
         file.as_file().sync_all()?;
         file.persist(self.path(kind)).map_err(|e| e.error)?;
-        Ok(())
+        sync_directory(&self.directory)
     }
 
     pub(crate) fn clear(&self, kind: &str) -> io::Result<()> {
+        validate_kind(kind)?;
+        if let Ok(meta) = fs::symlink_metadata(&self.directory)
+            && !meta.is_dir()
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "composer directory must be a real directory",
+            ));
+        }
         match fs::remove_file(self.path(kind)) {
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            result => result,
+            Err(error) => Err(error),
+            Ok(()) => sync_directory(&self.directory),
         }
+    }
+}
+
+fn validate_kind(kind: &str) -> io::Result<()> {
+    if kind.is_empty()
+        || kind.len() > 128
+        || !kind.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "invalid local memory key",
+        ));
+    }
+    Ok(())
+}
+
+fn sync_directory(directory: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        fs::File::open(directory)?.sync_all()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = directory;
+        Ok(())
     }
 }
 
@@ -204,6 +266,18 @@ mod tests {
     }
 
     #[test]
+    fn local_memory_keys_cannot_escape_the_workspace_namespace() -> io::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let store = ComposerStore::new(directory.path(), Path::new("/workspace"));
+        for key in ["", "../outside", "task/../../outside", "a\nb", "."] {
+            assert!(store.save(key, "secret").is_err());
+            assert!(store.load(key).is_err());
+            assert!(store.clear(key).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn path_completion_quotes_spaces_and_preserves_unicode() -> io::Result<()> {
         let directory = tempfile::tempdir()?;
         fs::write(directory.path().join("task with spaces.md"), "private body")?;
@@ -242,6 +316,12 @@ mod tests {
         fs::create_dir(&target)?;
         symlink(&target, &store.directory)?;
         assert!(store.save("draft", "denied").is_err());
+        fs::write(
+            target.join(format!("{}-draft.txt", store.workspace_key)),
+            "must not read",
+        )?;
+        assert!(store.load("draft").is_err());
+        assert!(store.clear("draft").is_err());
         Ok(())
     }
 

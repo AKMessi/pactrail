@@ -6,6 +6,18 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### V2 Ledger foundation
+
+- Keep explicit continuation focus local to a live CLI session; another terminal
+  can update the restart default without redirecting `continue`. Ambiguous or
+  corrupt saved focus is refused instead of falling back to the latest receipt.
+- Harden private composer/task-memory persistence with bounded keys, directory
+  validation, Unix no-follow/nonblocking reads and directory fsync after writes
+  or deletion. Make invisible bidi controls visible in human output while
+  preserving decoded JSON values.
+- Await cooperative engine cancellation even when the Ctrl-C listener fails.
+- Record the local audit and reconciled Ledger design/milestones for v2.
+
 ### Licensing
 
 - Replace Pactrail’s MIT/Apache dual licensing with PolyForm Noncommercial

@@ -452,6 +452,7 @@ pub(crate) async fn launch(
         editor,
         theme: Theme::detect(),
         last_run,
+        continuation_focus: crate::continuation::TaskFocus::default(),
         pending_runs,
         memory_count,
         known_models: Vec::new(),
@@ -467,6 +468,7 @@ pub(crate) async fn launch(
     };
     session.bootstrap().await?;
     if let Err(error) = session.restore_task_focus() {
+        session.continuation_focus = crate::continuation::TaskFocus::Invalid(error.to_string());
         session.render_error(&error.to_string())?;
     }
     if let Err(error) = previous_task {
@@ -565,6 +567,7 @@ struct Session {
     editor: Reedline,
     theme: Theme,
     last_run: Option<RunId>,
+    continuation_focus: crate::continuation::TaskFocus,
     pending_runs: usize,
     memory_count: usize,
     known_models: Vec<String>,
@@ -1862,7 +1865,9 @@ impl Session {
         let result = tokio::select! {
             result = &mut execution => result,
             signal = tokio::signal::ctrl_c() => {
-                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                if let Err(error) = signal {
+                    activity.row("!", "cancel", &format!("Ctrl-C listener failed: {error}; stopping safely"), TimelineTone::Warning);
+                }
                 activity.row(
                     "!",
                     "cancel",
@@ -1889,6 +1894,7 @@ impl Session {
 
     fn set_task_focus(&mut self, run_id: RunId) -> Result<(), CliError> {
         self.last_run = Some(run_id);
+        self.continuation_focus = crate::continuation::TaskFocus::Selected(run_id);
         if let Err(error) = self.composer.save("focus", &run_id.to_string()) {
             self.emit(&format!(
                 "{}\n",
@@ -1920,6 +1926,7 @@ impl Session {
             ));
         }
         self.last_run = Some(run_id);
+        self.continuation_focus = crate::continuation::TaskFocus::Selected(run_id);
         Ok(())
     }
 
@@ -1927,24 +1934,10 @@ impl Session {
         if !argument.is_empty() {
             return self.resolve_run(argument);
         }
-        let saved = self.composer.load("focus").map_err(|e| {
-            CliError::Argument(format!(
-                "Cannot read continuation focus: {e}. Use /focus <run>."
-            ))
-        })?;
-        if let Some(saved) = saved {
-            return saved.parse().map_err(|_| {
-                CliError::Argument(
-                    "Saved continuation focus is invalid. Use /focus <run> to replace it."
-                        .to_owned(),
-                )
-            });
-        }
         let runs = commands::run_history(&self.state)?;
-        if runs.len() == 1 {
-            return Ok(runs[0].run_id);
-        }
-        Err(CliError::Argument(if runs.is_empty() { "No task to continue in this workspace. Write a task first." } else { "Several tasks exist and none is explicitly selected. Use /runs, then /continue <id> or /focus <id>." }.to_owned()))
+        self.continuation_focus
+            .resolve(&runs.iter().map(|run| run.run_id).collect::<Vec<_>>())
+            .map_err(CliError::Argument)
     }
 
     async fn continue_task(&mut self, argument: &str) -> Result<(), CliError> {
@@ -1959,6 +1952,7 @@ impl Session {
                     CliError::Argument(format!("Could not forget local task context: {e}"))
                 })?;
             self.last_run = None;
+            self.continuation_focus = crate::continuation::TaskFocus::Unselected;
             return self.emit("Selected task's local answer memory and continuation focus removed. Engine receipts, traces and checkpoints remain.\n");
         }
         self.set_task_focus(run_id)?;
@@ -2094,7 +2088,9 @@ impl Session {
         let result = tokio::select! {
             result = &mut execution => result,
             signal = tokio::signal::ctrl_c() => {
-                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                if let Err(error) = signal {
+                    activity.row("!", "cancel", &format!("Ctrl-C listener failed: {error}; stopping safely"), TimelineTone::Warning);
+                }
                 activity.row(
                     "!",
                     "cancel",

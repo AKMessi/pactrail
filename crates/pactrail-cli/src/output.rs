@@ -28,7 +28,10 @@ pub fn write_stderr(value: &str) -> std::io::Result<()> {
 pub fn escape_json_terminal_controls(value: &str) -> String {
     let mut escaped = String::with_capacity(value.len());
     for character in value.chars() {
-        if ('\u{7f}'..='\u{9f}').contains(&character) {
+        if is_direction_control(character) {
+            use std::fmt::Write as _;
+            let _result = write!(escaped, "\\u{:04x}", u32::from(character));
+        } else if ('\u{7f}'..='\u{9f}').contains(&character) {
             let code = u32::from(character);
             escaped.push_str("\\u00");
             escaped.push(char::from_digit((code >> 4) & 0x0f, 16).unwrap_or('0'));
@@ -40,17 +43,24 @@ pub fn escape_json_terminal_controls(value: &str) -> String {
     escaped
 }
 
+fn is_direction_control(character: char) -> bool {
+    matches!(character, '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}')
+}
+
 pub(crate) fn sanitize_terminal_text(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| {
-            if character == '\n' || character == '\t' || !character.is_control() {
-                character
-            } else {
-                '\u{fffd}'
-            }
-        })
-        .collect()
+    let mut safe = String::with_capacity(value.len());
+    for character in value.chars() {
+        if is_direction_control(character) {
+            use std::fmt::Write as _;
+            // Make invisible direction changes visible without reordering paths.
+            let _result = write!(safe, "[U+{:04X}]", u32::from(character));
+        } else if character == '\n' || character == '\t' || !character.is_control() {
+            safe.push(character);
+        } else {
+            safe.push('\u{fffd}');
+        }
+    }
+    safe
 }
 
 #[cfg(test)]
@@ -64,6 +74,23 @@ mod tests {
         assert_eq!(
             sanitize_terminal_text("safe\n\u{1b}[31mred\u{9b}2J"),
             "safe\n�[31mred�2J"
+        );
+    }
+
+    #[test]
+    fn invisible_direction_controls_cannot_disguise_a_path_or_prompt() {
+        assert_eq!(
+            sanitize_terminal_text("src/\u{202e}evil.rs\u{2069}"),
+            "src/[U+202E]evil.rs[U+2069]"
+        );
+        assert_eq!(sanitize_terminal_text("日本語/مرحبا.rs"), "日本語/مرحبا.rs");
+        let value = "file\u{202e}.rs";
+        let encoded = serde_json::to_string(value).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            serde_json::from_str::<String>(&escape_json_terminal_controls(&encoded))
+                .ok()
+                .as_deref(),
+            Some(value)
         );
     }
 
@@ -105,7 +132,7 @@ mod tests {
             prop_assert_eq!(decoded, input);
             let has_literal_c1 = escaped
                 .chars()
-                .any(|character| ('\u{7f}'..='\u{9f}').contains(&character));
+                .any(|character| ('\u{7f}'..='\u{9f}').contains(&character) || is_direction_control(character));
             prop_assert!(!has_literal_c1);
         }
     }
