@@ -23,9 +23,13 @@ class Capture:
     def flush(self): self.log.flush()
     def snapshot(self, name):
         (OUT / (name + '.txt')).write_text('\n'.join(self.screen.display))
+        (OUT / (name + '.cells.json')).write_text(json.dumps([
+            [{'text':self.screen.buffer[y][x].data, 'fg':self.screen.buffer[y][x].fg, 'bold':self.screen.buffer[y][x].bold} for x in range(self.screen.columns)]
+            for y in range(self.screen.lines)
+        ]))
 
 class Terminal:
-    def __init__(self, width=100, name='workflow', dumb=False):
+    def __init__(self, width=100, name='workflow', dumb=False, color=False):
         self.root = pathlib.Path(tempfile.mkdtemp(prefix='pactrail-cli-qa-'))
         self.workspace = self.root / 'workspace'
         self.workspace.mkdir()
@@ -45,6 +49,8 @@ allow_process = false
         editor = self.root / 'editor.py'
         editor.write_text('import pathlib, sys\np=pathlib.Path(sys.argv[1]); p.write_text(p.read_text()+"\\nEdited draft in external editor.")\n')
         self.env = dict(os.environ, PACTRAIL_CONFIG_DIR=str(config), NO_COLOR='1', PACTRAIL_NO_ANIMATION='1', TERM='dumb' if dumb else 'xterm-256color', EDITOR=f'{sys.executable} {editor}', PACTRAIL_FIXTURE_KEY='fixture-not-a-secret')
+        self.color = color
+        if color: self.env.pop('NO_COLOR', None)
         for key in ['PACTRAIL_MODEL','PACTRAIL_BASE_URL','PAGER','VISUAL']:
             self.env.pop(key,None)
         self.child = pexpect.spawn(str(BINARY), ['--workspace', str(self.workspace)], env=self.env, encoding='utf-8', dimensions=(34,width), timeout=20)
@@ -55,6 +61,10 @@ allow_process = false
         self.capture.snapshot(name + '-startup')
         assert any('Composer' in row and 'commands: none' in row for row in self.capture.screen.display), 'composer hid command permissions'
     def expect(self, pattern, timeout=20):
+        if self.color and pattern == 'pactrail ❯':
+            pattern = r'pactrail(?:\x1b\[[0-9;]*m)* ❯'
+        if self.color and pattern.startswith('◇ '):
+            pattern = r'◇(?:\x1b\[[0-9;]*m)* ' + re.escape(pattern[2:])
         deadline=time.monotonic()+timeout
         while True:
             index=self.child.expect([pattern, '\x1b\\[6n', pexpect.EOF], timeout=max(.1,deadline-time.monotonic()))
@@ -71,7 +81,8 @@ allow_process = false
         self.child.expect(pexpect.EOF)
         self.child.close()
         assert self.child.exitstatus==0
-        assert not re.search(r'\x1b\[(?:3[0-7]|9[0-7]|38;[^m]*)m', self.capture.text), 'NO_COLOR emitted colored text'
+        if not self.color:
+            assert not re.search(r'\x1b\[(?:3[0-7]|9[0-7]|38;[^m]*)m', self.capture.text), 'NO_COLOR emitted colored text'
 
 provider=subprocess.Popen([sys.executable,str(ROOT/'crates/pactrail-cli/web/tests/model-fixture.py')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 terminals=[]
@@ -184,7 +195,16 @@ try:
         narrow.command('/help editor','/editor')
         narrow.close()
     dumb=Terminal(width=80,name='dumb',dumb=True);terminals.append(dumb);dumb.close()
-    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/120 column startup','TERM=dumb','NO_COLOR'],'artifacts':str(OUT)},indent=2))
+    for width in [40,100]:
+        colored=Terminal(width=width,name='color-'+str(width),color=True);terminals.append(colored)
+        colored.command('Explain this repository', '◇ Answered')
+        colored.capture.snapshot('color-'+str(width)+'-answer')
+        colored.command('/model fixture-edit','Model selected')
+        colored.command('Create candidate.md with a short test heading.','◇ Awaiting review')
+        colored.capture.snapshot('color-'+str(width)+'-review')
+        colored.close()
+        assert re.search(r'\x1b\[(?:3[0-7]|9[0-7])m',colored.capture.text), 'color terminal missing palette'
+    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/120 column startup','TERM=dumb','NO_COLOR','colored startup, answer and review at 40/100 columns'],'artifacts':str(OUT)},indent=2))
     print((OUT/'results.json').read_text())
 finally:
     for t in terminals:

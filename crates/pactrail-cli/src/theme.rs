@@ -34,12 +34,7 @@ impl Theme {
 
     #[must_use]
     pub fn heading(&self, value: &str) -> String {
-        self.paint(
-            Style::new()
-                .fg_color(Some(AnsiColor::BrightCyan.into()))
-                .bold(),
-            value,
-        )
+        self.paint(Style::new().bold(), value)
     }
 
     #[must_use]
@@ -100,10 +95,7 @@ impl Theme {
 
     #[must_use]
     pub fn code(&self, value: &str) -> String {
-        self.paint(
-            Style::new().fg_color(Some(AnsiColor::BrightWhite.into())),
-            value,
-        )
+        self.paint(Style::new(), value)
     }
 
     #[must_use]

@@ -637,7 +637,7 @@ fn timeline_row(
         .map(|(index, line)| {
             if index == 0 {
                 format!(
-                    "  {} {time}  {marker} {label} {}",
+                    "  {} {marker} {label} {time}  {}",
                     theme.muted("│"),
                     theme.text(&line)
                 )
@@ -892,8 +892,15 @@ impl RunActivity {
                 RunState::Cancelled | RunState::Discarded => TimelineTone::Warning,
                 _ => TimelineTone::Muted,
             };
+            let marker = match state {
+                RunState::Failed => "×",
+                RunState::Cancelled | RunState::Discarded => "■",
+                RunState::Completed | RunState::Applied => "◇",
+                RunState::AwaitingApply => "▣",
+                _ => "◆",
+            };
             self.row(
-                "◇",
+                marker,
                 "state",
                 &format!("{} · {message}", format_state(*state)),
                 tone,
@@ -2148,11 +2155,17 @@ impl Session {
             .settings
             .effective_model()
             .unwrap_or_else(|| "not configured · /models or /connect".to_owned());
-        let mut lines = vec![format!(
-            "  {}  {}",
-            self.theme.brand("╭─ pactrail"),
-            self.theme.muted(&format!("v{}", env!("CARGO_PKG_VERSION")))
-        )];
+        let mut lines = vec![
+            format!(
+                "  {}  {}",
+                self.theme.brand("● pactrail"),
+                self.theme.muted(&format!("v{}", env!("CARGO_PKG_VERSION")))
+            ),
+            format!(
+                "  {}",
+                self.theme.muted(&"─".repeat(content_width(columns, 2, 88)))
+            ),
+        ];
         lines.extend(frame_field(
             &self.theme,
             columns,
@@ -2190,7 +2203,17 @@ impl Session {
             "Work stays isolated until you review and apply a candidate.",
         ));
         lines.push(format!("  {}", self.theme.muted("╰─")));
-        lines.extend(wrap_text("Enter dispatch · Ctrl+J newline · Tab complete · Ctrl+P commands · Ctrl+O runs · Ctrl+S save draft · Ctrl+G editor · /help", content_width(columns, 2, 110)).into_iter().map(|l|format!("  {}",self.theme.muted(&l))));
+        for shortcuts in [
+            "Enter dispatch   ·   Ctrl+J newline   ·   Tab complete",
+            "Ctrl+P commands  ·   Ctrl+O runs      ·   /help",
+            "Ctrl+S save draft ·  Ctrl+G editor    ·   continue",
+        ] {
+            lines.extend(
+                wrap_text(shortcuts, content_width(columns, 2, 88))
+                    .into_iter()
+                    .map(|line| format!("  {}", self.theme.muted(&line))),
+            );
+        }
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
@@ -2221,7 +2244,7 @@ impl Session {
         let mut lines = vec![self.theme.heading("Command palette")];
         for group in HELP_GROUPS {
             lines.push(String::new());
-            lines.push(self.theme.muted(&group.to_uppercase()));
+            lines.push(self.theme.heading(group));
             lines.extend(
                 COMMANDS
                     .iter()
@@ -3461,25 +3484,22 @@ impl Session {
             completed.cost_microusd,
         )?;
         self.emit(&format!("\n{}\n\n", lines.join("\n")))?;
-        self.emit(&format!(
-            "{}  {}\n",
-            self.theme.code("/trace full timeline"),
-            self.theme.code("/runs history")
-        ))?;
+        for line in wrap_text(
+            "/trace full timeline  ·  /runs history",
+            content_width(terminal_columns(), 2, 96),
+        ) {
+            self.emit(&format!("  {}\n", self.theme.muted(&line)))?;
+        }
         if completed.receipt.outcome == ReceiptOutcome::ReadyToApply {
             let message = if completed.receipt.changes.is_empty() {
-                self.theme
-                    .warning("No file changes were produced. Nothing needs applying.")
+                "No file changes were produced. Nothing needs applying."
             } else {
-                format!(
-                    "{}  {}  {}  {}",
-                    self.theme.muted("next"),
-                    self.theme.code("/diff review"),
-                    self.theme.code("/apply land"),
-                    self.theme.code("/discard reject")
-                )
+                "Next: /diff review · /apply apply files · /discard discard candidate"
             };
-            self.emit(&format!("{message}\n\n"))?;
+            for line in wrap_text(message, content_width(terminal_columns(), 2, 96)) {
+                self.emit(&format!("  {}\n", self.theme.heading(&line)))?;
+            }
+            self.emit("\n")?;
         }
         Ok(())
     }
@@ -4705,6 +4725,15 @@ fn frame_field(
     value: &str,
     tone: TimelineTone,
 ) -> Vec<String> {
+    if columns < 60 {
+        let mut lines = vec![format!("  {}  {}", theme.muted("│"), theme.muted(label))];
+        lines.extend(
+            wrap_text(value, content_width(columns, 6, 88))
+                .into_iter()
+                .map(|line| format!("  {}   {}", theme.muted("│"), tone.paint(theme, &line))),
+        );
+        return lines;
+    }
     wrap_text(value, content_width(columns, 16, 120))
         .into_iter()
         .enumerate()
@@ -4978,24 +5007,29 @@ pub(crate) fn completion_lines(
         if line.trim_start().starts_with("```") {
             code = !code;
             lines.extend(
-                crate::terminal::wrap_verbatim(line, columns)
+                crate::terminal::wrap_verbatim(line, content_width(columns, 2, 96))
                     .into_iter()
-                    .map(|l| theme.muted(&l)),
+                    .map(|l| format!("  {}", theme.muted(&l))),
             );
         } else if code {
             lines.extend(
-                crate::terminal::wrap_verbatim(line, columns)
+                crate::terminal::wrap_verbatim(line, content_width(columns, 2, 96))
                     .into_iter()
-                    .map(|l| theme.code(&l)),
+                    .map(|l| format!("  {}", theme.code(&l))),
             );
         } else {
-            lines.extend(wrap_text(line, columns.min(100)).into_iter().map(|l| {
-                if l.starts_with('#') {
-                    theme.heading(&l)
-                } else {
-                    theme.text(&l)
-                }
-            }));
+            lines.extend(
+                wrap_text(line, content_width(columns, 2, 96))
+                    .into_iter()
+                    .map(|l| {
+                        let rendered = if l.starts_with('#') {
+                            theme.heading(&l)
+                        } else {
+                            theme.text(&l)
+                        };
+                        format!("  {rendered}")
+                    }),
+            );
         }
     }
     lines.push(String::new());
@@ -5020,11 +5054,15 @@ fn receipt_lines(
     receipt: &ChangeReceipt,
 ) -> Result<Vec<String>, CliError> {
     let integrity = receipt.verify_integrity()?;
-    let mut lines = vec![format!(
-        "  {} {}",
-        theme.muted("╭─"),
-        outcome_text(theme, receipt.outcome)
-    )];
+    let mut lines = vec![
+        String::new(),
+        format!(
+            "  {} {}",
+            theme.muted("╭─ Receipt ·"),
+            outcome_text(theme, receipt.outcome)
+        ),
+        format!("  {}", theme.muted("│")),
+    ];
     let (added, removed) = change_bytes(receipt);
     let fields = [
         ("run", receipt.run_id.to_string()),
@@ -5413,6 +5451,27 @@ mod tests {
 
         assert!(rendered.contains("#008  ↻ recover"));
         assert!(rendered.contains("bounded recovery produced an answer"));
+    }
+
+    #[test]
+    fn stacked_metadata_and_composer_fit_small_screens() {
+        for columns in [32, 40, 59, 60, 80, 120] {
+            let lines = frame_field(
+                &Theme::plain(),
+                columns,
+                "workspace",
+                "/some/very/long/ユニコード/path/to/a/project/with/many/components",
+                TimelineTone::Normal,
+            );
+            assert!(
+                lines
+                    .iter()
+                    .all(|line| crate::terminal::width(line) <= columns)
+            );
+            let edge = composer_edge(columns, "commands: none · fixture/model");
+            assert!(crate::terminal::width(&edge) <= columns);
+            assert!(edge.contains("commands: none"));
+        }
     }
 
     #[test]

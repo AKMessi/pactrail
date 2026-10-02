@@ -79,3 +79,21 @@ Plain `continue` needs durable task selection and engine-bound recovery semantic
 not a string alias for sending another new task. Handle ambiguity, terminal
 results, unsafe checkpoints, revision-bound context and permissions explicitly.
 Implemented as the separate [persistent task continuation](persistent-task-continuation.md) upgrade after the composer/navigation commit.
+
+## Visual refinement
+
+The transcript remains inline and selectable. A cyan wordmark anchors startup;
+neutral bold headings distinguish sections without competing with warnings.
+Model activity retains its magenta accent, and permissions stay visible above
+the composer. Terminal foreground colors are used for prose and code, so the
+terminal owns the light or dark background. No background blocks or truecolor
+assumptions are introduced. `NO_COLOR` and `TERM=dumb` remain supported.
+
+Startup shortcuts have three balanced rows. Below 60 columns, metadata labels
+stack above their values rather than consuming half the reading width. Live
+activity puts the category before its timestamp; receipt output has its own
+section boundary, and reports have a consistent two-cell reading inset.
+
+The real PTY suite captures colored startup, answered, and review states at 40 and 100
+columns, alongside plain 32–120-column flows. Captures are local development
+artifacts in `/tmp/pactrail-cli-qa`, not application dependencies.
