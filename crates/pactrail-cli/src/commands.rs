@@ -346,7 +346,7 @@ async fn run(
 ) -> Result<(), CliError> {
     if args.allow_process {
         write_stderr(
-            "warning: --allow-process is deprecated and will be removed in 2.0; use --process-backend native --process-approval allow-run\n",
+            "warning: legacy stored process configuration uses trusted host execution; new tasks must select --process-backend native and an explicit --process-approval\n",
         )
         .map_err(CliError::Output)?;
     }
@@ -1052,7 +1052,7 @@ fn failed_run_error(
         let _write = std::fmt::Write::write_fmt(
             &mut trace_status,
             format_args!(
-                "\nCandidate files preserved. Retry from the validated checkpoint with `pactrail resume {run_id}` (remaining budgets and permissions still apply)."
+                "\nCheckpoint stored. The engine must validate candidate contents, identity, and recovery eligibility before resuming with `pactrail resume {run_id}` (remaining budgets and permissions still apply)."
             ),
         );
     }

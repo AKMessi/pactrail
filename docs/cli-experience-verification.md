@@ -1,5 +1,17 @@
 # CLI experience verification
 
+## V2 running-input verification — October 3, 2026
+
+The real debug binary passed the expanded 39-scenario terminal suite using a
+loopback provider and disposable workspaces. This includes type-ahead/caret
+preservation, explicit-only next-task dispatch, cooperative stop with retained
+Unicode drafts, denied buffered approval and fresh per-request consent. Plain
+and dumb captures contain no terminal control sequences; Apply remains guarded.
+
+These are deterministic interaction checks, not model quality measurements.
+The final v2 version/build/platform evidence is tracked separately in the launch
+checklist; the October 2 measurements below remain historical evidence.
+
 ## Ledger branch verification — October 2, 2026
 
 Platform: Linux, Rust 1.95. Debug and optimized executables were exercised against

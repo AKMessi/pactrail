@@ -29,7 +29,7 @@ class Capture:
         ]))
 
 class Terminal:
-    def __init__(self, width=100, name='workflow', dumb=False, color=False, ascii=False):
+    def __init__(self, width=100, name='workflow', dumb=False, color=False, ascii=False, plain=False):
         self.root = pathlib.Path(tempfile.mkdtemp(prefix='pactrail-cli-qa-'))
         self.workspace = self.root / 'workspace'
         self.workspace.mkdir()
@@ -50,7 +50,8 @@ allow_process = false
         editor.write_text('import pathlib, sys\np=pathlib.Path(sys.argv[1]); p.write_text(p.read_text()+"\\nEdited draft in external editor.")\n')
         self.env = dict(os.environ, PACTRAIL_CONFIG_DIR=str(config), NO_COLOR='1', PACTRAIL_NO_ANIMATION='1', TERM='dumb' if dumb else 'xterm-256color', EDITOR=f'{sys.executable} {editor}', PACTRAIL_FIXTURE_KEY='fixture-not-a-secret')
         self.color = color
-        self.ascii = ascii
+        self.ascii = ascii or dumb or plain
+        self.env['PACTRAIL_PLAIN'] = '1' if plain else '0'
         self.env['PACTRAIL_ASCII'] = '1' if ascii else '0'
         self.env['LC_ALL'] = 'C.UTF-8'
         if color: self.env.pop('NO_COLOR', None)
@@ -214,11 +215,73 @@ try:
     t.command('continue','Several tasks exist')
     t.command('/continue '+failed_id[:16],'◇ Answered')
     t.close()
+    live=Terminal(width=100,name='live-input');terminals.append(live)
+    live.command('/model fixture-slow','Model selected')
+    live.child.sendline('Explain slowly while I draft the next task.');live.expect('Running')
+    draft='Next 日本語 task.\nKeep this draft.'
+    live.child.send('\x1b[200~'+draft+'\x1b[201~');live.expect('Keep this draft.')
+    live.child.send('\x1b[D')
+    live.expect('◇ Answered',timeout=35);live.expect('pactrail ❯')
+    assert len(list((live.workspace/'.pactrail/runs').glob('*/run.json')))==1, 'type-ahead dispatched itself'
+    live.child.send('X');live.child.send('\x13');live.expect('Workspace draft saved');live.expect('pactrail ❯')
+    saved_draft=next((live.root/'config/composer').glob('*-draft.txt')).read_text()
+    assert saved_draft=='Next 日本語 task.\nKeep this draftX.', 'streaming or completion moved the caret or lost pasted text: '+repr(saved_draft)
+    live.child.send('\x03');live.expect('Input cancelled');live.expect('pactrail ❯')
+    live.child.sendline('Explain another slow task.');live.expect('Running')
+    live.child.sendline('This draft needs explicit dispatch.');live.expect('Draft retained')
+    live.expect('◇ Answered',timeout=35);live.expect('pactrail ❯')
+    assert len(list((live.workspace/'.pactrail/runs').glob('*/run.json')))==2
+    live.child.send('\x03');live.expect('Input cancelled');live.expect('pactrail ❯')
+    live.command('/model fixture-stop','Model selected')
+    live.child.sendline('Wait so I can stop this task.');live.expect('Running')
+    live.child.send('\x1b[200~Preserve my draft after stopping.\x1b[201~');live.expect('Preserve my draft')
+    live.child.send('\x03');live.expect('Stop requested');live.expect('Stopped',timeout=35);live.expect('pactrail ❯')
+    assert next((live.root/'config/composer').glob('*-draft.txt')).read_text()=='Preserve my draft after stopping.'
+    stopped=[json.loads(p.read_text()) for p in (live.workspace/'.pactrail/runs').glob('*/receipt.json') if json.loads(p.read_text())['outcome']=='cancelled']
+    assert len(stopped)==1
+    live.child.send('\x03');live.expect('Input cancelled');live.expect('pactrail ❯')
+    live.command('/model fixture-process','Model selected')
+    live.command('/process native','Trusted native process execution enabled')
+    live.child.sendline('Run the fixture command only with explicit approval.');live.expect('Running')
+    live.child.send('run')
+    live.expect(r'Type "once ([a-f0-9]{6})"');nonce=live.child.match.group(1)
+    live.expect(r'Approval \(default: deny\)')
+    live.child.sendline('')
+    live.expect('Receipt · × Failed',timeout=35);live.expect('pactrail ❯')
+    denied=sorted((live.workspace/'.pactrail/runs').glob('*/receipt.json'),key=lambda p:p.stat().st_mtime)[-1]
+    denied_receipt=json.loads(denied.read_text())
+    assert not denied_receipt['changes'], 'buffered text granted approval'
+    assert any(record['decision']=='deny' for record in denied_receipt['approvals']), 'denial was not durably recorded'
+    assert not (live.workspace/'permission-proof.txt').exists()
+    live.child.send('\x03');live.expect('Input cancelled');live.expect('pactrail ❯')
+    live.child.sendline('Run the fixture command with fresh consent.');live.expect(r'Type "once ([a-f0-9]{6})"');nonce=live.child.match.group(1)
+    live.expect(r'Approval \(default: deny\)');live.child.sendline('once '+nonce)
+    live.expect('◇ Awaiting review',timeout=35);live.expect('pactrail ❯')
+    assert not (live.workspace/'permission-proof.txt').exists(), 'approved command escaped isolation'
+    latest=sorted((live.workspace/'.pactrail/runs').glob('*/receipt.json'),key=lambda p:p.stat().st_mtime)[-1]
+    assert any(change['path']=='permission-proof.txt' for change in json.loads(latest.read_text())['changes'])
+    live.close()
     for width in [32,40,60,80,100,120,160]:
         narrow=Terminal(width=width,name='width-'+str(width));terminals.append(narrow)
         narrow.command('/help editor','/editor')
         narrow.close()
-    dumb=Terminal(width=80,name='dumb',dumb=True);terminals.append(dumb);dumb.close()
+    dumb=Terminal(width=80,name='dumb',dumb=True);terminals.append(dumb);dumb.command('/clear','Plain mode preserves');dumb.close()
+    assert '\x1b' not in dumb.capture.text, 'dumb mode emitted terminal control sequences'
+    plain=Terminal(width=80,name='plain',plain=True);terminals.append(plain)
+    plain.command('Explain this repository', '◇ Answered')
+    plain.command('/retry','Previous task restored')
+    before_plain=len(list((plain.workspace/'.pactrail/runs').glob('*/run.json')))
+    plain.command('/dispatch', '◇ Answered')
+    assert len(list((plain.workspace/'.pactrail/runs').glob('*/run.json')))==before_plain+1
+    plain.command('/model fixture-edit','Model selected')
+    plain.command('Create candidate.md','◇ Awaiting review')
+    plain.child.sendline('/apply');plain.expect(r'Confirm \(default: cancel\) >')
+    plain.child.sendline('');plain.expect('Apply cancelled');plain.expect('pactrail ❯')
+    assert not (plain.workspace/'candidate.md').exists()
+    plain.child.sendline('/apply');plain.expect(r'Confirm \(default: cancel\) >')
+    plain.child.sendline('apply');plain.expect('Applied');plain.expect('pactrail ❯')
+    assert (plain.workspace/'candidate.md').exists()
+    plain.close();assert '\x1b' not in plain.capture.text, 'plain mode emitted terminal control sequences'
     ascii_terminal=Terminal(width=40,name='ascii',ascii=True);terminals.append(ascii_terminal)
     ascii_terminal.command('Explain this repository', '◇ Answered')
     ascii_terminal.capture.snapshot('ascii-answer')
@@ -233,7 +296,7 @@ try:
         colored.capture.snapshot('color-'+str(width)+'-review')
         colored.close()
         assert re.search(r'\x1b\[(?:3[0-7]|9[0-7])m',colored.capture.text), 'color terminal missing palette'
-    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/100/120/160 column startup','TERM=dumb','ASCII composer and outcome','NO_COLOR','colored startup, answer and review at 40/100 columns','simultaneous sessions cannot redirect continue'],'artifacts':str(OUT)},indent=2))
+    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/100/120/160 column startup','type-ahead preserves paste and caret without dispatch','Enter during execution saves instead of dispatching','Ctrl-C stops and preserves the draft','buffered draft cannot grant process approval','fresh process consent keeps changes isolated','cursor-free TERM=dumb','plain draft dispatch and guarded apply','ASCII composer and outcome','NO_COLOR','colored startup, answer and review at 40/100 columns','simultaneous sessions cannot redirect continue'],'artifacts':str(OUT)},indent=2))
     print((OUT/'results.json').read_text())
 finally:
     for t in terminals:

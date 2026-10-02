@@ -1,0 +1,4 @@
+pexpect==4.9.0
+ptyprocess==0.7.0
+pyte==0.8.2
+wcwidth==0.9.1

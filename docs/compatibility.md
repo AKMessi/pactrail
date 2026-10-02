@@ -80,9 +80,9 @@ All future schema versions fail closed. Pactrail never downgrades durable state,
 and it never obtains new process, network, MCP, write, or secret authority while
 migrating a known format.
 
-## Stable 1.x contract
+## Stable 2.x contract
 
-Pactrail 1.x follows Semantic Versioning for the surfaces below:
+Pactrail 2.x follows Semantic Versioning for the surfaces below:
 
 - documented non-interactive commands, flags, exit behavior, and versioned
   JSON envelopes;
@@ -94,7 +94,7 @@ Pactrail 1.x follows Semantic Versioning for the surfaces below:
   the threat model and architecture documents.
 
 Human-oriented colors, spacing, progress animation, prose, and diagnostic
-wording may improve in any 1.x release. Scripts must use JSON modes and stable
+wording may improve in any 2.x release. Scripts must use JSON modes and stable
 exit codes, not scrape terminal output. New optional JSON fields, enum variants
 marked non-exhaustive, commands, tools, and provider capabilities may be added
 in a minor release. Removing or changing a documented field or behavior
@@ -106,10 +106,10 @@ bind each check to an existing obligation ID and retain the same schema version.
 
 The stable Rust contract is the `pactrail-sdk` facade, not every public item in
 the workspace's implementation crates. Downstream embedders should depend on an
-exact Pactrail tag or compatible `1.x` release and check `SDK_API_REVISION` when
+exact Pactrail tag or compatible `2.x` release and check `SDK_API_REVISION` when
 their integration needs a specific extension surface.
 
-Every 1.x durable-schema change must include:
+Every 2.x durable-schema change must include:
 
 1. an updated entry in `pactrail compatibility --json`;
 2. a checked-in current or historical fixture exercised by its production
@@ -118,9 +118,9 @@ Every 1.x durable-schema change must include:
 4. documented atomicity, rollback, and authority behavior; and
 5. a release-note migration section.
 
-Pactrail 1.x will continue to read or atomically migrate every safe format
-shipped by 1.0 for the lifetime of the 1.x line. A schema may stop being
-accepted only in 2.0 after a deprecation notice in at least one prior 1.x minor
+Pactrail 2.x will continue to read or atomically migrate every safe format
+listed in the current compatibility inventory for the lifetime of the 2.x line. A schema may stop being
+accepted only in a future major after a deprecation notice in at least one prior 2.x minor
 release. Security fixes may reject a previously accepted unsafe format
 immediately; the release notes must name the exception and the safe recovery
 path.
@@ -132,8 +132,8 @@ it unless that older release explicitly declares the resulting schema readable.
 ## Distribution and support
 
 GitHub release binaries, their checksum manifest, provenance attestations, and
-source installation from an immutable tag are the v1 distribution contract.
-Publishing individual workspace crates to crates.io is not part of the 1.0
+source installation from an immutable tag are the v2 distribution contract.
+Publishing individual workspace crates to crates.io is not part of the 2.0
 contract. See the [support matrix](support.md), [upgrade guide](upgrading.md),
 and [security policy](../SECURITY.md) for platform tiers and maintenance
 windows.

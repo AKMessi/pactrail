@@ -140,6 +140,8 @@ fn validate_kind(kind: &str) -> io::Result<()> {
     Ok(())
 }
 
+// Keep one fallible persistence interface; Windows has no portable directory fsync.
+#[cfg_attr(not(unix), allow(clippy::unnecessary_wraps))]
 fn sync_directory(directory: &Path) -> io::Result<()> {
     #[cfg(unix)]
     {

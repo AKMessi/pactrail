@@ -6,6 +6,26 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-03
+
+### V2 running input and release
+
+- Give live execution and process approval one coordinated terminal input owner.
+  Type-ahead survives streaming and completion; Enter retains a draft without
+  dispatching. Ctrl-C stops cooperatively and preserves the draft.
+- Add cursor-free `TERM=dumb`/`PACTRAIL_PLAIN=1` line mode and explicit `/dispatch`
+  for loaded drafts. Keep confirmation defaults at cancel/deny.
+- Require a freshly displayed challenge for cursor-mode process approval so
+  buffered task text cannot authorize a command.
+- Add real-binary terminal CI and trigger platform gates on v2 branch pushes.
+- Gate publication on successful exact-commit CI, verify candidate installers and
+  packaged binaries before publishing, and atomically replace Unix installations
+  only after checksum and version validation.
+- Fix Windows conditional compilation for browser cancellation and local memory
+  persistence; distinguish stored checkpoints from validated recovery eligibility.
+- Remove `/process on` and `--allow-process` from new task input as previously
+  announced; preserve legacy durable configuration readers.
+
 ### V2 Ledger presentation and recovery
 
 - Introduce reusable open-layout blocks, faint terminal metadata, stacked narrow

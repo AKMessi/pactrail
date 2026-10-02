@@ -16,30 +16,33 @@ receipt-bound apply.
 The central abstraction is not a chat wrapper or an agent persona. It is a
 durable, inspectable software change transaction.
 
+Illustrative terminal flow (values depend on the run):
+
 ```text
-  ╭─ P A C T R A I L  v1.0.0
-  │  verification-native coding · every change carries evidence
-  ├─
-  │ workspace  C:\work\project
-  │ runtime    local-coder  · open-ai-compatible
-  │ safety     isolated edits · native processes blocked
-  │ trace      live timeline · durable hash chain · /trace
-  │ review     no candidates waiting
-  │ memory     3 memories · /memory
-  ╰─ Describe a task · /help commands · // escapes a leading slash
+pactrail 2.0.0 · Ledger
+  workspace  /work/project
+  commands   isolated edits · native processes blocked
 
 pactrail ❯ Fix the parser regression and add a test.
 
-  ╭─ RUN 019f7a31  compatible/local-coder
-  │ Fix the parser regression and add a test.
-  │     0ms  ◇ state     contracting · validating task contract
-  │     4ms  ◆ context   186 indexed · 181 warm · 5 cold · 140 parsed · 46 lexical · 8 cited · 100.00% coverage · 4ms
-  │   1.82s  ● model     turn 1 · 2 actions · 3,412 tokens · 1.8s
-  │   1.84s  ● tool      read_many_files · 18.1 KiB · 12ms
-  │   1.86s  ◆ tool      edit_file · changed src/parser.rs · 9ms
-  │   3.21s  ✓ verify    Rust workspace tests · passed · 1.3s
-  ╰─ ✓ complete  2 turns · 4 tools · 6,104 tokens · 2.9s model · 3.2s
+◇ state     contracting · validating task contract
+● model     turn 1 · 2 actions
+◆ tool      edit_file · changed src/parser.rs
+✓ verify    contract-bound regression check · deterministic pass
+
+Receipt · ◇ Awaiting review
+  candidate  1 file · +42 / -7 bytes
+  /diff review · /evidence inspect · /apply · /discard
+
+Composer · commands: none · local-coder
+pactrail ❯
 ```
+
+While a run executes, you can prepare the next draft. Enter retains it; dispatch
+remains explicit. `continue` recovers eligible interrupted/failed work or creates
+an assessed follow-up for completed work, preserving the task's authority.
+Provider failures never authorize partial tool calls or implicit Apply.
+
 
 ## Local web app
 

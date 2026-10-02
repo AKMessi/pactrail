@@ -405,10 +405,8 @@ pub struct RunArgs {
     #[arg(long, value_enum)]
     pub process_backend: Option<ProcessBackendArg>,
 
-    /// Trust unsandboxed processes with host, network, secret, and external access.
-    ///
-    /// Deprecated alias for `--process-backend native`.
-    #[arg(long)]
+    /// Legacy persisted configuration only; v2 requires an explicit process backend.
+    #[arg(skip)]
     pub allow_process: bool,
 
     /// Expose a POSIX shell tool inside an explicitly selected restricted OCI backend.

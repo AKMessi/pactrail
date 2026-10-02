@@ -22,19 +22,19 @@ server, or corporate network configuration is certified.
 
 | Provider family | Pactrail adapter | Support level |
 |---|---|---|
-| OpenAI API | Native bounded Chat Completions mapping | Supported |
+| OpenAI API | Native bounded Chat Completions and Responses mappings | Supported |
 | Anthropic API | Native Messages mapping | Supported |
 | Gemini API | Native GenerateContent mapping | Supported |
 | Ollama | Loopback OpenAI-compatible mapping and model discovery | Supported local default |
 | llama.cpp, vLLM, SGLang, LM Studio, LocalAI | Loopback OpenAI-compatible mapping | Supported when the server implements Chat Completions tool calls |
 | Hosted OpenAI-compatible gateways | HTTPS OpenAI-compatible mapping | Supported at the protocol boundary |
-| Custom Rust providers | `pactrail-sdk::model::ModelDriver` | Stable 1.x embedding contract |
+| Custom Rust providers | `pactrail-sdk::model::ModelDriver` | Stable 2.x embedding contract |
 
 All built-in transports have bounded buffered and streaming parsers, strict
 tool-argument validation, cancellation, credential-safe errors, explicit
 capability profiles, and deterministic fixtures. Provider-specific beta APIs,
-Assistants/Responses APIs, implicit model fallback, remote image fetching, and
-provider-managed code execution are not part of v1.
+Assistants APIs, implicit model fallback, remote image fetching, and
+provider-managed code execution are not part of v2.
 
 Model behavior is never guaranteed by provider support. A model must be able to
 follow the exposed JSON Schema tool protocol within the configured context and
@@ -55,10 +55,10 @@ configured model remains usable.
 
 ## Maintenance window
 
-The latest stable 1.x minor receives correctness and security fixes. After a new
-1.x minor ships, the previous minor remains eligible for critical/high security
+The latest stable 2.x minor receives correctness and security fixes. After a new
+2.x minor ships, the previous minor remains eligible for critical/high security
 fixes for 90 days. The 0.x developer-preview line is unsupported after v1.0.0.
-State created by 1.0 remains readable or atomically migratable throughout 1.x as
+State created by 1.0 remains readable or atomically migratable throughout 2.x as
 defined by the compatibility contract.
 
 Bug reports must include the Pactrail version, platform, provider family,
