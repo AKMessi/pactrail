@@ -25,6 +25,12 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Plain `continue` and `/continue` with persistent task focus, same-ID guarded
+  checkpoint recovery, review preservation, and contract-preserving completed
+  follow-ups using bounded advisory history. Local answer context is versioned,
+  private and receipt/contract-bound; `/continue forget` removes selected local
+  context without deleting durable engine history.
+
 - CLI workspace draft save/restore (Ctrl+S, `/draft`), restart-safe `/retry`,
   fuzzy command/model/run discovery, goal-based Ctrl+O run navigation, bounded
   quoted task-path completion, explicit bracketed paste, and compact run history.

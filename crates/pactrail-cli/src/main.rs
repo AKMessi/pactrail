@@ -4,6 +4,7 @@ mod cli;
 mod commands;
 mod compatibility;
 mod composer;
+mod continuation;
 mod diff;
 mod interactive;
 mod mcp;

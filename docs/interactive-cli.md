@@ -376,3 +376,17 @@ Drafts and previous tasks are local plaintext in the config directory, outside
 source/candidate copies. Ctrl+C clears only the current editor; saved drafts
 remain until replaced or cleared. Saving is explicit, not automatic on every
 keystroke. See [the CLI design](cli-workflow-upgrade.md) for research and limits.
+
+### Continue a selected task
+
+Type **continue** or **/continue**. Interrupted executing runs and recoverable
+failed checkpoints resume under the same run ID. A pending candidate opens
+review without applying. An Answered/Applied task starts a fresh isolated run,
+with the original contract constraints and bounded historical context; current
+files and evidence must be checked again. Stopped/discarded runs and unsafe
+checkpoints are not silently restarted.
+
+Focus and task context survive restart. Use `/continue <id>` when choosing an
+older task; if no focus is saved and several runs exist, Pactrail asks you to
+select one. `/continue forget` clears the selected local answer record and focus,
+not engine history. See [continuation details](persistent-task-continuation.md).

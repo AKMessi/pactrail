@@ -79,6 +79,7 @@ try:
     time.sleep(.3)
     assert provider.poll() is None, 'local model fixture could not bind 4190'
     t=Terminal();terminals.append(t)
+    t.command('continue','No task to continue')
     # Bracketed multiline paste stays in the composer until explicit Enter.
     t.child.send('\x1b[200~Pasted task.\nDo not dispatch automatically.\x1b[201~')
     t.expect('Do not dispatch automatically.')
@@ -102,12 +103,20 @@ try:
     t.command('/model fixture-edit','Model selected')
     t.command('Create candidate.md with a short test heading.','◇ Awaiting review')
     assert not (t.workspace/'candidate.md').exists()
+    before_review=len(list((t.workspace/'.pactrail/runs').glob('*/run.json')))
+    t.command('continue','Candidate awaiting review')
+    assert len(list((t.workspace/'.pactrail/runs').glob('*/run.json')))==before_review
+    assert not (t.workspace/'candidate.md').exists()
     t.capture.snapshot('review')
     t.command('/evidence','required')
     t.child.sendline('/apply');t.expect('Confirm');t.child.sendline('');t.expect('Apply cancelled');t.expect('pactrail ❯');assert not (t.workspace/'candidate.md').exists()
     t.child.sendline('/apply');t.expect('Confirm');t.child.sendline('yes');t.expect('Apply cancelled');t.expect('pactrail ❯');assert not (t.workspace/'candidate.md').exists()
     t.child.sendline('/apply');t.expect('Confirm');t.child.sendline('apply');t.expect('Applied 1 file');t.expect('pactrail ❯');assert (t.workspace/'candidate.md').read_text()=='# Test candidate\n'
     t.capture.snapshot('applied')
+    t.command('/model fixture-read','Model selected')
+    t.command('continue','◇ Answered')
+    assert (t.workspace/'candidate.md').read_text()=='# Test candidate\n'
+    t.command('/model fixture-edit','Model selected')
     (t.workspace/'candidate.md').unlink()
     t.command('Create candidate.md with a short test heading.','◇ Awaiting review')
     t.child.sendline('/discard');t.expect('Confirm');t.child.sendline('');t.expect('Discard cancelled');t.expect('pactrail ❯')
@@ -136,13 +145,46 @@ try:
     t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
     t.child.sendline('/retry');t.expect('Previous task restored');t.expect('Create candidate.md')
     t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
+    t.command('/model fixture-read','Model selected')
+    t.command('/focus '+first_id[:16],'Focused run')
+    before=set(p.parent.name for p in (t.workspace/'.pactrail/runs').glob('*/run.json'))
+    t.command('continue','◇ Answered')
+    after=set(p.parent.name for p in (t.workspace/'.pactrail/runs').glob('*/run.json'))
+    new_id=(after-before).pop()
+    child_events=[json.loads(line) for line in (t.workspace/'.pactrail/runs'/new_id/'trace.jsonl').read_text().splitlines()]
+    child_contract=next(event['event']['data'] for event in child_events if event['event']['type']=='contract_registered')
+    assert 'Original user goal:' in child_contract['goal'] and 'Explain this repository.' in child_contract['goal']
+    assert child_contract['allowed_write_paths']==contract['allowed_write_paths']
+    assert child_contract['permissions']==contract['permissions']
+    assert child_contract['budget']==contract['budget']
+    for field in ['out_of_scope','obligations','acceptance_checks']:
+        assert child_contract.get(field)==contract.get(field)
+    assert '# Workspace overview' not in child_contract['goal']
+    context_actions=[e['event']['data'] for e in child_events if e['event']['type']=='action_completed' and e['event']['data']['actor']=='context']
+    assert any(int(action.get('attributes',{}).get('memory_fragments','0'))>=1 for action in context_actions)
+    # A provider error leaves a durable checkpoint; plain continue recovers its ID.
+    t.command('/model fixture-recover','Model selected')
+    t.command('Explain after a transient provider failure.','Deliberate test provider failure')
+    failed=[p for p in (t.workspace/'.pactrail/runs').glob('*/run.json') if not p.with_name('receipt.json').exists()]
+    assert len(failed)==1
+    failed_id=failed[0].parent.name
+    before_recovery=len(list((t.workspace/'.pactrail/runs').glob('*/run.json')))
+    t.close()
+    t.child=pexpect.spawn(str(BINARY),['--workspace',str(t.workspace)],env=t.env,encoding='utf-8',dimensions=(34,100),timeout=20)
+    t.child.linesep="\r";t.child.logfile_read=t.capture;t.expect('pactrail ❯')
+    t.command('continue','◇ Answered')
+    assert len(list((t.workspace/'.pactrail/runs').glob('*/run.json')))==before_recovery
+    assert (t.workspace/'.pactrail/runs'/failed_id/'receipt.json').is_file()
+    t.command('/continue forget','local answer memory')
+    t.command('continue','Several tasks exist')
+    t.command('/continue '+failed_id[:16],'◇ Answered')
     t.close()
     for width in [32,40,60,80,120]:
         narrow=Terminal(width=width,name='width-'+str(width));terminals.append(narrow)
         narrow.command('/help editor','/editor')
         narrow.close()
     dumb=Terminal(width=80,name='dumb',dumb=True);terminals.append(dumb);dumb.close()
-    (OUT/'results.json').write_text(json.dumps({'passed':['bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/120 column startup','TERM=dumb','NO_COLOR'],'artifacts':str(OUT)},indent=2))
+    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/120 column startup','TERM=dumb','NO_COLOR'],'artifacts':str(OUT)},indent=2))
     print((OUT/'results.json').read_text())
 finally:
     for t in terminals:
