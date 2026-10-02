@@ -452,6 +452,7 @@ pub(crate) async fn launch(
         editor,
         theme: Theme::detect(),
         last_run,
+        continuation_focus: crate::continuation::TaskFocus::default(),
         pending_runs,
         memory_count,
         known_models: Vec::new(),
@@ -467,6 +468,7 @@ pub(crate) async fn launch(
     };
     session.bootstrap().await?;
     if let Err(error) = session.restore_task_focus() {
+        session.continuation_focus = crate::continuation::TaskFocus::Invalid(error.to_string());
         session.render_error(&error.to_string())?;
     }
     if let Err(error) = previous_task {
@@ -565,6 +567,7 @@ struct Session {
     editor: Reedline,
     theme: Theme,
     last_run: Option<RunId>,
+    continuation_focus: crate::continuation::TaskFocus,
     pending_runs: usize,
     memory_count: usize,
     known_models: Vec<String>,
@@ -613,39 +616,49 @@ fn timeline_row(
     detail: &str,
     tone: TimelineTone,
 ) -> Vec<String> {
+    let marker = theme.symbol(marker);
     if columns < 60 {
-        let mut lines = vec![format!(
-            "  {} {} {} · {}",
-            theme.muted("│"),
+        let mut rows = vec![format!(
+            "  {} {}",
             tone.paint(theme, marker),
-            tone.paint(theme, label),
-            theme.muted(&trace_duration(elapsed_ms))
+            tone.paint(theme, label)
         )];
-        lines.extend(
-            wrap_text(detail, content_width(columns, 6, 96))
+        rows.extend(
+            wrap_text(detail, columns.saturating_sub(4).clamp(1, 88))
                 .into_iter()
-                .map(|l| format!("      {}", theme.text(&l))),
+                .map(|line| format!("    {}", theme.text(&line))),
         );
-        return lines;
+        return rows;
     }
-    let time = theme.muted(&format!("{:>7}", trace_duration(elapsed_ms)));
-    let marker = tone.paint(theme, marker);
-    let label = tone.paint(theme, &format!("{label:<9}"));
-    wrap_text(detail, content_width(columns, 25, 96))
-        .into_iter()
-        .enumerate()
-        .map(|(index, line)| {
-            if index == 0 {
-                format!(
-                    "  {} {marker} {label} {time}  {}",
-                    theme.muted("│"),
-                    theme.text(&line)
-                )
-            } else {
-                format!("                         {}", theme.text(&line))
-            }
-        })
-        .collect()
+    let prefix = format!("  {marker} {label:<9} ");
+    let prefix_width = crate::terminal::width(&prefix);
+    let time = if columns >= 80 {
+        Some(format!("{:>7}", trace_duration(elapsed_ms)))
+    } else {
+        None
+    };
+    let reserve = if time.is_some() { 9 } else { 0 };
+    let detail_width = columns.saturating_sub(prefix_width + reserve).clamp(1, 88);
+    let details = wrap_text(detail, detail_width);
+    let mut rows = Vec::new();
+    for (index, line) in details.into_iter().enumerate() {
+        if index == 0 {
+            let timestamp = time.as_ref().map_or_else(String::new, |value| {
+                let padding = columns
+                    .saturating_sub(prefix_width + crate::terminal::width(&line) + value.len());
+                format!("{}{}", " ".repeat(padding), theme.muted(value))
+            });
+            rows.push(format!(
+                "  {} {} {}{timestamp}",
+                tone.paint(theme, marker),
+                tone.paint(theme, &format!("{label:<9}")),
+                theme.text(&line)
+            ));
+        } else {
+            rows.push(format!("{}{}", " ".repeat(prefix_width), theme.text(&line)));
+        }
+    }
+    rows
 }
 
 fn elapsed_millis(started: Instant) -> u64 {
@@ -693,16 +706,24 @@ impl RunActivity {
     fn new(model: &str, theme: Theme, detailed: bool) -> Self {
         let progress = ProgressBar::new_spinner();
         let template = if theme.has_color() {
-            "  {spinner:.cyan}  {msg}  {elapsed_precise:.bright_black}"
+            "  {spinner:.cyan}  {msg}  {elapsed_precise}"
         } else {
             "  {spinner}  {msg}  {elapsed_precise}"
         };
+        let ticks = if crate::ui::glyphs::ascii_requested() {
+            &["|", "/", "-", "\\"][..]
+        } else {
+            &["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"][..]
+        };
         let style = ProgressStyle::with_template(template)
             .unwrap_or_else(|_| ProgressStyle::default_spinner())
-            .tick_strings(&["\u{25d0}", "\u{25d3}", "\u{25d1}", "\u{25d2}"]);
+            .tick_strings(ticks);
         progress.set_style(style);
         progress.set_message("starting isolated transaction");
-        if std::env::var_os("PACTRAIL_NO_ANIMATION").is_none() {
+        if std::env::var_os("PACTRAIL_NO_ANIMATION").is_none()
+            && std::env::var_os("PACTRAIL_REDUCED_MOTION").is_none()
+            && std::env::var("TERM").map_or(true, |term| term != "dumb")
+        {
             progress.enable_steady_tick(Duration::from_millis(120));
         }
         Self {
@@ -743,15 +764,16 @@ impl RunActivity {
             format!(" · {truncated} bounded")
         };
         let outcome = if succeeded {
-            self.theme.heading("◇ finished")
+            self.theme.heading(&self.theme.label("◇ finished"))
         } else {
-            self.theme.warning("■ ended · inspect the result below")
+            self.theme
+                .warning(&self.theme.label("■ ended · inspect the result below"))
         };
         let metrics = format!(
             "{turns} {turn_word} · {tools} {tool_word} · {} engine-counted tokens · {model_time} model · {elapsed}{truncation_text}",
             format_count(tokens),
         );
-        let mut lines = vec![format!("  {} {outcome}", self.theme.muted("╰─"))];
+        let mut lines = vec![format!("  {outcome}")];
         lines.extend(
             wrap_text(&metrics, content_width(terminal_columns(), 5, 110))
                 .into_iter()
@@ -769,7 +791,7 @@ impl RunActivity {
 
     fn row(&self, marker: &str, label: &str, detail: &str, tone: TimelineTone) {
         if !self.detailed
-            && matches!(label, "context" | "control")
+            && matches!(label, "context" | "control" | "stream" | "progress")
             && !matches!(tone, TimelineTone::Warning | TimelineTone::Danger)
         {
             return;
@@ -831,22 +853,16 @@ impl RunActivity {
             self.persist_started_task(*run_id, goal);
             self.progress.println(format!(
                 "\n  {} {}",
-                self.theme.brand("╭─ Run"),
+                self.theme.brand("Task"),
                 self.theme.code(&short_run_id(*run_id))
             ));
             for line in wrap_text(model, content_width(terminal_columns(), 4, 88)) {
-                self.progress.println(format!(
-                    "  {} {}",
-                    self.theme.muted("│"),
-                    self.theme.muted(&line)
-                ));
+                self.progress
+                    .println(format!("    {}", self.theme.muted(&line)));
             }
             for line in wrap_text(goal, content_width(terminal_columns(), 4, 88)) {
-                self.progress.println(format!(
-                    "  {} {}",
-                    self.theme.muted("│"),
-                    self.theme.text(&line)
-                ));
+                self.progress
+                    .println(format!("    {}", self.theme.text(&line)));
             }
         }
     }
@@ -1540,15 +1556,32 @@ fn prompt_for_approval(request: &ApprovalRequest) -> ApprovalDecision {
             .get(name)
             .map_or("not reported", String::as_str)
     };
-    let prompt = format!(
-        "\n╭─ PROCESS APPROVAL\n│ command     {}\n│ backend     {}\n│ network     {}\n│ filesystem  {}\n│ workspace   {}\n│ environment {}\n╰─ [o] allow once  [r] allow this exact request for this run  [d] deny\napproval ❯ ",
-        field("command"),
-        field("backend"),
-        field("network"),
-        field("filesystem"),
-        field("workspace"),
-        field("environment_names"),
-    );
+    let theme = Theme::detect();
+    let columns = terminal_columns();
+    let mut lines = vec![
+        String::new(),
+        crate::ui::section(&theme, columns, "Process approval"),
+    ];
+    for (label, value) in [
+        ("command", field("command")),
+        ("backend", field("backend")),
+        ("network", field("network")),
+        ("filesystem", field("filesystem")),
+        ("workspace", field("workspace")),
+        ("environment", field("environment_names")),
+    ] {
+        lines.push(format!("  {}", theme.muted(label)));
+        // Preserve command whitespace; wrapping changes only the visual line breaks.
+        for line in crate::terminal::wrap_verbatim(value, columns.saturating_sub(4).max(1)) {
+            lines.push(format!("    {}", theme.text(&line)));
+        }
+    }
+    lines.extend(crate::ui::note(
+        &theme,
+        columns,
+        "[o] allow once  [r] allow this exact request for this run  [d] deny. Enter denies.",
+    ));
+    let prompt = format!("{}\napproval {} ", lines.join("\n"), theme.symbol("❯"));
     if write_human_stdout(&prompt).is_err() {
         return ApprovalDecision::Deny;
     }
@@ -1586,6 +1619,8 @@ impl Session {
                 self.settings.effective_model(),
                 self.pending_runs,
                 self.settings.process_backend,
+                &self.workspace,
+                &self.continuation_focus,
             );
             match self.editor.read_line(&prompt) {
                 Ok(Signal::Success(line)) => {
@@ -1593,7 +1628,9 @@ impl Session {
                     if line.is_empty() {
                         continue;
                     }
-                    if line.eq_ignore_ascii_case("continue") {
+                    if line == "?" {
+                        self.render_help("")?;
+                    } else if line.eq_ignore_ascii_case("continue") {
                         if let Err(error) = self.continue_task("").await {
                             self.render_error(&error.to_string())?;
                         }
@@ -1862,7 +1899,9 @@ impl Session {
         let result = tokio::select! {
             result = &mut execution => result,
             signal = tokio::signal::ctrl_c() => {
-                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                if let Err(error) = signal {
+                    activity.row("!", "cancel", &format!("Ctrl-C listener failed: {error}; stopping safely"), TimelineTone::Warning);
+                }
                 activity.row(
                     "!",
                     "cancel",
@@ -1889,6 +1928,7 @@ impl Session {
 
     fn set_task_focus(&mut self, run_id: RunId) -> Result<(), CliError> {
         self.last_run = Some(run_id);
+        self.continuation_focus = crate::continuation::TaskFocus::Selected(run_id);
         if let Err(error) = self.composer.save("focus", &run_id.to_string()) {
             self.emit(&format!(
                 "{}\n",
@@ -1920,6 +1960,7 @@ impl Session {
             ));
         }
         self.last_run = Some(run_id);
+        self.continuation_focus = crate::continuation::TaskFocus::Selected(run_id);
         Ok(())
     }
 
@@ -1927,24 +1968,10 @@ impl Session {
         if !argument.is_empty() {
             return self.resolve_run(argument);
         }
-        let saved = self.composer.load("focus").map_err(|e| {
-            CliError::Argument(format!(
-                "Cannot read continuation focus: {e}. Use /focus <run>."
-            ))
-        })?;
-        if let Some(saved) = saved {
-            return saved.parse().map_err(|_| {
-                CliError::Argument(
-                    "Saved continuation focus is invalid. Use /focus <run> to replace it."
-                        .to_owned(),
-                )
-            });
-        }
         let runs = commands::run_history(&self.state)?;
-        if runs.len() == 1 {
-            return Ok(runs[0].run_id);
-        }
-        Err(CliError::Argument(if runs.is_empty() { "No task to continue in this workspace. Write a task first." } else { "Several tasks exist and none is explicitly selected. Use /runs, then /continue <id> or /focus <id>." }.to_owned()))
+        self.continuation_focus
+            .resolve(&runs.iter().map(|run| run.run_id).collect::<Vec<_>>())
+            .map_err(CliError::Argument)
     }
 
     async fn continue_task(&mut self, argument: &str) -> Result<(), CliError> {
@@ -1959,6 +1986,7 @@ impl Session {
                     CliError::Argument(format!("Could not forget local task context: {e}"))
                 })?;
             self.last_run = None;
+            self.continuation_focus = crate::continuation::TaskFocus::Unselected;
             return self.emit("Selected task's local answer memory and continuation focus removed. Engine receipts, traces and checkpoints remain.\n");
         }
         self.set_task_focus(run_id)?;
@@ -2094,7 +2122,9 @@ impl Session {
         let result = tokio::select! {
             result = &mut execution => result,
             signal = tokio::signal::ctrl_c() => {
-                signal.map_err(|error| CliError::Argument(format!("Ctrl-C handler failed: {error}")))?;
+                if let Err(error) = signal {
+                    activity.row("!", "cancel", &format!("Ctrl-C listener failed: {error}; stopping safely"), TimelineTone::Warning);
+                }
                 activity.row(
                     "!",
                     "cancel",
@@ -2127,8 +2157,16 @@ impl Session {
             Err(error) => {
                 self.emit(&activity.summary(false))?;
                 if let Some(run_id) = error.run_id() {
-                    self.set_task_focus(run_id)?;
-                    self.save_failed_task_memory(run_id)?;
+                    if let Err(memory_error) = self.set_task_focus(run_id) {
+                        self.render_error(&format!(
+                            "Task focus could not be saved: {memory_error}"
+                        ))?;
+                    }
+                    if let Err(memory_error) = self.save_failed_task_memory(run_id) {
+                        self.render_error(&format!(
+                            "Local task context could not be saved: {memory_error}"
+                        ))?;
+                    }
                 }
                 self.render_error(&error.to_string())?;
                 let guidance = error.run_id().map_or_else(
@@ -2138,12 +2176,20 @@ impl Session {
                     },
                     |run_id| {
                         format!(
-                            "Run {} is durable · /trace inspects it · /runs keeps it discoverable",
+                            "Run {} · /trace inspects retained events · /runs lists retained state",
                             short_run_id(run_id)
                         )
                     },
                 );
                 self.emit(&format!("{}\n", self.theme.muted(&guidance)))?;
+                let advice = crate::ui::recovery::advice(&error);
+                self.emit(&format!(
+                    "{}\n",
+                    crate::ui::section(&self.theme, terminal_columns(), advice.title)
+                ))?;
+                for line in crate::ui::note(&self.theme, terminal_columns(), advice.next) {
+                    self.emit(&format!("{line}\n"))?;
+                }
             }
         }
         Ok(())
@@ -2156,15 +2202,12 @@ impl Session {
             .effective_model()
             .unwrap_or_else(|| "not configured · /models or /connect".to_owned());
         let mut lines = vec![
-            format!(
-                "  {}  {}",
-                self.theme.brand("● pactrail"),
-                self.theme.muted(&format!("v{}", env!("CARGO_PKG_VERSION")))
+            crate::ui::section(
+                &self.theme,
+                columns,
+                &format!("pactrail {} · Ledger", env!("CARGO_PKG_VERSION")),
             ),
-            format!(
-                "  {}",
-                self.theme.muted(&"─".repeat(content_width(columns, 2, 88)))
-            ),
+            String::new(),
         ];
         lines.extend(frame_field(
             &self.theme,
@@ -2202,7 +2245,7 @@ impl Session {
             columns,
             "Work stays isolated until you review and apply a candidate.",
         ));
-        lines.push(format!("  {}", self.theme.muted("╰─")));
+        lines.push(String::new());
         for shortcuts in [
             "Enter dispatch   ·   Ctrl+J newline   ·   Tab complete",
             "Ctrl+P commands  ·   Ctrl+O runs      ·   /help",
@@ -3312,12 +3355,12 @@ impl Session {
         let mut lines = vec![
             format!(
                 "{} {}",
-                self.theme.brand("╭─ Execution trace"),
+                self.theme.heading("Execution trace"),
                 self.theme.code(&short_run_id(run_id)),
             ),
             format!(
                 "{} state · {}",
-                self.theme.muted("│"),
+                self.theme.muted(" "),
                 terminal_state.map_or_else(
                     || self.theme.muted("unknown"),
                     |state| run_state_text(&self.theme, state)
@@ -3325,21 +3368,22 @@ impl Session {
             ),
             format!(
                 "{} {} events · {action_count} actions · {evidence_count} evidence · {}",
-                self.theme.muted("│"),
+                self.theme.muted(" "),
                 events.len(),
                 trace_duration(elapsed_ms)
             ),
             format!(
                 "{} {}",
-                self.theme.muted("╰─"),
-                self.theme.heading("BLAKE3 hash chain verified")
+                self.theme.muted("  "),
+                self.theme.text("BLAKE3 hash chain verified")
             ),
             String::new(),
         ];
-        let legend =
-            "◆ context · ◇ control · ● model · ● tool · ✓ verify/evidence · ↻ recover · ◇ state";
+        let legend = self.theme.label(
+            "◆ context · ◇ control · ● model · ● tool · ✓ verify/evidence · ↻ recover · ◇ state",
+        );
         lines.extend(
-            wrap_text(legend, content_width(columns, 2, 96))
+            wrap_text(&legend, content_width(columns, 2, 88))
                 .into_iter()
                 .map(|line| format!("  {}", self.theme.muted(&line))),
         );
@@ -4181,7 +4225,13 @@ struct SessionPrompt {
 }
 
 impl SessionPrompt {
-    fn new(model: Option<String>, pending_runs: usize, backend: ProcessBackendArg) -> Self {
+    fn new(
+        model: Option<String>,
+        pending_runs: usize,
+        backend: ProcessBackendArg,
+        workspace: &Path,
+        focus: &crate::continuation::TaskFocus,
+    ) -> Self {
         let model = truncate(
             &model.unwrap_or_else(|| "no model · /connect".to_owned()),
             terminal_columns().saturating_sub(24).min(40),
@@ -4197,15 +4247,39 @@ impl SessionPrompt {
             format!("{pending_runs} review · {mode} · {model}")
         };
         let status = if terminal_columns() < 60 { mode } else { &text };
+        let focus = match focus {
+            crate::continuation::TaskFocus::Selected(run_id) => {
+                format!("continue: {}", short_run_id(*run_id))
+            }
+            crate::continuation::TaskFocus::Unselected => "new task".to_owned(),
+            crate::continuation::TaskFocus::Invalid(_) => "continue: select with /focus".to_owned(),
+        };
+        let workspace = workspace.file_name().map_or_else(
+            || sanitize_terminal_text(&display_path(workspace)),
+            |name| sanitize_terminal_text(&name.to_string_lossy()),
+        );
+        let separator = if crate::ui::glyphs::ascii_requested() {
+            " . "
+        } else {
+            " · "
+        };
+        let location = truncate(
+            &format!("{workspace}{separator}{focus}"),
+            terminal_columns(),
+        );
         Self {
-            left: format!("{}\npactrail", composer_edge(terminal_columns(), status)),
+            left: format!(
+                "{}\n{location}\npactrail",
+                composer_edge(terminal_columns(), status)
+            ),
             right: String::new(),
         }
     }
 }
 
 fn composer_edge(columns: usize, status: &str) -> String {
-    let label = "╭─ Composer · ";
+    let ascii = crate::ui::glyphs::ascii_requested();
+    let label = if ascii { "Composer . " } else { "Composer · " };
     let header = format!(
         "{label}{}",
         truncate(
@@ -4215,7 +4289,10 @@ fn composer_edge(columns: usize, status: &str) -> String {
     );
     let remaining = columns.saturating_sub(crate::terminal::width(&header));
     if remaining > 0 {
-        format!("{header} {}", "─".repeat(remaining - 1))
+        format!(
+            "{header} {}",
+            (if ascii { "-" } else { "─" }).repeat(remaining - 1)
+        )
     } else {
         header
     }
@@ -4238,6 +4315,7 @@ impl Prompt for SessionPrompt {
 
     fn render_prompt_indicator(&self, edit_mode: PromptEditMode) -> Cow<'_, str> {
         match edit_mode {
+            _ if crate::ui::glyphs::ascii_requested() => Cow::Borrowed(" > "),
             PromptEditMode::Vi(PromptViMode::Normal | PromptViMode::Visual) => {
                 Cow::Borrowed(" \u{25c7} ")
             }
@@ -4246,7 +4324,11 @@ impl Prompt for SessionPrompt {
     }
 
     fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
-        Cow::Borrowed(" │ ")
+        Cow::Borrowed(if crate::ui::glyphs::ascii_requested() {
+            " | "
+        } else {
+            " │ "
+        })
     }
 
     fn render_prompt_history_search_indicator(
@@ -4475,23 +4557,23 @@ fn provider_label(provider: ProviderKind) -> &'static str {
 
 fn outcome_text(theme: &Theme, outcome: ReceiptOutcome) -> String {
     match outcome {
-        ReceiptOutcome::Answered => theme.heading("◇ Answered"),
-        ReceiptOutcome::ReadyToApply => theme.brand("◇ Awaiting review"),
-        ReceiptOutcome::Applied => theme.heading("✓ Applied"),
-        ReceiptOutcome::Discarded => theme.muted("◇ Discarded"),
-        ReceiptOutcome::Failed => theme.danger("× Failed"),
-        ReceiptOutcome::Cancelled => theme.warning("■ Stopped"),
+        ReceiptOutcome::Answered => theme.text(&theme.label("◇ Answered")),
+        ReceiptOutcome::ReadyToApply => theme.brand(&theme.label("◇ Awaiting review")),
+        ReceiptOutcome::Applied => theme.text(&theme.label("✓ Applied")),
+        ReceiptOutcome::Discarded => theme.muted(&theme.label("◇ Discarded")),
+        ReceiptOutcome::Failed => theme.danger(&theme.label("× Failed")),
+        ReceiptOutcome::Cancelled => theme.warning(&theme.label("■ Stopped")),
     }
 }
 
 fn run_state_text(theme: &Theme, state: RunState) -> String {
     match state {
-        RunState::Failed => theme.danger("× Failed"),
-        RunState::Cancelled => theme.warning("■ Stopped"),
-        RunState::Applied => theme.heading("✓ Applied"),
-        RunState::Discarded => theme.muted("◇ Discarded"),
-        RunState::Completed => theme.heading("◇ Answered"),
-        RunState::AwaitingApply => theme.brand("◇ Awaiting review"),
+        RunState::Failed => theme.danger(&theme.label("× Failed")),
+        RunState::Cancelled => theme.warning(&theme.label("■ Stopped")),
+        RunState::Applied => theme.text(&theme.label("✓ Applied")),
+        RunState::Discarded => theme.muted(&theme.label("◇ Discarded")),
+        RunState::Completed => theme.text(&theme.label("◇ Answered")),
+        RunState::AwaitingApply => theme.brand(&theme.label("◇ Awaiting review")),
         _ => theme.muted(format_state(state)),
     }
 }
@@ -4725,34 +4807,11 @@ fn frame_field(
     value: &str,
     tone: TimelineTone,
 ) -> Vec<String> {
-    if columns < 60 {
-        let mut lines = vec![format!("  {}  {}", theme.muted("│"), theme.muted(label))];
-        lines.extend(
-            wrap_text(value, content_width(columns, 6, 88))
-                .into_iter()
-                .map(|line| format!("  {}   {}", theme.muted("│"), tone.paint(theme, &line))),
-        );
-        return lines;
-    }
-    wrap_text(value, content_width(columns, 16, 120))
-        .into_iter()
-        .enumerate()
-        .map(|(index, line)| {
-            format!(
-                "  {} {} {}",
-                theme.muted("│"),
-                theme.muted(&format!("{:<10}", if index == 0 { label } else { "" })),
-                tone.paint(theme, &line)
-            )
-        })
-        .collect()
+    crate::ui::field(theme, columns, label, value, |line| tone.paint(theme, line))
 }
 
 fn frame_note(theme: &Theme, columns: usize, value: &str) -> Vec<String> {
-    wrap_text(value, content_width(columns, 5, 120))
-        .into_iter()
-        .map(|line| format!("  {}  {}", theme.muted("│"), theme.muted(&line)))
-        .collect()
+    crate::ui::note(theme, columns, value)
 }
 
 fn labelled_rows(
@@ -5058,10 +5117,10 @@ fn receipt_lines(
         String::new(),
         format!(
             "  {} {}",
-            theme.muted("╭─ Receipt ·"),
+            theme.muted("Receipt ·"),
             outcome_text(theme, receipt.outcome)
         ),
-        format!("  {}", theme.muted("│")),
+        String::new(),
     ];
     let (added, removed) = change_bytes(receipt);
     let fields = [
@@ -5105,7 +5164,7 @@ fn receipt_lines(
             TimelineTone::Normal,
         ));
     }
-    lines.push(format!("  {}", theme.muted("╰─")));
+    lines.push(String::new());
     for change in &receipt.changes {
         lines.extend(
             wrap_text(&change.path, content_width(columns, 7, 100))

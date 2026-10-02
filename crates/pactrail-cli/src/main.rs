@@ -13,6 +13,7 @@ mod output;
 mod settings;
 mod terminal;
 mod theme;
+mod ui;
 mod upgrade;
 mod web;
 

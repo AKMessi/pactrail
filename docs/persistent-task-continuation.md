@@ -26,7 +26,10 @@ are not copied. Apply still requires the existing explicit confirmation.
 The CLI persists focus when a run starts, when results arrive, and when `/focus`,
 Apply or Discard selects a run. It restores that focus after restart and checks
 that the selected run exists in this workspace's state directory. An explicitly
-focused run stays selected when other review candidates exist.
+focused run stays selected when other review candidates exist. Focus is restored
+once at startup; another live terminal can update the restart default but cannot
+redirect this session’s `continue`. Corrupt saved focus blocks implicit selection
+until an explicit `/focus <id>` or `/continue <id>` resolves it.
 
 Without saved focus, exactly one historical run can be selected automatically.
 With several runs, the CLI asks for `/continue <id>` or `/focus <id>` rather than

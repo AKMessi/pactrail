@@ -4,6 +4,27 @@ use serde::{Deserialize, Serialize};
 
 use crate::composer::ComposerStore;
 
+/// Session-local selection, separate from convenience defaults in review views.
+#[derive(Default)]
+pub(crate) enum TaskFocus {
+    #[default]
+    Unselected,
+    Selected(RunId),
+    Invalid(String),
+}
+
+impl TaskFocus {
+    pub(crate) fn resolve(&self, runs: &[RunId]) -> Result<RunId, String> {
+        match self {
+            Self::Selected(id) if runs.contains(id) => Ok(*id),
+            Self::Selected(_) => Err("Selected task is not in this workspace's state directory. Use /runs and /focus <id>.".to_owned()),
+            Self::Invalid(reason) => Err(format!("Saved continuation focus is unavailable: {reason}. Use /focus <id> or /continue <id> explicitly.")),
+            Self::Unselected if runs.len() == 1 => Ok(runs[0]),
+            Self::Unselected => Err(if runs.is_empty() { "No task to continue in this workspace. Write a task first." } else { "Several tasks exist and none is explicitly selected. Use /runs, then /continue <id> or /focus <id>." }.to_owned()),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum NextAction {
     Resume,
@@ -276,6 +297,25 @@ mod tests {
             unresolved_risks: Vec::new(),
         })
         .unwrap_or_else(|e| unreachable!("fixture: {e}"))
+    }
+
+    #[test]
+    fn continuation_never_guesses_over_ambiguous_or_corrupt_focus() {
+        let first = RunId::new();
+        let second = RunId::new();
+        assert!(TaskFocus::Unselected.resolve(&[]).is_err());
+        assert_eq!(TaskFocus::Unselected.resolve(&[first]).ok(), Some(first));
+        assert!(TaskFocus::Unselected.resolve(&[first, second]).is_err());
+        assert_eq!(
+            TaskFocus::Selected(first).resolve(&[first, second]).ok(),
+            Some(first)
+        );
+        assert!(TaskFocus::Selected(first).resolve(&[second]).is_err());
+        assert!(
+            TaskFocus::Invalid("corrupt file".to_owned())
+                .resolve(&[first])
+                .is_err()
+        );
     }
 
     #[test]
