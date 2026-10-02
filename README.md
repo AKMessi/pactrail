@@ -7,6 +7,10 @@
 
 **Every change carries its evidence.**
 
+This branch prepares the v2 release candidate. The `v2.0.0` installation tag
+becomes available after publication; build this checkout with
+`cargo build --release --locked -p pactrail` to test the candidate.
+
 Pactrail is a model-agnostic coding-agent harness written in Rust. It combines
 the direct terminal flow of a coding assistant with a stricter execution model:
 tasks become contracts, edits happen in isolated transactions, actions become
@@ -289,7 +293,7 @@ kernel. It reexports the provider-neutral `ModelDriver`, typed `Tool`, policy,
 engine, MCP, transaction, store, checkpoint, memory, and context contracts. An
 out-of-tree-style compatibility fixture implements a custom provider and tool
 and composes them with `RunEngine`. See the [embedding guide](docs/embedding.md).
-The v1 SDK is consumed from an immutable Git tag and follows the documented 1.x
+The v2 SDK is consumed from an immutable Git tag and follows the documented 2.x
 SemVer contract. Workspace implementation crates remain internal; crates.io
 publication is not part of the 1.0 distribution contract.
 
@@ -323,7 +327,7 @@ release targets are Windows x86_64, Linux x86_64, and Apple Silicon macOS.
 To build the current source with Rust 1.95 or newer:
 
 ```console
-cargo install --git https://github.com/AKMessi/pactrail.git --tag v1.0.0 --locked pactrail
+cargo install --git https://github.com/AKMessi/pactrail.git --tag v2.0.0 --locked pactrail
 ```
 
 Or from a local checkout:

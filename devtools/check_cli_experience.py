@@ -2,7 +2,7 @@
 Uses the real binary and local model fixture in disposable workspaces, no credentials.
 Run: python devtools/check_cli_experience.py
 """
-import json, os, pathlib, re, subprocess, sys, tempfile, time
+import json, os, pathlib, re, signal, subprocess, sys, tempfile, time
 import pexpect, pyte
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -106,6 +106,7 @@ try:
     assert provider.poll() is None, 'local model fixture could not bind 4190'
     t=Terminal();terminals.append(t)
     t.command('continue','No task to continue')
+    t.command('/process on','was removed in v2')
     # Bracketed multiline paste stays in the composer until explicit Enter.
     t.child.send('\x1b[200~Pasted task.\nDo not dispatch automatically.\x1b[201~')
     t.expect('Do not dispatch automatically.')
@@ -260,7 +261,25 @@ try:
     assert not (live.workspace/'permission-proof.txt').exists(), 'approved command escaped isolation'
     latest=sorted((live.workspace/'.pactrail/runs').glob('*/receipt.json'),key=lambda p:p.stat().st_mtime)[-1]
     assert any(change['path']=='permission-proof.txt' for change in json.loads(latest.read_text())['changes'])
+    live.child.sendline('Run only after approval; stop at the approval prompt.');live.expect(r'Type "once ([a-f0-9]{6})"')
+    live.expect(r'Approval \(default: deny\)')
+    os.kill(live.child.pid, signal.SIGINT)
+    live.expect('Stopped',timeout=35);live.expect('pactrail ❯')
+    assert not (live.workspace/'permission-proof.txt').exists()
     live.close()
+    resized=Terminal(width=100,name='live-resize');terminals.append(resized)
+    resized.command('/model fixture-slow','Model selected')
+    resized.child.sendline('Explain slowly while the terminal resizes.');resized.expect('Running')
+    resize_draft='Resize preserves 日本語 and this complete draft.'
+    resized.child.send('\x1b[200~'+resize_draft+'\x1b[201~')
+    for width in [40,32,80,100]:
+        resized.child.setwinsize(34,width)
+        time.sleep(.1)
+    resized.expect('◇ Answered',timeout=35);resized.expect('pactrail ❯')
+    resized.child.send('\x13');resized.expect('Workspace draft saved');resized.expect('pactrail ❯')
+    assert next((resized.root/'config/composer').glob('*-draft.txt')).read_text()==resize_draft
+    resized.child.send('\x03');resized.expect('Input cancelled');resized.expect('pactrail ❯')
+    resized.close()
     for width in [32,40,60,80,100,120,160]:
         narrow=Terminal(width=width,name='width-'+str(width));terminals.append(narrow)
         narrow.command('/help editor','/editor')
@@ -296,7 +315,7 @@ try:
         colored.capture.snapshot('color-'+str(width)+'-review')
         colored.close()
         assert re.search(r'\x1b\[(?:3[0-7]|9[0-7])m',colored.capture.text), 'color terminal missing palette'
-    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/100/120/160 column startup','type-ahead preserves paste and caret without dispatch','Enter during execution saves instead of dispatching','Ctrl-C stops and preserves the draft','buffered draft cannot grant process approval','fresh process consent keeps changes isolated','cursor-free TERM=dumb','plain draft dispatch and guarded apply','ASCII composer and outcome','NO_COLOR','colored startup, answer and review at 40/100 columns','simultaneous sessions cannot redirect continue'],'artifacts':str(OUT)},indent=2))
+    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/100/120/160 column startup','type-ahead preserves paste and caret without dispatch','Enter during execution saves instead of dispatching','Ctrl-C stops and preserves the draft','buffered draft cannot grant process approval','fresh process consent keeps changes isolated','SIGINT during approval stops without granting authority','live resize preserves Unicode draft','cursor-free TERM=dumb','plain draft dispatch and guarded apply','ASCII composer and outcome','NO_COLOR','colored startup, answer and review at 40/100 columns','simultaneous sessions cannot redirect continue'],'artifacts':str(OUT)},indent=2))
     print((OUT/'results.json').read_text())
 finally:
     for t in terminals:

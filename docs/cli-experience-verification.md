@@ -2,11 +2,17 @@
 
 ## V2 running-input verification — October 3, 2026
 
-The real debug binary passed the expanded 39-scenario terminal suite using a
+The real debug binary passed the expanded 41-scenario terminal suite using a
 loopback provider and disposable workspaces. This includes type-ahead/caret
 preservation, explicit-only next-task dispatch, cooperative stop with retained
-Unicode drafts, denied buffered approval and fresh per-request consent. Plain
+Unicode drafts, denied buffered approval, fresh per-request consent, SIGINT at
+approval and live resize from 32 to 100 columns. Plain
 and dumb captures contain no terminal control sequences; Apply remains guarded.
+
+Eight real browser-engine workflows also passed: dispatch/answer, guarded
+Apply, Discard, real Cargo verification, Stop, provider failure inspection,
+contract-bound deterministic evidence and reconnect stability. Ten browser
+projection/design tests passed.
 
 These are deterministic interaction checks, not model quality measurements.
 The final v2 version/build/platform evidence is tracked separately in the launch
