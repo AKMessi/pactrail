@@ -358,3 +358,21 @@ existing turn/token/cost/time allowances and preserve all tool permissions.
 The option is opt-in and stored with the run for resume; interactive sessions
 retain their existing policy. Review requests are advisory, never deterministic
 passes. Use caller-declared acceptance checks for independent behavioral evidence.
+
+### Workspace drafts and quick navigation
+
+- **Ctrl+S** saves the current composer text locally, keeping it editable.
+- **/draft** restores it without dispatching; **/draft clear** deletes it.
+- **/retry** restores the previous submitted task even after a restart, scoped to
+  this workspace. It does not resume a run or restore image attachments.
+- **Ctrl+O** opens run focus in the composer. Type a goal fragment or ID, then
+  **Tab** to select a run; **Enter** changes focus only. A current draft is saved
+  before switching. Use `/draft` to return to it.
+- Command completion supports fuzzy abbreviations; prefix matches rank first.
+  `/task` completes quoted file paths without reading their contents.
+- Bracketed multiline paste waits for explicit Enter before dispatching.
+
+Drafts and previous tasks are local plaintext in the config directory, outside
+source/candidate copies. Ctrl+C clears only the current editor; saved drafts
+remain until replaced or cleared. Saving is explicit, not automatic on every
+keystroke. See [the CLI design](cli-workflow-upgrade.md) for research and limits.

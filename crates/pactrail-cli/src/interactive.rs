@@ -47,6 +47,11 @@ const IMAGE_TIMELINE_MARKER: &str = "◈";
 const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Kernel", "Safety", "Session"];
 const COMMANDS: &[CommandHelp] = &[
     CommandHelp::new(
+        "Session",
+        "/draft [clear]",
+        "Restore the saved workspace draft, or remove it.",
+    ),
+    CommandHelp::new(
         "Work",
         "/resume [run]",
         "continue an interrupted run from its safe checkpoint",
@@ -235,7 +240,7 @@ struct CompletionEntry {
     description: String,
     kind: &'static str,
 }
-struct CommandCompleter(Arc<Mutex<Vec<CompletionEntry>>>);
+struct CommandCompleter(Arc<Mutex<Vec<CompletionEntry>>>, PathBuf);
 impl Completer for CommandCompleter {
     fn complete(&mut self, line: &str, pos: usize) -> Vec<Suggestion> {
         let Some(input) = line.get(..pos) else {
@@ -248,19 +253,33 @@ impl Completer for CommandCompleter {
             if !trimmed.is_empty() && !trimmed.starts_with('/') {
                 return suggestions;
             }
-            for command in COMMANDS.iter().filter(|c| c.name().starts_with(trimmed)) {
-                suggestions.push(Suggestion {
-                    value: command.name().to_owned(),
-                    description: Some(format!("{} · {}", command.group, command.description)),
-                    span: Span::new(start, pos),
-                    append_whitespace: command.usage.contains(' '),
-                    ..Suggestion::default()
-                });
-            }
-            return suggestions;
+            return command_suggestions(trimmed, start, pos);
         }
         let (command, arguments) = split_command(trimmed);
-        if arguments.contains(char::is_whitespace) {
+        if command == "/task" {
+            return crate::composer::path_completions(&self.1, arguments)
+                .into_iter()
+                .map(|(value, directory)| Suggestion {
+                    value,
+                    description: Some(
+                        if directory {
+                            "directory · Tab to continue"
+                        } else {
+                            "task file · loads into composer"
+                        }
+                        .to_owned(),
+                    ),
+                    span: Span::new(pos - arguments.len(), pos),
+                    ..Suggestion::default()
+                })
+                .collect();
+        }
+        if arguments.contains(char::is_whitespace)
+            && !matches!(
+                command,
+                "/focus" | "/review" | "/trace" | "/inspect" | "/diff" | "/evidence" | "/resume"
+            )
+        {
             return suggestions;
         }
         let prefix = arguments;
@@ -270,6 +289,7 @@ impl Completer for CommandCompleter {
             "/stream" => &["on", "off"],
             "/pager" => &["auto", "off"],
             "/detail" => &["compact", "full"],
+            "/draft" => &["clear"],
             "/provider" => &[
                 "ollama",
                 "open-ai-compatible",
@@ -319,12 +339,57 @@ impl Completer for CommandCompleter {
         } else {
             return suggestions;
         };
+        suggestions.extend(self.dynamic_suggestions(kind, prefix, start, pos));
+        suggestions
+    }
+}
+
+fn command_suggestions(prefix: &str, start: usize, pos: usize) -> Vec<Suggestion> {
+    let mut suggestions = Vec::new();
+    let mut matches = COMMANDS
+        .iter()
+        .filter_map(|c| crate::composer::match_score(c.name(), prefix).map(|score| (score, c)))
+        .collect::<Vec<_>>();
+    matches.sort_by_key(|(score, _)| *score);
+    for (_, command) in matches {
+        suggestions.push(Suggestion {
+            value: command.name().to_owned(),
+            description: Some(format!("{} · {}", command.group, command.description)),
+            span: Span::new(start, pos),
+            append_whitespace: command.usage.contains(' '),
+            ..Suggestion::default()
+        });
+    }
+    suggestions
+}
+
+impl CommandCompleter {
+    fn dynamic_suggestions(
+        &self,
+        kind: &str,
+        prefix: &str,
+        start: usize,
+        pos: usize,
+    ) -> Vec<Suggestion> {
+        let mut suggestions = Vec::new();
         if let Ok(entries) = self.0.lock() {
-            for entry in entries
+            let mut matches = entries
                 .iter()
-                .filter(|e| e.kind == kind && e.value.starts_with(prefix))
-                .take(100)
-            {
+                .filter(|e| e.kind == kind)
+                .filter_map(|entry| {
+                    let score =
+                        crate::composer::match_score(&entry.value, prefix).or_else(|| {
+                            if kind == "run" {
+                                crate::composer::match_score(&entry.description, prefix)
+                            } else {
+                                None
+                            }
+                        })?;
+                    Some((score, entry))
+                })
+                .collect::<Vec<_>>();
+            matches.sort_by_key(|(score, _)| *score);
+            for (_, entry) in matches.into_iter().take(100) {
                 suggestions.push(Suggestion {
                     value: entry.value.clone(),
                     description: Some(entry.description.clone()),
@@ -361,6 +426,56 @@ pub(crate) async fn launch(
     let history = FileBackedHistory::with_file(HISTORY_CAPACITY, preferences.history_path())
         .map_err(|error| CliError::Argument(format!("history failed: {error}")))?;
     let completion_data = Arc::new(Mutex::new(Vec::new()));
+    let editor = session_editor(history, &completion_data, &workspace);
+
+    let composer = crate::composer::ComposerStore::new(
+        preferences
+            .history_path()
+            .parent()
+            .unwrap_or(Path::new(".")),
+        &workspace,
+    );
+    let previous_task = composer.load("last-task");
+    let last_goal = previous_task.as_ref().ok().cloned().flatten();
+    let mut session = Session {
+        workspace,
+        state,
+        preferences,
+        settings,
+        editor,
+        theme: Theme::detect(),
+        last_run,
+        pending_runs,
+        memory_count,
+        known_models: Vec::new(),
+        pending_images: Vec::new(),
+        completion_data,
+        last_goal,
+        composer,
+        pager: true,
+        detailed: false,
+    };
+    session.bootstrap().await?;
+    if let Err(error) = previous_task {
+        session.render_error(&format!("Saved retry task could not be read: {error}"))?;
+    }
+    match session.composer.load("draft") {
+        Ok(Some(_)) => session
+            .emit("Saved workspace draft available: /draft restores it without dispatching.\n")?,
+        Ok(None) => {}
+        Err(error) => session.render_error(&format!("Saved draft could not be read: {error}"))?,
+    }
+    if let Some(goal) = initial_goal {
+        session.execute_goal(goal.to_owned()).await?;
+    }
+    session.run().await
+}
+
+fn session_editor(
+    history: FileBackedHistory,
+    completion_data: &Arc<Mutex<Vec<CompletionEntry>>>,
+    workspace: &Path,
+) -> Reedline {
     let mut keys = default_emacs_keybindings();
     keys.add_binding(
         KeyModifiers::NONE,
@@ -396,9 +511,23 @@ pub(crate) async fn launch(
         KeyCode::Char('g'),
         ReedlineEvent::ExecuteHostCommand("/editor-buffer".to_owned()),
     );
-    let editor = Reedline::create()
+    keys.add_binding(
+        KeyModifiers::CONTROL,
+        KeyCode::Char('s'),
+        ReedlineEvent::ExecuteHostCommand("/save-draft".to_owned()),
+    );
+    keys.add_binding(
+        KeyModifiers::CONTROL,
+        KeyCode::Char('o'),
+        ReedlineEvent::ExecuteHostCommand("/run-picker".to_owned()),
+    );
+    Reedline::create()
+        .use_bracketed_paste(true)
         .with_history(Box::new(history))
-        .with_completer(Box::new(CommandCompleter(Arc::clone(&completion_data))))
+        .with_completer(Box::new(CommandCompleter(
+            Arc::clone(completion_data),
+            workspace.to_path_buf(),
+        )))
         .with_menu(ReedlineMenu::EngineCompleter(Box::new(
             IdeMenu::default()
                 .with_name("commands")
@@ -408,30 +537,7 @@ pub(crate) async fn launch(
         )))
         .with_edit_mode(Box::new(Emacs::new(keys)))
         .with_ansi_colors(Theme::detect().has_color())
-        .with_validator(Box::new(TaskValidator));
-
-    let mut session = Session {
-        workspace,
-        state,
-        preferences,
-        settings,
-        editor,
-        theme: Theme::detect(),
-        last_run,
-        pending_runs,
-        memory_count,
-        known_models: Vec::new(),
-        pending_images: Vec::new(),
-        completion_data,
-        last_goal: None,
-        pager: true,
-        detailed: false,
-    };
-    session.bootstrap().await?;
-    if let Some(goal) = initial_goal {
-        session.execute_goal(goal.to_owned()).await?;
-    }
-    session.run().await
+        .with_validator(Box::new(TaskValidator))
 }
 
 struct Session {
@@ -448,6 +554,7 @@ struct Session {
     pending_images: Vec<PathBuf>,
     completion_data: Arc<Mutex<Vec<CompletionEntry>>>,
     last_goal: Option<String>,
+    composer: crate::composer::ComposerStore,
     pager: bool,
     detailed: bool,
 }
@@ -1440,6 +1547,29 @@ impl Session {
                     ))?;
                 }
                 Ok(Signal::HostCommand(command)) => match command.as_str() {
+                    "/save-draft" => {
+                        let draft = self.editor.current_buffer_contents().to_owned();
+                        match self.composer.save("draft", &draft) {
+                            Ok(()) => self.emit("Workspace draft saved. /draft restores it after restart; /draft clear removes it.\n")?,
+                            Err(error) => self.render_error(&format!("Draft was not saved: {error}"))?,
+                        }
+                        self.restore_draft(&draft);
+                    }
+                    "/run-picker" => {
+                        let draft = self.editor.current_buffer_contents().to_owned();
+                        if !draft.trim().is_empty() {
+                            if let Err(error) = self.composer.save("draft", &draft) {
+                                self.render_error(&format!(
+                                    "Run picker cancelled: draft could not be saved: {error}"
+                                ))?;
+                                self.restore_draft(&draft);
+                                continue;
+                            }
+                            self.emit("Draft saved before switching runs. /draft restores it.\n")?;
+                        }
+                        self.restore_draft("/focus ");
+                        self.emit("Type part of a goal or run ID, then Tab to choose. Enter only changes focus.\n")?;
+                    }
                     "/palette" => self.editor.run_edit_commands(&[
                         EditCommand::Clear,
                         EditCommand::InsertString("/".to_owned()),
@@ -1475,6 +1605,20 @@ impl Session {
         arguments: &str,
     ) -> Result<bool, CliError> {
         match command {
+            "/draft" => match arguments {
+                "" => {
+                    let draft = self.composer.load("draft").map_err(|e| CliError::Argument(format!("Cannot restore draft: {e}")))?.ok_or_else(|| CliError::Argument("No saved draft for this workspace. Compose a task and press Ctrl+S to save it.".to_owned()))?;
+                    self.restore_draft(&draft);
+                    self.emit("Saved draft restored. Edit before dispatching; Ctrl-C clears the composer only.\n")?;
+                }
+                "clear" => {
+                    self.composer
+                        .clear("draft")
+                        .map_err(|e| CliError::Argument(format!("Cannot remove draft: {e}")))?;
+                    self.emit("Saved workspace draft removed.\n")?;
+                }
+                _ => return Err(CliError::Argument("usage: /draft [clear]".to_owned())),
+            },
             "/editor" | "/edit" => {
                 let text = crate::terminal::edit_draft(arguments, &self.workspace)
                     .map_err(CliError::Argument)?;
@@ -1496,7 +1640,7 @@ impl Session {
             }
             "/retry" => {
                 let goal = self.last_goal.clone().ok_or_else(|| {
-                    CliError::Argument("No task has been submitted in this session.".to_owned())
+                    CliError::Argument("No previous task is saved for this workspace.".to_owned())
                 })?;
                 self.restore_draft(&goal);
                 self.emit("Previous task restored; edit it before dispatching.\n")?;
@@ -1612,6 +1756,13 @@ impl Session {
 
     async fn execute_goal(&mut self, goal: String) -> Result<(), CliError> {
         self.last_goal = Some(goal.clone());
+        if let Err(error) = self.composer.save("last-task", &goal) {
+            self.emit(&format!(
+                "{}\n",
+                self.theme
+                    .warning(&format!("Restart-safe retry unavailable: {error}"))
+            ))?;
+        }
         let Some(model) = self.settings.effective_model() else {
             self.render_error(
                 "No model is configured. Use /models and /model, or /connect <base-url> <model>.",
@@ -1772,7 +1923,7 @@ impl Session {
             "Work stays isolated until you review and apply a candidate.",
         ));
         lines.push(format!("  {}", self.theme.muted("╰─")));
-        lines.extend(wrap_text("Enter dispatch · Alt+Enter / Ctrl+J newline · Tab commands · Ctrl+P palette · Ctrl+G editor · /help", content_width(columns, 2, 110)).into_iter().map(|l|format!("  {}",self.theme.muted(&l))));
+        lines.extend(wrap_text("Enter dispatch · Ctrl+J newline · Tab complete · Ctrl+P commands · Ctrl+O runs · Ctrl+S save draft · Ctrl+G editor · /help", content_width(columns, 2, 110)).into_iter().map(|l|format!("  {}",self.theme.muted(&l))));
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
@@ -2794,17 +2945,32 @@ impl Session {
                 || run_state_text(&self.theme, run.state),
                 |outcome| outcome_text(&self.theme, outcome),
             );
-            lines.push(format!(
-                "  {marker} {}",
-                self.theme
-                    .code(&unique_id_prefix(&run.run_id.to_string(), &run_ids))
-            ));
-            lines.push(format!("      {status}"));
-            lines.push(format!(
-                "      {} {}",
-                run.changes,
-                plural(run.changes, "file", "files")
-            ));
+            let file_count = if run.outcome.is_some() {
+                format!("{} {}", run.changes, plural(run.changes, "file", "files"))
+            } else {
+                "files not reported".to_owned()
+            };
+            let identity = format!(
+                "{} · {} · {file_count}",
+                unique_id_prefix(&run.run_id.to_string(), &run_ids),
+                format_state(run.state)
+            );
+            lines.extend(
+                wrap_text(&identity, content_width(columns, 4, 96))
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, line)| {
+                        if index == 0 {
+                            format!("  {marker} {}", self.theme.code(&line))
+                        } else {
+                            format!("    {}", self.theme.code(&line))
+                        }
+                    }),
+            );
+            // Keep the outcome visible when it differs from the durable phase.
+            if run.outcome.is_some() {
+                lines.push(format!("      {status}"));
+            }
             lines.extend(
                 wrapped_preview(&run.goal, content_width(columns, 6, 82), 2)
                     .into_iter()
@@ -3187,7 +3353,11 @@ impl Session {
         for run in &runs {
             entries.push(CompletionEntry {
                 value: unique_id_prefix(&run.run_id.to_string(), &ids),
-                description: format!("{} · {}", format_state(run.state), truncate(&run.goal, 52)),
+                description: format!(
+                    "{} · {}",
+                    format_state(run.state),
+                    sanitize_terminal_text(&run.goal).replace('\n', " ")
+                ),
                 kind: "run",
             });
         }
@@ -3737,10 +3907,28 @@ impl SessionPrompt {
         } else {
             format!("{pending_runs} review · {mode} · {model}")
         };
+        let status = if terminal_columns() < 60 { mode } else { &text };
         Self {
-            left: "pactrail".to_owned(),
-            right: truncate(&text, terminal_columns().saturating_sub(14)),
+            left: format!("{}\npactrail", composer_edge(terminal_columns(), status)),
+            right: String::new(),
         }
+    }
+}
+
+fn composer_edge(columns: usize, status: &str) -> String {
+    let label = "╭─ Composer · ";
+    let header = format!(
+        "{label}{}",
+        truncate(
+            status,
+            columns.saturating_sub(crate::terminal::width(label))
+        )
+    );
+    let remaining = columns.saturating_sub(crate::terminal::width(&header));
+    if remaining > 0 {
+        format!("{header} {}", "─".repeat(remaining - 1))
+    } else {
+        header
     }
 }
 
@@ -3769,7 +3957,7 @@ impl Prompt for SessionPrompt {
     }
 
     fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
-        Cow::Borrowed(" \u{00b7} ")
+        Cow::Borrowed(" │ ")
     }
 
     fn render_prompt_history_search_indicator(
@@ -4700,13 +4888,23 @@ mod tests {
     }
 
     #[test]
+    fn composer_rail_fits_terminal_cells() {
+        for columns in [32, 40, 60, 80, 120, 240] {
+            assert_eq!(
+                crate::terminal::width(&composer_edge(columns, "commands: none")),
+                columns
+            );
+        }
+    }
+
+    #[test]
     fn described_completion_never_replaces_a_task() {
         let data = Arc::new(Mutex::new(vec![CompletionEntry {
             value: "019f1234".to_owned(),
-            description: "Awaiting review".to_owned(),
+            description: "Awaiting review · Fix the Unicode parser".to_owned(),
             kind: "run",
         }]));
-        let mut completer = CommandCompleter(data);
+        let mut completer = CommandCompleter(data, PathBuf::from("."));
         assert!(completer.complete("Explain the parser", 18).is_empty());
         let commands = completer.complete("/ev", 3);
         assert_eq!(commands[0].value, "/evidence");
@@ -4716,6 +4914,12 @@ mod tests {
                 .as_deref()
                 .is_some_and(|s| s.contains("obligations"))
         );
+        let fuzzy = completer.complete("/evd", 4);
+        assert_eq!(fuzzy[0].value, "/evidence");
+        let goals = completer.complete("/focus Unicode parser", 21);
+        assert_eq!(goals[0].value, "019f1234");
+        assert_eq!(goals[0].span, Span::new(7, 21));
+        assert!(completer.complete("/focus 日本語", 8).is_empty()); // invalid UTF-8 cursor boundary
         let runs = completer.complete("/apply 019", 10);
         assert_eq!(runs[0].value, "019f1234");
         assert_eq!(runs[0].span.start, 7);
