@@ -153,3 +153,21 @@ no lost user input under high-rate synthetic events; coalesced operation updates
 append-only transcript and bounded dock. Record CPU, RAM, terminal, OS, binary
 commit, event workload and latency distribution when measuring. Real models and
 benchmarks are a separate evaluation, not implied by local fixture passes.
+
+## Implementation status
+
+- M0/M1 foundation shipped on the v2 feature branch: source audit, seven-width
+  baseline, bounded local memory, visible bidi controls and session-local focus.
+- M2/M3 initial Ledger presentation: shared section/field/note components, faint
+  metadata, adaptive activity rows, neutral applied/answered states, state glyph
+  fallbacks, workspace/focus composer status, and open-layout process approval.
+- M5 initial typed recovery guidance preserves the engine error and distinguishes
+  access/configuration, transient provider, budget, protocol, context, storage,
+  workspace and unsafe-checkpoint failures. It does not claim saved byte counts
+  or checkpoint eligibility that have not been checked.
+- The input-owner/type-ahead spike and a genuinely cursor-free plain input mode
+  remain separate work. Reedline has an external-break signal and optional
+  external-printer support, but integrating those requires coordinated approval
+  input and output ownership; merely enabling a feature is not a verified dock.
+- Remaining compatibility/crash gates and full engine/memory refinements are not
+  represented as shipped by the initial presentation changes.

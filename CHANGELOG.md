@@ -6,6 +6,19 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### V2 Ledger presentation and recovery
+
+- Introduce reusable open-layout blocks, faint terminal metadata, stacked narrow
+  fields and right-aligned elapsed times on wider activity rows. Compact mode
+  suppresses routine stream/progress/context chatter; complete trace remains available.
+- Show workspace and explicit continuation focus in the composer; add `?` help,
+  app-owned state glyph fallbacks and `PACTRAIL_REDUCED_MOTION=1` support.
+- Replace the framed process approval with readable command-preserving fields;
+  Enter continues to deny permission. Applied outcomes use neutral text.
+- Preserve the primary engine error if saving local task memory also fails. Add
+  distinct recovery guidance for provider access, rate limits, budgets, storage,
+  context, uncertain effects and refused checkpoints without changing engine policy.
+
 ### V2 Ledger foundation
 
 - Keep explicit continuation focus local to a live CLI session; another terminal

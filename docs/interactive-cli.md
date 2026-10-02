@@ -20,6 +20,27 @@ first displays the candidate and evidence cautions, then asks you to type `apply
 Enter, Ctrl-C, Ctrl-D, and any other response cancel. Discard similarly requires
 `discard`. Scriptable `pactrail apply`/`discard` retain their existing semantics.
 
+## Ledger presentation
+
+The interactive session uses normal terminal scrollback and an open, compact
+layout. Startup and approval fields stack on narrow terminals. Live activity
+puts elapsed time at the right at 80 columns and wider; narrow terminals omit
+that visual timestamp. Event timestamps remain in the durable trace.
+
+The composer shows process mode, workspace and explicit continuation focus.
+`?` opens help. `PACTRAIL_ASCII=1` replaces the state markers and composer
+indicators with ASCII; repository paths and model prose keep their original
+Unicode. `PACTRAIL_REDUCED_MOTION=1` disables the spinner's timed animation, as
+`PACTRAIL_NO_ANIMATION=1` does. `NO_COLOR` disables styling. Metadata uses the
+terminal's faint style rather than assuming a dark background.
+
+Failure reports keep the original engine error and add guidance for its class.
+Guidance never grants permissions, resets budgets or promises that a checkpoint
+is resumable. Local task memory is advisory; the engine validates all recovery.
+
+This phase retains reedline's existing input lifecycle. Type-ahead during a run,
+a cursor-free plain input mode and daemon detachment are not implemented.
+
 ## What the UI reports
 
 The default run view is a compact, persistent live execution timeline backed by engine
@@ -47,7 +68,7 @@ tokens, model time, wall time, and bounded-output count. Untrusted provider,
 model, tool, path, goal, and summary text is terminal-control sanitized before
 it reaches either the timeline or spinner.
 
-The renderer reads the active terminal width. Framed dashboards, command help,
+The renderer reads the active terminal width. Ledger blocks, command help,
 status fields, tool contracts, receipts, run history, and trace continuations
 wrap deliberately in narrow terminals; long paths and URLs are hard-wrapped
 instead of overflowing or disappearing. Diffs remain byte-faithful and are the

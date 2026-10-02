@@ -29,7 +29,7 @@ class Capture:
         ]))
 
 class Terminal:
-    def __init__(self, width=100, name='workflow', dumb=False, color=False):
+    def __init__(self, width=100, name='workflow', dumb=False, color=False, ascii=False):
         self.root = pathlib.Path(tempfile.mkdtemp(prefix='pactrail-cli-qa-'))
         self.workspace = self.root / 'workspace'
         self.workspace.mkdir()
@@ -50,6 +50,9 @@ allow_process = false
         editor.write_text('import pathlib, sys\np=pathlib.Path(sys.argv[1]); p.write_text(p.read_text()+"\\nEdited draft in external editor.")\n')
         self.env = dict(os.environ, PACTRAIL_CONFIG_DIR=str(config), NO_COLOR='1', PACTRAIL_NO_ANIMATION='1', TERM='dumb' if dumb else 'xterm-256color', EDITOR=f'{sys.executable} {editor}', PACTRAIL_FIXTURE_KEY='fixture-not-a-secret')
         self.color = color
+        self.ascii = ascii
+        self.env['PACTRAIL_ASCII'] = '1' if ascii else '0'
+        self.env['LC_ALL'] = 'C.UTF-8'
         if color: self.env.pop('NO_COLOR', None)
         for key in ['PACTRAIL_MODEL','PACTRAIL_BASE_URL','PAGER','VISUAL']:
             self.env.pop(key,None)
@@ -63,12 +66,15 @@ allow_process = false
     def fork_session(self, name):
         other = object.__new__(Terminal)
         other.root, other.workspace, other.env, other.color = self.root, self.workspace, dict(self.env), self.color
+        other.ascii = self.ascii
         other.capture = Capture(100,34,name)
         other.child = pexpect.spawn(str(BINARY), ['--workspace',str(self.workspace)], env=other.env, encoding='utf-8', dimensions=(34,100), timeout=20)
         other.child.linesep = "\r"; other.child.logfile_read = other.capture
         other.expect('pactrail ❯')
         return other
     def expect(self, pattern, timeout=20):
+        if self.ascii:
+            pattern = pattern.replace('pactrail ❯','pactrail >').replace('◇ ','<> ')
         if self.color and pattern == 'pactrail ❯':
             pattern = r'pactrail(?:\x1b\[[0-9;]*m)* ❯'
         if self.color and pattern.startswith('◇ '):
@@ -118,6 +124,7 @@ try:
     assert '\nDo not modify files.' in contract['goal'],contract['goal']
     first_id=records[0].parent.name
     t.capture.snapshot('answer')
+    assert any('continue: '+first_id[:13] in row for row in t.capture.screen.display), 'composer hid explicit continuation focus'
     t.child.sendline('/retry');t.expect('Previous task restored');t.expect('Do not modify files.');t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
     t.command('/model fixture-edit','Model selected')
     t.command('Create candidate.md with a short test heading.','◇ Awaiting review')
@@ -212,6 +219,11 @@ try:
         narrow.command('/help editor','/editor')
         narrow.close()
     dumb=Terminal(width=80,name='dumb',dumb=True);terminals.append(dumb);dumb.close()
+    ascii_terminal=Terminal(width=40,name='ascii',ascii=True);terminals.append(ascii_terminal)
+    ascii_terminal.command('Explain this repository', '◇ Answered')
+    ascii_terminal.capture.snapshot('ascii-answer')
+    assert 'Composer .' in ascii_terminal.capture.text and '<> Answered' in ascii_terminal.capture.text
+    ascii_terminal.close()
     for width in [40,100]:
         colored=Terminal(width=width,name='color-'+str(width),color=True);terminals.append(colored)
         colored.command('Explain this repository', '◇ Answered')
@@ -221,7 +233,7 @@ try:
         colored.capture.snapshot('color-'+str(width)+'-review')
         colored.close()
         assert re.search(r'\x1b\[(?:3[0-7]|9[0-7])m',colored.capture.text), 'color terminal missing palette'
-    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/100/120/160 column startup','TERM=dumb','NO_COLOR','colored startup, answer and review at 40/100 columns','simultaneous sessions cannot redirect continue'],'artifacts':str(OUT)},indent=2))
+    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/100/120/160 column startup','TERM=dumb','ASCII composer and outcome','NO_COLOR','colored startup, answer and review at 40/100 columns','simultaneous sessions cannot redirect continue'],'artifacts':str(OUT)},indent=2))
     print((OUT/'results.json').read_text())
 finally:
     for t in terminals:

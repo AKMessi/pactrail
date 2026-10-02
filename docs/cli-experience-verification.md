@@ -1,5 +1,30 @@
 # CLI experience verification
 
+## Ledger branch verification — October 2, 2026
+
+Platform: Linux, Rust 1.95. Debug and optimized executables were exercised against
+local deterministic providers in disposable workspaces; no live model credentials
+were used.
+
+- 33 PTY scenario groups passed, including draft/retry/editor/pager flows, guarded
+  Apply/Discard, same-ID recovery after a provider failure and restart, ASCII mode,
+  explicit focus in the composer and two sessions that cannot redirect each other.
+- Startup widths: 32, 40, 60, 80, 100, 120 and 160 columns. Colored startup, answer
+  and review captures at 40 and 100 columns were inspected using captured screen
+  cells. NO_COLOR checks passed. TERM=dumb retains reedline input; this is not a
+  claim of a cursor-free plain mode.
+- Workspace suite: 416 passed, 0 failed, 1 existing ignored Docker containment
+  test. CLI unit portion: 98 passed.
+- Formatting, strict workspace Clippy, warnings-as-errors documentation, and the
+  optimized workspace build passed.
+
+The source audit and remaining milestones are in [v2-audit.md](v2-audit.md) and
+[v2-cli-plan.md](v2-cli-plan.md). These checks do not demonstrate complete v2
+implementation, model task-solving quality, crash coverage at every durable
+boundary or macOS/Windows terminal compatibility.
+
+## Earlier workflow verification
+
 Date: September 30, 2026. Platform: Linux, Rust 1.95.
 
 ## Verified behavior
