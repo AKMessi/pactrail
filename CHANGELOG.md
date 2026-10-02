@@ -8,6 +8,12 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Bounded, fully accounted recovery for empty or partial output-limit responses:
+  at most two additional ordinary turns with ceiling-clamped output escalation.
+  Recovery allowance survives checkpoint resume. Truncated text is never final.
+- Show the initial adaptive output allowance in compact CLI output and label
+  empty model turns as "no usable output" instead of "answer".
+
 - Retry truncated buffered OpenAI-compatible response/tool-argument JSON and interrupted
   response bodies with a shared three-retry limit. Invalid syntax, authentication
   failures, and response-size violations still fail closed.

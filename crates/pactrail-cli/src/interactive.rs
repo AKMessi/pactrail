@@ -637,7 +637,7 @@ impl RunActivity {
 
     fn row(&self, marker: &str, label: &str, detail: &str, tone: TimelineTone) {
         if !self.detailed
-            && matches!(label, "profile" | "context" | "control")
+            && matches!(label, "context" | "control")
             && !matches!(tone, TimelineTone::Warning | TimelineTone::Danger)
         {
             return;
@@ -702,7 +702,7 @@ impl RunActivity {
             "◇",
             "profile",
             &format!(
-                "{} · {} · {} input · {} output/turn · {discovery_turn_cap} discovery · {max_tool_calls_per_turn} actions/turn · read width {parallel_read_width}",
+                "{} · {} · {} input · {} initial output/turn · {discovery_turn_cap} discovery · {max_tool_calls_per_turn} actions/turn · read width {parallel_read_width}",
                 class.label(),
                 capability_source_label(*capability_source),
                 format_count(*input_tokens),
@@ -988,7 +988,7 @@ impl RunActivity {
             input_tokens,
             output_tokens,
             cached_input_tokens,
-            ..
+            text_bytes,
         } = progress
         else {
             return;
@@ -998,8 +998,10 @@ impl RunActivity {
         self.model_time_ms
             .fetch_add(*duration_ms, Ordering::Relaxed);
         let duration = format_duration(Duration::from_millis(*duration_ms));
-        let result = if *tool_calls == 0 {
-            "answer".to_owned()
+        let result = if *tool_calls == 0 && *text_bytes == 0 {
+            "no usable output".to_owned()
+        } else if *tool_calls == 0 {
+            "text response".to_owned()
         } else {
             format!("{tool_calls} {}", plural(*tool_calls, "action", "actions"))
         };

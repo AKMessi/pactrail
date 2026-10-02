@@ -31,3 +31,27 @@ responses, and real isolated workspace/checkpoint execution to prove completed
 writes are not replayed. Existing checkpoint/effect/candidate negative tests
 remain required. This is resilience against a known failure class, not a guarantee
 against provider outages or every possible task failure.
+
+## Output-limit responses
+
+A readable response with finish reason `length` and no tool calls is incomplete,
+including when it contains some text. It is not accepted as a final answer.
+Pactrail accounts the reported usage first, then allows at most two additional
+ordinary turns per run. The next turn requests twice, then four times, the initial
+adaptive output allowance, bounded by configured and selected endpoint ceilings.
+The context window already reserves the configured output ceiling. Requests still
+pass the normal cost reservation, token, turn, wall-time, and permission checks.
+There is no provider-specific reasoning assumption or automatic paid fallback.
+
+The controller records each recovery in the durable trace; checkpoint continuation
+restores the allowance rather than resetting it. Completed effects are retained.
+After exhaustion the candidate remains isolated and the failure explains the
+limit. This recovery does not make pre-upgrade post-response failures resumable;
+start a new task from the same brief if an older failed run has no safe head-bound
+checkpoint.
+
+Compact CLI output shows the initial effective output allowance. The configured
+`--max-output-tokens` is a ceiling, not a promise that every turn requests that
+many tokens. Recovery notices and model action attributes show the escalated
+requested allowance. Empty responses are labelled "no usable output"; text is
+labelled "text response", not automatically a completed answer.
