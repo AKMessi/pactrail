@@ -25,6 +25,10 @@ follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- CLI workspace draft save/restore (Ctrl+S, `/draft`), restart-safe `/retry`,
+  fuzzy command/model/run discovery, goal-based Ctrl+O run navigation, bounded
+  quoted task-path completion, explicit bracketed paste, and compact run history.
+
 - Opt-in revision-bound completion audits: up to two ordinary budgeted review
   requests, durable event-derived allowance, unchanged tool authority, and
   explicit unreviewed-revision risks. Model review never creates passing evidence.

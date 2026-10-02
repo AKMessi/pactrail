@@ -6,7 +6,7 @@ import json, os, pathlib, re, subprocess, sys, tempfile, time
 import pexpect, pyte
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-BINARY = ROOT / 'target/debug/pactrail'
+BINARY = pathlib.Path(os.environ.get('PACTRAIL_CLI_TEST_BINARY', str(ROOT / 'target/debug/pactrail')))
 OUT = pathlib.Path('/tmp/pactrail-cli-qa')
 OUT.mkdir(exist_ok=True)
 
@@ -53,6 +53,7 @@ allow_process = false
         self.child.logfile_read = self.capture
         self.expect('pactrail ❯')
         self.capture.snapshot(name + '-startup')
+        assert any('Composer' in row and 'commands: none' in row for row in self.capture.screen.display), 'composer hid command permissions'
     def expect(self, pattern, timeout=20):
         deadline=time.monotonic()+timeout
         while True:
@@ -78,6 +79,16 @@ try:
     time.sleep(.3)
     assert provider.poll() is None, 'local model fixture could not bind 4190'
     t=Terminal();terminals.append(t)
+    # Bracketed multiline paste stays in the composer until explicit Enter.
+    t.child.send('\x1b[200~Pasted task.\nDo not dispatch automatically.\x1b[201~')
+    t.expect('Do not dispatch automatically.')
+    assert not list((t.workspace/'.pactrail/runs').glob('*/run.json'))
+    t.child.send('\x13');t.expect('Workspace draft saved');t.expect('pactrail ❯')
+    t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
+    t.child.sendline('/draft');t.expect('Saved draft restored');t.expect('Do not dispatch automatically.')
+    t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
+    t.command('/draft clear','Saved workspace draft removed')
+
     t.child.send('Explain this repository.');t.child.send('\x0a');t.child.sendline('Do not modify files.')
     t.expect('◇ Answered',timeout=35);t.expect('pactrail ❯')
     records=list((t.workspace/'.pactrail/runs').glob('*/run.json'))
@@ -107,15 +118,31 @@ try:
     t.child.send('\x10');t.expect('/resume');t.child.send('\x1b');time.sleep(.1);t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
     t.child.send('/ev');t.child.send('\t');t.expect('/evidence');t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
     task=t.workspace/'task with spaces.md';task.write_text('A loaded draft.\nSecond line.')
+    t.child.send('/task task');t.child.send('\t');t.expect('task with spaces.md')
+    t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
+    t.child.send('/evd');t.child.send('\t');t.expect('/evidence')
+    t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
+    t.child.send('A draft before browsing runs.');t.child.send('\x0f');t.expect('Draft saved before switching runs');t.expect('Type part of a goal')
+    t.child.send('Explain');t.child.send('\t');t.expect(first_id[:8])
+    t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
+
     t.child.sendline('/task "task with spaces.md"');t.expect('Task loaded');t.expect('Second line.');t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
     t.child.send('An unfinished draft.');t.child.send('\x07');t.expect('Edited draft in external editor.');t.capture.snapshot('editor');t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
+    t.close()
+    t.child = pexpect.spawn(str(BINARY), ['--workspace',str(t.workspace)],env=t.env,encoding='utf-8',dimensions=(34,100),timeout=20)
+    t.child.linesep = "\r";t.child.logfile_read=t.capture
+    t.expect('Saved workspace draft available');t.expect('pactrail ❯')
+    t.child.sendline('/draft');t.expect('Saved draft restored');t.expect('A draft before browsing runs.')
+    t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
+    t.child.sendline('/retry');t.expect('Previous task restored');t.expect('Create candidate.md')
+    t.child.send('\x03');t.expect('Input cancelled');t.expect('pactrail ❯')
     t.close()
     for width in [32,40,60,80,120]:
         narrow=Terminal(width=width,name='width-'+str(width));terminals.append(narrow)
         narrow.command('/help editor','/editor')
         narrow.close()
     dumb=Terminal(width=80,name='dumb',dumb=True);terminals.append(dumb);dumb.close()
-    (OUT/'results.json').write_text(json.dumps({'passed':['multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/120 column startup','TERM=dumb','NO_COLOR'],'artifacts':str(OUT)},indent=2))
+    (OUT/'results.json').write_text(json.dumps({'passed':['bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/120 column startup','TERM=dumb','NO_COLOR'],'artifacts':str(OUT)},indent=2))
     print((OUT/'results.json').read_text())
 finally:
     for t in terminals:
