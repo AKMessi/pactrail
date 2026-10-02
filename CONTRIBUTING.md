@@ -48,3 +48,10 @@ Sanitize paths and provider errors in reproductions. Test fixtures must be safe
 to publish under the repository license.
 
 Participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## Contribution license
+
+Unless explicitly agreed otherwise, contributions submitted for inclusion in
+Pactrail are offered under the repository’s [PolyForm Noncommercial License
+1.0.0](LICENSE). Only contribute material you have the right to license under
+these terms. Required upstream notices must be preserved.

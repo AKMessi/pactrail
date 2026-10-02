@@ -66,14 +66,14 @@ jobs:
         shell: bash
         run: |
           mkdir package
-          cp target/release/pactrail README.md LICENSE-MIT LICENSE-APACHE package/
+          cp target/release/pactrail README.md LICENSE THIRD_PARTY_NOTICES package/
           tar -C package -czf "${{ matrix.archive }}" .
       - name: Package Windows binary
         if: matrix.kind == 'windows'
         shell: pwsh
         run: |
           New-Item -ItemType Directory package
-          Copy-Item target/release/pactrail.exe, README.md, LICENSE-MIT, LICENSE-APACHE package/
+          Copy-Item target/release/pactrail.exe, README.md, LICENSE, THIRD_PARTY_NOTICES package/
           Compress-Archive -Path package/* -DestinationPath "${{ matrix.archive }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

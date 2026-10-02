@@ -1,6 +1,6 @@
 # Governance
 
-Pactrail is currently a maintainer-led open-source project.
+Pactrail is currently a maintainer-led source-available project.
 
 ## Roles
 

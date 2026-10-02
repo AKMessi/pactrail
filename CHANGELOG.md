@@ -6,6 +6,13 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Licensing
+
+- Replace Pactrail’s MIT/Apache dual licensing with PolyForm Noncommercial
+  1.0.0. Consolidate bundled asset notices in `THIRD_PARTY_NOTICES` and include
+  both documents in release archives. Previously distributed license grants
+  are unaffected.
+
 ### Changed
 
 - Refined the interactive CLI with a compact wordmark, balanced shortcut rows,

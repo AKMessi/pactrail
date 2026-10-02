@@ -12,6 +12,7 @@ highlight = "all"
 version = 2
 confidence-threshold = 0.93
 allow = [
+    "PolyForm-Noncommercial-1.0.0",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",

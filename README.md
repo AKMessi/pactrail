@@ -3,7 +3,7 @@
 [![CI](https://github.com/AKMessi/pactrail/actions/workflows/ci.yml/badge.svg)](https://github.com/AKMessi/pactrail/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/AKMessi/pactrail)](https://github.com/AKMessi/pactrail/releases/latest)
 [![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange.svg)](rust-toolchain.toml)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue.svg)](#license)
 
 **Every change carries its evidence.**
 
@@ -642,5 +642,13 @@ welcome and is not implied by the version number.
 
 ## License
 
-Licensed under either [Apache License 2.0](LICENSE-APACHE) or
-[MIT](LICENSE-MIT), at your option.
+Pactrail is source-available under the [PolyForm Noncommercial License
+1.0.0](LICENSE). Noncommercial use, modification, and distribution are permitted
+subject to that license. Commercial use is not granted by this license.
+
+Bundled third-party assets retain their upstream terms, reproduced in
+[THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES). These are not alternative licenses
+for Pactrail. Third-party dependencies retain their own licenses.
+
+This change applies to this revision and subsequent distributions under this
+license; it does not revoke license grants for previously distributed versions.
