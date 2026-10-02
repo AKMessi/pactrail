@@ -6,6 +6,13 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Refined the interactive CLI with a compact wordmark, balanced shortcut rows,
+  neutral headings, aligned activity categories, and distinct receipt sections.
+  Metadata stacks on narrow terminals; answer and code text use the terminal
+  foreground for compatibility with light and dark palettes.
+
 ### Fixed
 
 - Bounded, fully accounted recovery for empty or partial output-limit responses:
