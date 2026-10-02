@@ -6,6 +6,23 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Bounded, fully accounted recovery for empty or partial output-limit responses:
+  at most two additional ordinary turns with ceiling-clamped output escalation.
+  Recovery allowance survives checkpoint resume. Truncated text is never final.
+- Show the initial adaptive output allowance in compact CLI output and label
+  empty model turns as "no usable output" instead of "answer".
+
+- Retry truncated buffered OpenAI-compatible response/tool-argument JSON and interrupted
+  response bodies with a shared three-retry limit. Invalid syntax, authentication
+  failures, and response-size violations still fail closed.
+- Explicit resume of failed runs only at an adjacent, validated pre-model
+  checkpoint, preserving completed effects, candidate identity, and remaining
+  budgets. Unknown billing prevents cost-capped failed-run recovery.
+- Explain missing receipts during Apply and show checkpoint recovery guidance
+  after failures instead of only a missing-file error.
+
 ### Added
 
 - Opt-in revision-bound completion audits: up to two ordinary budgeted review

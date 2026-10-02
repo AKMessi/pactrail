@@ -9,6 +9,78 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 #[test]
+fn exhausted_truncated_provider_response_can_resume_the_same_run() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|e| unreachable!("workspace: {e}"));
+    let listener =
+        TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("listener: {e}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|e| unreachable!("address: {e}"));
+    let server = thread::spawn(move || {
+        for _ in 0..4 {
+            let (mut stream, _) = listener
+                .accept()
+                .unwrap_or_else(|e| unreachable!("accept: {e}"));
+            read_request(&mut stream);
+            let body = "{\"choices\":[{\"message\":{\"content\":\"cut";
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .unwrap_or_else(|e| unreachable!("response: {e}"));
+        }
+        let (mut stream, _) = listener
+            .accept()
+            .unwrap_or_else(|e| unreachable!("resume accept: {e}"));
+        read_request(&mut stream);
+        write_response(
+            &mut stream,
+            &json!({"choices":[{"message":{"content":"Recovered answer."},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":2}}),
+        );
+    });
+    let failed = pactrail(
+        workspace.path(),
+        [
+            "run",
+            "Explain this workspace",
+            "--provider",
+            "open-ai-compatible",
+            "--base-url",
+            &format!("http://{address}/v1"),
+            "--model",
+            "mock-coder",
+            "--no-stream",
+            "--output",
+            "json",
+        ],
+    );
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("validated checkpoint"));
+    let runs = std::fs::read_dir(workspace.path().join(".pactrail/runs"))
+        .unwrap_or_else(|e| unreachable!("runs: {e}"));
+    let run_id = runs
+        .filter_map(Result::ok)
+        .find(|e| e.path().is_dir())
+        .unwrap_or_else(|| unreachable!("run"))
+        .file_name()
+        .to_string_lossy()
+        .into_owned();
+    let resumed = pactrail(workspace.path(), ["resume", &run_id, "--output", "json"]);
+    assert!(
+        resumed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&resumed.stderr)
+    );
+    let result: Value =
+        serde_json::from_slice(&resumed.stdout).unwrap_or_else(|e| unreachable!("json: {e}"));
+    assert_eq!(result["run_id"], run_id);
+    assert_eq!(result["outcome"], "answered");
+    server.join().unwrap_or_else(|_| unreachable!("server"));
+}
+
+#[test]
 fn mcp_offline_lifecycle_is_scriptable_and_fails_closed() {
     let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
 

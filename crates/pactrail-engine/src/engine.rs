@@ -52,6 +52,8 @@ const DEFAULT_MAX_TURNS: u16 = 24;
 const STALLED_TOOL_TURN_LIMIT: u16 = 3;
 const MAX_AUTOMATIC_REPAIR_CYCLES: u16 = 1;
 const MAX_PROACTIVE_VERIFICATION_ATTEMPTS: u16 = 2;
+const MAX_OUTPUT_LIMIT_RECOVERIES: u16 = 2;
+const OUTPUT_LIMIT_RECOVERY_ACTION: &str = "recover_output_limit";
 const MAX_MODEL_TOOL_RESULT_BYTES: usize = 256 * 1024;
 const MAX_REPAIR_DIAGNOSTIC_BYTES: usize = 24 * 1024;
 const MAX_VERIFICATION_STREAM_BYTES: usize = 12 * 1024;
@@ -587,7 +589,11 @@ impl<'a> RunEngine<'a> {
     ) -> Result<RunOutcome, EngineError> {
         contract.validate()?;
         let wall_time_seconds = contract.budget.wall_time_seconds;
-        let elapsed_active_ms = resume.as_ref().map_or(0, |value| value.elapsed_active_ms);
+        let failure_elapsed_ms = failed_model_elapsed_ms(store, run_id)?;
+        let elapsed_active_ms = resume
+            .as_ref()
+            .map_or(0, |value| value.elapsed_active_ms)
+            .saturating_add(failure_elapsed_ms);
         let wall_time_ms = wall_time_seconds.saturating_mul(1_000);
         let remaining_ms = wall_time_ms.saturating_sub(elapsed_active_ms);
         if remaining_ms == 0 {
@@ -778,10 +784,21 @@ impl<'a> RunEngine<'a> {
             } else {
                 self.resume_cost_spent(store, run_id, checkpoint.usage)?
             };
+            let recovering_failure = store.snapshot(run_id)?.state == RunState::Failed;
+            let failure_elapsed_ms = failed_model_elapsed_ms(store, run_id)?;
             let mut journal = Journal::resume(run_id, store)?;
+            if recovering_failure {
+                let mut failed = RunState::Failed;
+                transition(&mut journal, &mut failed, RunState::Executing, observer)?;
+            }
+            let recovery_notice = if recovering_failure {
+                "; failed provider call usage was not reported; completed tool effects are retained"
+            } else {
+                ""
+            };
             journal.append(RunEvent::NoteRecorded {
                 message: format!(
-                    "resumed from safe session checkpoint at model turn {}",
+                    "resumed from safe session checkpoint at model turn {}{recovery_notice}",
                     checkpoint.next_turn.saturating_add(1)
                 ),
             })?;
@@ -804,7 +821,9 @@ impl<'a> RunEngine<'a> {
                 Some(checkpoint.clone()),
                 checkpoint.next_turn,
                 checkpoint.phase,
-                checkpoint.elapsed_active_ms,
+                checkpoint
+                    .elapsed_active_ms
+                    .saturating_add(failure_elapsed_ms),
             )
         } else {
             let mut journal = Journal::new(run_id, store);
@@ -1147,7 +1166,23 @@ impl<'a> RunEngine<'a> {
             },
         )?;
 
+        let mut output_limit_recoveries = u16::try_from(
+            journal
+                .store
+                .snapshot(run_id)?
+                .actions
+                .iter()
+                .filter(|action| {
+                    action.actor == "controller" && action.action == OUTPUT_LIMIT_RECOVERY_ACTION
+                })
+                .count(),
+        )
+        .unwrap_or(u16::MAX);
         for turn in start_turn..max_turns {
+            let turn_output_tokens = runtime_profile
+                .turn_output_tokens
+                .saturating_mul(1_u64 << output_limit_recoveries.min(MAX_OUTPUT_LIMIT_RECOVERIES))
+                .min(model_capabilities.max_output_tokens);
             if resume_phase == ResumePhase::BeforeVerification {
                 break;
             }
@@ -1164,7 +1199,7 @@ impl<'a> RunEngine<'a> {
                 model_phase,
                 active_route,
                 controller.no_progress_turns(),
-                runtime_profile.turn_output_tokens,
+                turn_output_tokens,
                 contract.budget.cost_microusd,
                 cost_spent,
             )?;
@@ -1192,6 +1227,11 @@ impl<'a> RunEngine<'a> {
                 }))?;
             }
             active_route = route;
+            let turn_output_tokens = turn_output_tokens.min(
+                self.model
+                    .capabilities_for_route(model_phase, route)
+                    .max_output_tokens,
+            );
             let turn_native_tools = self
                 .model
                 .capabilities_for_route(model_phase, route)
@@ -1317,7 +1357,7 @@ impl<'a> RunEngine<'a> {
                 } else {
                     Vec::new()
                 },
-                max_output_tokens: runtime_profile.turn_output_tokens,
+                max_output_tokens: turn_output_tokens,
                 temperature: Some(0.0),
                 phase: Some(model_phase),
                 route,
@@ -1361,23 +1401,20 @@ impl<'a> RunEngine<'a> {
                         "provider emitted native tool calls despite a text-only request".to_owned(),
                     ));
                 }
-                let action = match parse_action(&response.text, turn) {
-                    Ok(action) => action,
-                    Err(message) => {
-                        transition(&mut journal, &mut state, RunState::Failed, observer)?;
-                        return Err(EngineError::Protocol(message));
+                // Never parse or execute a text-encoded action from a truncated response.
+                if response.finish_reason != FinishReason::Length {
+                    let action = match parse_action(&response.text, turn) {
+                        Ok(action) => action,
+                        Err(message) => {
+                            transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                            return Err(EngineError::Protocol(message));
+                        }
+                    };
+                    if let Some(action) = action {
+                        response.text.clear();
+                        response.tool_calls.push(action);
+                        response.finish_reason = FinishReason::ToolCalls;
                     }
-                };
-                if action.is_some() && response.finish_reason == FinishReason::Length {
-                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
-                    return Err(EngineError::Protocol(
-                        "text action was emitted by a length-truncated response".to_owned(),
-                    ));
-                }
-                if let Some(action) = action {
-                    response.text.clear();
-                    response.tool_calls.push(action);
-                    response.finish_reason = FinishReason::ToolCalls;
                 }
             }
             let model_duration_ms = elapsed_millis(model_started);
@@ -1410,14 +1447,15 @@ impl<'a> RunEngine<'a> {
                     return Err(error);
                 }
             };
-            if contract.budget.model_tokens != 0 && usage.total() > contract.budget.model_tokens {
-                transition(&mut journal, &mut state, RunState::Failed, observer)?;
-                return Err(EngineError::BudgetExceeded {
-                    used: usage.total(),
-                    limit: contract.budget.model_tokens,
-                });
-            }
             let mut model_attributes = BTreeMap::from([
+                (
+                    "requested_output_tokens".to_owned(),
+                    turn_output_tokens.to_string(),
+                ),
+                (
+                    "configured_output_ceiling".to_owned(),
+                    model_capabilities.max_output_tokens.to_string(),
+                ),
                 ("adapter".to_owned(), bounded_trace_value(self.model.name())),
                 (
                     "stream_mode".to_owned(),
@@ -1506,6 +1544,13 @@ impl<'a> RunEngine<'a> {
                 attributes: model_attributes,
             }))?;
 
+            if contract.budget.model_tokens != 0 && usage.total() > contract.budget.model_tokens {
+                transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                return Err(EngineError::BudgetExceeded {
+                    used: usage.total(),
+                    limit: contract.budget.model_tokens,
+                });
+            }
             if response.finish_reason == FinishReason::ContentFilter {
                 transition(&mut journal, &mut state, RunState::Failed, observer)?;
                 return Err(EngineError::Protocol(
@@ -1529,11 +1574,50 @@ impl<'a> RunEngine<'a> {
                         "model stopped for tool calls but returned none".to_owned(),
                     ));
                 }
-                if response.finish_reason == FinishReason::Length && response.text.is_empty() {
-                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
-                    return Err(EngineError::Protocol(
-                        "model exhausted output tokens without a result".to_owned(),
-                    ));
+                if response.finish_reason == FinishReason::Length {
+                    if output_limit_recoveries >= MAX_OUTPUT_LIMIT_RECOVERIES
+                        || turn.saturating_add(1) >= max_turns
+                    {
+                        transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                        return Err(EngineError::Protocol(format!(
+                            "model reached its {turn_output_tokens}-token output limit without a complete result; bounded recovery or remaining turns exhausted. Candidate files are preserved."
+                        )));
+                    }
+                    output_limit_recoveries += 1;
+                    let next_limit = runtime_profile
+                        .turn_output_tokens
+                        .saturating_mul(1_u64 << output_limit_recoveries)
+                        .min(model_capabilities.max_output_tokens);
+                    let reason = format!(
+                        "Output limit reached without a complete result; recovery {output_limit_recoveries}/{MAX_OUTPUT_LIMIT_RECOVERIES}, next request up to {next_limit} output tokens (configured ceiling {}).",
+                        model_capabilities.max_output_tokens
+                    );
+                    journal.append(RunEvent::ActionCompleted(ActionRecord {
+                        actor: "controller".to_owned(),
+                        action: OUTPUT_LIMIT_RECOVERY_ACTION.to_owned(),
+                        summary: reason.clone(),
+                        declared_effects: Vec::new(),
+                        observed_effects: Vec::new(),
+                        succeeded: false,
+                        duration_ms: 0,
+                        attributes: BTreeMap::from([
+                            ("turn".to_owned(), (turn + 1).to_string()),
+                            ("next_output_tokens".to_owned(), next_limit.to_string()),
+                        ]),
+                    }))?;
+                    observer.on_progress(&RunProgress::ControllerIntervened {
+                        turn: turn + 1,
+                        no_progress_turns: 0,
+                        reason,
+                    });
+                    if !response.text.is_empty() {
+                        conversation
+                            .push(ConversationItem::Message(Message::assistant(response.text)));
+                    }
+                    conversation.push(ConversationItem::Message(Message::system(
+                        "Pactrail output-limit recovery: your previous response was truncated or contained no usable answer/tool call. Preserve completed work. Take one small concrete step with a valid tool call, or provide a concise complete answer. Do not repeat investigation already recorded. Never claim tests ran unless supported by tool evidence."
+                    )));
+                    continue;
                 }
                 let candidate_changes = transaction.changes()?;
                 let candidate_digest = candidate_changes_digest(&candidate_changes);
@@ -1970,7 +2054,7 @@ impl<'a> RunEngine<'a> {
                                 max_turns,
                                 repeated_tool_turns,
                                 &reason,
-                                runtime_profile.turn_output_tokens,
+                                turn_output_tokens,
                             )
                             .await
                         {
@@ -3013,11 +3097,17 @@ impl RunEngine<'_> {
         let snapshot = events
             .snapshot(run_id)
             .map_err(|error| reject(error.to_string()))?;
-        if snapshot.state != RunState::Executing {
+        if !matches!(snapshot.state, RunState::Executing | RunState::Failed) {
             return Err(reject(format!(
-                "durable lifecycle is {:?}; only executing runs can resume",
+                "durable lifecycle is {:?}; only executing runs or checkpoint-bound failed model calls can resume",
                 snapshot.state
             )));
+        }
+        if snapshot.state == RunState::Failed && contract.budget.cost_microusd > 0 {
+            return Err(reject("failed provider call has unknown billed usage; cost-capped recovery requires billing reconciliation".to_owned()));
+        }
+        if !snapshot.pending_effects.is_empty() {
+            return Err(reject("unreconciled tool effects forbid resume".to_owned()));
         }
         let expected_contract =
             contract_digest(contract).map_err(|error| reject(error.to_string()))?;
@@ -4102,6 +4192,31 @@ fn compaction_action(report: &CompactionReport) -> ActionRecord {
     }
 }
 
+// Charge time spent in the failed invocation, but never idle time before
+// the user explicitly resumes. Checkpoint hashes remain untouched.
+fn failed_model_elapsed_ms(store: &EventStore, run_id: RunId) -> Result<u64, EngineError> {
+    let events = store.load(run_id)?;
+    let Some(last) = events.last() else {
+        return Ok(0);
+    };
+    if !matches!(
+        last.event,
+        RunEvent::StateChanged {
+            from: RunState::Executing,
+            to: RunState::Failed
+        }
+    ) {
+        return Ok(0);
+    }
+    let Some(checkpoint) = events.iter().rev().nth(1) else {
+        return Ok(0);
+    };
+    if !matches!(checkpoint.event, RunEvent::CheckpointCreated { .. }) {
+        return Ok(0);
+    }
+    Ok(u64::try_from((last.timestamp - checkpoint.timestamp).whole_milliseconds()).unwrap_or(0))
+}
+
 fn transition(
     journal: &mut Journal<'_>,
     state: &mut RunState,
@@ -4853,6 +4968,230 @@ mod tests {
         (source, control, transaction)
     }
 
+    fn limited_response(text: &str) -> ModelResponse {
+        ModelResponse {
+            text: text.to_owned(),
+            tool_calls: Vec::new(),
+            finish_reason: FinishReason::Length,
+            usage: Usage {
+                input_tokens: 10,
+                output_tokens: 8,
+                ..Usage::default()
+            },
+            provider_request_id: None,
+            extensions: serde_json::Map::new(),
+        }
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)] // One fixture matrix verifies recovery, protocol modes, and budget stops.
+    async fn output_limit_recovery_is_bounded_accounted_and_ceiling_clamped() {
+        for (exhausted, token_budget, turn_limit, native_tools) in [
+            (false, 0, 8, true),
+            (true, 0, 8, true),
+            (false, 35, 8, true),
+            (false, 0, 1, true),
+            (false, 0, 8, false),
+        ] {
+            let source = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+            let control = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+            let transaction = WorkspaceTransaction::create(
+                source.path(),
+                control.path().join("run"),
+                &[".".to_owned()],
+            )
+            .unwrap_or_else(|e| unreachable!("{e}"));
+            let final_response = ModelResponse {
+                text: "A complete answer.".to_owned(),
+                tool_calls: Vec::new(),
+                finish_reason: FinishReason::Complete,
+                usage: Usage {
+                    input_tokens: 1,
+                    output_tokens: 2,
+                    ..Usage::default()
+                },
+                provider_request_id: None,
+                extensions: serde_json::Map::new(),
+            };
+            let model = InspectingModel {
+                responses: Mutex::new(VecDeque::from([
+                    limited_response(""),
+                    limited_response("{\"tool\":\"write_file\",\"arguments\":{\"path\":\"cut"),
+                    if exhausted || turn_limit == 1 {
+                        limited_response("")
+                    } else {
+                        final_response
+                    },
+                ])),
+                requests: Mutex::new(Vec::new()),
+                capabilities: ModelCapabilities {
+                    context_tokens: 262_144,
+                    max_output_tokens: 20_000,
+                    native_tools,
+                    ..ModelCapabilities::default()
+                },
+                non_investigation_capabilities: None,
+            };
+            let registry =
+                pactrail_tools::builtin_registry().unwrap_or_else(|e| unreachable!("{e}"));
+            let mut contract = TaskContract::new("Explain this repository", ".");
+            contract.permissions.allow.insert(Capability::FileRead);
+            contract.budget.model_tokens = token_budget;
+            let policy = PolicyEngine::new(contract.permissions.clone());
+            let mut store = EventStore::open_in_memory().unwrap_or_else(|e| unreachable!("{e}"));
+            let run_id = RunId::new();
+            let result = RunEngine::new(&model, &registry, &policy)
+                .with_max_turns(turn_limit)
+                .execute_with_id(run_id, contract, &transaction, &mut store)
+                .await;
+            if exhausted || turn_limit == 1 {
+                assert!(matches!(result, Err(EngineError::Protocol(_))));
+            } else if token_budget > 0 {
+                assert!(matches!(result, Err(EngineError::BudgetExceeded { .. })));
+            } else {
+                let outcome = result.unwrap_or_else(|e| unreachable!("{e}"));
+                assert_eq!(outcome.usage.total(), 39);
+                assert_eq!(outcome.receipt.outcome, ReceiptOutcome::Answered);
+            }
+            let requests = model
+                .requests
+                .lock()
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            assert_eq!(
+                requests
+                    .iter()
+                    .map(|r| r.max_output_tokens)
+                    .collect::<Vec<_>>(),
+                if turn_limit == 1 {
+                    vec![8_192]
+                } else if token_budget > 0 {
+                    vec![8_192, 16_384]
+                } else {
+                    vec![8_192, 16_384, 20_000]
+                }
+            );
+            let snapshot = store
+                .snapshot(run_id)
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            assert_eq!(
+                snapshot
+                    .actions
+                    .iter()
+                    .filter(|a| a.action == OUTPUT_LIMIT_RECOVERY_ACTION)
+                    .count(),
+                if turn_limit == 1 {
+                    0
+                } else if token_budget > 0 {
+                    1
+                } else {
+                    2
+                }
+            );
+            assert!(
+                snapshot
+                    .actions
+                    .iter()
+                    .all(|a| !a.actor.starts_with("tool:"))
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn output_limit_recovery_allowance_survives_checkpoint_resume() {
+        let source = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let control = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        let checkpoints = CheckpointStore::open(control.path().join("checkpoints"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let capabilities = ModelCapabilities {
+            context_tokens: 262_144,
+            max_output_tokens: 20_000,
+            ..ModelCapabilities::default()
+        };
+        let suspended = SuspendAfterScriptModel {
+            script: ScriptedModel {
+                name: "inspecting".to_owned(),
+                model: "controller-test".to_owned(),
+                responses: Mutex::new(VecDeque::from([limited_response("")])),
+                capabilities: capabilities.clone(),
+            },
+        };
+        let registry = pactrail_tools::builtin_registry().unwrap_or_else(|e| unreachable!("{e}"));
+        let mut contract = TaskContract::new("Explain this repository", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let mut store = EventStore::open_in_memory().unwrap_or_else(|e| unreachable!("{e}"));
+        let run_id = RunId::new();
+        let engine = RunEngine::new(&suspended, &registry, &policy)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints);
+        assert!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(300),
+                engine.execute_inner(
+                    run_id,
+                    contract.clone(),
+                    &transaction,
+                    &mut store,
+                    &SilentRunObserver,
+                    None
+                )
+            )
+            .await
+            .is_err()
+        );
+        let checkpoint = checkpoints
+            .load_head(&store, run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(checkpoint.usage.total(), 18);
+        let resumed = InspectingModel {
+            responses: Mutex::new(VecDeque::from([limited_response(""), limited_response("")])),
+            requests: Mutex::new(Vec::new()),
+            capabilities,
+            non_investigation_capabilities: None,
+        };
+        let result = RunEngine::new(&resumed, &registry, &policy)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints)
+            .resume(run_id, contract, &transaction, &mut store, checkpoint)
+            .await;
+        assert!(matches!(result, Err(EngineError::Protocol(_))));
+        assert_eq!(
+            resumed
+                .requests
+                .lock()
+                .unwrap_or_else(|e| unreachable!("{e}"))
+                .iter()
+                .map(|r| r.max_output_tokens)
+                .collect::<Vec<_>>(),
+            vec![16_384, 20_000]
+        );
+        let snapshot = store
+            .snapshot(run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            snapshot
+                .actions
+                .iter()
+                .filter(|a| a.action == OUTPUT_LIMIT_RECOVERY_ACTION)
+                .count(),
+            2
+        );
+        assert_eq!(
+            snapshot
+                .actions
+                .iter()
+                .filter(|a| a.action == "invoke")
+                .count(),
+            3
+        );
+    }
+
     #[tokio::test]
     async fn completion_audit_can_repair_a_second_path_without_fabricating_evidence() {
         let reply = || ModelResponse {
@@ -5000,6 +5339,161 @@ mod tests {
             capabilities: ModelCapabilities::default(),
             responses: Mutex::new(VecDeque::from([reply()])),
         };
+        let outcome = RunEngine::new(&resumed, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints)
+            .resume(run_id, contract, &transaction, &mut store, checkpoint)
+            .await
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(outcome.receipt.outcome, ReceiptOutcome::ReadyToApply);
+        let snapshot = store
+            .snapshot(run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            snapshot
+                .actions
+                .iter()
+                .filter(|a| a.action == crate::completion::AUDIT_ACTION)
+                .count(),
+            1
+        );
+        assert_eq!(
+            snapshot
+                .actions
+                .iter()
+                .filter(|a| a.actor == "tool:write_file")
+                .count(),
+            1
+        );
+        assert!(!source.path().join("a.txt").exists());
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)] // Full recovery scenario includes identity and billing rejection gates.
+    async fn failed_model_boundary_resumes_without_replaying_completed_tools() {
+        let reply = || ModelResponse {
+            text: "The change is complete.".to_owned(),
+            tool_calls: Vec::new(),
+            finish_reason: FinishReason::Complete,
+            usage: Usage::default(),
+            provider_request_id: None,
+            extensions: serde_json::Map::new(),
+        };
+        let suspended = SuspendAfterScriptModel {
+            script: ScriptedModel {
+                name: "scripted".to_owned(),
+                model: "audit-resume".to_owned(),
+                capabilities: ModelCapabilities::default(),
+                responses: Mutex::new(VecDeque::from([
+                    tool_response(
+                        "write-once",
+                        "write_file",
+                        json!({"path":"a.txt", "content":"fixed"}),
+                    ),
+                    reply(),
+                ])),
+            },
+        };
+        let source = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let control = tempfile::tempdir().unwrap_or_else(|e| unreachable!("{e}"));
+        let transaction = WorkspaceTransaction::create(
+            source.path(),
+            control.path().join("run"),
+            &[".".to_owned()],
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        let checkpoints = CheckpointStore::open(control.path().join("checkpoints"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let registry = pactrail_tools::builtin_registry().unwrap_or_else(|e| unreachable!("{e}"));
+        let mut contract = TaskContract::new("Fix a.txt", ".");
+        contract.permissions.allow.insert(Capability::FileRead);
+        contract.permissions.allow.insert(Capability::FileWrite);
+        let policy = PolicyEngine::new(contract.permissions.clone());
+        let mut store = EventStore::open_in_memory().unwrap_or_else(|e| unreachable!("{e}"));
+        let run_id = RunId::new();
+        let engine = RunEngine::new(&suspended, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints);
+        let interrupted = tokio::time::timeout(
+            std::time::Duration::from_millis(300),
+            engine.execute_inner(
+                run_id,
+                contract.clone(),
+                &transaction,
+                &mut store,
+                &SilentRunObserver,
+                None,
+            ),
+        )
+        .await;
+        assert!(interrupted.is_err());
+        let checkpoint = checkpoints
+            .load_head(&store, run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(checkpoint.phase, ResumePhase::BeforeModel);
+        assert_eq!(checkpoint.next_turn, 2);
+        let next = store
+            .load(run_id)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .last()
+            .unwrap_or_else(|| unreachable!("head"))
+            .sequence
+            + 1;
+        store
+            .append(
+                run_id,
+                next,
+                RunEvent::StateChanged {
+                    from: RunState::Executing,
+                    to: RunState::Failed,
+                },
+            )
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            checkpoints.load_head(&store, run_id).ok(),
+            Some(checkpoint.clone())
+        );
+        let resumed = ScriptedModel {
+            name: "scripted".to_owned(),
+            model: "audit-resume".to_owned(),
+            capabilities: ModelCapabilities::default(),
+            responses: Mutex::new(VecDeque::from([reply()])),
+        };
+        fs::write(transaction.workspace_root().join("a.txt"), "tampered")
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let rejected = RunEngine::new(&resumed, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints)
+            .resume(
+                run_id,
+                contract.clone(),
+                &transaction,
+                &mut store,
+                checkpoint.clone(),
+            )
+            .await;
+        assert!(matches!(rejected, Err(EngineError::ResumeRejected(_))));
+        fs::write(transaction.workspace_root().join("a.txt"), "fixed")
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let mut capped = contract.clone();
+        capped.budget.cost_microusd = 1;
+        let rejected = RunEngine::new(&resumed, &registry, &policy)
+            .with_completion_audit(true)
+            .with_max_turns(8)
+            .with_checkpoint_store(&checkpoints)
+            .validate_resume_checkpoint(
+                run_id,
+                &capped,
+                &transaction,
+                &store,
+                &registry.descriptors(),
+                &checkpoint,
+                8,
+            );
+        assert!(matches!(rejected, Err(EngineError::ResumeRejected(_))));
         let outcome = RunEngine::new(&resumed, &registry, &policy)
             .with_completion_audit(true)
             .with_max_turns(8)

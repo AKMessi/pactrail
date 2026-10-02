@@ -44,7 +44,7 @@ pub enum Command {
     },
     /// Execute a task in an isolated transaction.
     Run(Box<RunArgs>),
-    /// Continue an interrupted run from its latest safe checkpoint.
+    /// Continue an interrupted or recoverable failed run from a validated checkpoint.
     Resume(ResumeArgs),
     /// Probe positive model capabilities without executing returned tools.
     Probe(ProbeArgs),

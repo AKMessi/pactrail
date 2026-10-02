@@ -140,14 +140,28 @@ impl OpenAiCompatibleDriver {
         )
     }
 
-    async fn send(&self, body: &Value) -> Result<(Value, Option<String>), ModelError> {
+    async fn send(
+        &self,
+        body: &Value,
+        validate_completion: bool,
+    ) -> Result<(Value, Option<String>), ModelError> {
         let mut attempt = 0_u32;
         loop {
             let mut request = self.client.post(self.endpoint()).json(body);
             if let Some(api_key) = &self.config.api_key {
                 request = request.bearer_auth(api_key.expose_secret());
             }
-            let response = request.send().await.map_err(ModelError::Transport)?;
+            let response = match request.send().await {
+                Ok(response) => response,
+                Err(error)
+                    if (error.is_timeout() || error.is_connect()) && attempt < MAX_RETRIES =>
+                {
+                    attempt += 1;
+                    tokio::time::sleep(Duration::from_millis(250 * u64::from(attempt))).await;
+                    continue;
+                }
+                Err(error) => return Err(ModelError::Transport(error)),
+            };
             let status = response.status();
             let request_id = response
                 .headers()
@@ -156,9 +170,44 @@ impl OpenAiCompatibleDriver {
                 .map(str::to_owned);
             let server_retry_after = parse_retry_after(response.headers(), SystemTime::now());
             let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
-            let bytes = read_bounded(response, MAX_RESPONSE_BYTES).await?;
+            let bytes = match read_bounded(response, MAX_RESPONSE_BYTES).await {
+                Ok(bytes) => bytes,
+                Err(ModelError::Transport(_error))
+                    if status.is_success() && attempt < MAX_RETRIES =>
+                {
+                    attempt += 1;
+                    warn!(attempt, "retrying incomplete model response body");
+                    tokio::time::sleep(Duration::from_millis(250 * u64::from(attempt))).await;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
             if status.is_success() {
-                let value = serde_json::from_slice(&bytes).map_err(ModelError::Json)?;
+                let value = match serde_json::from_slice(&bytes) {
+                    Ok(value) => value,
+                    Err(error) if error.is_eof() && attempt < MAX_RETRIES => {
+                        attempt += 1;
+                        warn!(attempt, "retrying truncated model response JSON");
+                        tokio::time::sleep(Duration::from_millis(250 * u64::from(attempt))).await;
+                        continue;
+                    }
+                    Err(error) => return Err(ModelError::Json(error)),
+                };
+                // Tool argument JSON is encoded inside the outer response. A
+                // truncated call must be rejected before ANY tool is admitted.
+                if validate_completion
+                    && let Err(error) = parse_response(&value, request_id.clone())
+                {
+                    if matches!(&error, ModelError::Json(json_error) if json_error.is_eof())
+                        && attempt < MAX_RETRIES
+                    {
+                        attempt += 1;
+                        warn!(attempt, "retrying truncated model tool arguments");
+                        tokio::time::sleep(Duration::from_millis(250 * u64::from(attempt))).await;
+                        continue;
+                    }
+                    return Err(error);
+                }
                 return Ok((value, request_id));
             }
             let message = provider_message(&bytes);
@@ -281,7 +330,7 @@ impl ModelDriver for OpenAiCompatibleDriver {
 
     async fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelError> {
         let body = request_body(&self.config, request, false)?;
-        let (response, request_id) = self.send(&body).await?;
+        let (response, request_id) = self.send(&body, true).await?;
         parse_response(&response, request_id)
     }
 
@@ -1543,6 +1592,82 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn truncated_json_is_retried_but_permanent_invalid_json_is_not() {
+        for (bad, count, succeeds, short_body, status) in [
+            ("{\"text\":\"cut", 2, true, false, "200 OK"),
+            ("{broken}", 1, false, false, "200 OK"),
+            ("{\"text\":\"cut", 4, false, false, "200 OK"),
+            ("{\"text\":\"cut", 2, true, true, "200 OK"),
+            ("{\"error\":\"cut", 1, false, true, "401 Unauthorized"),
+        ] {
+            use std::{io::Write, net::TcpListener};
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
+            let address = listener
+                .local_addr()
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            let server = std::thread::spawn(move || -> std::io::Result<()> {
+                for i in 0..count {
+                    let (mut stream, _) = listener.accept()?;
+                    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+                    read_http_request(&mut stream)?;
+                    let body = if succeeds && i == count - 1 {
+                        "{\"ok\":true}"
+                    } else {
+                        bad
+                    };
+                    let body_length =
+                        body.len() + usize::from(short_body && !(succeeds && i == count - 1)) * 100;
+                    write!(
+                        stream,
+                        "HTTP/1.1 {status}\r\nContent-Length: {body_length}\r\nConnection: close\r\n\r\n{body}"
+                    )?;
+                }
+                Ok(())
+            });
+            let driver = OpenAiCompatibleDriver::new(config(&format!("http://{address}/v1")))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            let result = driver.send(&json!({}), false).await;
+            assert_eq!(result.is_ok(), succeeds);
+            assert!(matches!(server.join(), Ok(Ok(()))));
+        }
+    }
+
+    #[tokio::test]
+    async fn truncated_tool_arguments_retry_before_returning_any_calls() {
+        use std::{io::Write, net::TcpListener};
+        for exhausted in [false, true] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
+            let address = listener
+                .local_addr()
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            let server = std::thread::spawn(move || -> std::io::Result<()> {
+                for i in 0..if exhausted { 4 } else { 2 } {
+                    let (mut stream, _) = listener.accept()?;
+                    stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+                    read_http_request(&mut stream)?;
+                    let arguments = if !exhausted && i == 1 {
+                        "{\"path\":\"a.txt\"}"
+                    } else {
+                        "{\"path\":\"cut"
+                    };
+                    let body = json!({"choices":[{"message":{"content":"", "tool_calls":[{"id":"call-1","type":"function","function":{"name":"read_file","arguments":arguments}}]},"finish_reason":"tool_calls"}]}).to_string();
+                    write!(
+                        stream,
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )?;
+                }
+                Ok(())
+            });
+            let driver = OpenAiCompatibleDriver::new(config(&format!("http://{address}/v1")))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            let result = driver.send(&json!({}), true).await;
+            assert_eq!(result.is_ok(), !exhausted);
+            assert!(matches!(server.join(), Ok(Ok(()))));
+        }
+    }
+
+    #[tokio::test]
     async fn redirects_are_not_followed() {
         use std::{
             io::{Read, Write},
@@ -1568,7 +1693,7 @@ mod tests {
 
         let driver = OpenAiCompatibleDriver::new(config(&format!("http://{address}/v1")))
             .unwrap_or_else(|error| unreachable!("loopback endpoint must be valid: {error}"));
-        let result = driver.send(&json!({})).await;
+        let result = driver.send(&json!({}), false).await;
 
         assert!(matches!(
             result,
