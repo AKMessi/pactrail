@@ -13,6 +13,8 @@ follow [Semantic Versioning](https://semver.org/).
 - Give live execution and process approval one coordinated terminal input owner.
   Type-ahead survives streaming and completion; Enter retains a draft without
   dispatching. Ctrl-C stops cooperatively and preserves the draft.
+- Keep Unix plain prompts and confirmations interruptible after model execution
+  installs its signal handler, using one cancellable stdin readiness wait.
 - Add cursor-free `TERM=dumb`/`PACTRAIL_PLAIN=1` line mode and explicit `/dispatch`
   for loaded drafts. Keep confirmation defaults at cancel/deny.
 - Require a freshly displayed challenge for cursor-mode process approval so

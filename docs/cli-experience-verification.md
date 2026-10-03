@@ -2,11 +2,12 @@
 
 ## V2 running-input verification — October 3, 2026
 
-The real debug binary passed the expanded 41-scenario terminal suite using a
+The real debug binary passed the expanded 42-scenario terminal suite using a
 loopback provider and disposable workspaces. This includes type-ahead/caret
 preservation, explicit-only next-task dispatch, cooperative stop with retained
 Unicode drafts, denied buffered approval, fresh per-request consent, SIGINT at
-approval and live resize from 32 to 100 columns. Plain
+approval and live resize from 32 to 100 columns. Unix plain Ctrl-C cancels both
+the post-run prompt and Apply confirmation. Plain
 and dumb captures contain no terminal control sequences; Apply remains guarded.
 
 Eight real browser-engine workflows also passed: dispatch/answer, guarded

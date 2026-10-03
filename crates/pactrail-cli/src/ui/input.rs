@@ -28,6 +28,49 @@ pub(crate) fn read_line(reader: impl BufRead) -> io::Result<Signal> {
     ))
 }
 
+/// Canonical line input with a cancellable readiness wait; never create a second reader.
+#[cfg(unix)]
+pub(crate) fn read_terminal_line() -> io::Result<Signal> {
+    use nix::poll::{PollFd, PollFlags, poll};
+    use std::os::fd::AsFd;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let mut interrupts = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let flag = Arc::clone(&interrupted);
+    let listener = tokio::spawn(async move {
+        if interrupts.recv().await.is_some() {
+            flag.store(true, Ordering::Release);
+        }
+    });
+    let stdin = io::stdin();
+    let result = (|| {
+        let mut descriptors = [PollFd::new(stdin.as_fd(), PollFlags::POLLIN)];
+        loop {
+            if interrupted.load(Ordering::Acquire) {
+                return Ok(Signal::CtrlC);
+            }
+            match poll(&mut descriptors, 50_u16) {
+                Ok(0) | Err(nix::errno::Errno::EINTR) => {}
+                Err(error) => return Err(io::Error::other(error)),
+                Ok(_) => {
+                    if interrupted.load(Ordering::Acquire) {
+                        return Ok(Signal::CtrlC);
+                    }
+                    return read_line(stdin.lock());
+                }
+            }
+        }
+    })();
+    listener.abort();
+    result
+}
+
+#[cfg(not(unix))]
+pub(crate) fn read_terminal_line() -> io::Result<Signal> {
+    read_line(io::stdin().lock())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

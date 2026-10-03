@@ -288,6 +288,7 @@ try:
     assert '\x1b' not in dumb.capture.text, 'dumb mode emitted terminal control sequences'
     plain=Terminal(width=80,name='plain',plain=True);terminals.append(plain)
     plain.command('Explain this repository', '◇ Answered')
+    plain.child.send('\x03');plain.expect('Input cancelled');plain.expect('pactrail ❯')
     plain.command('/retry','Previous task restored')
     before_plain=len(list((plain.workspace/'.pactrail/runs').glob('*/run.json')))
     plain.command('/dispatch', '◇ Answered')
@@ -296,6 +297,9 @@ try:
     plain.command('Create candidate.md','◇ Awaiting review')
     plain.child.sendline('/apply');plain.expect(r'Confirm \(default: cancel\) >')
     plain.child.sendline('');plain.expect('Apply cancelled');plain.expect('pactrail ❯')
+    assert not (plain.workspace/'candidate.md').exists()
+    plain.child.sendline('/apply');plain.expect(r'Confirm \(default: cancel\) >')
+    plain.child.send('\x03');plain.expect('Apply cancelled');plain.expect('pactrail ❯')
     assert not (plain.workspace/'candidate.md').exists()
     plain.child.sendline('/apply');plain.expect(r'Confirm \(default: cancel\) >')
     plain.child.sendline('apply');plain.expect('Applied');plain.expect('pactrail ❯')
@@ -315,7 +319,7 @@ try:
         colored.capture.snapshot('color-'+str(width)+'-review')
         colored.close()
         assert re.search(r'\x1b\[(?:3[0-7]|9[0-7])m',colored.capture.text), 'color terminal missing palette'
-    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/100/120/160 column startup','type-ahead preserves paste and caret without dispatch','Enter during execution saves instead of dispatching','Ctrl-C stops and preserves the draft','buffered draft cannot grant process approval','fresh process consent keeps changes isolated','SIGINT during approval stops without granting authority','live resize preserves Unicode draft','cursor-free TERM=dumb','plain draft dispatch and guarded apply','ASCII composer and outcome','NO_COLOR','colored startup, answer and review at 40/100 columns','simultaneous sessions cannot redirect continue'],'artifacts':str(OUT)},indent=2))
+    (OUT/'results.json').write_text(json.dumps({'passed':['continue without history','pending candidate continue does not dispatch or apply','completed follow-up preserves contract','applied follow-up can answer without redundant edits','plain continue after provider failure and restart keeps run ID','forget local context and refuse ambiguous task selection','bracketed paste without dispatch','workspace draft save/restore/remove','draft and retry after restart','fuzzy command completion','run search by goal','task path completion','multiline dispatch','answer','draft retry','evidence','apply default cancel','apply incorrect acknowledgment cancel','explicit apply','discard default cancel','explicit discard','run focus','less pager return','command palette','Tab completion','task file draft','external editor draft','32/40/60/80/100/120/160 column startup','type-ahead preserves paste and caret without dispatch','Enter during execution saves instead of dispatching','Ctrl-C stops and preserves the draft','buffered draft cannot grant process approval','fresh process consent keeps changes isolated','SIGINT during approval stops without granting authority','live resize preserves Unicode draft','cursor-free TERM=dumb','plain draft dispatch and guarded apply','plain Ctrl-C cancels after a run and at Apply confirmation','ASCII composer and outcome','NO_COLOR','colored startup, answer and review at 40/100 columns','simultaneous sessions cannot redirect continue'],'artifacts':str(OUT)},indent=2))
     print((OUT/'results.json').read_text())
 finally:
     for t in terminals:

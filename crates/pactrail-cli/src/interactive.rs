@@ -4067,7 +4067,7 @@ impl Session {
             return self.editor.read_line(prompt);
         }
         write_human_stdout(&format!("{} > ", prompt.left))?;
-        crate::ui::input::read_line(std::io::stdin().lock())
+        crate::ui::input::read_terminal_line()
     }
 
     fn restore_draft(&mut self, text: &str) {
@@ -4095,7 +4095,7 @@ impl Session {
         };
         if self.plain {
             self.emit("Confirm (default: cancel) > ")?;
-            return crate::ui::input::read_line(std::io::stdin().lock())
+            return crate::ui::input::read_terminal_line()
                 .map(|signal| matches!(signal, Signal::Success(text) if text.trim() == expected))
                 .map_err(|error| CliError::Argument(format!("confirmation failed: {error}")));
         }
