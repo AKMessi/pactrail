@@ -101,11 +101,11 @@ shipped architecture change or a measured victory over other harnesses.
 
 ## V2 guided model setup verification
 
-The real-binary onboarding suite is `devtools/check_model_setup.py`. Twelve
+The real-binary onboarding suite is `devtools/check_model_setup.py`. Thirteen
 scenario groups passed with disposable workspaces, a loopback catalog and local
 model fixture: hidden entry/private storage; saved-key restart; endpoint mismatch
 before requests; secret-free browser defaults; cancelled and accepted key
-replacement; setup cancellation; hidden-input Ctrl-C; retained first tasks;
+replacement; setup cancellation; hidden-input and in-flight discovery Ctrl-C; retained first tasks;
 explicit .env consent; unauthenticated compatible endpoints; and key removal.
 No hosted inference or paid model calls were used.
 

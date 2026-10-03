@@ -395,7 +395,15 @@ pub(crate) async fn configure(
         }
     }
     say("Looking for models (up to 8 seconds)…\n")?;
-    let models = if let Ok(models) = crate::interactive::available_models(&settings).await {
+    let discovery = tokio::select! {
+        result = crate::interactive::available_models(&settings) => result,
+        signal = tokio::signal::ctrl_c() => {
+            signal.map_err(error)?;
+            say("Setup cancelled during model discovery. Existing settings and stored keys are unchanged.\n")?;
+            return Ok(false);
+        }
+    };
+    let models = if let Ok(models) = discovery {
         models
     } else {
         say(

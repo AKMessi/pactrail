@@ -11,11 +11,14 @@ namespace = {}
 fixture = (ROOT/'crates/pactrail-cli/web/tests/model-fixture.py').read_text()
 exec(compile(fixture.split("ThreadingHTTPServer(('127.0.0.1',4190)")[0], 'local-model-fixture', 'exec'), namespace)
 auth = []
+slow_catalog = threading.Event()
 class Handler(namespace['Handler']):
     def do_GET(self):
+        if slow_catalog.is_set(): time.sleep(4)
         auth.append(self.headers.get('Authorization'))
         self.send_response(200); self.send_header('Content-Type','application/json'); self.end_headers()
-        self.wfile.write(json.dumps({'data':[{'id':'fixture-read'},{'id':'fixture-edit'}]}).encode())
+        try: self.wfile.write(json.dumps({'data':[{'id':'fixture-read'},{'id':'fixture-edit'}]}).encode())
+        except (BrokenPipeError, ConnectionResetError): pass
     def do_POST(self):
         auth.append(self.headers.get('Authorization'))
         super().do_POST()
@@ -92,6 +95,12 @@ with tempfile.TemporaryDirectory(prefix='pactrail-setup-qa-') as directory:
     child=spawn(); child.expect('Provider'); child.sendcontrol('c'); child.expect(pexpect.EOF)
     assert (config/'settings.toml').read_bytes()==previous
     passed.append('cancel preserves prior configuration')
+    slow_catalog.set()
+    child=spawn(); begin(child); child.expect('Looking for models'); time.sleep(.2); child.sendcontrol('c')
+    child.expect('Setup cancelled during model discovery',timeout=2); child.expect(pexpect.EOF)
+    slow_catalog.clear()
+    assert (config/'settings.toml').read_bytes()==previous
+    passed.append('Ctrl-C cancels an in-flight catalog request promptly without changing configuration')
     # A fresh config exercises secret-prompt cancellation, including echo restoration.
     fresh=root/'fresh'; env['PACTRAIL_CONFIG_DIR']=str(fresh)
     child=spawn(); begin(child); child.expect('Paste API key'); time.sleep(.15); child.sendcontrol('c'); child.expect(pexpect.EOF)
