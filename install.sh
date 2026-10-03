@@ -45,7 +45,8 @@ else
 fi
 
 temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/pactrail-install.XXXXXX")
-trap 'rm -rf "$temporary_dir"' EXIT HUP INT TERM
+staged_binary=""
+trap 'rm -rf "$temporary_dir"; if [ -n "$staged_binary" ]; then rm -f "$staged_binary"; fi' EXIT HUP INT TERM
 archive="${temporary_dir}/${asset}"
 checksums="${temporary_dir}/SHA256SUMS"
 
@@ -85,15 +86,20 @@ mkdir -p "$unpack_dir"
 tar -xzf "$archive" -C "$unpack_dir"
 [ -f "${unpack_dir}/pactrail" ] || fail "release archive does not contain pactrail"
 
-mkdir -p "$install_dir"
-if command -v install >/dev/null 2>&1; then
-    install -m 0755 "${unpack_dir}/pactrail" "${install_dir}/pactrail"
-else
-    cp "${unpack_dir}/pactrail" "${install_dir}/pactrail"
-    chmod 0755 "${install_dir}/pactrail"
+chmod 0755 "${unpack_dir}/pactrail"
+actual_version=$("${unpack_dir}/pactrail" --version) || fail "downloaded binary cannot run"
+if [ "$version" != "latest" ]; then
+    [ "$actual_version" = "pactrail ${version#v}" ] || fail "downloaded binary version does not match ${version}"
 fi
 
-printf 'Installed %s\n' "$("${install_dir}/pactrail" --version)"
+mkdir -p "$install_dir"
+staged_binary=$(mktemp "${install_dir}/.pactrail-install.XXXXXX")
+cp "${unpack_dir}/pactrail" "$staged_binary"
+chmod 0755 "$staged_binary"
+# Replace by rename: updating an executing binary must not truncate its inode.
+mv -f "$staged_binary" "${install_dir}/pactrail"
+staged_binary=""
+printf 'Installed %s\n' "$actual_version"
 case ":${PATH}:" in
     *":${install_dir}:"*) ;;
     *)

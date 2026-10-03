@@ -13,7 +13,8 @@ pub(crate) struct Theme {
 impl Theme {
     #[must_use]
     pub fn detect() -> Self {
-        let color = std::io::stdout().is_terminal()
+        let color = !crate::ui::input::plain_requested()
+            && std::io::stdout().is_terminal()
             && std::env::var_os("NO_COLOR").is_none()
             && std::env::var("TERM").map_or(true, |term| term != "dumb");
         Self {

@@ -165,9 +165,16 @@ benchmarks are a separate evaluation, not implied by local fixture passes.
   access/configuration, transient provider, budget, protocol, context, storage,
   workspace and unsafe-checkpoint failures. It does not claim saved byte counts
   or checkpoint eligibility that have not been checked.
-- The input-owner/type-ahead spike and a genuinely cursor-free plain input mode
-  remain separate work. Reedline has an external-break signal and optional
-  external-printer support, but integrating those requires coordinated approval
-  input and output ownership; merely enabling a feature is not a verified dock.
-- Remaining compatibility/crash gates and full engine/memory refinements are not
-  represented as shipped by the initial presentation changes.
+- M4 uses reedline external printing with a bounded engine-to-terminal channel.
+  One owner handles running input and approval. PTY regressions cover multiline
+  Unicode paste, caret retention, explicit-only dispatch, cooperative stop,
+  retained drafts and fresh approval challenges. Plain mode is cursor-free and
+  denies process prompts; it does not pretend to offer an interruptible editor.
+- M6–M9 retain the audited durable architecture instead of replacing its schemas.
+  Existing production tests cover interrupted/failed model boundaries, effect
+  fences, candidate drift, cost reservations, immutable budgets, compaction
+  checkpoint replay and historical memory/state readers. No new SQL store or
+  conversation authority tier is introduced.
+- M10 is the final release gate: exact-commit platform CI, dependency policy,
+  Docker containment, terminal workflows, historical readers, release build and
+  deterministic soak. Publication remains blocked until all required gates pass.

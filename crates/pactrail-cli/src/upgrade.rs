@@ -41,29 +41,10 @@ struct UpgradeReport {
 
 #[must_use]
 pub(crate) fn deprecation_manifest() -> DeprecationManifest {
-    let mut entries = vec![
-        DeprecationEntry {
-            id: "cli.run.allow_process",
-            surface: "pactrail run --allow-process",
-            deprecated_since: "0.4.0",
-            removal_version: "2.0.0",
-            replacement: "--process-backend native --process-approval allow-run",
-            rationale: "separate the host-execution boundary from approval authority",
-        },
-        DeprecationEntry {
-            id: "interactive.process_on",
-            surface: "/process on",
-            deprecated_since: "0.4.0",
-            removal_version: "2.0.0",
-            replacement: "/process native",
-            rationale: "name trusted host execution explicitly",
-        },
-    ];
-    entries.sort_unstable_by_key(|entry| entry.id);
     DeprecationManifest {
         manifest_schema: DEPRECATION_MANIFEST_SCHEMA,
         pactrail_version: env!("CARGO_PKG_VERSION"),
-        entries,
+        entries: Vec::new(),
     }
 }
 
@@ -144,7 +125,7 @@ mod tests {
     fn fixture_pins_the_deprecation_manifest() {
         let expected: serde_json::Value = serde_json::from_str(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/upgrade/deprecations-v1.json"
+            "/../../tests/fixtures/upgrade/deprecations-v2.json"
         )))
         .unwrap_or_else(|error| unreachable!("deprecation fixture: {error}"));
         let mut actual = serde_json::to_value(deprecation_manifest())

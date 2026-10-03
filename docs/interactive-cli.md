@@ -38,8 +38,22 @@ Failure reports keep the original engine error and add guidance for its class.
 Guidance never grants permissions, resets budgets or promises that a checkpoint
 is resumable. Local task memory is advisory; the engine validates all recovery.
 
-This phase retains reedline's existing input lifecycle. Type-ahead during a run,
-a cursor-free plain input mode and daemon detachment are not implemented.
+During execution, the running composer accepts the next draft. Enter retains it
+without dispatching; completion restores the draft and caret. Ctrl-C requests a
+cooperative stop and retains the draft. Ctrl-D requests stop and exits only after
+cleanup. Drafts are saved on explicit submit and execution boundaries, not on
+every keystroke. Closing the process is not daemon detachment.
+
+Process approval temporarily takes input ownership. The draft is restored after
+the decision. Type the freshly displayed `once <challenge>` or `run <challenge>`
+to approve the exact request; Enter denies. Buffered task text is not consent.
+
+`TERM=dumb` or `PACTRAIL_PLAIN=1` selects cursor-free line input. This mode
+requires a terminal, preserves scrollback, and has no live type-ahead editor.
+`/draft`, `/retry`, `/task` and `/editor` load a draft; `/dispatch` explicitly runs
+it. Process requests are denied in plain mode; use cursor mode for interruptible
+per-request approvals or explicitly configure a one-shot process policy. Use
+`pactrail run` for noninteractive automation.
 
 ## What the UI reports
 
@@ -327,7 +341,7 @@ native execution.
 `/process native` runs registered commands directly on the host. The child is
 not confined by an OS or container boundary and may reach host files, network,
 operational environment, or external services. Use it only for trusted
-repositories. `/process on` remains a deprecated alias for this mode.
+repositories. `/process on` is removed in v2; use `/process native`.
 
 Selecting a backend does not approve a command. When the model first requests a
 process, Pactrail shows its exact program, arguments, environment-variable names,

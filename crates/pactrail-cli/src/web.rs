@@ -689,12 +689,14 @@ async fn run_child(
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     let child = command.spawn().map_err(|e| e.to_string())?;
+    #[cfg(unix)]
     let child_id = child.id();
     let mut completion = Box::pin(child.wait_with_output());
     let output = tokio::select! {
         result = &mut completion => result.map_err(|e| e.to_string())?,
         _ = &mut cancel => {
             #[cfg(unix)]
+            {
             if let Some(id) = child_id {
                 // The CLI translates SIGINT into a cooperative cancellation
                 // event and writes an integrity-checked partial receipt.
@@ -706,12 +708,13 @@ async fn run_child(
                 )
                 .map_err(|error| format!("Could not signal run: {error}"))?;
             }
-            #[cfg(not(unix))]
-            return Err("Run cancelled".to_owned());
             tokio::time::timeout(std::time::Duration::from_mins(1), &mut completion)
                 .await
                 .map_err(|_| "Run did not stop within 60 seconds".to_owned())?
                 .map_err(|e| e.to_string())?
+            }
+            #[cfg(not(unix))]
+            return Err("Run process stopped; a partial receipt is not guaranteed on this platform".to_owned());
         },
     };
     if !output.status.success() {

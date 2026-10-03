@@ -465,6 +465,9 @@ pub(crate) async fn launch(
         followup_context: Vec::new(),
         pager: true,
         detailed: false,
+        plain: crate::ui::input::plain_requested(),
+        plain_draft: None,
+        control: SessionControl::Continue,
     };
     session.bootstrap().await?;
     if let Err(error) = session.restore_task_focus() {
@@ -490,11 +493,7 @@ pub(crate) async fn launch(
     session.run().await
 }
 
-fn session_editor(
-    history: FileBackedHistory,
-    completion_data: &Arc<Mutex<Vec<CompletionEntry>>>,
-    workspace: &Path,
-) -> Reedline {
+fn session_keys() -> reedline::Keybindings {
     let mut keys = default_emacs_keybindings();
     keys.add_binding(
         KeyModifiers::NONE,
@@ -540,6 +539,29 @@ fn session_editor(
         KeyCode::Char('o'),
         ReedlineEvent::ExecuteHostCommand("/run-picker".to_owned()),
     );
+    keys
+}
+
+fn running_keys() -> reedline::Keybindings {
+    let mut keys = session_keys();
+    keys.add_binding(
+        KeyModifiers::CONTROL,
+        KeyCode::Char('c'),
+        ReedlineEvent::ExecuteHostCommand("/stop-run".to_owned()),
+    );
+    keys.add_binding(
+        KeyModifiers::CONTROL,
+        KeyCode::Char('d'),
+        ReedlineEvent::ExecuteHostCommand("/exit-run".to_owned()),
+    );
+    keys
+}
+
+fn session_editor(
+    history: FileBackedHistory,
+    completion_data: &Arc<Mutex<Vec<CompletionEntry>>>,
+    workspace: &Path,
+) -> Reedline {
     Reedline::create()
         .use_bracketed_paste(true)
         .with_history(Box::new(history))
@@ -554,7 +576,7 @@ fn session_editor(
                 .with_max_completion_width(40)
                 .with_max_description_width(52),
         )))
-        .with_edit_mode(Box::new(Emacs::new(keys)))
+        .with_edit_mode(Box::new(Emacs::new(session_keys())))
         .with_ansi_colors(Theme::detect().has_color())
         .with_validator(Box::new(TaskValidator))
 }
@@ -580,6 +602,9 @@ struct Session {
     followup_context: Vec<pactrail_context::ContextFragment>,
     pager: bool,
     detailed: bool,
+    plain: bool,
+    plain_draft: Option<String>,
+    control: SessionControl,
 }
 
 #[derive(Clone, Copy)]
@@ -700,11 +725,16 @@ struct RunActivity {
     )>,
     started: Instant,
     detailed: bool,
+    terminal: Option<crate::ui::live::Sink>,
 }
 
 impl RunActivity {
     fn new(model: &str, theme: Theme, detailed: bool) -> Self {
-        let progress = ProgressBar::new_spinner();
+        let progress = if crate::ui::input::plain_requested() {
+            ProgressBar::hidden()
+        } else {
+            ProgressBar::new_spinner()
+        };
         let template = if theme.has_color() {
             "  {spinner:.cyan}  {msg}  {elapsed_precise}"
         } else {
@@ -740,6 +770,27 @@ impl RunActivity {
             task_context: None,
             started: Instant::now(),
             detailed,
+            terminal: None,
+        }
+    }
+
+    fn with_terminal(mut self, terminal: crate::ui::live::Sink) -> Self {
+        self.progress.finish_and_clear();
+        self.terminal = Some(terminal);
+        self
+    }
+
+    fn print_rows(&self, rows: Vec<String>) {
+        if let Some(terminal) = &self.terminal {
+            terminal.rows(&rows);
+        } else {
+            for line in rows {
+                if crate::ui::input::plain_requested() {
+                    let _ = write_human_stdout(&format!("{line}\n"));
+                } else {
+                    self.progress.println(line);
+                }
+            }
         }
     }
 
@@ -783,10 +834,12 @@ impl RunActivity {
     }
 
     fn set_message(&self, message: impl AsRef<str>) {
-        self.progress.set_message(truncate(
-            message.as_ref(),
-            content_width(terminal_columns(), 16, 160),
-        ));
+        let text = truncate(message.as_ref(), content_width(terminal_columns(), 16, 160));
+        if let Some(terminal) = &self.terminal {
+            terminal.set_operation(text);
+        } else {
+            self.progress.set_message(text);
+        }
     }
 
     fn row(&self, marker: &str, label: &str, detail: &str, tone: TimelineTone) {
@@ -797,7 +850,7 @@ impl RunActivity {
             return;
         }
 
-        for line in timeline_row(
+        self.print_rows(timeline_row(
             &self.theme,
             terminal_columns(),
             elapsed_millis(self.started),
@@ -805,9 +858,7 @@ impl RunActivity {
             label,
             detail,
             tone,
-        ) {
-            self.progress.println(line);
-        }
+        ));
     }
 
     fn with_task_context(
@@ -851,19 +902,22 @@ impl RunActivity {
         } = progress
         {
             self.persist_started_task(*run_id, goal);
-            self.progress.println(format!(
+            let mut rows = vec![format!(
                 "\n  {} {}",
                 self.theme.brand("Task"),
                 self.theme.code(&short_run_id(*run_id))
-            ));
-            for line in wrap_text(model, content_width(terminal_columns(), 4, 88)) {
-                self.progress
-                    .println(format!("    {}", self.theme.muted(&line)));
-            }
-            for line in wrap_text(goal, content_width(terminal_columns(), 4, 88)) {
-                self.progress
-                    .println(format!("    {}", self.theme.text(&line)));
-            }
+            )];
+            rows.extend(
+                wrap_text(model, content_width(terminal_columns(), 4, 88))
+                    .into_iter()
+                    .map(|line| format!("    {}", self.theme.muted(&line))),
+            );
+            rows.extend(
+                wrap_text(goal, content_width(terminal_columns(), 4, 88))
+                    .into_iter()
+                    .map(|line| format!("    {}", self.theme.text(&line))),
+            );
+            self.print_rows(rows);
         }
     }
 
@@ -1519,7 +1573,11 @@ impl RunObserver for RunActivity {
         if !std::io::stdin().is_terminal() {
             return ApprovalDecision::Deny;
         }
-        let decision = self.progress.suspend(|| prompt_for_approval(request));
+        let decision = if let Some(terminal) = &self.terminal {
+            terminal.approve(request.clone())
+        } else {
+            self.progress.suspend(|| prompt_for_approval(request))
+        };
         if decision == ApprovalDecision::AllowRun {
             let inserted = self
                 .run_approvals
@@ -1579,21 +1637,10 @@ fn prompt_for_approval(request: &ApprovalRequest) -> ApprovalDecision {
     lines.extend(crate::ui::note(
         &theme,
         columns,
-        "[o] allow once  [r] allow this exact request for this run  [d] deny. Enter denies.",
+        "Process approval is denied in plain line mode. Restart without PACTRAIL_PLAIN/TERM=dumb for interruptible interactive approval, or use an explicitly authorized one-shot process policy.",
     ));
-    let prompt = format!("{}\napproval {} ", lines.join("\n"), theme.symbol("❯"));
-    if write_human_stdout(&prompt).is_err() {
-        return ApprovalDecision::Deny;
-    }
-    let mut response = String::new();
-    if std::io::stdin().read_line(&mut response).is_err() {
-        return ApprovalDecision::Deny;
-    }
-    match response.trim().to_ascii_lowercase().as_str() {
-        "o" | "once" | "y" | "yes" => ApprovalDecision::AllowOnce,
-        "r" | "run" => ApprovalDecision::AllowRun,
-        _ => ApprovalDecision::Deny,
-    }
+    let _ = write_human_stdout(&format!("{}\n", lines.join("\n")));
+    ApprovalDecision::Deny
 }
 
 impl Session {
@@ -1614,6 +1661,9 @@ impl Session {
 
     async fn run(&mut self) -> Result<(), CliError> {
         loop {
+            if matches!(self.control, SessionControl::Exit) {
+                break;
+            }
             self.update_completions()?;
             let prompt = SessionPrompt::new(
                 self.settings.effective_model(),
@@ -1622,13 +1672,15 @@ impl Session {
                 &self.workspace,
                 &self.continuation_focus,
             );
-            match self.editor.read_line(&prompt) {
+            match self.read_input(&prompt) {
                 Ok(Signal::Success(line)) => {
                     let line = line.trim();
                     if line.is_empty() {
                         continue;
                     }
-                    if line == "?" {
+                    if line == "/dispatch" && self.plain {
+                        self.dispatch_plain_draft().await?;
+                    } else if line == "?" {
                         self.render_help("")?;
                     } else if line.eq_ignore_ascii_case("continue") {
                         if let Err(error) = self.continue_task("").await {
@@ -1706,6 +1758,16 @@ impl Session {
         ))
     }
 
+    async fn dispatch_plain_draft(&mut self) -> Result<(), CliError> {
+        if let Some(draft) = self.plain_draft.take() {
+            self.execute_goal(draft).await
+        } else {
+            self.render_error(
+                "No loaded draft. /draft or /task <path> loads one; /dispatch runs it.",
+            )
+        }
+    }
+
     fn handle_composer_command(
         &mut self,
         command: &str,
@@ -1716,12 +1778,15 @@ impl Session {
                 "" => {
                     let draft = self.composer.load("draft").map_err(|e| CliError::Argument(format!("Cannot restore draft: {e}")))?.ok_or_else(|| CliError::Argument("No saved draft for this workspace. Compose a task and press Ctrl+S to save it.".to_owned()))?;
                     self.restore_draft(&draft);
-                    self.emit("Saved draft restored. Edit before dispatching; Ctrl-C clears the composer only.\n")?;
+                    self.emit(if self.plain { "Saved draft restored. /dispatch runs it; /draft clear removes it.\n" } else { "Saved draft restored. Edit before dispatching; Ctrl-C clears the composer only.\n" })?;
                 }
                 "clear" => {
                     self.composer
                         .clear("draft")
                         .map_err(|e| CliError::Argument(format!("Cannot remove draft: {e}")))?;
+                    if self.plain {
+                        self.plain_draft = None;
+                    }
                     self.emit("Saved workspace draft removed.\n")?;
                 }
                 _ => return Err(CliError::Argument("usage: /draft [clear]".to_owned())),
@@ -1730,9 +1795,11 @@ impl Session {
                 let text = crate::terminal::edit_draft(arguments, &self.workspace)
                     .map_err(CliError::Argument)?;
                 self.restore_draft(&text);
-                self.emit(
-                    "Draft restored. Review it and press Enter to dispatch; Ctrl-C clears it.\n",
-                )?;
+                self.emit(if self.plain {
+                    "Draft restored. Review it; /dispatch runs it.\n"
+                } else {
+                    "Draft restored. Review it and press Enter to dispatch; Ctrl-C clears it.\n"
+                })?;
             }
             "/task" => {
                 let path = parse_image_path(arguments)?;
@@ -1743,7 +1810,11 @@ impl Session {
                 };
                 let text = crate::terminal::read_draft(&path).map_err(CliError::Argument)?;
                 self.restore_draft(&text);
-                self.emit("Task loaded into the composer. Enter dispatches; Ctrl-C clears it.\n")?;
+                self.emit(if self.plain {
+                    "Task loaded. /dispatch runs it.\n"
+                } else {
+                    "Task loaded into the composer. Enter dispatches; Ctrl-C clears it.\n"
+                })?;
             }
             "/retry" => {
                 let goal = self.last_goal.clone().ok_or_else(|| {
@@ -1848,6 +1919,7 @@ impl Session {
             "/diff" => self.render_diff(self.resolve_run(arguments)?)?,
             "/apply" => self.apply_run(self.resolve_run(arguments)?)?,
             "/discard" => self.discard_run(self.resolve_run(arguments)?)?,
+            "/clear" if self.plain => self.emit("Plain mode preserves terminal scrollback.\n")?,
             "/clear" => write_stdout("\u{1b}[2J\u{1b}[H").map_err(CliError::Output)?,
             "/quit" | "/exit" => return Ok(SessionControl::Exit),
             _ => {
@@ -1888,6 +1960,40 @@ impl Session {
         let contract_file = self.prepare_followup_contract(&mut args)?;
 
         let cancellation = CancellationToken::new();
+        if !self.plain {
+            let (terminal, receiver) = crate::ui::live::Sink::channel(cancellation.clone());
+            let activity = Arc::new(activity.with_terminal(terminal.clone()));
+            let observer = Arc::clone(&activity);
+            let workspace = self.workspace.clone();
+            let state = self.state.clone();
+            let token = cancellation.clone();
+            let context = std::mem::take(&mut self.followup_context);
+            let execution = async move {
+                let _contract_file = contract_file;
+                commands::execute_run_with_context(
+                    &workspace,
+                    Some(&state),
+                    args,
+                    observer.as_ref(),
+                    token,
+                    context,
+                )
+                .await
+            };
+            let result = self
+                .run_with_terminal(execution, &terminal, receiver, cancellation)
+                .await?;
+            activity.finish();
+            if result.as_ref().is_ok()
+                || result
+                    .as_ref()
+                    .err()
+                    .is_some_and(|error| error.run_id().is_some())
+            {
+                self.pending_images.clear();
+            }
+            return self.finish_run_activity(activity.as_ref(), result);
+        }
         let mut execution = Box::pin(commands::execute_run_with_context(
             &self.workspace,
             Some(&self.state),
@@ -2112,6 +2218,29 @@ impl Session {
             .with_task_context(self.composer.clone(), None);
         activity.set_message("validating checkpoint identity");
         let cancellation = CancellationToken::new();
+        if !self.plain {
+            let (terminal, receiver) = crate::ui::live::Sink::channel(cancellation.clone());
+            let activity = Arc::new(activity.with_terminal(terminal.clone()));
+            let observer = Arc::clone(&activity);
+            let workspace = self.workspace.clone();
+            let state = self.state.clone();
+            let token = cancellation.clone();
+            let execution = async move {
+                commands::execute_resume_with_observer_and_cancellation(
+                    &workspace,
+                    Some(&state),
+                    run_id,
+                    observer.as_ref(),
+                    token,
+                )
+                .await
+            };
+            let result = self
+                .run_with_terminal(execution, &terminal, receiver, cancellation)
+                .await?;
+            activity.finish();
+            return self.finish_run_activity(activity.as_ref(), result);
+        }
         let mut execution = Box::pin(commands::execute_resume_with_observer_and_cancellation(
             &self.workspace,
             Some(&self.state),
@@ -2139,6 +2268,286 @@ impl Session {
         drop(execution);
         activity.finish();
         self.finish_run_activity(&activity, result)
+    }
+
+    async fn run_with_terminal<F>(
+        &mut self,
+        execution: F,
+        terminal: &crate::ui::live::Sink,
+        receiver: std::sync::mpsc::Receiver<crate::ui::live::Message>,
+        cancellation: CancellationToken,
+    ) -> Result<Result<CompletedRun, CliError>, CliError>
+    where
+        F: Future<Output = Result<CompletedRun, CliError>> + Send + 'static,
+    {
+        let supervisor =
+            crate::ui::live::supervise(execution, terminal.clone(), cancellation.clone());
+        let editor = std::mem::replace(&mut self.editor, Reedline::create());
+        self.editor = editor
+            .with_break_signal(Arc::clone(&terminal.wake))
+            .with_external_printer(terminal.printer.clone())
+            .with_edit_mode(Box::new(Emacs::new(running_keys())));
+        let started = Instant::now();
+        let mut draft = String::new();
+        let mut saved = String::new();
+        let mut caret = 0;
+        let mut input_error = None;
+        let mut closing = false;
+        let mut finished = false;
+        while !finished {
+            while let Ok(message) = receiver.try_recv() {
+                match message {
+                    crate::ui::live::Message::Approval(request, reply) => {
+                        let decision = match self.handle_process_request(
+                            &request,
+                            &draft,
+                            caret,
+                            &cancellation,
+                        ) {
+                            Ok(decision) => decision,
+                            Err(error) => {
+                                input_error = Some(error);
+                                ApprovalDecision::Deny
+                            }
+                        };
+                        let _ = reply.send(decision);
+                    }
+                    crate::ui::live::Message::Finished => {
+                        finished = true;
+                        break;
+                    }
+                }
+            }
+            if input_error.is_some() || finished {
+                break;
+            }
+            if closing {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                continue;
+            }
+            let prompt = crate::ui::live::RunningPrompt {
+                terminal,
+                started,
+                backend: self.settings.process_backend,
+            };
+            let editor = std::mem::replace(&mut self.editor, Reedline::create());
+            self.editor = editor.with_break_signal(Arc::clone(&terminal.wake));
+            let signal = self.editor.read_line(&prompt);
+            match self.handle_running_input(signal, &mut draft, terminal) {
+                Ok(SessionControl::Continue) => {}
+                Ok(SessionControl::Exit) => {
+                    cancellation.cancel();
+                    closing = true;
+                    terminal.set_operation("Stopping; waiting for engine cleanup".to_owned());
+                }
+                Err(error) => {
+                    input_error = Some(error);
+                    break;
+                }
+            }
+            self.persist_live_draft(&draft, &mut saved, terminal);
+            self.restore_draft(&draft);
+            caret = self.editor.current_insertion_point();
+        }
+        // Release queued approval reply senders before waiting for cleanup.
+        drop(receiver);
+        if input_error.is_some() {
+            cancellation.cancel();
+        }
+        let result = supervisor
+            .await
+            .map_err(|error| CliError::Argument(format!("Engine supervision failed: {error}")));
+        let editor = std::mem::replace(&mut self.editor, Reedline::create());
+        self.editor = editor
+            .with_break_signal(Arc::new(std::sync::atomic::AtomicBool::new(false)))
+            .with_edit_mode(Box::new(Emacs::new(session_keys())));
+        if input_error.is_none() {
+            input_error = self.end_live_edit().err();
+        }
+        self.restore_draft_at(&draft, caret);
+        if let Some(error) = input_error {
+            return Err(error);
+        }
+        result
+    }
+
+    fn handle_running_input(
+        &mut self,
+        signal: std::io::Result<Signal>,
+        draft: &mut String,
+        terminal: &crate::ui::live::Sink,
+    ) -> Result<SessionControl, CliError> {
+        match signal {
+            Ok(Signal::ExternalBreak(buffer)) => *draft = buffer,
+            Ok(Signal::Success(buffer)) if matches!(buffer.trim(), "/stop" | "/quit" | "/exit") => {
+                if buffer.trim() != "/stop" {
+                    self.control = SessionControl::Exit;
+                }
+                self.emit("Stop requested. Waiting for engine cleanup.\n")?;
+                return Ok(SessionControl::Exit);
+            }
+            Ok(Signal::Success(buffer)) => {
+                *draft = buffer;
+                terminal.rows(&["Draft retained; it will not dispatch automatically.".to_owned()]);
+            }
+            Ok(Signal::CtrlC | Signal::CtrlD) => {
+                if matches!(signal, Ok(Signal::CtrlD)) {
+                    self.control = SessionControl::Exit;
+                }
+                self.emit("Stop requested. Waiting for engine cleanup.\n")?;
+                return Ok(SessionControl::Exit);
+            }
+            Ok(Signal::HostCommand(command))
+                if matches!(command.as_str(), "/stop-run" | "/exit-run") =>
+            {
+                self.editor.current_buffer_contents().clone_into(draft);
+                if command == "/exit-run" {
+                    self.control = SessionControl::Exit;
+                }
+                self.end_live_edit()?;
+                self.emit("Stop requested. Waiting for engine cleanup.\n")?;
+                return Ok(SessionControl::Exit);
+            }
+            Ok(Signal::HostCommand(_)) => {
+                self.editor.current_buffer_contents().clone_into(draft);
+                terminal.rows(&[
+                    "Editing shortcuts are available after this run. Your draft is retained."
+                        .to_owned(),
+                ]);
+            }
+            Ok(_) => {}
+            Err(error) => return Err(CliError::Argument(format!("Live input failed: {error}"))),
+        }
+        Ok(SessionControl::Continue)
+    }
+
+    fn persist_live_draft(
+        &self,
+        draft: &str,
+        saved: &mut String,
+        terminal: &crate::ui::live::Sink,
+    ) {
+        if draft != saved && !draft.is_empty() {
+            match self.composer.save("draft", draft) {
+                Ok(()) => draft.clone_into(saved),
+                Err(error) => terminal.rows(&[self
+                    .theme
+                    .warning(&format!("Draft could not be saved: {error}"))]),
+            }
+        }
+    }
+
+    fn end_live_edit(&mut self) -> Result<(), CliError> {
+        self.editor.run_edit_commands(&[EditCommand::Clear]);
+        let editor = std::mem::replace(&mut self.editor, Reedline::create());
+        self.editor = editor
+            .with_break_signal(Arc::new(std::sync::atomic::AtomicBool::new(false)))
+            .with_immediately_accept(true);
+        let prompt = SessionPrompt {
+            left: String::new(),
+            right: String::new(),
+        };
+        let result = self.editor.read_line(&prompt);
+        let editor = std::mem::replace(&mut self.editor, Reedline::create());
+        self.editor = editor.with_immediately_accept(false);
+        result
+            .map(|_| ())
+            .map_err(|error| CliError::Argument(format!("Live output failed: {error}")))
+    }
+
+    fn restore_draft_at(&mut self, draft: &str, caret: usize) {
+        self.restore_draft(draft);
+        if caret <= draft.len() && draft.is_char_boundary(caret) {
+            self.editor
+                .run_edit_commands(&[EditCommand::MoveToPosition {
+                    position: caret,
+                    select: false,
+                }]);
+        }
+    }
+
+    fn handle_process_request(
+        &mut self,
+        request: &ApprovalRequest,
+        draft: &str,
+        caret: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<ApprovalDecision, CliError> {
+        if cancellation.is_cancelled() {
+            return Ok(ApprovalDecision::Deny);
+        }
+        self.end_live_edit()?;
+        let decision = self.confirm_process(request, cancellation);
+        self.restore_draft_at(draft, caret);
+        Ok(decision)
+    }
+
+    fn confirm_process(
+        &self,
+        request: &ApprovalRequest,
+        cancellation: &CancellationToken,
+    ) -> ApprovalDecision {
+        // The running editor has relinquished stdin; its draft is kept separately.
+        let field = |name: &str| {
+            request
+                .presentation
+                .get(name)
+                .map_or("not reported", String::as_str)
+        };
+        let mut rows = vec![crate::ui::section(
+            &self.theme,
+            terminal_columns(),
+            "Process approval",
+        )];
+        for (label, value) in [
+            ("command", field("command")),
+            ("backend", field("backend")),
+            ("network", field("network")),
+            ("filesystem", field("filesystem")),
+            ("workspace", field("workspace")),
+            ("environment", field("environment_names")),
+        ] {
+            rows.push(format!("  {}", self.theme.muted(label)));
+            rows.extend(
+                crate::terminal::wrap_verbatim(value, terminal_columns().saturating_sub(4))
+                    .into_iter()
+                    .map(|line| format!("    {}", self.theme.text(&line))),
+            );
+        }
+        let nonce = pactrail_core::ApprovalId::new().to_string();
+        let suffix = &nonce[nonce.len().saturating_sub(6)..];
+        let once = format!("once {suffix}");
+        let run = format!("run {suffix}");
+        rows.extend(crate::terminal::wrap_verbatim(&format!("Type {once:?} or {run:?} to allow this exact request. Enter denies; Ctrl-C stops the run."), terminal_columns()));
+        if self.emit(&format!("{}\n", rows.join("\n"))).is_err() {
+            cancellation.cancel();
+            return ApprovalDecision::Deny;
+        }
+        let prompt = SessionPrompt {
+            left: "Approval (default: deny)".to_owned(),
+            right: String::new(),
+        };
+        let wake = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let interrupt = Arc::clone(&wake);
+        let stop = cancellation.clone();
+        let listener = tokio::spawn(async move {
+            stop.cancelled().await;
+            interrupt.store(true, Ordering::Release);
+        });
+        let mut editor = Reedline::create()
+            .with_ansi_colors(self.theme.has_color())
+            .with_break_signal(wake);
+        let response = editor.read_line(&prompt);
+        listener.abort();
+        match response {
+            Ok(Signal::Success(text)) if text.trim() == once => ApprovalDecision::AllowOnce,
+            Ok(Signal::Success(text)) if text.trim() == run => ApprovalDecision::AllowRun,
+            Ok(Signal::CtrlC | Signal::CtrlD) | Err(_) => {
+                cancellation.cancel();
+                ApprovalDecision::Deny
+            }
+            Ok(_) => ApprovalDecision::Deny,
+        }
     }
 
     fn finish_run_activity(
@@ -2795,8 +3204,17 @@ impl Session {
     }
 
     async fn refresh_models(&mut self, query: &str) -> Result<(), CliError> {
-        let spinner = ProgressBar::new_spinner();
-        spinner.enable_steady_tick(Duration::from_millis(100));
+        let spinner = if self.plain {
+            ProgressBar::hidden()
+        } else {
+            ProgressBar::new_spinner()
+        };
+        if !self.plain
+            && std::env::var_os("PACTRAIL_NO_ANIMATION").is_none()
+            && std::env::var_os("PACTRAIL_REDUCED_MOTION").is_none()
+        {
+            spinner.enable_steady_tick(Duration::from_millis(100));
+        }
         spinner.set_message("discovering models");
         let models = available_models(&self.settings).await;
         spinner.finish_and_clear();
@@ -3196,16 +3614,7 @@ impl Session {
                     self.theme.muted("Commands can access the host filesystem, network, secrets, and external services.")
                 ))
             }
-            ["on"] => {
-                settings.process_backend = ProcessBackendArg::Native;
-                self.persist(settings)?;
-                self.emit(&format!(
-                    "{}\n{}\n{}\n",
-                    self.theme.warning("Deprecated: /process on will be removed in 2.0; use /process native."),
-                    self.theme.warning("Trusted native process execution enabled."),
-                    self.theme.muted("Commands can access the host filesystem, network, secrets, and external services.")
-                ))
-            }
+            ["on"] => Err(CliError::Argument("/process on was removed in v2. Use /process native to explicitly select trusted host execution.".to_owned())),
             [mode, image] | [mode, image, "docker"] if matches!(*mode, "sandbox" | "oci") => {
                 settings.process_backend = ProcessBackendArg::Oci;
                 settings.sandbox_runtime = OciRuntimeArg::Docker;
@@ -3640,6 +4049,9 @@ impl Session {
     }
 
     fn view(&self, value: &str) -> Result<(), CliError> {
+        if self.plain {
+            return self.emit(value);
+        }
         match crate::terminal::page(value, self.pager) {
             Ok(true) => Ok(()),
             Ok(false) => self.emit(value),
@@ -3650,11 +4062,26 @@ impl Session {
         }
     }
 
+    fn read_input(&mut self, prompt: &SessionPrompt) -> std::io::Result<Signal> {
+        if !self.plain {
+            return self.editor.read_line(prompt);
+        }
+        write_human_stdout(&format!("{} > ", prompt.left))?;
+        crate::ui::input::read_terminal_line()
+    }
+
     fn restore_draft(&mut self, text: &str) {
-        self.editor.run_edit_commands(&[
-            EditCommand::Clear,
-            EditCommand::InsertString(sanitize_terminal_text(text)),
-        ]);
+        if self.plain {
+            self.plain_draft = Some(text.to_owned());
+            let _ = self.emit(&format!("{}\nDraft loaded. /dispatch runs this draft; /draft clear removes the saved copy.\n", sanitize_terminal_text(text)));
+            return;
+        }
+        if self.editor.current_buffer_contents() != text {
+            self.editor.run_edit_commands(&[
+                EditCommand::Clear,
+                EditCommand::InsertString(sanitize_terminal_text(text)),
+            ]);
+        }
     }
 
     fn confirm(&self, expected: &str, explanation: &str) -> Result<bool, CliError> {
@@ -3666,6 +4093,12 @@ impl Session {
             left: "Confirm (default: cancel)".to_owned(),
             right: String::new(),
         };
+        if self.plain {
+            self.emit("Confirm (default: cancel) > ")?;
+            return crate::ui::input::read_terminal_line()
+                .map(|signal| matches!(signal, Signal::Success(text) if text.trim() == expected))
+                .map_err(|error| CliError::Argument(format!("confirmation failed: {error}")));
+        }
         let mut editor = Reedline::create()
             .with_ansi_colors(self.theme.has_color())
             .with_validator(Box::new(TaskValidator));
@@ -4168,7 +4601,7 @@ fn trace_attribute(key: &str, value: &str) -> String {
     format!("{key}={value}")
 }
 
-fn trace_duration(milliseconds: u64) -> String {
+pub(crate) fn trace_duration(milliseconds: u64) -> String {
     if milliseconds < 1_000 {
         format!("{milliseconds}ms")
     } else if milliseconds < 60_000 {
@@ -4298,6 +4731,16 @@ fn composer_edge(columns: usize, status: &str) -> String {
     }
 }
 
+pub(crate) fn prompt_indicator(mode: &PromptEditMode) -> &'static str {
+    if crate::ui::glyphs::ascii_requested() {
+        return " > ";
+    }
+    match mode {
+        PromptEditMode::Vi(PromptViMode::Normal | PromptViMode::Visual) => " ◇ ",
+        _ => " ❯ ",
+    }
+}
+
 impl Prompt for SessionPrompt {
     fn get_prompt_color(&self) -> reedline::Color {
         reedline::Color::Cyan
@@ -4314,13 +4757,10 @@ impl Prompt for SessionPrompt {
     }
 
     fn render_prompt_indicator(&self, edit_mode: PromptEditMode) -> Cow<'_, str> {
-        match edit_mode {
-            _ if crate::ui::glyphs::ascii_requested() => Cow::Borrowed(" > "),
-            PromptEditMode::Vi(PromptViMode::Normal | PromptViMode::Visual) => {
-                Cow::Borrowed(" \u{25c7} ")
-            }
-            _ => Cow::Borrowed(" \u{276f} "),
+        if self.left.is_empty() {
+            return Cow::Borrowed("");
         }
+        Cow::Borrowed(prompt_indicator(&edit_mode))
     }
 
     fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {

@@ -67,6 +67,12 @@ try {
         throw "The release archive does not contain pactrail.exe."
     }
 
+    $ActualVersion = & $Binary.FullName --version
+    if ($LASTEXITCODE -ne 0) { throw "Downloaded binary cannot run." }
+    if ($Version -ne "latest" -and $ActualVersion -ne "pactrail $($Version.TrimStart('v'))") {
+        throw "Downloaded binary version does not match $Version."
+    }
+
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     $Destination = Join-Path $InstallDir "pactrail.exe"
     $Running = Get-Process -Name "pactrail" -ErrorAction SilentlyContinue |

@@ -57,7 +57,7 @@ fn exhausted_truncated_provider_response_can_resume_the_same_run() {
         ],
     );
     assert!(!failed.status.success());
-    assert!(String::from_utf8_lossy(&failed.stderr).contains("validated checkpoint"));
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("Checkpoint stored"));
     let runs = std::fs::read_dir(workspace.path().join(".pactrail/runs"))
         .unwrap_or_else(|e| unreachable!("runs: {e}"));
     let run_id = runs
@@ -1127,7 +1127,7 @@ fn state_migration_is_explicit_preflighted_and_machine_readable() {
     assert_eq!(upgrade["state"]["pending_components"], 3);
     assert_eq!(
         upgrade["deprecations"]["entries"].as_array().map(Vec::len),
-        Some(2)
+        Some(0)
     );
     assert!(std::fs::read_to_string(&settings).is_ok_and(|text| text.contains("schema = 1")));
 
@@ -1596,4 +1596,16 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 fn path_text(path: &Path) -> &str {
     path.to_str()
         .unwrap_or_else(|| unreachable!("temporary path is not Unicode"))
+}
+
+#[test]
+fn v2_rejects_removed_process_alias_before_creating_state() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|error| unreachable!("workspace: {error}"));
+    let output = pactrail(
+        workspace.path(),
+        ["run", "--allow-process", "Explain this workspace"],
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("--allow-process"));
+    assert!(!workspace.path().join(".pactrail").exists());
 }

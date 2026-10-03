@@ -1,5 +1,24 @@
 # CLI experience verification
 
+## V2 running-input verification — October 3, 2026
+
+The real debug binary passed the expanded 42-scenario terminal suite using a
+loopback provider and disposable workspaces. This includes type-ahead/caret
+preservation, explicit-only next-task dispatch, cooperative stop with retained
+Unicode drafts, denied buffered approval, fresh per-request consent, SIGINT at
+approval and live resize from 32 to 100 columns. Unix plain Ctrl-C cancels both
+the post-run prompt and Apply confirmation. Plain
+and dumb captures contain no terminal control sequences; Apply remains guarded.
+
+Eight real browser-engine workflows also passed: dispatch/answer, guarded
+Apply, Discard, real Cargo verification, Stop, provider failure inspection,
+contract-bound deterministic evidence and reconnect stability. Ten browser
+projection/design tests passed.
+
+These are deterministic interaction checks, not model quality measurements.
+The final v2 version/build/platform evidence is tracked separately in the launch
+checklist; the October 2 measurements below remain historical evidence.
+
 ## Ledger branch verification — October 2, 2026
 
 Platform: Linux, Rust 1.95. Debug and optimized executables were exercised against

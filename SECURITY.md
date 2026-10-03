@@ -17,8 +17,8 @@ coordinate validation, remediation, release, and disclosure with the reporter.
 
 ## Supported versions
 
-Security fixes target the latest stable 1.x minor and current `main`. For 90
-days after a newer 1.x minor is released, the previous minor remains eligible
+Security fixes target the latest stable 2.x minor and current `main`. For 90
+days after a newer 2.x minor is released, the previous minor remains eligible
 for critical/high fixes. The 0.x developer-preview line is unsupported after
 v1.0.0.
 

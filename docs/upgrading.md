@@ -71,8 +71,8 @@ has migrated state. The 0.x line receives no security fixes after v1.0.0.
 
 ## Deprecated process aliases
 
-The following aliases remain supported throughout Pactrail 1.x and are planned
-for removal in 2.0:
+The following aliases were supported throughout Pactrail 1.x and are removed
+from new task input in 2.0:
 
 | Deprecated | Replacement |
 |---|---|
@@ -99,7 +99,25 @@ curl --proto '=https' --tlsv1.2 -LsSf \
   https://raw.githubusercontent.com/AKMessi/pactrail/main/install.sh | sh
 ```
 
-For reproducible deployments, set `PACTRAIL_VERSION=v1.0.0` on Unix or pass
-`-Version v1.0.0` to the downloaded PowerShell installer, verify
+For reproducible deployments, set `PACTRAIL_VERSION=v2.0.0` after publication on Unix or pass
+`-Version v2.0.0` to the downloaded PowerShell installer, verify
 `pactrail --version`, and retain the release checksum and provenance attestation
 with your deployment record.
+
+## Upgrading to 2.0
+
+Back up workspace state and local settings, finish or stop active runs, install
+v2, then run `pactrail upgrade` before resuming work. V2 preserves the historical
+readers in the compatibility inventory; no new event/receipt/checkpoint schema
+is introduced by the Ledger terminal changes. Unknown or corrupt state is refused.
+
+The previously deprecated `--allow-process` and `/process on` aliases are removed
+from new task input. Use `--process-backend native --process-approval allow-run`
+for explicitly trusted one-shot execution, or `/process native` for interactive
+per-request approvals. Saved legacy run configurations remain readable and do
+not gain permissions. Human terminal output changed; scripts must use JSON.
+
+Restart an existing interactive process after updating the binary. Drafts and
+local task context remain browser/terminal-local advisory data, not permission
+or evidence. No automatic daemon detachment or automatic next-task dispatch is
+provided. See [interactive-cli.md](interactive-cli.md) for the new input flow.

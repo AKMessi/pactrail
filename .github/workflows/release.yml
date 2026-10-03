@@ -17,6 +17,9 @@ env:
 
 jobs:
   metadata:
+    permissions:
+      contents: read
+      actions: read
     name: Release metadata contract
     runs-on: ubuntu-latest
     steps:
@@ -35,6 +38,17 @@ jobs:
           test -f "docs/release-$GITHUB_REF_NAME.md"
           grep -Fq "## [$version] -" CHANGELOG.md
           grep -Fq "# Pactrail $GITHUB_REF_NAME" "docs/release-$GITHUB_REF_NAME.md"
+      - name: Require successful CI for the exact release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python {0}
+        run: |
+          import json, os, urllib.request
+          endpoint = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/workflows/ci.yml/runs?head_sha={os.environ['GITHUB_SHA']}&per_page=100"
+          request = urllib.request.Request(endpoint, headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"], "Accept": "application/vnd.github+json"})
+          runs = json.load(urllib.request.urlopen(request, timeout=30))["workflow_runs"]
+          if not any(run["head_sha"] == os.environ["GITHUB_SHA"] and run["status"] == "completed" and run["conclusion"] == "success" and run["event"] == "push" for run in runs):
+              raise SystemExit("Release refused: successful push CI for this exact commit is required before tagging.")
       - uses: dtolnay/rust-toolchain@eac0f66a48bc4b70a10b9acd4c4e930f835d95ff # 1.95.0
       - name: Verify locked package metadata
         run: cargo metadata --locked --no-deps --format-version 1 > /dev/null
@@ -61,6 +75,12 @@ jobs:
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - run: cargo test --workspace --all-features --locked
       - run: cargo build --release --locked -p pactrail
+      - name: Exercise installer against the candidate executable
+        shell: python {0}
+        run: |
+          import os, subprocess, sys
+          binary = "target/release/pactrail.exe" if os.name == "nt" else "target/release/pactrail"
+          subprocess.run([sys.executable, "devtools/check_installers.py", binary], check=True)
       - name: Package Unix binary
         if: matrix.kind == 'unix'
         shell: bash
@@ -75,6 +95,26 @@ jobs:
           New-Item -ItemType Directory package
           Copy-Item target/release/pactrail.exe, README.md, LICENSE, THIRD_PARTY_NOTICES package/
           Compress-Archive -Path package/* -DestinationPath "${{ matrix.archive }}"
+      - name: Verify packaged Unix executable and notices before publication
+        if: matrix.kind == 'unix'
+        shell: bash
+        run: |
+          mkdir unpacked
+          tar -xzf "${{ matrix.archive }}" -C unpacked
+          test "$(unpacked/pactrail --version)" = "pactrail ${GITHUB_REF_NAME#v}"
+          unpacked/pactrail compatibility --json > compatibility.json
+          test -s unpacked/LICENSE
+          test -s unpacked/THIRD_PARTY_NOTICES
+      - name: Verify packaged Windows executable and notices before publication
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          Expand-Archive -Path "${{ matrix.archive }}" -DestinationPath unpacked
+          $actual = & ./unpacked/pactrail.exe --version
+          if ($actual -ne "pactrail $($env:GITHUB_REF_NAME.TrimStart('v'))") { throw "packaged version mismatch" }
+          & ./unpacked/pactrail.exe compatibility --json | ConvertFrom-Json | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "packaged compatibility failed" }
+          if (!(Test-Path unpacked/LICENSE) -or !(Test-Path unpacked/THIRD_PARTY_NOTICES)) { throw "package notices missing" }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.archive }}

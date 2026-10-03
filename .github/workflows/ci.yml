@@ -3,7 +3,8 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, codex/pactrail-2-architecture]
+    branches: [main, codex/pactrail-2-architecture, "feat/v2-*"]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -39,12 +40,27 @@ jobs:
         shell: pwsh
         run: '[ScriptBlock]::Create((Get-Content -Raw install.ps1)) | Out-Null'
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Strict Clippy with portable failure diagnostics
+        shell: python {0}
+        run: |
+          import subprocess
+          result = subprocess.run(["cargo", "clippy", "--workspace", "--all-targets", "--all-features", "--locked", "--", "-D", "warnings"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+          print(result.stdout)
+          if result.returncode:
+              details = result.stdout[-14000:].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print("::error title=Strict Clippy failed::" + details)
+          raise SystemExit(result.returncode)
       - name: Permission and storage failure recovery matrix
         run: cargo test --locked -p pactrail-workspace io_failure_matrix
       - run: cargo test --workspace --all-features --locked
       - run: cargo doc --workspace --all-features --no-deps --locked
       - run: cargo build --workspace --release --locked
+      - name: Exercise checksum-verifying installer before publication
+        shell: python {0}
+        run: |
+          import os, subprocess, sys
+          binary = "target/release/pactrail.exe" if os.name == "nt" else "target/release/pactrail"
+          subprocess.run([sys.executable, "devtools/check_installers.py", binary], check=True)
 
   dependency-policy:
     name: Dependency policy
@@ -68,3 +84,26 @@ jobs:
         run: docker build --pull --tag "$PACTRAIL_OCI_TEST_IMAGE" tests/fixtures/oci-sandbox
       - name: Run hostile-repository containment checks
         run: cargo test --locked -p pactrail-tools oci_backend_blocks_hostile_effects -- --ignored --nocapture
+
+  terminal-experience:
+    name: Ledger terminal / Linux
+    runs-on: ubuntu-latest
+    env:
+      CARGO_BUILD_JOBS: "1"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: dtolnay/rust-toolchain@eac0f66a48bc4b70a10b9acd4c4e930f835d95ff # 1.95.0
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - run: cargo build --locked -p pactrail
+      - name: Install development-only terminal test tools
+        run: |
+          python3 -m venv /tmp/pactrail-terminal-tests
+          /tmp/pactrail-terminal-tests/bin/pip install -r devtools/terminal-requirements.txt
+      - name: Exercise real terminal workflows with a loopback provider
+        run: /tmp/pactrail-terminal-tests/bin/python devtools/check_cli_experience.py
+      - name: Retain terminal captures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ledger-terminal-captures
+          path: /tmp/pactrail-cli-qa

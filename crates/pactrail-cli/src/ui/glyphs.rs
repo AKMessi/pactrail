@@ -1,5 +1,8 @@
 //! ASCII fallbacks affect app-owned decorations, never filenames or model prose.
 pub(crate) fn ascii_requested() -> bool {
+    if crate::ui::input::plain_requested() {
+        return true;
+    }
     if std::env::var("PACTRAIL_ASCII").is_ok_and(|value| value == "1") {
         return true;
     }
