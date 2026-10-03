@@ -17,6 +17,9 @@ env:
 
 jobs:
   metadata:
+    permissions:
+      contents: read
+      actions: read
     name: Release metadata contract
     runs-on: ubuntu-latest
     steps:
