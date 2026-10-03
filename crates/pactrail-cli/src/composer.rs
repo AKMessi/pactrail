@@ -81,7 +81,7 @@ impl ComposerStore {
             if opened.permissions().mode() & 0o077 != 0 {
                 return Err(io::Error::new(
                     io::ErrorKind::PermissionDenied,
-                    "saved credential permissions are not private; reconnect with /setup",
+                    "saved credential permissions are not private; reconnect with /setup new-key",
                 ));
             }
         }

@@ -7,10 +7,6 @@
 
 **Every change carries its evidence.**
 
-This branch prepares the v2 release candidate. The `v2.0.0` installation tag
-becomes available after publication; build this checkout with
-`cargo build --release --locked -p pactrail` to test the candidate.
-
 Pactrail is a model-agnostic coding-agent harness written in Rust. It combines
 the direct terminal flow of a coding assistant with a stricter execution model:
 tasks become contracts, edits happen in isolated transactions, actions become
@@ -341,6 +337,11 @@ Cargo normally installs the executable in `~/.cargo/bin`; put that directory on
 
 ## Quick start
 
+### Connect your model
+
+Run `pactrail setup`, or enter your first task in `pactrail` and follow guided setup. Choose a provider, paste a hidden key if needed, then search/select a model. See [model setup](docs/model-setup.md) for credential storage and platform details.
+
+
 Open a terminal in a project and launch the session:
 
 ```console
@@ -659,7 +660,3 @@ for Pactrail. Third-party dependencies retain their own licenses.
 
 This change applies to this revision and subsequent distributions under this
 license; it does not revoke license grants for previously distributed versions.
-
-### Connect your model
-
-Run `pactrail setup`, or enter your first task in `pactrail` and follow guided setup. Choose a provider, paste a hidden key if needed, then search/select a model. See [model setup](docs/model-setup.md) for credential storage and platform details.

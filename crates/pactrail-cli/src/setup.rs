@@ -101,7 +101,7 @@ pub(crate) fn credential(name: &str) -> Result<Option<SecretString>, CliError> {
         let decrypted = value
             .map(|text| {
                 let encoded = text.strip_prefix("dpapi-v1:").ok_or_else(|| {
-                    error("Unrecognized Windows credential format; reconnect with /setup.")
+                    error("Unrecognized Windows credential format; reconnect with /setup new-key.")
                 })?;
                 windows_protect(encoded, true).map(SecretString::from)
             })
@@ -204,7 +204,7 @@ fn windows_protect(value: &str, decrypt: bool) -> Result<String, CliError> {
         .map_err(|_| error("Windows credential protection failed"))?;
     if !output.status.success() || output.stdout.len() > 65536 {
         return Err(error(
-            "Windows credential protection failed for this user. Reconnect with /setup or use an environment key.",
+            "Windows credential protection failed for this user. Reconnect with /setup new-key or use an environment key.",
         ));
     }
     String::from_utf8(output.stdout).map_err(|_| error("Invalid protected credential encoding"))

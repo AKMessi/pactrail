@@ -98,3 +98,20 @@ Existing normalized token counters can lose provider-field absence. The UI label
 these as engine-counted tokens and does not claim complete provider coverage.
 The V3 proposal addresses that underlying limitation. It is a proposal, not a
 shipped architecture change or a measured victory over other harnesses.
+
+## V2 guided model setup verification
+
+The real-binary onboarding suite is `devtools/check_model_setup.py`. Twelve
+scenario groups passed with disposable workspaces, a loopback catalog and local
+model fixture: hidden entry/private storage; saved-key restart; endpoint mismatch
+before requests; secret-free browser defaults; cancelled and accepted key
+replacement; setup cancellation; hidden-input Ctrl-C; retained first tasks;
+explicit .env consent; unauthenticated compatible endpoints; and key removal.
+No hosted inference or paid model calls were used.
+
+The workspace suite passed 423 tests on Linux, with the existing Docker-only test
+ignored locally and executed separately by OCI CI. The Ledger terminal suite
+passed all 42 existing groups. Platform CI additionally verifies Windows
+user-scoped DPAPI round-trip/rejected ciphertext and Unix private-file refusal.
+The release checklist still requires successful CI on the exact tagged commit;
+these fixture checks are not model-quality benchmark results.

@@ -2,7 +2,7 @@
 
 ## Candidate scope
 
-The candidate is developed on `feat/v2-terminal-workbench`. All twelve workspace
+The candidate is developed on `feat/v2-frictionless-setup`. All twelve workspace
 packages and internal dependency requirements are 2.0.0. The launch description
 is [release-v2.0.0.md](release-v2.0.0.md); the terminal and recovery contract is in
 [interactive-cli.md](interactive-cli.md) and [v2-cli-plan.md](v2-cli-plan.md).
@@ -17,6 +17,8 @@ Before merging/tagging, the exact candidate must pass:
 - Historical production-reader fixtures and permission/storage fault tests.
 - Real-binary terminal scenarios, including running input, guarded decisions,
   approval ownership, stopped drafts, Unicode, seven widths, NO_COLOR and dumb mode.
+- Guided setup: hidden entry, restart, cancellation, replacement, no-auth endpoints,
+  endpoint binding, private Unix permissions, Windows DPAPI and secret-free web defaults.
 - Browser projection/design tests and loopback security tests.
 - Linux, macOS and Windows CI; dependency policy; hostile-repository Docker tests.
 - Candidate installer checks: correct executable version and checksum rejection
