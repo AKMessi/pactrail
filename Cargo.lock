@@ -2482,6 +2482,7 @@ dependencies = [
  "blake3",
  "clap",
  "clap_complete",
+ "console",
  "directories",
  "dotenvy",
  "futures-util",

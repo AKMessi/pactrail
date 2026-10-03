@@ -36,6 +36,15 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    /// Connect a model with guided provider, credential and model selection.
+    Setup {
+        /// Remove the configured saved key; leaves environment variables untouched.
+        #[arg(long)]
+        forget_key: bool,
+        /// Paste a replacement key instead of reusing an existing credential.
+        #[arg(long, conflicts_with = "forget_key")]
+        replace_key: bool,
+    },
     /// Serve the local browser interface for this workspace.
     Web {
         /// Loopback port for the web interface.

@@ -320,15 +320,18 @@ async fn cli_json(state: &AppState, args: &[&str]) -> ApiResult {
 }
 
 async fn bootstrap(State(state): State<AppState>) -> Json<Value> {
+    let settings = crate::settings::SettingsStore::discover()
+        .and_then(|store| store.load())
+        .unwrap_or_default();
     Json(json!({
         "workspace": state.workspace,
         "version": env!("CARGO_PKG_VERSION"),
         "providers": ["ollama", "open-ai-compatible", "open-ai", "open-ai-responses", "anthropic", "gemini"],
         "defaults": {
-            "provider": if std::env::var_os("OPENROUTER_API_KEY").is_some() { "open-ai-compatible" } else { "ollama" },
-            "model": std::env::var("PACTRAIL_MODEL").unwrap_or_else(|_| if std::env::var_os("OPENROUTER_API_KEY").is_some() { "stealth/space-bunny-alpha".to_owned() } else { String::new() }),
-            "base_url": if std::env::var_os("OPENROUTER_API_KEY").is_some() { "https://openrouter.ai/api/v1" } else { "" },
-            "api_key_env": if std::env::var_os("OPENROUTER_API_KEY").is_some() { "OPENROUTER_API_KEY" } else { "OPENAI_API_KEY" }
+            "provider": settings.provider,
+            "model": settings.effective_model().unwrap_or_default(),
+            "base_url": settings.effective_base_url().unwrap_or_default(),
+            "api_key_env": settings.api_key_env
         }
     }))
 }

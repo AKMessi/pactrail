@@ -1345,7 +1345,7 @@ if (typeof document !== "undefined") {
         mono: true,
         placeholder: "Provider default",
       }),
-      key = field("API key environment variable", config.api_key_env || "", {
+      key = field("API key environment variable or saved reference", config.api_key_env || "", {
         id: "api-key-env",
         mono: true,
         placeholder: "OPENAI_API_KEY",
@@ -1357,7 +1357,7 @@ if (typeof document !== "undefined") {
       el(
         "p",
         "caption",
-        "The name of an environment variable in the process that started Pactrail. The key itself never reaches this browser.",
+        "Connect from the terminal with pactrail setup. This field accepts an environment variable name or the saved reference supplied by setup. The key itself never reaches this browser.",
       ),
     );
     configCol.append(advanced.details);

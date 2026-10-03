@@ -55,6 +55,10 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
     match cli.command.ok_or_else(|| {
         CliError::Argument("a command is required outside interactive mode".to_owned())
     })? {
+        Command::Setup {
+            forget_key,
+            replace_key,
+        } => crate::setup::launch(&cli.workspace, forget_key, replace_key).await,
         Command::Web { port } => crate::web::serve(&cli.workspace, cli.state_dir.as_deref(), port)
             .await
             .map_err(CliError::Argument),
@@ -1276,6 +1280,16 @@ fn build_driver_for_provider(
     capabilities: ModelCapabilities,
     args: &RunArgs,
 ) -> Result<Box<dyn ModelDriver>, CliError> {
+    let endpoint = args.base_url.as_deref().unwrap_or(match args.provider {
+        ProviderKind::Ollama => "http://127.0.0.1:11434/v1",
+        ProviderKind::OpenAi | ProviderKind::OpenAiResponses => "https://api.openai.com/v1",
+        ProviderKind::Anthropic => "https://api.anthropic.com",
+        ProviderKind::Gemini => "https://generativelanguage.googleapis.com",
+        ProviderKind::OpenAiCompatible => "",
+    });
+    if args.provider != ProviderKind::Ollama {
+        crate::setup::check_binding(&args.api_key_env, endpoint)?;
+    }
     let driver: Box<dyn ModelDriver> = match args.provider {
         ProviderKind::Ollama => Box::new(
             OpenAiCompatibleDriver::new(OpenAiCompatibleConfig {
@@ -1319,10 +1333,7 @@ fn build_driver_for_provider(
                     CliError::Argument("--base-url is required for open-ai-compatible".to_owned())
                 })?,
                 model,
-                api_key: std::env::var(&args.api_key_env)
-                    .ok()
-                    .filter(|api_key| !api_key.is_empty())
-                    .map(SecretString::from),
+                api_key: optional_api_key(&args.api_key_env)?,
                 timeout: Duration::from_secs(args.request_timeout_seconds),
                 capabilities,
                 stream: !args.no_stream,
@@ -1426,16 +1437,22 @@ fn provider_key_env(provider: ProviderKind, configured: &str) -> &str {
     }
 }
 
+fn optional_api_key(name: &str) -> Result<Option<SecretString>, CliError> {
+    let key = crate::setup::credential(name)?;
+    if key.is_none() && name.starts_with("PACTRAIL_SAVED_") {
+        return Err(CliError::Argument(
+            "Saved API key is unavailable. Run /setup to reconnect.".to_owned(),
+        ));
+    }
+    Ok(key)
+}
+
 fn api_key_from_env(name: &str) -> Result<SecretString, CliError> {
-    std::env::var(name)
-        .ok()
-        .filter(|api_key| !api_key.is_empty())
-        .map(SecretString::from)
-        .ok_or_else(|| {
-            CliError::Argument(format!(
-                "required API key environment variable {name:?} is not set or is empty"
-            ))
-        })
+    crate::setup::credential(name)?.ok_or_else(|| {
+        CliError::Argument(format!(
+            "API key {name:?} is unavailable. Run `pactrail setup` or set the named environment variable."
+        ))
+    })
 }
 
 fn effective_process_backend(args: &RunArgs) -> Result<ProcessBackendArg, CliError> {

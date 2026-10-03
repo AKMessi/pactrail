@@ -29,6 +29,17 @@ impl ComposerStore {
     }
 
     pub(crate) fn load(&self, kind: &str) -> io::Result<Option<String>> {
+        self.load_impl(kind, false)
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn load_private(&self, kind: &str) -> io::Result<Option<String>> {
+        self.load_impl(kind, true)
+    }
+
+    fn load_impl(&self, kind: &str, private: bool) -> io::Result<Option<String>> {
+        #[cfg(not(unix))]
+        let _ = private;
         validate_kind(kind)?;
         match fs::symlink_metadata(&self.directory) {
             Ok(meta) if !meta.is_dir() => {
@@ -64,6 +75,16 @@ impl ComposerStore {
         }
         let file = options.open(path)?;
         let opened = file.metadata()?;
+        #[cfg(unix)]
+        if private {
+            use std::os::unix::fs::PermissionsExt;
+            if opened.permissions().mode() & 0o077 != 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "saved credential permissions are not private; reconnect with /setup",
+                ));
+            }
+        }
         if !opened.is_file() || opened.len() > MAX_BYTES as u64 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -101,8 +122,24 @@ impl ComposerStore {
         {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&self.directory, fs::Permissions::from_mode(0o700))?;
+            if fs::metadata(&self.directory)?.permissions().mode() & 0o077 != 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "local storage requires private directory permissions",
+                ));
+            }
         }
         let mut file = NamedTempFile::new_in(&self.directory)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if file.as_file().metadata()?.permissions().mode() & 0o077 != 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "local storage requires private file permissions",
+                ));
+            }
+        }
         file.write_all(text.as_bytes())?;
         file.as_file().sync_all()?;
         file.persist(self.path(kind)).map_err(|e| e.error)?;
@@ -232,6 +269,29 @@ pub(crate) fn path_completions(workspace: &Path, argument: &str) -> Vec<(String,
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn credentials_refuse_broadened_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap_or_else(|e| unreachable!("temp: {e}"));
+        let store = ComposerStore::new(root.path(), Path::new("credential-test"));
+        store
+            .save("key", "fixture-key")
+            .unwrap_or_else(|e| unreachable!("save: {e}"));
+        assert_eq!(
+            store
+                .load_private("key")
+                .unwrap_or_else(|e| unreachable!("load: {e}")),
+            Some("fixture-key".to_owned())
+        );
+        fs::set_permissions(store.path("key"), fs::Permissions::from_mode(0o644))
+            .unwrap_or_else(|e| unreachable!("permissions: {e}"));
+        assert_eq!(
+            store.load_private("key").err().map(|e| e.kind()),
+            Some(io::ErrorKind::PermissionDenied)
+        );
+    }
+
     use super::*;
 
     #[test]

@@ -4,6 +4,13 @@ Pactrail v2 brings the Ledger terminal experience together with durable task
 continuation, bounded provider recovery, model-neutral execution and
 receipt-bound review. Work remains isolated until an explicit Apply.
 
+## Model setup
+
+`pactrail setup` and `/setup` guide provider selection, private credential input
+and searchable model discovery. First tasks survive setup cancellation. CLI and
+browser share saved model defaults; permissions remain unchanged. See
+[model setup](model-setup.md) for endpoint-bound key storage and platform credential storage.
+
 ## The terminal
 
 - Open, width-aware scrollback with native foreground prose, faint metadata,

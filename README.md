@@ -659,3 +659,7 @@ for Pactrail. Third-party dependencies retain their own licenses.
 
 This change applies to this revision and subsequent distributions under this
 license; it does not revoke license grants for previously distributed versions.
+
+### Connect your model
+
+Run `pactrail setup`, or enter your first task in `pactrail` and follow guided setup. Choose a provider, paste a hidden key if needed, then search/select a model. See [model setup](docs/model-setup.md) for credential storage and platform details.

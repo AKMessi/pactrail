@@ -910,9 +910,10 @@ fn completion_is_generated_and_prompt_cannot_shadow_a_subcommand() {
         .output()
         .unwrap_or_else(|error| unreachable!("empty API key command: {error}"));
     assert!(!empty_key.status.success());
-    assert!(String::from_utf8_lossy(&empty_key.stderr).contains(
-        "required API key environment variable \"PACTRAIL_TEST_EMPTY_KEY\" is not set or is empty"
-    ));
+    assert!(
+        String::from_utf8_lossy(&empty_key.stderr)
+            .contains("API key \"PACTRAIL_TEST_EMPTY_KEY\" is unavailable.")
+    );
 }
 
 #[test]

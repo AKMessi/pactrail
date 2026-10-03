@@ -425,3 +425,7 @@ Focus and task context survive restart. Use `/continue <id>` when choosing an
 older task; if no focus is saved and several runs exist, Pactrail asks you to
 select one. `/continue forget` clears the selected local answer record and focus,
 not engine history. See [continuation details](persistent-task-continuation.md).
+
+## Guided model connection
+
+Use `/setup` to select a provider and model without editing shell configuration. Your first task opens setup automatically if no model exists and remains saved if setup is cancelled. See [model setup](model-setup.md).

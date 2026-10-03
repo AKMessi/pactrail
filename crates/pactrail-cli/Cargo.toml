@@ -13,6 +13,7 @@ categories.workspace = true
 publish = false
 
 [dependencies]
+console = "0.16.4"
 time.workspace = true
 anstyle.workspace = true
 axum.workspace = true
@@ -54,7 +55,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", features = ["signal", "poll"] }
+nix = { version = "0.31", features = ["signal", "poll", "term"] }
 
 [dev-dependencies]
 proptest.workspace = true

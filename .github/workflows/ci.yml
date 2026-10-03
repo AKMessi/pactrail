@@ -101,6 +101,8 @@ jobs:
           /tmp/pactrail-terminal-tests/bin/pip install -r devtools/terminal-requirements.txt
       - name: Exercise real terminal workflows with a loopback provider
         run: /tmp/pactrail-terminal-tests/bin/python devtools/check_cli_experience.py
+      - name: Exercise guided model setup and credential boundaries
+        run: /tmp/pactrail-terminal-tests/bin/python devtools/check_model_setup.py
       - name: Retain terminal captures
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -11,6 +11,7 @@ mod mcp;
 mod migration;
 mod output;
 mod settings;
+mod setup;
 mod terminal;
 mod theme;
 mod ui;

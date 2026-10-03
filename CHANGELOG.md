@@ -8,6 +8,14 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [2.0.0] - 2026-10-03
 
+### Guided model setup
+
+- Add `pactrail setup` and `/setup` with provider presets, hidden key input,
+  model search/manual fallback and explicit workspace .env key consent.
+- Preserve first tasks through setup and share saved model defaults with web.
+- Bind private saved Unix keys to endpoints; encrypt Windows keys for the current user with DPAPI.
+  Add `pactrail setup --forget-key` without editing environment or workspace files.
+
 ### V2 running input and release
 
 - Give live execution and process approval one coordinated terminal input owner.

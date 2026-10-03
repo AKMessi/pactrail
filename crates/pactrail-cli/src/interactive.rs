@@ -47,6 +47,11 @@ const IMAGE_TIMELINE_MARKER: &str = "◈";
 const HELP_GROUPS: &[&str] = &["Work", "Memory", "Model", "Kernel", "Safety", "Session"];
 const COMMANDS: &[CommandHelp] = &[
     CommandHelp::new(
+        "Model",
+        "/setup",
+        "connect a provider and model with guided setup",
+    ),
+    CommandHelp::new(
         "Work",
         "/continue [run|forget]",
         "Continue the selected task safely; forget removes its local answer memory.",
@@ -1656,7 +1661,11 @@ impl Session {
                 self.persist(settings)?;
             }
         }
-        self.render_banner()
+        self.render_banner()?;
+        if self.settings.effective_model().is_none() {
+            self.emit("Connect a model with /setup. Choose a provider, then a model; no shell configuration required.\n")?;
+        }
+        Ok(())
     }
 
     async fn run(&mut self) -> Result<(), CliError> {
@@ -1889,6 +1898,25 @@ impl Session {
             "/tools" => self.render_tools()?,
             "/image" | "/images" | "/attach" => self.handle_images(arguments)?,
             "/mcp" => self.handle_mcp(arguments).await?,
+            "/setup" => {
+                if !arguments.is_empty() && arguments != "new-key" {
+                    return Err(CliError::Argument("usage: /setup [new-key]".to_owned()));
+                }
+                if crate::setup::configure(
+                    &self.workspace,
+                    &self.preferences,
+                    &self.settings,
+                    arguments == "new-key",
+                )
+                .await?
+                {
+                    self.settings = self
+                        .preferences
+                        .load()
+                        .map_err(|e| CliError::Argument(e.to_string()))?;
+                    self.known_models.clear();
+                }
+            }
             "/models" => self.refresh_models(arguments).await?,
             "/model" => self.set_model(arguments)?,
             "/connect" => self.connect(arguments)?,
@@ -1934,6 +1962,24 @@ impl Session {
         Ok(SessionControl::Continue)
     }
 
+    async fn ensure_model(&mut self) -> Result<bool, CliError> {
+        if self.settings.effective_model().is_some() {
+            return Ok(true);
+        }
+        self.emit("Your task is saved. Connect a model to run it.\n")?;
+        if !crate::setup::configure(&self.workspace, &self.preferences, &self.settings, false)
+            .await?
+        {
+            self.emit("Setup cancelled. Your task remains available with /retry.\n")?;
+            return Ok(false);
+        }
+        self.settings = self
+            .preferences
+            .load()
+            .map_err(|e| CliError::Argument(e.to_string()))?;
+        Ok(self.settings.effective_model().is_some())
+    }
+
     async fn execute_goal(&mut self, goal: String) -> Result<(), CliError> {
         if self.followup_contract.is_none() {
             self.continuation_parent = None;
@@ -1947,12 +1993,13 @@ impl Session {
                     .warning(&format!("Restart-safe retry unavailable: {error}"))
             ))?;
         }
-        let Some(model) = self.settings.effective_model() else {
-            self.render_error(
-                "No model is configured. Use /models and /model, or /connect <base-url> <model>.",
-            )?;
+        if !self.ensure_model().await? {
             return Ok(());
-        };
+        }
+        let model = self
+            .settings
+            .effective_model()
+            .ok_or_else(|| CliError::Argument("No model configured".to_owned()))?;
         let activity = RunActivity::new(&model, self.theme.clone(), self.detailed)
             .with_task_context(self.composer.clone(), self.continuation_parent.clone());
         let mut args = run_args_from_settings(&self.settings, Some(goal), model);
@@ -3030,8 +3077,11 @@ impl Session {
         };
         if self.settings.provider == ProviderKind::Ollama {
             ("not required for Ollama".to_owned(), TimelineTone::Muted)
-        } else if std::env::var(key_env).is_ok_and(|key| !key.is_empty()) {
-            (format!("{key_env} is set"), TimelineTone::Success)
+        } else if crate::setup::credential(key_env).is_ok_and(|key| key.is_some()) {
+            (
+                "API key available (environment or saved credential)".to_owned(),
+                TimelineTone::Muted,
+            )
         } else if self
             .settings
             .effective_base_url()
@@ -4783,8 +4833,14 @@ impl Prompt for SessionPrompt {
     }
 }
 
-async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>, ModelListError> {
+pub(crate) async fn available_models(
+    settings: &InteractiveSettings,
+) -> Result<Vec<String>, ModelListError> {
     let base_url = provider_base_url(settings).ok_or(ModelListError::MissingEndpoint)?;
+    if settings.provider != ProviderKind::Ollama {
+        crate::setup::check_binding(&settings.api_key_env, &base_url)
+            .map_err(|_| ModelListError::MissingEndpoint)?;
+    }
     let endpoint = models_endpoint(&base_url, settings.provider)?;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
@@ -4797,9 +4853,12 @@ async fn available_models(settings: &InteractiveSettings) -> Result<Vec<String>,
         (ProviderKind::Gemini, "OPENAI_API_KEY") => "GEMINI_API_KEY",
         _ => &settings.api_key_env,
     };
-    if let Ok(api_key) = std::env::var(key_env)
-        && !api_key.is_empty()
+    if settings.provider != ProviderKind::Ollama
+        && let Some(api_key) =
+            crate::setup::credential(key_env).map_err(|_| ModelListError::MissingEndpoint)?
     {
+        use secrecy::ExposeSecret;
+        let api_key = api_key.expose_secret();
         request = match settings.provider {
             ProviderKind::Ollama => request,
             ProviderKind::Anthropic => request
@@ -4906,7 +4965,7 @@ fn models_endpoint(base_url: &str, provider: ProviderKind) -> Result<Url, ModelL
         .map_err(|error| ModelListError::InvalidEndpoint(error.to_string()))
 }
 
-fn validate_base_url(base_url: &str) -> Result<(), CliError> {
+pub(crate) fn validate_base_url(base_url: &str) -> Result<(), CliError> {
     let endpoint = Url::parse(base_url)
         .map_err(|error| CliError::Argument(format!("invalid endpoint: {error}")))?;
     let host = endpoint.host_str().unwrap_or_default();
@@ -4932,7 +4991,7 @@ fn validate_base_url(base_url: &str) -> Result<(), CliError> {
     Ok(())
 }
 
-fn provider_base_url(settings: &InteractiveSettings) -> Option<String> {
+pub(crate) fn provider_base_url(settings: &InteractiveSettings) -> Option<String> {
     settings
         .effective_base_url()
         .or_else(|| match settings.provider {
@@ -5639,7 +5698,7 @@ fn receipt_lines(
 }
 
 #[derive(Debug, thiserror::Error)]
-enum ModelListError {
+pub(crate) enum ModelListError {
     #[error("no endpoint is configured; use /connect <base-url> <model>")]
     MissingEndpoint,
     #[error("invalid model-list endpoint: {0}")]
