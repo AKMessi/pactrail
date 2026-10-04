@@ -343,6 +343,28 @@ const server = http.createServer((req, res) => {
   await page.reload();
   await page.waitForTimeout(500);
   assert.equal(await page.getByLabel("I allow this run").isChecked(), false);
+  await goto("/runs/" + id + "?view=conversation");
+  await page
+    .getByLabel("Next task", { exact: true })
+    .fill("Check the follow-up regression.");
+  const nextEditor = await page.locator(".next-task-input").elementHandle();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.waitForTimeout(300);
+  assert.equal(
+    await nextEditor.evaluate(
+      (e) => e.isConnected && e.value === "Check the follow-up regression.",
+    ),
+    true,
+  );
+  await page
+    .getByRole("button", { name: "Prepare task ↑", exact: true })
+    .click();
+  assert.equal(new URL(page.url()).pathname, "/");
+  assert.equal(
+    await page.locator("#task-goal").inputValue(),
+    "Check the follow-up regression.",
+  );
+  assert.equal(await page.locator("#host-ack").isChecked(), false);
   await goto("/runs/" + id + "?view=changes");
   await page.setViewportSize({ width: 1920, height: 1000 });
   await page.locator("#diff-mode").click();

@@ -19,7 +19,7 @@ durable, inspectable software change transaction.
 Illustrative terminal flow (values depend on the run):
 
 ```text
-pactrail 2.1.1 · Ledger
+pactrail 2.1.2 · Ledger
   workspace  /work/project
   commands   isolated edits · native processes blocked
 
@@ -323,7 +323,7 @@ release targets are Windows x86_64, Linux x86_64, and Apple Silicon macOS.
 To build the current source with Rust 1.95 or newer:
 
 ```console
-cargo install --git https://github.com/AKMessi/pactrail.git --tag v2.1.1 --locked pactrail
+cargo install --git https://github.com/AKMessi/pactrail.git --tag v2.1.2 --locked pactrail
 ```
 
 Or from a local checkout:
@@ -675,3 +675,8 @@ The profile remains experimental and off by default. See the
 [qualification evidence](docs/design/0019-v2.1-release-qualification.md) and
 [v2.1 release notes](docs/release-v2.1.0.md) and
 [v2.1.1 web workspace refresh](docs/release-v2.1.1.md).
+
+The local web UI also provides a conversation workspace with a compact header,
+readable task/result thread, and bottom next-task composer. The composer prepares
+a separate run for configuration review; it does not append to a finished run.
+See [v2.1.2](docs/release-v2.1.2.md).

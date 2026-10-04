@@ -2475,7 +2475,7 @@ checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 
 [[package]]
 name = "pactrail"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "anstyle",
  "axum",
@@ -2524,7 +2524,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-context"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "blake3",
  "ignore",
@@ -2542,7 +2542,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-core"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "blake3",
  "proptest",
@@ -2556,7 +2556,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-engine"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "async-trait",
  "blake3",
@@ -2581,7 +2581,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-git"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "gix",
  "ignore",
@@ -2594,7 +2594,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-mcp"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "async-trait",
  "blake3",
@@ -2621,7 +2621,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-memory"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "pactrail-core",
  "rusqlite",
@@ -2636,7 +2636,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-models"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "async-trait",
  "base64",
@@ -2659,7 +2659,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-sdk"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "async-trait",
  "pactrail-context",
@@ -2678,7 +2678,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-store"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "blake3",
  "pactrail-core",
@@ -2692,7 +2692,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-tools"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "async-trait",
  "blake3",
@@ -2717,7 +2717,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-workspace"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "blake3",
  "ignore",

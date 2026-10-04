@@ -128,12 +128,12 @@ const binary =
   let t = await setup("fixture-read");
   await dispatch(t, "Explain this repository. Do not modify files.");
   await finish(t, "Answered");
-  await t.page.getByRole("tab", { name: "Answer", exact: true }).click();
+  await t.page.getByRole("tab", { name: "Conversation", exact: true }).click();
   assert.ok(
     (await t.page.locator(".answer-prose").innerText()).includes("disposable"),
   );
   await t.page.screenshot({ path: out + "/answered.png" });
-  results.push("read-only dispatch → Starting → Trace → Answer");
+  results.push("read-only dispatch → Starting → Conversation");
   await close(t);
   t = await setup("fixture-edit");
   await dispatch(t, "Create candidate.md containing a short test heading.");
@@ -342,6 +342,7 @@ const binary =
   t = await setup("fixture-stop");
   await dispatch(t, "Explain this repository without modifying files.");
   await t.page.locator(".run-heading").waitFor({ timeout: 15000 });
+  await t.page.getByRole("tab", { name: "Trace", exact: true }).click();
   await t.page
     .getByRole("searchbox", { name: "Search trace" })
     .fill("contract");

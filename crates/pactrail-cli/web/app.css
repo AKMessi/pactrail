@@ -36,9 +36,9 @@
 /* All color literals live in this token block. Contrast is checked by web tests. */
 :root {
   color-scheme: light;
-  --bg: #f7f8fa;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #eef0f4;
+  --surface-2: #f7f8fa;
   --code-bg: #f8f9fc;
   --line: #dce0e8;
   --line-strong: #aab2c1;
@@ -2760,5 +2760,235 @@ dialog::backdrop {
   .setup-summary .caption {
     display: block;
     margin: 0;
+  }
+}
+
+/* Conversation workspace: compact chrome, a readable thread, and a bottom composer. */
+.workspace-tree-label {
+  padding: 16px 16px 0;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+.rail .workspace-chip {
+  margin: 8px 12px 12px;
+  border: 0;
+  font: 500 13px/20px var(--sans);
+  text-align: left;
+  padding: 8px;
+}
+.rail .workspace-chip::before {
+  content: "▱";
+  color: var(--accent);
+  margin-right: 8px;
+}
+.run-header {
+  padding: 12px 28px 8px;
+}
+.run-heading {
+  gap: 8px;
+}
+.run-heading h1 {
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  -webkit-line-clamp: 1;
+}
+.header-details-button {
+  display: inline-flex;
+}
+.run-page.mobile-collapsed .run-meta,
+.run-page.mobile-collapsed .phase-track,
+.run-page.mobile-collapsed .phase-mobile,
+.run-page.mobile-collapsed .last-activity {
+  display: none;
+}
+.run-page:not(.mobile-collapsed) .phase-track {
+  display: grid;
+}
+.run-page > .ledger-strip {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+  gap: 20px;
+  border: 0;
+  margin: 0;
+  padding: 4px 24px;
+  border-radius: 0;
+}
+.run-page > .ledger-strip .stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.run-page > .ledger-strip .stat-value {
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--ink-3);
+}
+.run-page > .ledger-strip .stat-label {
+  font-size: 11px;
+  line-height: 18px;
+}
+.run-page > .ledger-strip meter {
+  display: none;
+}
+.conversation-thread {
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 32px 40px 48px;
+}
+.conversation-task {
+  margin: 0 0 36px auto;
+  padding: 16px 20px;
+  background: var(--surface-2);
+  border-radius: 12px;
+  max-width: 88%;
+}
+.task-prose {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 6px 0 0;
+}
+.conversation-brand {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+.conversation-reply {
+  font-size: 15px;
+  line-height: 26px;
+  overflow-wrap: anywhere;
+}
+.conversation-status {
+  color: var(--ink-2);
+}
+.conversation-answer > :first-child {
+  margin-top: 0;
+}
+.conversation-answer h1,
+.conversation-answer h2,
+.conversation-answer h3 {
+  font-size: 18px;
+  line-height: 28px;
+  margin: 28px 0 12px;
+}
+.conversation-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+.next-task-composer {
+  flex-shrink: 0;
+  margin: 0 32px 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 12px 16px;
+}
+.next-task-input {
+  display: block;
+  border: 0;
+  resize: none;
+  background: transparent;
+  width: 100%;
+  min-height: 52px;
+  max-height: 25vh;
+  padding: 4px 0;
+  font: 400 14px/22px var(--sans);
+}
+.next-task-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.next-task-controls .primary {
+  border-radius: 8px;
+}
+.conversation-view .tab-panel {
+  overflow: auto;
+}
+@media (max-width: 767px) {
+  .run-header {
+    padding: 10px 16px;
+  }
+  .run-heading h1 {
+    flex-basis: auto;
+    flex: 1;
+    min-width: 0;
+  }
+  .conversation-thread {
+    padding: 24px 16px;
+  }
+  .conversation-task {
+    max-width: 100%;
+    padding: 12px 16px;
+  }
+  .next-task-composer {
+    margin: 0 12px 4px;
+    padding: 10px 12px;
+  }
+  .next-task-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .next-task-controls .caption {
+    width: 100%;
+  }
+  .next-task-controls .primary {
+    margin-left: auto;
+  }
+  .run-page > .ledger-strip {
+    gap: 12px;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding: 4px 12px;
+  }
+  .run-page > .ledger-strip .stat {
+    flex-shrink: 0;
+  }
+}
+
+@media (min-width: 1280px) {
+  .app-shell:not(.rail-collapsed) .work-area:has(.run-page) > .app-bar {
+    display: none;
+  }
+  .run-header {
+    min-height: 48px;
+  }
+}
+.conversation-consulted {
+  margin-top: 24px;
+}
+.conversation-consulted h3 {
+  font-size: 13px;
+  line-height: 20px;
+  margin: 0 0 8px;
+}
+.run-page.mobile-collapsed > .ledger-strip {
+  display: flex;
+}
+.run-page:not(.mobile-collapsed) > .ledger-strip .stat {
+  flex-direction: column;
+  gap: 2px;
+}
+.run-page:not(.mobile-collapsed) > .ledger-strip meter:not([hidden]) {
+  display: block;
+}
+
+.app-shell.rail-collapsed #open-rail {
+  display: inline-flex;
+}
+.app-shell.rail-collapsed:not(.rail-overlay) .workspace-tree-label {
+  display: none;
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .app-shell:not(.rail-overlay) .workspace-tree-label {
+    display: none;
   }
 }
