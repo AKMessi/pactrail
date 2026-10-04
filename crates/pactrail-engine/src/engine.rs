@@ -1466,6 +1466,34 @@ impl<'a> RunEngine<'a> {
                 &mut journal,
                 observer,
             )?;
+            // A failed reservation commit must not strand the already committed
+            // controller prelude or a delivered peer message at a stale head.
+            // This boundary precedes provider I/O and carries no uncertain effect.
+            if agents.is_some() {
+                self.persist_checkpoint(
+                    &mut durable_checkpoint,
+                    transaction,
+                    &mut journal,
+                    CheckpointLoopState {
+                        agents: agents.as_mut(),
+                        phase: ResumePhase::BeforeModel,
+                        next_turn: turn,
+                        elapsed_active_ms: active_base_ms
+                            .saturating_add(elapsed_millis(active_started)),
+                        conversation: &conversation,
+                        usage,
+                        cost_spent_microusd: cost_spent,
+                        active_route,
+                        call_ids: &call_ids,
+                        previous_tool_signature: previous_tool_signature.as_ref(),
+                        repeated_tool_turns,
+                        consecutive_failed_tool_turns,
+                        automatic_repair_cycles,
+                        final_text: &final_text,
+                        recovery_risk: recovery_risk.as_deref(),
+                    },
+                )?;
+            }
             if let Some(agents) = &mut agents {
                 agents
                     .reserve_turn(max_turns)
@@ -4937,7 +4965,11 @@ fn extend_provider_trace_attributes(
     attributes: &mut BTreeMap<String, String>,
     extensions: &serde_json::Map<String, Value>,
 ) {
-    const SAFE_KEYS: [&str; 9] = [
+    const SAFE_KEYS: [&str; 13] = [
+        "id",
+        "reported_input_tokens",
+        "reported_output_tokens",
+        "reported_cached_input_tokens",
         "created",
         "model",
         "modelVersion",

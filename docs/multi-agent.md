@@ -1,4 +1,4 @@
-# Experimental bounded agents (planned v2.1)
+# Experimental bounded agents (v2.1 release candidate)
 
 Single-agent execution remains the default. The experimental coordinator uses
 independent conversations in one run and one isolated candidate. Scheduling is
@@ -131,3 +131,13 @@ research payloads, not all transformer memory traffic. Repeated backend imports
 and exports are recorded separately as per-invocation operation/byte attributes;
 they still consume compute and memory bandwidth. Bounded model attempts and
 message shapes limit that work. Benchmark them alongside transport counters.
+
+## Qualification and diagnostic limitations
+
+The frozen Space Bunny Alpha historical-task comparison passed 6/9 single-agent
+trials versus 1/9 full-text trials. Eight text trials exhausted per-agent limits.
+The runtime remains bounded and the profile remains experimental; lower tokens
+or latency from early failure is not an efficiency gain. Do not raise budgets or
+rerun only failures inside a frozen study. See the
+[qualification ledger](design/0019-v2.1-release-qualification.md) for validated
+recovery/authority tests, exact protocols, metrics and remaining limitations.

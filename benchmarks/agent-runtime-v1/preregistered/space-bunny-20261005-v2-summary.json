@@ -1,0 +1,209 @@
+{
+  "protocol_sha256": "a72f55ee57e68cacdb8065492dd21ce1225fc7ba50570e782b60b2c12d53943d",
+  "experiment": "Space Bunny Alpha diagnostic historical issues; all 18 preregistered trials",
+  "analysis": {
+    "paired_tasks": 3,
+    "paired_trials": 9,
+    "difference": -0.5555555555555555,
+    "interval_95": [
+      -1.0,
+      -0.3333333333333333
+    ],
+    "method": "task-clustered paired bootstrap; small task counts do not establish generalization",
+    "coverage": {
+      "single": {
+        "scored": 9,
+        "failed": 0,
+        "invalid": 0,
+        "unsupported": 0
+      },
+      "text": {
+        "scored": 1,
+        "failed": 8,
+        "invalid": 0,
+        "unsupported": 0
+      }
+    },
+    "resources": {
+      "single": {
+        "declared_trials": 9,
+        "successes": 6,
+        "input_tokens": {
+          "coverage": 9,
+          "total": 2072864,
+          "task_mean": 230318.22222222222
+        },
+        "output_tokens": {
+          "coverage": 9,
+          "total": 28168,
+          "task_mean": 3129.777777777778
+        },
+        "cached_input_tokens": {
+          "coverage": 9,
+          "total": 1738376,
+          "task_mean": 193152.88888888888
+        },
+        "uncached_input_tokens": {
+          "coverage": 9,
+          "total": 334488,
+          "task_mean": 37165.333333333336
+        },
+        "model_turns": {
+          "coverage": 9,
+          "total": 105,
+          "task_mean": 11.666666666666666
+        },
+        "model_time_ms": {
+          "coverage": 9,
+          "total": 539532,
+          "task_mean": 59948.0
+        },
+        "tool_calls": {
+          "coverage": 9,
+          "total": 115,
+          "task_mean": 12.777777777777779
+        },
+        "communication_messages": {
+          "coverage": 9,
+          "total": 0,
+          "task_mean": 0.0
+        },
+        "communication_bytes": {
+          "coverage": 9,
+          "total": 0,
+          "task_mean": 0.0
+        },
+        "wall_time_ms": {
+          "coverage": 9,
+          "total": 551160,
+          "task_mean": 61240.0
+        },
+        "cache_hit_ratio": {
+          "covered_trials": 9,
+          "value": 0.8386348549639533
+        }
+      },
+      "text": {
+        "declared_trials": 9,
+        "successes": 1,
+        "input_tokens": {
+          "coverage": 9,
+          "total": 872264,
+          "task_mean": 96918.22222222223
+        },
+        "output_tokens": {
+          "coverage": 9,
+          "total": 16169,
+          "task_mean": 1796.5555555555557
+        },
+        "cached_input_tokens": {
+          "coverage": 9,
+          "total": 612806,
+          "task_mean": 68089.55555555555
+        },
+        "uncached_input_tokens": {
+          "coverage": 9,
+          "total": 259458,
+          "task_mean": 28828.666666666668
+        },
+        "model_turns": {
+          "coverage": 9,
+          "total": 65,
+          "task_mean": 7.222222222222222
+        },
+        "model_time_ms": {
+          "coverage": 9,
+          "total": 296321,
+          "task_mean": 32924.555555555555
+        },
+        "tool_calls": {
+          "coverage": 9,
+          "total": 85,
+          "task_mean": 9.444444444444445
+        },
+        "communication_messages": {
+          "coverage": 9,
+          "total": 8,
+          "task_mean": 0.8888888888888888
+        },
+        "communication_bytes": {
+          "coverage": 9,
+          "total": 18643,
+          "task_mean": 2071.444444444445
+        },
+        "wall_time_ms": {
+          "coverage": 9,
+          "total": 306525,
+          "task_mean": 34058.333333333336
+        },
+        "cache_hit_ratio": {
+          "covered_trials": 9,
+          "value": 0.702546476754744
+        }
+      }
+    }
+  },
+  "per_task": {
+    "bytes-get-int-zero": {
+      "single": {
+        "successes": 3,
+        "trials": 3
+      },
+      "text": {
+        "successes": 0,
+        "trials": 3
+      }
+    },
+    "fd-and-pattern-path-separator": {
+      "single": {
+        "successes": 2,
+        "trials": 3
+      },
+      "text": {
+        "successes": 1,
+        "trials": 3
+      }
+    },
+    "pactrail-idempotent-discard": {
+      "single": {
+        "successes": 1,
+        "trials": 3
+      },
+      "text": {
+        "successes": 0,
+        "trials": 3
+      }
+    }
+  },
+  "failure_categories": {
+    "single": {
+      "success": 6,
+      "regression": 2,
+      "incorrect_solution": 1
+    },
+    "text": {
+      "budget_exhaustion": 8,
+      "success": 1
+    }
+  },
+  "claims": [
+    "Observed single-agent 6/9 versus text 1/9 under frozen diagnostic constraints.",
+    "Eight text failures exhausted specialist budgets; do not interpret lower resources as efficiency.",
+    "Three public tasks are not independently curated held-out evaluation.",
+    "No real hidden-state/latent model proof exists."
+  ],
+  "receipt_checks": {
+    "single": {
+      "receipt_valid": 9,
+      "trace_valid": 9,
+      "ready_to_apply": 9,
+      "source_isolation_valid": 9
+    },
+    "text": {
+      "receipt_valid": 1,
+      "trace_valid": 9,
+      "ready_to_apply": 1,
+      "source_isolation_valid": 9
+    }
+  }
+}

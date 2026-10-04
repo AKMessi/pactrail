@@ -81,3 +81,8 @@ suspected vulnerabilities.
 
 A model route/role cannot grant authority. All permitted writes and commands use
 the same Tool Kernel and candidate. See [bounded agents](multi-agent.md).
+
+The v2.1 release-candidate text profile has real hosted-model execution evidence,
+not a general task-quality advantage. The frozen diagnostic passed 1/9 text
+versus 6/9 single-agent trials. It remains opt-in and experimental; see the
+[qualification ledger](design/0019-v2.1-release-qualification.md).

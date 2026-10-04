@@ -25,6 +25,27 @@ def paired(rows, control, treatment, seed=42, samples=10000):
             "method": "task-clustered paired bootstrap; small task counts do not establish generalization"}
 
 
+def resource_summary(rows, arm):
+    selected = [row for row in rows if row["arm"] == arm]
+    keys = ("input_tokens", "output_tokens", "cached_input_tokens", "uncached_input_tokens",
+            "model_turns", "model_time_ms", "tool_calls", "communication_messages", "communication_bytes")
+    report = {"declared_trials": len(selected), "successes": sum(row["task_success"] for row in selected)}
+    for key in keys + ("wall_time_ms",):
+        values = []
+        by_task = {}
+        for row in selected:
+            value = (row.get("execution") or {}).get(key) if key == "wall_time_ms" else row["metrics"].get(key)
+            if value is not None:
+                values.append(value)
+                by_task.setdefault(row["task"], []).append(value)
+        report[key] = {"coverage": len(values), "total": sum(values) if values else None,
+                       "task_mean": sum(sum(v) / len(v) for v in by_task.values()) / len(by_task) if by_task else None}
+    covered = [r for r in selected if r["metrics"].get("input_tokens") is not None and r["metrics"].get("cached_input_tokens") is not None]
+    inputs = sum(r["metrics"]["input_tokens"] for r in covered)
+    report["cache_hit_ratio"] = {"covered_trials": len(covered), "value": sum(r["metrics"]["cached_input_tokens"] for r in covered) / inputs if inputs else None}
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("results", type=Path)
@@ -36,6 +57,7 @@ def main():
     report = paired(rows, args.control, args.treatment, args.seed)
     report["coverage"] = {arm: {status: sum(row["arm"] == arm and row["status"] == status for row in rows)
                                for status in ("scored", "failed", "invalid", "unsupported")} for arm in (args.control, args.treatment)}
+    report["resources"] = {arm: resource_summary(rows, arm) for arm in (args.control, args.treatment)}
     print(json.dumps(report, indent=2, allow_nan=False))
 
 

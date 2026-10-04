@@ -18,6 +18,9 @@ METRICS = (
     "model_time_ms", "inference_time_ms", "latent_logical_bytes",
     "latent_stored_bytes", "latent_messages", "communication_rounds",
     "peak_memory_bytes", "cost_microusd", "latent_import_bytes", "latent_export_bytes",
+    "cache_creation_input_tokens", "uncached_input_tokens", "read_calls", "write_calls",
+    "process_calls", "communication_messages", "communication_bytes", "files_changed",
+    "lines_added", "lines_removed", "provider_errors", "timeouts", "recovery_events",
 )
 
 
@@ -123,6 +126,9 @@ def run(protocol_path, output):
         raise ValueError("this runner requires POSIX process-group cancellation")
     protocol = bounded_json(protocol_path)
     validate(protocol)
+    for path, expected in protocol.get("frozen_inputs", {}).items():
+        if digest(Path(path)) != expected:
+            raise ValueError("frozen experiment input changed: " + path)
     output.mkdir(parents=True, exist_ok=False)
     write(output / "protocol.json", protocol)
     programs = [a["adapter"] for a in protocol["arms"]] + [t[k] for t in protocol["tasks"] for k in ("targeted", "regression")]
@@ -162,13 +168,24 @@ def run(protocol_path, output):
             request = {"schema_version": 1, "task": {key: task[key] for key in ("id", "goal", "commit")}, "arm": arm,
                        "model_identity": protocol["model_identity"], "limits": protocol["limits"],
                        "workspace": str(workspace), "trial_directory": str(root), "repeat": repeat,
-                       "permissions": protocol["permissions"], "normalization": protocol["normalization"]}
+                       "permissions": protocol["permissions"], "normalization": protocol["normalization"],
+                       "runtime_identity": protocol.get("runtime_identity")}
             write(root / "request.json", request)
             execution = command(arm["adapter"] + [str(root / "request.json")], workspace, root,
                                 protocol["limits"]["wall_seconds"] + 30)
             row["execution"] = execution
             if execution["exit_code"] == 78:
                 row["status"] = "unsupported"
+            elif execution["exit_code"] != 0 or execution["timed_out"]:
+                # Failed trials count, and their available usage must not disappear.
+                if (root / "result.json").exists():
+                    response = bounded_json(root / "result.json")
+                    if response.get("schema_version") != 1 or response.get("model_identity") != protocol["model_identity"]:
+                        raise ValueError("failed adapter result identity mismatch")
+                    row["metrics"] = metrics(response)
+                    row["checks"] = response.get("checks")
+                    row["usage_coverage"] = response.get("usage_coverage")
+                    row["provenance"] = response.get("provenance")
             elif not execution["timed_out"] and execution["exit_code"] == 0:
                 response = bounded_json(root / "result.json")
                 if response.get("schema_version") != 1 or response.get("model_identity") != protocol["model_identity"]:
@@ -180,14 +197,19 @@ def run(protocol_path, output):
                 row["metrics"] = metrics(response)
                 row["usage_coverage"] = response.get("usage_coverage")
                 row["provenance"] = response.get("provenance")
+                row["checks"] = response.get("checks")
                 # Separate grading copy; build artifacts cannot mutate the scored candidate.
                 for path in candidate.rglob("*"):
                     if path.is_symlink():
                         path.resolve(strict=True).relative_to(candidate)
-                grading = root / "grading"
-                shutil.copytree(candidate, grading, ignore=shutil.ignore_patterns(".git", ".pactrail"), symlinks=True)
                 clean_env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "TMPDIR") if key in os.environ}
                 for key in ("targeted", "regression"):
+                    # A grader may install hidden tests or generate outputs.
+                    # Each phase starts from the unchanged candidate so those
+                    # writes cannot contaminate another phase's policy checks.
+                    grading = root / "grading" / key
+                    grading.parent.mkdir(exist_ok=True)
+                    shutil.copytree(candidate, grading, ignore=shutil.ignore_patterns(".git", ".pactrail"), symlinks=True)
                     logs = root / key
                     logs.mkdir()
                     graded = command(task[key], grading, logs, task.get("grader_timeout_seconds", 120), clean_env)

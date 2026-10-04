@@ -663,8 +663,15 @@ license; it does not revoke license grants for previously distributed versions.
 
 ## Experimental v2.1 collaboration
 
-The feature branch adds bounded specialist collaboration while retaining one
+The v2.1 release candidate adds bounded specialist collaboration while retaining one
 governed authority plane. Single-agent remains the default. See
 [experimental agents](docs/multi-agent.md) for text profiles, durable status,
 latent capability limits and research qualification. Latent runtime tests do not
 establish a real-model performance improvement.
+
+The preregistered Space Bunny diagnostic passed **6/9 single-agent trials versus
+1/9 full text-agent trials**; eight text runs exhausted specialist ceilings.
+The profile remains experimental and off by default. See the
+[qualification evidence](docs/design/0019-v2.1-release-qualification.md) and
+[v2.1 release notes draft](docs/release-v2.1.0.md). No release/tag is published by
+preparing this candidate.
