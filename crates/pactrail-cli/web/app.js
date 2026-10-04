@@ -2040,13 +2040,15 @@ if (typeof document !== "undefined") {
   function defaultView(record) {
     const k = runState(record);
     return k === "answered"
-      ? "answer"
+      ? "conversation"
       : ["review", "applied", "discarded"].includes(k)
         ? "changes"
-        : "trace";
+        : k === "running"
+          ? "conversation"
+          : "trace";
   }
   function renderRunShell(run) {
-    const page = el("article", "run-page"),
+    const page = el("article", "run-page mobile-collapsed"),
       header = el("header", "run-header"),
       heading = el("div", "run-heading"),
       title = el("h1", "", runTitle(run.record), { tabindex: "-1" }),
@@ -2072,8 +2074,53 @@ if (typeof document !== "undefined") {
       stateSlot,
       actionsBox,
     );
-    append(header, heading, meta, phase, mobile, stats, last);
-    append(page, header, banners, tabs, content);
+    append(header, heading, meta, phase, mobile, last);
+    const nextTask = el("form", "next-task-composer"),
+      nextInput = el("textarea", "next-task-input", null, {
+        "aria-label": "Next task",
+        placeholder: "Plan your next task…",
+        maxlength: 16000,
+        rows: 2,
+      }),
+      nextAction = button("Prepare task ↑", null, "button primary", {
+        type: "submit",
+      }),
+      nextHint = el(
+        "span",
+        "caption",
+        "A new isolated run. Review setup before dispatch.",
+      );
+    nextInput.value = read(
+      "nextTaskDraft",
+      "",
+      (v) => typeof v === "string" && v.length <= 16000,
+    );
+    const syncNextTask = () => {
+      save("nextTaskDraft", nextInput.value);
+      disabled(
+        nextAction,
+        nextInput.value.trim() ? null : "Write a task first.",
+      );
+    };
+    nextInput.addEventListener("input", syncNextTask);
+    syncNextTask();
+    nextTask.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!nextInput.value.trim()) {
+        nextInput.focus();
+        return;
+      }
+      state.draft = { goal: nextInput.value, title: "" };
+      save("draft", state.draft);
+      save("nextTaskDraft", "");
+      navigate("/");
+    });
+    append(
+      nextTask,
+      nextInput,
+      append(el("div", "next-task-controls"), nextHint, nextAction),
+    );
+    append(page, header, banners, tabs, content, nextTask, stats);
     $("main").replaceChildren(page);
     run.nodes = {
       page,
@@ -2089,6 +2136,7 @@ if (typeof document !== "undefined") {
       banners,
       tabs,
       content,
+      nextTask,
     };
     run.statNodes = {};
     for (const [key, label] of [
@@ -2121,7 +2169,7 @@ if (typeof document !== "undefined") {
       },
       "icon-button header-details-button",
       {
-        "aria-expanded": "true",
+        "aria-expanded": "false",
         "aria-label": "Show run details",
         title: "Show run details",
       },
@@ -2147,9 +2195,14 @@ if (typeof document !== "undefined") {
       new URLSearchParams(location.search).get("view") ||
       defaultView(currentRecord(run));
     if (
-      !["trace", "changes", "evidence", "receipt", "answer"].includes(
-        requested,
-      ) ||
+      ![
+        "conversation",
+        "trace",
+        "changes",
+        "evidence",
+        "receipt",
+        "answer",
+      ].includes(requested) ||
       (["changes", "receipt"].includes(requested) && !run.receipt)
     )
       requested = "trace";
@@ -2157,7 +2210,7 @@ if (typeof document !== "undefined") {
       page.classList.add("mobile-collapsed");
       detailsButton.setAttribute("aria-expanded", "false");
     }
-    switchTab(run, requested, false);
+    switchTab(run, requested === "answer" ? "conversation" : requested, false);
     title.focus();
   }
   function renameRun(run, anchor) {
@@ -2183,6 +2236,7 @@ if (typeof document !== "undefined") {
   }
   function updateRunHeader(run) {
     if (!run.nodes) return;
+    updateConversation(run);
     const record = currentRecord(run),
       key = runState(record),
       contract = contractOf(run),
@@ -2550,13 +2604,15 @@ if (typeof document !== "undefined") {
   function updateTabs(run) {
     const keys =
       runState(currentRecord(run)) === "answered"
-        ? ["answer", "trace", "evidence", "receipt"]
-        : ["trace", "changes", "evidence", "receipt"];
+        ? ["conversation", "trace", "evidence", "receipt"]
+        : ["conversation", "trace", "changes", "evidence", "receipt"];
     for (const key of keys) {
       let tab = run.nodes.tabs.querySelector(`[data-view="${key}"]`);
       if (!tab) {
         tab = button(
-          key[0].toUpperCase() + key.slice(1),
+          key === "answer"
+            ? "Conversation"
+            : key[0].toUpperCase() + key.slice(1),
           () => {
             if (tab.getAttribute("aria-disabled") !== "true")
               switchTab(run, key);
@@ -2584,6 +2640,7 @@ if (typeof document !== "undefined") {
       if (!keys.includes(tab.dataset.view)) tab.remove();
   }
   function switchTab(run, view, write = true) {
+    if (view === "answer") view = "conversation";
     saveScroll();
     run.view = view;
     if (write) {
@@ -2600,14 +2657,19 @@ if (typeof document !== "undefined") {
       });
       run.panels.set(view, panel);
       run.nodes.content.append(panel);
+      if (view === "conversation") renderConversation(run, panel);
       if (view === "trace") renderTrace(run, panel);
       if (view === "changes") renderChanges(run, panel);
       if (view === "evidence") renderEvidence(run, panel);
       if (view === "receipt") renderReceipt(run, panel);
-      if (view === "answer") renderAnswer(run, panel);
     }
     for (const [key, p] of run.panels) p.hidden = key !== view;
     run.panel = panel;
+    run.nodes.page.classList.toggle(
+      "conversation-view",
+      ["conversation", "answer"].includes(view),
+    );
+    run.nodes.nextTask.hidden = !["conversation", "answer"].includes(view);
     updateTabs(run);
     const offset = state.scrolls.get(run.id + ":" + view);
     if (offset !== undefined)
@@ -4438,59 +4500,107 @@ if (typeof document !== "undefined") {
     flush();
     return root;
   }
-  function renderAnswer(run, panel) {
-    panel.replaceChildren();
-    const reading = el("div", "reading"),
-      summary = run.detail?.web_result?.summary,
-      u = usageProjection(run.events),
-      toolbar = el("div", "answer-toolbar");
-    if (typeof summary === "string" && summary) {
-      append(
-        toolbar,
-        button("Copy answer", (e) => copy(summary, e.currentTarget)),
-        el(
-          "span",
-          "caption",
-          `${timeText(run.events.at(-1)?.timestamp, true)} · ${u.turns} turns · ${formatUsage(u.total, { kind: "tokens", coverage: { reported: u.reported, total: u.turns } }).text} tokens`,
-        ),
-      );
-      append(reading, toolbar, markdown(summary));
-    } else {
-      append(
-        reading,
-        banner(
-          "neutral",
-          "Answer text unavailable.",
-          "The answer text wasn’t stored for runs started outside the browser. The trace shows what the agent did.",
-        ),
-      );
-      for (const e of run.events.slice(-10))
-        reading.append(
-          el(
-            "p",
-            "caption",
-            e.event.data?.summary ||
-              e.event.data?.message ||
-              e.event.type.replaceAll("_", " "),
+  function renderConversation(run, panel) {
+    const thread = el("div", "conversation-thread"),
+      task = el("section", "conversation-task"),
+      reply = el("section", "conversation-reply"),
+      status = el("div", "conversation-status"),
+      answer = el("div", "conversation-answer"),
+      consulted = el("section", "conversation-consulted", null, { hidden: "" }),
+      consultedPaths = el("div", "chips"),
+      controls = el("div", "conversation-actions");
+    append(consulted, el("h3", "", "Files consulted"), consultedPaths);
+    append(
+      task,
+      el("span", "caption", "Your task"),
+      el(
+        "p",
+        "task-prose",
+        contractOf(run)?.goal || run.record.goal || "Task text not recorded.",
+      ),
+    );
+    append(
+      reply,
+      el("h2", "conversation-brand", "Pactrail"),
+      status,
+      answer,
+      consulted,
+      controls,
+    );
+    append(thread, task, reply);
+    panel.append(thread);
+    run.conversationUI = {
+      status,
+      answer,
+      controls,
+      summary: null,
+      actionKey: null,
+    };
+    Object.assign(run.conversationUI, {
+      consulted,
+      consultedPaths,
+      knownPaths: new Set(),
+    });
+    updateConversation(run);
+  }
+  function updateConversation(run) {
+    const ui = run.conversationUI;
+    if (!ui) return;
+    const record = currentRecord(run),
+      key = runState(record),
+      summary = run.detail?.web_result?.summary;
+    const latest = run.events.at(-1),
+      text = latest?.event?.data?.summary || latest?.event?.data?.message;
+    const statusText =
+      typeof summary === "string" && summary
+        ? ""
+        : key === "running"
+          ? `Working in the isolated candidate. ${text || "Open Trace for recorded activity."}`
+          : key === "review"
+            ? "The candidate is ready for review. Check the changes and evidence before applying."
+            : key === "answered"
+              ? "Answer text was not stored for this run. The trace records the work performed."
+              : `${stateInfo[key]?.[0] || key}. Open Trace and Receipt for the recorded result.`;
+    if (ui.status.textContent !== statusText)
+      ui.status.textContent = statusText;
+    if (ui.summary !== summary) {
+      ui.summary = summary;
+      ui.answer.replaceChildren();
+      if (typeof summary === "string" && summary) {
+        ui.answer.append(
+          markdown(summary),
+          button(
+            "Copy answer",
+            (e) => copy(summary, e.currentTarget),
+            "button",
           ),
         );
+      }
     }
-    const consulted = new Set(
-      actions(run.events)
-        .flatMap((e) => e.event.data.observed_effects || [])
-        .filter((x) => x.startsWith("fs.read:"))
-        .map((x) => x.slice(8)),
-    );
-    if (consulted.size)
-      append(
-        reading,
-        el("h2", "", "Files consulted"),
-        append(
-          el("div", "chips"),
-          ...[...consulted].map((p) => copyText(p, "Copy consulted path")),
-        ),
+    for (const event of actions(run.events)) {
+      for (const effect of event.event.data.observed_effects || []) {
+        if (!effect.startsWith("fs.read:")) continue;
+        const path = effect.slice(8);
+        if (ui.knownPaths.has(path)) continue;
+        ui.knownPaths.add(path);
+        ui.consultedPaths.append(copyText(path, "Copy consulted path"));
+        ui.consulted.hidden = false;
+      }
+    }
+    const actionKey = key + ":" + Boolean(run.receipt);
+    if (ui.actionKey !== actionKey) {
+      ui.actionKey = actionKey;
+      ui.controls.replaceChildren(
+        button("Open trace", () => switchTab(run, "trace")),
       );
-    panel.append(reading);
+      if (run.receipt?.changes?.length)
+        ui.controls.append(
+          button("Review changes", () => switchTab(run, "changes")),
+        );
+      ui.controls.append(
+        button("Open evidence", () => switchTab(run, "evidence")),
+      );
+    }
   }
   function showDialog(title, body, footer, initial) {
     const d = $("dialog");
@@ -4912,6 +5022,7 @@ if (typeof document !== "undefined") {
           confirmLocal(e.currentTarget, "Clear draft?", () => {
             state.draft = { goal: "", title: "" };
             save("draft", state.draft);
+            save("nextTaskDraft", "");
           }),
         ),
         button("Reset preferences", (e) =>
@@ -5270,8 +5381,7 @@ if (typeof document !== "undefined") {
       if (run.evidenceUI) updateEvidence(run);
       if (run.panels.has("receipt"))
         renderReceipt(run, run.panels.get("receipt"));
-      if (run.panels.has("answer") && run.receipt)
-        renderAnswer(run, run.panels.get("answer"));
+      updateConversation(run);
       updateDecision(run);
     } catch (error) {
       if (error.network) connectionLost();

@@ -6,6 +6,11 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-10-05
+
+- Add a conversation workspace matching the supplied DeepSeek Harness reference: compact run header, readable task/result thread, bottom next-task composer and slim usage footer.
+- Preserve bookmarked Answer views as Conversation aliases and keep all trace, changes, evidence and receipt views available. The next-task composer prepares a separate run; it does not claim unsupported same-run chat continuation.
+
 ## [2.1.1] - 2026-10-05
 
 - Refresh the local web workspace with a centered task composer, integrated dispatch card, expandable run setup, compact sidebar, and neutral light/dark surfaces inspired by DeepSeek Harness's workspace flow.
