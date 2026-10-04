@@ -96,6 +96,11 @@ Local Linux checks on the implementation:
   denied: passed.
 - Local installer smoke: accepted a checksum-verified release asset; rejected
   tampering without changing the previously installed binary.
+- [GitHub CI for implementation commit `7e3ec1a`](https://github.com/AKMessi/pactrail/actions/runs/37217495813)
+  completed successfully: Linux, macOS and Windows quality/release/installer
+  gates, Docker hostile-containment checks, dependency policy, and real terminal
+  workflows. The local ignored OCI test is therefore covered by its dedicated CI
+  job. This records the tested implementation commit, not a released v2.1 tag.
 
 Tests exercise role serialization, malformed descriptors, model mismatch,
 oversized/corrupt artifacts, exact ledger reconstruction, atomic SQLite rollback,

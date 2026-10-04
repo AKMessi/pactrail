@@ -1,6 +1,7 @@
 # Design 0018: bounded agents and integrity-bound latent communication
 
-Status: implementation in progress; experimental, off by default.
+Status: bounded runtime implemented; experimental, off by default. Real-model
+latent qualification remains pending. See [the implementation audit](0018-implementation-audit.md).
 Target: 2.1. Published 2.0.0 is immutable.
 
 ## 1. Problem and research hypothesis
