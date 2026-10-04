@@ -149,3 +149,8 @@ ordinary conversation IR. Existing `action_completed` records carry bounded
 `agent_schema=1` / `agent_data` lifecycle provenance; unknown ordinary event kinds
 have not been introduced. Older binaries cannot resume an agent-session prefix
 and must reject it. SDK revision 8 adds an opt-in experimental namespace.
+
+The v2.1 candidate keeps these ranges and SDK revision 8; the package minor
+version does not introduce a new ordinary durable schema. Qualification includes
+old fixtures, an embedding consumer and normalized default provider requests
+against the exact v2.0.0 binary. Experimental agent state is not downgrade-safe.

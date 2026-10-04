@@ -208,3 +208,12 @@ recovery behavior, observability, test plan, and compatibility strategy. See
 [Design 0017](design/0017-evidence-directed-completion.md) adds an opt-in bounded
 completion audit on the existing engine. This is separate from the shared runtime
 proposal; promotion to a default policy requires outcome/cost evidence.
+
+## v2.1 qualification outcome
+
+The bounded serial authority runtime has tests and real hosted text-agent runs.
+The frozen diagnostic found 1/9 text successes versus 6/9 single. Specialist
+budget allocation and communication usefulness remain research questions; the
+profile stays experimental. No benchmark-driven tuning is part of this release.
+Actual neural latent usefulness requires a genuine backend and causal evaluation,
+not the CPU mechanics mock. See [qualification](design/0019-v2.1-release-qualification.md).

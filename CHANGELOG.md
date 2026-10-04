@@ -6,7 +6,9 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Experimental bounded agents (v2.1)
+## [2.1.0] - Release candidate
+
+### Experimental bounded agents
 
 - Add opt-in independent specialist conversations with deterministic serial
   routing, capability ceilings and shared governed candidate authority.
@@ -18,6 +20,14 @@ follow [Semantic Versioning](https://semver.org/).
   SDK extension. Built-in providers explicitly reject unsupported latent mode.
 - Add text baselines, a CPU correctness mock, causal interventions, recovery and
   privilege tests, a fuzz target and matched external-grader trial infrastructure.
+- Preserve controller/peer delivery recovery before invocation reservation and
+  provider-reported model/usage coverage, including actual zero.
+- Qualify strict builds, recovery/authority tests, bounded fuzz campaigns and
+  real Space Bunny Alpha text collaboration. On the frozen three-task diagnostic,
+  single passed 6/9 versus text 1/9; eight text runs hit specialist ceilings.
+  Lower text resources reflect early failures, not an efficiency improvement.
+- Isolate external grading phases and prevent shared Cargo stale-artifact reuse;
+  retain the invalid first experiment and publish the replacement protocol/results.
 - No first-party real hidden-state model adapter or performance gain is claimed.
 
 
@@ -629,7 +639,8 @@ not published as separate GitHub releases. Their changes ship in v1.0.0.
 - Bounded run-goal and memory previews now end with a visible ellipsis instead
   of silently dropping continuation text.
 
-[Unreleased]: https://github.com/AKMessi/pactrail/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/AKMessi/pactrail/compare/v2.0.0...HEAD
+[2.1.0]: https://github.com/AKMessi/pactrail/compare/v2.0.0...feat/v2.1-multi-agent
 [1.0.0]: https://github.com/AKMessi/pactrail/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/AKMessi/pactrail/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/AKMessi/pactrail/compare/v0.1.0...v0.2.0

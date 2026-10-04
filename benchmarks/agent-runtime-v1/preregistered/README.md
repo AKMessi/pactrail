@@ -14,3 +14,9 @@ The replacement runner isolates each grading phase and has a regression test
 that writes a grading artifact and rejects contamination between phases. A new
 registration retains the same tasks, seed, arms, repetitions and model budgets;
 grader timeouts are made explicit using the original task manifest ceilings.
+
+`space-bunny-20261005-v2.json` completed all 18 declared trials after validation
+of the complete known bad/gold grading pipeline. Its immutable SHA sidecar and
+[public summary](space-bunny-20261005-v2-summary.json) retain the observed negative
+quality result: single 6/9, full text 1/9. The ignored evidence directory retains
+raw failed trials, receipts, traces, status, candidate diffs and grading output.
