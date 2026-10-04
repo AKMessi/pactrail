@@ -90,12 +90,31 @@ seeds, stopping rules, task population, donor selection and analysis. Flat corre
 vs ablated performance falsifies useful communication for that setup. A tiny
 fixture or a mock-only effect is not evidence of repository-task superiority.
 
-The current CLI adapter treats zero-valued normalized token fields conservatively:
-it cannot distinguish a provider-reported zero from the legacy `Usage` default
-for an absent field. Such totals remain `null`, with coverage explained; positive
-fully covered totals remain measured. This does not alter the engine ledger.
-Cost, when available, is the engine estimate from a configured rate card, not a
-provider invoice. A reported estimated cost of zero remains distinct from absent.
+The CLI adapter uses explicit provider-reported usage markers when available,
+including real zero. Absent fields stay `null`; legacy normalized zero alone
+cannot prove reporting coverage. Every scored hosted response can require the
+frozen response model identity. Estimated cost needs an explicit complete rate
+card and remains distinct from a provider invoice.
+
+### Release qualification
+
+`prepare_issues.py` seals the existing historical issue population;
+`issue_grader.py` grades separate disposable candidate copies without provider
+credentials. Validate every bad/gold state before freezing. Its regression test
+covers bad → gold → bad grading with shared Cargo targets and old timestamps.
+`space_bunny_benchmark.py --freeze RESULTS --protocol preregistered/NAME.json
+--binary /absolute/pactrail --env-file /existing/root/.env` freezes the protocol,
+runner/grader/input hashes, model metadata and global budgets without scored
+model requests. It refuses to overwrite a protocol. Execute with the same
+`--protocol`, `--binary`, `--env-file` and a fresh `--output RESULTS/trials`.
+Every frozen file and runtime binary is checked before execution. Do not change
+files during an experiment. Moving the prepared paths requires a new registration.
+
+`live_qualification.py` and `live_recovery.py` provide separate unscored
+engineering checks. `disabled_regression.py` compares ordinary provider requests
+and isolated effects to an explicit baseline binary. Public historical tasks are
+diagnostic evidence, not independently curated held-out evaluation. Hosted
+Space Bunny can qualify text collaboration, never neural latent usefulness.
 
 Optional `model_identity.pricing` provides exactly `input_price`,
 `cached_input_price`, `cache_creation_price` and `output_price` as non-negative

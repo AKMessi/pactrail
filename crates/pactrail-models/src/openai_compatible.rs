@@ -387,6 +387,7 @@ struct OpenAiStreamAccumulator {
     finish_reason: Option<FinishReason>,
     usage: Usage,
     usage_seen: bool,
+    reported_usage: serde_json::Map<String, Value>,
     done: bool,
 }
 
@@ -438,6 +439,7 @@ impl OpenAiStreamAccumulator {
                 ));
             }
             self.usage = next;
+            self.reported_usage.extend(reported_usage_fields(usage));
             self.usage_seen = true;
             observer.on_event(&ModelStreamEvent::UsageUpdate { usage: next });
         }
@@ -626,6 +628,7 @@ impl OpenAiStreamAccumulator {
         if let Some(id) = self.response_id {
             extensions.insert("id".to_owned(), Value::String(id));
         }
+        extensions.extend(self.reported_usage);
         Ok(ModelResponse {
             text: self.text,
             tool_calls,
@@ -939,10 +942,13 @@ fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResp
             cache_creation_input_tokens: 0,
         });
     let mut extensions = serde_json::Map::new();
-    for key in ["id", "created", "system_fingerprint"] {
+    for key in ["id", "created", "model", "system_fingerprint"] {
         if let Some(value) = value.get(key) {
             extensions.insert(key.to_owned(), value.clone());
         }
+    }
+    if let Some(usage) = value.get("usage") {
+        extensions.extend(reported_usage_fields(usage));
     }
     Ok(ModelResponse {
         text: text.to_owned(),
@@ -952,6 +958,29 @@ fn parse_response(value: &Value, request_id: Option<String>) -> Result<ModelResp
         provider_request_id: request_id,
         extensions,
     })
+}
+
+// Keep provider reporting coverage separate from the legacy zero-default ledger.
+// Only numeric counters are retained; reasoning bodies and arbitrary metadata are not.
+fn reported_usage_fields(usage: &Value) -> serde_json::Map<String, Value> {
+    let mut reported = serde_json::Map::new();
+    for (source, target) in [
+        ("prompt_tokens", "reported_input_tokens"),
+        ("completion_tokens", "reported_output_tokens"),
+    ] {
+        if let Some(value) = usage.get(source).and_then(Value::as_u64) {
+            reported.insert(target.to_owned(), value.into());
+        }
+    }
+    if let Some(value) = usage
+        .get("prompt_tokens_details")
+        .and_then(|details| details.get("cached_tokens"))
+        .and_then(Value::as_u64)
+        .or_else(|| usage.get("prompt_cache_hit_tokens").and_then(Value::as_u64))
+    {
+        reported.insert("reported_cached_input_tokens".to_owned(), value.into());
+    }
+    reported
 }
 
 fn cached_input_tokens(usage: &Value) -> u64 {
@@ -1155,6 +1184,21 @@ mod tests {
             "prompt_cache_hit_tokens": 6
         });
         assert_eq!(cached_input_tokens(&usage), 7);
+    }
+
+    #[test]
+    fn reported_usage_preserves_real_zero_and_absent_coverage() {
+        let absent = reported_usage_fields(&json!({}));
+        assert!(absent.is_empty());
+        let zero = reported_usage_fields(&json!({
+            "prompt_tokens": 0, "completion_tokens": 0,
+            "prompt_tokens_details": {"cached_tokens": 0}
+        }));
+        assert_eq!(zero["reported_input_tokens"], 0);
+        assert_eq!(zero["reported_output_tokens"], 0);
+        assert_eq!(zero["reported_cached_input_tokens"], 0);
+        assert_eq!(zero.len(), 3);
+        assert!(reported_usage_fields(&json!({"prompt_tokens": -1})).is_empty());
     }
 
     #[test]

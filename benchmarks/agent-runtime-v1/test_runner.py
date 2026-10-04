@@ -12,6 +12,26 @@ spec.loader.exec_module(runner)
 
 
 class RunnerTests(unittest.TestCase):
+    def test_external_rust_grader_does_not_reuse_bad_or_gold_path_artifacts(self):
+        grader = Path(__file__).with_name("issue_grader.py").resolve()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            baseline = root / "baseline"
+            baseline.mkdir()
+            (baseline / "Cargo.toml").write_text('[package]\nname="grading-cache-fixture"\nversion="0.1.0"\nedition="2024"\n[workspace]\n')
+            manifest = root / "issues.json"
+            manifest.write_text(json.dumps([{"id": "cache", "baseline": str(baseline), "forbidden_paths": [], "overlay_sha256": {}, "targeted": ["cargo", "test", "--quiet"]}]))
+            for index, value in enumerate([0, 1, 0]):
+                workspace = root / str(index)
+                (workspace / "src").mkdir(parents=True)
+                (workspace / "Cargo.toml").write_text((baseline / "Cargo.toml").read_text())
+                source = workspace / "src/lib.rs"
+                source.write_text(f'pub fn value()->u8 {{{value}}}\n#[test] fn regression() {{assert_eq!(value(),1);}}\n')
+                import os
+                os.utime(source, (946684800, 946684800))
+                result = subprocess.run([sys.executable, str(grader), str(manifest), "cache", "targeted"], cwd=workspace, capture_output=True)
+                self.assertEqual(result.returncode == 0, value == 1, result.stdout + result.stderr)
+
     def test_missing_and_zero_metrics_differ(self):
         measured = runner.metrics({"metrics": {"cost_microusd": 0}})
         self.assertEqual(measured["cost_microusd"], 0)
