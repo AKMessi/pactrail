@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "seed": 210105,
+  "repetitions": 3,
+  "runtime_identity": {
+    "commit": "62fad0edb8b9bbc6705e48686329d4ade097fc25",
+    "binary_sha256": "c9e3b78730c77075d0544f3a23cad4837dd8e4272330e2a821b721b6505a9fcd"
+  },
+  "model_identity": {
+    "provider": "open-ai-compatible",
+    "model": "stealth/space-bunny-alpha",
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key_env": "OPENROUTER_API_KEY",
+    "reasoning_effort": "low",
+    "require_response_model": true
+  },
+  "provider_metadata": {
+    "id": "stealth/space-bunny-alpha",
+    "canonical_slug": "stealth/space-bunny-alpha",
+    "hugging_face_id": null,
+    "name": "Space Bunny Alpha",
+    "created": 1790174884,
+    "description": "Space Bunny Alpha is an anonymous large model with blazing-fast inference, strong coding capabilities and native multimodal input support. It delivers adjustable reasoning effort, and a 1M-token context window. Space...",
+    "context_length": 1000000,
+    "architecture": {
+      "modality": "text+image+video->text",
+      "input_modalities": [
+        "text",
+        "image",
+        "video"
+      ],
+      "output_modalities": [
+        "text"
+      ],
+      "tokenizer": "Other",
+      "instruct_type": null
+    },
+    "pricing": {
+      "prompt": "0",
+      "completion": "0"
+    },
+    "top_provider": {
+      "context_length": 1000000,
+      "max_completion_tokens": 524288,
+      "is_moderated": false
+    },
+    "per_request_limits": null,
+    "supported_parameters": [
+      "include_reasoning",
+      "max_tokens",
+      "reasoning",
+      "reasoning_effort",
+      "response_format",
+      "temperature",
+      "tool_choice",
+      "tools",
+      "top_p"
+    ],
+    "default_parameters": {},
+    "supported_voices": null,
+    "knowledge_cutoff": null,
+    "expiration_date": "2026-10-05",
+    "links": {
+      "details": "/api/v1/models/stealth/space-bunny-alpha/endpoints"
+    },
+    "reasoning": {
+      "mandatory": true,
+      "supported_efforts": [
+        "max",
+        "xhigh",
+        "high",
+        "medium",
+        "low"
+      ],
+      "default_effort": "max"
+    }
+  },
+  "limits": {
+    "model_turns": 24,
+    "wall_seconds": 600,
+    "output_tokens": 8192,
+    "context_tokens": 65536,
+    "model_tokens": 500000
+  },
+  "permissions": {
+    "process": "disabled",
+    "write_paths": [
+      "."
+    ]
+  },
+  "normalization": "Equal global engine model attempts, cumulative token limit and wall budget. Text specialists share the global budget; read-only role ceilings and serialized implementer effects. Provider retries are not independently counted.",
+  "capabilities": {
+    "native_tools": true,
+    "parallel_tools": false,
+    "structured_output": false,
+    "vision": false,
+    "prompt_caching": false,
+    "streaming": false,
+    "reasoning_controls": true,
+    "source": "user_declared"
+  },
+  "temperature": 0.0,
+  "arms": [
+    {
+      "id": "single",
+      "mode": "single",
+      "profile": null,
+      "adapter": [
+        "/usr/bin/python3",
+        "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/pactrail_cli.py"
+      ]
+    },
+    {
+      "id": "text",
+      "mode": "text",
+      "profile": "full",
+      "adapter": [
+        "/usr/bin/python3",
+        "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/pactrail_cli.py"
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "id": "bytes-get-int-zero",
+      "repository": "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/tasks/bytes-get-int-zero",
+      "commit": "3d989f6ba4a5a87935c533d10c82e39dfe121919",
+      "goal": "Fix issue #798 in this Bytes repository. Buf::get_int, get_int_le, and get_int_ne panic when nbytes is 0 because sign extension attempts a 64-bit shift. A zero-width signed read must behave consistently with get_uint: return 0 and consume no bytes, for every Buf implementation and endian variant. Work offline, do not inspect git history or any remote, do not modify tests, and make the smallest production-quality implementation change.  Commands are disabled; do not claim tests ran. An external grader will run the checks.",
+      "targeted": [
+        "/usr/bin/python3",
+        "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/issue_grader.py",
+        "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/issues.json",
+        "bytes-get-int-zero",
+        "targeted"
+      ],
+      "regression": [
+        "/usr/bin/python3",
+        "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/issue_grader.py",
+        "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/issues.json",
+        "bytes-get-int-zero",
+        "regression"
+      ]
+    },
+    {
+      "id": "fd-and-pattern-path-separator",
+      "repository": "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/tasks/fd-and-pattern-path-separator",
+      "commit": "ea13c7980003a874c592a6cdf13b6c37eb9ec478",
+      "goal": "Fix the fd CLI bug described in PR #2036. The existing path-separator diagnostic validates only the primary positional pattern. An --and pattern is matched against the file name in the same way, but `fd foo --and nonexistent/path` currently exits successfully with no results. Apply the same diagnostic to every --and pattern while preserving the --full-path escape hatch and the existing Windows backslash behavior. Work offline, do not inspect git history or any remote, do not modify tests or CHANGELOG.md, and make a focused production-quality change.  Commands are disabled; do not claim tests ran. An external grader will run the checks.",
+      "targeted": [
+        "/usr/bin/python3",
+        "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/issue_grader.py",
+        "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/issues.json",
+        "fd-and-pattern-path-separator",
+        "targeted"
+      ],
+      "regression": [
+        "/usr/bin/python3",
+        "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/issue_grader.py",
+        "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/issues.json",
+        "fd-and-pattern-path-separator",
+        "regression"
+      ]
+    },
+    {
+      "id": "pactrail-idempotent-discard",
+      "repository": "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/tasks/pactrail-idempotent-discard",
+      "commit": "07fec938a56938efd5f048f414179d36b0d5818e",
+      "goal": "Fix Pactrail's completed-discard recovery bug. Calling `pactrail discard RUN_ID --json` a second time currently fails after the first call removes the candidate workspace. Discard must be idempotent. It must also recover an interrupted operation where the durable event state is Discarded but the receipt still says ReadyToApply: rebuild and persist the discarded receipt from the durable event head. Preserve receipt integrity, retained review artifacts, and explicit errors for inconsistent state/workspace combinations. Work offline, do not inspect git history or any remote, do not modify tests or documentation, and implement the smallest coherent production-quality fix.  Commands are disabled; do not claim tests ran. An external grader will run the checks.",
+      "targeted": [
+        "/usr/bin/python3",
+        "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/issue_grader.py",
+        "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/issues.json",
+        "pactrail-idempotent-discard",
+        "targeted"
+      ],
+      "regression": [
+        "/usr/bin/python3",
+        "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/issue_grader.py",
+        "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/issues.json",
+        "pactrail-idempotent-discard",
+        "regression"
+      ]
+    }
+  ],
+  "topology": "Serial localizer -> solver -> critic -> implementer, one round; default template ceilings 4/4/4/12, global 24. Independent conversations; specialist tools read-only. Single uses the same tool kernel/contract with no peer messages.",
+  "task_provenance": [
+    {
+      "id": "bytes-get-int-zero",
+      "repository_url": "https://github.com/tokio-rs/bytes.git",
+      "issue_url": "https://github.com/tokio-rs/bytes/issues/798",
+      "base_commit": "a7952fb4478f6dc226f623b217432fbc6f8dad24",
+      "reference_commit": "acd1e0ffb8f076225759b8005d04f65ef77cccca",
+      "commit": "3d989f6ba4a5a87935c533d10c82e39dfe121919",
+      "overlay_sha256": {
+        "tests/test_buf.rs": "fd3c515fab1c220a36eddd0322ea01fcbace1fd4654304789ac04c9096f4b939"
+      }
+    },
+    {
+      "id": "fd-and-pattern-path-separator",
+      "repository_url": "https://github.com/sharkdp/fd.git",
+      "issue_url": "https://github.com/sharkdp/fd/pull/2036",
+      "base_commit": "a8a77d21621a11dbe499f1732331448c48ce9b76",
+      "reference_commit": "6aac84e4ae30c502d22a76c2e80183ac7306d544",
+      "commit": "ea13c7980003a874c592a6cdf13b6c37eb9ec478",
+      "overlay_sha256": {
+        "tests/tests.rs": "45f0c4fbace0bd228113c7f6969d5420e2626612685fc912752fdf393554c5ca"
+      }
+    },
+    {
+      "id": "pactrail-idempotent-discard",
+      "repository_url": "https://github.com/AKMessi/pactrail.git",
+      "issue_url": "https://github.com/AKMessi/pactrail/commit/7231c6ed8d82de80ceec77ad681202b4f93bbba1",
+      "base_commit": "8adb21a23a189196b77ca3412104cb03d32809f5",
+      "reference_commit": "7231c6ed8d82de80ceec77ad681202b4f93bbba1",
+      "commit": "07fec938a56938efd5f048f414179d36b0d5818e",
+      "overlay_sha256": {
+        "crates/pactrail-cli/tests/end_to_end.rs": "04a93ad0fc47d18b9a323ee765ef0d8c2e85a1043fae1bfe1851bb83349b06cb"
+      }
+    }
+  ],
+  "population": "Three public historical diagnostic defects, not independently curated held-out tasks. Synthetic baseline commits remove future history/remotes. Bytes stable autobenches=false; standalone bytes/fd workspace normalization. fd regression omits two previously documented platform-dependent tests. Gold reference tests are held outside agent workspaces.",
+  "stopping_rules": "All 18 declared trials count. Seed-shuffled sequential execution. No retries of failed trials, no substitution, no early performance stopping. Provider errors/timeouts are failures; invalid and unsupported remain reported separately. Any runner/grader correctness repair freezes this experiment and requires a new protocol.",
+  "success_criteria": "Both unchanged external targeted and regression graders pass on the isolated candidate; valid receipt/trace and source isolation are checked separately. No success claim from model prose.",
+  "analysis": "Paired task-level success delta with 10000 task-clustered bootstrap samples, seed 210105. Report all arm counts, per-task outcomes, covered token/cache/tool/communication totals and equally weighted task means; no synthetic score. Three tasks produce weak generalization/uncertainty evidence.",
+  "limitations": [
+    "Input/output budget checks occur after provider responses and may overshoot by one response.",
+    "HTTP adapter retries up to three times within one logical engine attempt; unavailable failed-request usage/billing cannot be reconstructed.",
+    "No exact inter-agent language-token count without generated_text_tokens; report null. Cache creation, GPU time, inference RSS and invoice cost are unknown.",
+    "No stronger process authority for either arm; both rely on external verification.",
+    "Opaque hosted checkpoint identity cannot be cryptographically attested; every reported response model must match the requested model."
+  ],
+  "environment": {
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+    "machine": "x86_64",
+    "python": "3.14.4 (main, Aug 20 2026, 10:41:58) [GCC 15.2.0]",
+    "cpu_count": 4,
+    "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+    "hardware_cpu": "AMD Ryzen 3 3200G with Radeon Vega Graphics"
+  },
+  "frozen_inputs": {
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/analyze.py": "06447b5703722bed61983a4a681a45f2fc0a0ef8d25c60f0d28cde3302ca551c",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/test_cli_adapter.py": "b4574ac7fb981cc44244662d129e41535b7fb4a1b89e986b62d2e7f074d0f4b7",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/live_qualification.py": "20962e813b8a803ef333e9862344d2651829cf32d45b21efcc40c7c5a1601c8f",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/pactrail_cli.py": "b7375f32783c6a4c6293adb9dc2cba180ac672ce7373c27a775747ed17b9147e",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/test_runner.py": "f332f0cc6bb192ea23d8b145d08a7b1951ccc6172442fa1a877c6741e82c629d",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/prepare_issues.py": "2de1b12d7605428a785fc62676bd9399bc229fcbf46d079eab68ca882ebcc8f1",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/live_recovery.py": "bebe47c943296fa489d9b1149779452b6468c356c5987e8e95fa9f654e9cac9d",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/disabled_regression.py": "fb45c2b9bcc8340554906576048e75d6eec98adc37083e149ef46100231bf421",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/space_bunny_benchmark.py": "5214fcd02a533845f8ad6603f45543d0fadd9f6638590d6635cf1ae2c597f0b6",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/run.py": "70a61037cef52537d16fb8d32387f085a44e250d33ab5407bf7e05fb912d6d9b",
+    "/home/akmessi/pactrail-v2-release/benchmarks/agent-runtime-v1/issue_grader.py": "4687f53b84683b1f392666acdab2b24f6ac01e9b9de76b95ea6eb9a91cffe9e6",
+    "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/issues.json": "537dcd2f10a0e3828c4dd72fc022c70c7bc93e4ff2ce30204866ca43cca0d5ec",
+    "/home/akmessi/.cache/pactrail-v2-build/release/pactrail-v2.1-qualification": "c9e3b78730c77075d0544f3a23cad4837dd8e4272330e2a821b721b6505a9fcd",
+    "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/graders/bytes-get-int-zero/tests/test_buf.rs": "fd3c515fab1c220a36eddd0322ea01fcbace1fd4654304789ac04c9096f4b939",
+    "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/tasks/bytes-get-int-zero/Cargo.lock": "1cb70d19116427adec82ff45d68218c794522eee295adedc37a6856c9812a832",
+    "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/graders/fd-and-pattern-path-separator/tests/tests.rs": "45f0c4fbace0bd228113c7f6969d5420e2626612685fc912752fdf393554c5ca",
+    "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/tasks/fd-and-pattern-path-separator/Cargo.lock": "108d2e47cf071bd35c309cd3d5ed123370bead7cc2183ecf84e6028cef8af3a3",
+    "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/graders/pactrail-idempotent-discard/crates/pactrail-cli/tests/end_to_end.rs": "04a93ad0fc47d18b9a323ee765ef0d8c2e85a1043fae1bfe1851bb83349b06cb",
+    "/home/akmessi/pactrail-v2-release/benchmark-results/v2.1-qualification-20261004/tasks/pactrail-idempotent-discard/Cargo.lock": "dff5596084151a4097c9d47baa9643ad9a919e04c465aaaeade2f1cc4da07018"
+  }
+}

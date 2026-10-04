@@ -202,10 +202,14 @@ def run(protocol_path, output):
                 for path in candidate.rglob("*"):
                     if path.is_symlink():
                         path.resolve(strict=True).relative_to(candidate)
-                grading = root / "grading"
-                shutil.copytree(candidate, grading, ignore=shutil.ignore_patterns(".git", ".pactrail"), symlinks=True)
                 clean_env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "TMPDIR") if key in os.environ}
                 for key in ("targeted", "regression"):
+                    # A grader may install hidden tests or generate outputs.
+                    # Each phase starts from the unchanged candidate so those
+                    # writes cannot contaminate another phase's policy checks.
+                    grading = root / "grading" / key
+                    grading.parent.mkdir(exist_ok=True)
+                    shutil.copytree(candidate, grading, ignore=shutil.ignore_patterns(".git", ".pactrail"), symlinks=True)
                     logs = root / key
                     logs.mkdir()
                     graded = command(task[key], grading, logs, task.get("grader_timeout_seconds", 120), clean_env)

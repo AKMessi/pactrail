@@ -71,7 +71,7 @@ if r['arm']['id']=='malformed': Path(r['trial_directory'],'result.json').write_t
 p=Path(r['workspace'],'value.txt');p.write_text('after')
 Path(r['trial_directory'],'result.json').write_text(json.dumps({'schema_version':1,'model_identity':r['model_identity'],'candidate':r['workspace'],'metrics':{'cost_microusd':0}}))
 ''')
-            grader = [sys.executable, "-c", "from pathlib import Path; assert Path('value.txt').read_text() == 'after'"]
+            grader = [sys.executable, "-c", "from pathlib import Path; assert Path('value.txt').read_text() == 'after'; assert not Path('grader-output').exists(); Path('grader-output').write_text('hidden overlay or generated artifact')"]
             protocol = {"schema_version": 1, "seed": 42, "repetitions": 1, "model_identity": {"model": "fixture-not-inference"},
                 "permissions": {"process": "disabled", "write_paths": ["."]}, "normalization": "equal declared ceilings",
                 "limits": {"model_turns": 4, "wall_seconds": 5, "output_tokens": 256, "context_tokens": 4096, "model_tokens": 16384},

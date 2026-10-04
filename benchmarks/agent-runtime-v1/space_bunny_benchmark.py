@@ -33,6 +33,7 @@ def freeze(root, protocol, binary, env_file):
     tasks = []
     for issue in issues:
         task = {key: issue[key] for key in ('id', 'repository', 'commit')}
+        task['grader_timeout_seconds'] = max(issue['targeted_test']['timeout_seconds'], issue['regression_test']['timeout_seconds'])
         task['goal'] = issue['prompt'].replace('Run relevant tests before finishing.', '') + ' Commands are disabled; do not claim tests ran. An external grader will run the checks.'
         for phase in ('targeted', 'regression'):
             task[phase] = [sys.executable, str(tools / 'issue_grader.py'), str(manifest), issue['id'], phase]
