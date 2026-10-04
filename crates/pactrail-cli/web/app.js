@@ -1141,7 +1141,12 @@ if (typeof document !== "undefined") {
     main.replaceChildren();
     const page = el("section", "composer"),
       heading = el("header", "page-heading");
-    append(heading, el("h1", "", "New task"));
+    append(
+      heading,
+      el("span", "workspace-eyebrow", "Your local coding workspace"),
+      el("h1", "", "New task"),
+      el("p", "hero-description", "What should we work on?"),
+    );
     const ws = el("div", "workspace-row");
     append(
       ws,
@@ -1208,7 +1213,7 @@ if (typeof document !== "undefined") {
           "Changes stay isolated until you review and apply a candidate.",
         ),
       );
-    briefCol.append(intro);
+
     const goalField = field(
         "What should change?",
         typeof state.draft.goal === "string" ? state.draft.goal : "",
@@ -1345,11 +1350,15 @@ if (typeof document !== "undefined") {
         mono: true,
         placeholder: "Provider default",
       }),
-      key = field("API key environment variable or saved reference", config.api_key_env || "", {
-        id: "api-key-env",
-        mono: true,
-        placeholder: "OPENAI_API_KEY",
-      });
+      key = field(
+        "API key environment variable or saved reference",
+        config.api_key_env || "",
+        {
+          id: "api-key-env",
+          mono: true,
+          placeholder: "OPENAI_API_KEY",
+        },
+      );
     append(
       advanced.body,
       base.wrap,
@@ -1361,7 +1370,15 @@ if (typeof document !== "undefined") {
       ),
     );
     configCol.append(advanced.details);
-    append(grid, briefCol, configCol);
+    const setup = el("details", "run-setup", null, { open: "" }),
+      setupSummary = el("summary", "setup-summary");
+    append(
+      setupSummary,
+      el("span", "", "Run setup"),
+      el("span", "caption", "Model, permissions and limits"),
+    );
+    append(setup, setupSummary, configCol);
+    grid.append(briefCol);
     form.append(grid);
     const errors = el("div", "", null, { id: "dispatch-error" }),
       bar = el("div", "dispatch-bar"),
@@ -1372,8 +1389,9 @@ if (typeof document !== "undefined") {
       });
     dispatchButton.append(el("kbd", "", "⌘↵ / Ctrl↵"));
     append(bar, summary, dispatchButton);
-    append(form, errors, bar);
-    page.append(form);
+    append(briefCol, errors, bar);
+    append(form, setup);
+    page.append(form, intro);
     main.append(page);
     pageBreadcrumb("New task");
     let draftTimer;
@@ -1384,7 +1402,7 @@ if (typeof document !== "undefined") {
       goal.style.setProperty("height", "auto");
       goal.style.setProperty(
         "height",
-        Math.max(224, Math.min(goal.scrollHeight, innerHeight * 0.6)) + "px",
+        Math.max(144, Math.min(goal.scrollHeight, innerHeight * 0.6)) + "px",
       );
       counter.textContent =
         goal.value.length.toLocaleString("en-US") + " / 16,000";

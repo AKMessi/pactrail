@@ -19,7 +19,7 @@ durable, inspectable software change transaction.
 Illustrative terminal flow (values depend on the run):
 
 ```text
-pactrail 2.0.0 · Ledger
+pactrail 2.1.1 · Ledger
   workspace  /work/project
   commands   isolated edits · native processes blocked
 
@@ -323,7 +323,7 @@ release targets are Windows x86_64, Linux x86_64, and Apple Silicon macOS.
 To build the current source with Rust 1.95 or newer:
 
 ```console
-cargo install --git https://github.com/AKMessi/pactrail.git --tag v2.0.0 --locked pactrail
+cargo install --git https://github.com/AKMessi/pactrail.git --tag v2.1.1 --locked pactrail
 ```
 
 Or from a local checkout:
@@ -663,7 +663,7 @@ license; it does not revoke license grants for previously distributed versions.
 
 ## Experimental v2.1 collaboration
 
-The v2.1 release candidate adds bounded specialist collaboration while retaining one
+Pactrail v2.1 adds bounded specialist collaboration while retaining one
 governed authority plane. Single-agent remains the default. See
 [experimental agents](docs/multi-agent.md) for text profiles, durable status,
 latent capability limits and research qualification. Latent runtime tests do not
@@ -673,5 +673,5 @@ The preregistered Space Bunny diagnostic passed **6/9 single-agent trials versus
 1/9 full text-agent trials**; eight text runs exhausted specialist ceilings.
 The profile remains experimental and off by default. See the
 [qualification evidence](docs/design/0019-v2.1-release-qualification.md) and
-[v2.1 release notes draft](docs/release-v2.1.0.md). No release/tag is published by
-preparing this candidate.
+[v2.1 release notes](docs/release-v2.1.0.md) and
+[v2.1.1 web workspace refresh](docs/release-v2.1.1.md).

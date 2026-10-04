@@ -36,16 +36,16 @@
 /* All color literals live in this token block. Contrast is checked by web tests. */
 :root {
   color-scheme: light;
-  --bg: #f4f3ee;
-  --surface: #fbfaf6;
-  --surface-2: #eceae2;
-  --code-bg: #faf9f5;
-  --line: #dad7cb;
-  --line-strong: #b9b5a6;
-  --control: #827e71;
-  --ink: #1a1915;
-  --ink-2: #47443c;
-  --ink-3: #5e5a50;
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #eef0f4;
+  --code-bg: #f8f9fc;
+  --line: #dce0e8;
+  --line-strong: #aab2c1;
+  --control: #747d8e;
+  --ink: #182131;
+  --ink-2: #3e4859;
+  --ink-3: #505a6b;
   --accent: #2b45d6;
   --accent-soft: #e3e7fa;
   --on-accent: #ffffff;
@@ -72,16 +72,16 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #121311;
-  --surface: #191a17;
-  --surface-2: #0e0f0d;
-  --code-bg: #151613;
-  --line: #2a2b26;
-  --line-strong: #43443c;
-  --control: #7a7a6f;
-  --ink: #eceae2;
-  --ink-2: #b8b5a9;
-  --ink-3: #a3a092;
+  --bg: #13161c;
+  --surface: #1b2029;
+  --surface-2: #101319;
+  --code-bg: #161b23;
+  --line: #2e3542;
+  --line-strong: #4f596b;
+  --control: #8590a2;
+  --ink: #eef0f4;
+  --ink-2: #bdc5d3;
+  --ink-3: #adb7c9;
   --accent: #93a4ff;
   --accent-soft: #212850;
   --on-accent: #0d1233;
@@ -102,16 +102,16 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #121311;
-    --surface: #191a17;
-    --surface-2: #0e0f0d;
-    --code-bg: #151613;
-    --line: #2a2b26;
-    --line-strong: #43443c;
-    --control: #7a7a6f;
-    --ink: #eceae2;
-    --ink-2: #b8b5a9;
-    --ink-3: #a3a092;
+    --bg: #13161c;
+    --surface: #1b2029;
+    --surface-2: #101319;
+    --code-bg: #161b23;
+    --line: #2e3542;
+    --line-strong: #4f596b;
+    --control: #8590a2;
+    --ink: #eef0f4;
+    --ink-2: #bdc5d3;
+    --ink-3: #adb7c9;
     --accent: #93a4ff;
     --accent-soft: #212850;
     --on-accent: #0d1233;
@@ -2568,5 +2568,197 @@ dialog::backdrop {
   .settings-link,
   .settings-nav a {
     min-height: 44px;
+  }
+}
+
+/* Workspace composition: task first; setup remains an independent disclosure. */
+.composer {
+  max-width: 960px;
+  padding: clamp(24px, 6vh, 72px) 40px 48px;
+}
+.composer .page-heading {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.workspace-eyebrow {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.composer h1 {
+  font-size: 32px;
+  line-height: 40px;
+  letter-spacing: -0.025em;
+  margin: 8px 0;
+}
+.hero-description {
+  font-size: 16px;
+  color: var(--ink-2);
+  margin: 0 0 20px;
+}
+.composer .workspace-row {
+  justify-content: center;
+}
+.composer .workspace-path {
+  max-width: 360px;
+}
+.composer .page-heading > .caption {
+  margin: 4px 0 0;
+}
+.composer-grid {
+  display: block;
+}
+.brief-column {
+  background: var(--surface);
+  border: 1px solid var(--control);
+  border-radius: 12px;
+  padding: 20px 20px 0;
+}
+.brief-column .field-label {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.brief-column .brief {
+  border: 0;
+  background: transparent;
+  min-height: 144px;
+  padding: 8px 0;
+  resize: none;
+}
+.brief-column .dispatch-bar {
+  position: static;
+  background: transparent;
+  border: 0;
+  padding: 16px 0;
+  margin: 12px 0 0;
+  gap: 12px;
+}
+.dispatch-summary {
+  min-width: 0;
+  font-size: 11px;
+}
+.brief-column .primary {
+  border-radius: 8px;
+}
+.run-setup {
+  margin-top: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.setup-summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-weight: 500;
+}
+.setup-summary .caption {
+  margin-left: 12px;
+  font-weight: 400;
+}
+.run-setup .config-column {
+  position: static;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 0 16px 16px;
+}
+.run-setup .config-section {
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+}
+.composer > .intro {
+  font-size: 12px;
+  line-height: 20px;
+  margin: 20px auto 0;
+  text-align: center;
+  max-width: 72ch;
+}
+.composer > .intro p {
+  margin: 4px 0;
+}
+.starter-chips {
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.starter-chips .button {
+  border-color: var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 12px;
+}
+.rail-head {
+  padding-top: 16px;
+}
+.rail .new-run {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--control);
+  border-radius: 8px;
+}
+.rail-search input {
+  border-radius: 8px;
+}
+.run-row {
+  border-radius: 6px;
+}
+.app-bar {
+  background: var(--surface);
+}
+.run-header {
+  background: var(--surface);
+}
+.ledger-strip {
+  border-radius: 8px;
+  background: var(--surface);
+}
+@media (min-width: 1280px) {
+  :root {
+    --rail-width: 260px;
+  }
+}
+@media (min-width: 1600px) {
+  :root {
+    --rail-width: 280px;
+  }
+}
+@media (max-width: 767px) {
+  .composer {
+    padding: 24px 16px 40px;
+  }
+  .composer h1 {
+    font-size: 26px;
+    line-height: 34px;
+  }
+  .composer .workspace-path {
+    display: none;
+  }
+  .brief-column {
+    padding: 16px 16px 0;
+  }
+  .run-setup .config-column {
+    display: block;
+  }
+  .run-setup .config-section + .config-section {
+    margin-top: 12px;
+  }
+  .brief-column .dispatch-bar {
+    flex-wrap: wrap;
+  }
+  .brief-column .dispatch-summary {
+    display: block;
+    width: 100%;
+    white-space: normal;
+  }
+  .brief-column .dispatch-bar .primary {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+  .setup-summary .caption {
+    display: block;
+    margin: 0;
   }
 }

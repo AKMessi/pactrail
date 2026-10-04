@@ -321,6 +321,21 @@ const server = http.createServer((req, res) => {
     await page.getByLabel("What should change?", { exact: true }).inputValue(),
     "Preserve this draft.",
   );
+  // The setup disclosure must not remount the editor or forget its draft.
+  const editor = await page.locator("#task-goal").elementHandle();
+  await page.locator(".setup-summary").click();
+  assert.equal(await page.locator(".run-setup").evaluate((e) => e.open), false);
+  assert.equal(
+    await editor.evaluate(
+      (e) => e.isConnected && e.value === "Preserve this draft.",
+    ),
+    true,
+  );
+  await page.locator(".setup-summary").click();
+  assert.equal(
+    await page.locator("#task-goal").inputValue(),
+    "Preserve this draft.",
+  );
   await page.getByRole("radio", { name: "Host", exact: true }).click();
   assert.equal(await page.locator("#dispatch-button").isDisabled(), true);
   await page.getByLabel("I allow this run").check();

@@ -6,6 +6,11 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-10-05
+
+- Refresh the local web workspace with a centered task composer, integrated dispatch card, expandable run setup, compact sidebar, and neutral light/dark surfaces inspired by DeepSeek Harness's workspace flow.
+- Keep existing contract/evidence review, policy checks, host acknowledgement, CSP, unknown usage reporting and streaming preservation intact.
+
 ## [2.1.0] - Release candidate
 
 ### Experimental bounded agents
