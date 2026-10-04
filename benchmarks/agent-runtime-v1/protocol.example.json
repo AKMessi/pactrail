@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "repetitions": 3,
+  "model_identity": {
+    "provider": "open-ai-compatible",
+    "model": "PIN_MODEL_OR_CHECKPOINT",
+    "base_url": "http://127.0.0.1:8000/v1",
+    "api_key_env": "BENCH_MODEL_API_KEY"
+  },
+  "permissions": {
+    "process": "disabled",
+    "write_paths": [
+      "."
+    ]
+  },
+  "normalization": "Same global model-turn, model-token, output-token and wall-time ceilings. Record actual resources; do not equate latent bytes with tokens.",
+  "limits": {
+    "model_turns": 24,
+    "wall_seconds": 3600,
+    "output_tokens": 4096,
+    "context_tokens": 32768,
+    "model_tokens": 786432
+  },
+  "tasks": [
+    {
+      "id": "pinned-task",
+      "repository": "/ABSOLUTE/LOCAL/REPOSITORY",
+      "commit": "0000000000000000000000000000000000000000",
+      "goal": "REPLACE WITH FROZEN TASK",
+      "targeted": [
+        "/ABSOLUTE/SEALED/TARGETED/GRADER"
+      ],
+      "regression": [
+        "/ABSOLUTE/SEALED/REGRESSION/GRADER"
+      ],
+      "grader_timeout_seconds": 120
+    }
+  ],
+  "arms": [
+    {
+      "id": "single",
+      "mode": "single",
+      "intervention": {
+        "kind": "correct"
+      },
+      "latent_slots": 8,
+      "adapter": [
+        "python3",
+        "/ABSOLUTE/PATH/TO/pactrail_cli.py"
+      ]
+    },
+    {
+      "id": "text",
+      "mode": "text",
+      "intervention": {
+        "kind": "correct"
+      },
+      "latent_slots": 8,
+      "adapter": [
+        "python3",
+        "/ABSOLUTE/PATH/TO/pactrail_cli.py"
+      ]
+    },
+    {
+      "id": "latent-correct",
+      "mode": "latent",
+      "intervention": {
+        "kind": "correct"
+      },
+      "latent_slots": 8,
+      "adapter": [
+        "python3",
+        "/ABSOLUTE/PATH/TO/QUALIFIED_LOCAL_LATENT_ADAPTER"
+      ]
+    },
+    {
+      "id": "latent-small",
+      "mode": "latent",
+      "intervention": {
+        "kind": "correct"
+      },
+      "latent_slots": 4,
+      "adapter": [
+        "python3",
+        "/ABSOLUTE/PATH/TO/QUALIFIED_LOCAL_LATENT_ADAPTER"
+      ]
+    },
+    {
+      "id": "latent-none",
+      "mode": "latent",
+      "intervention": {
+        "kind": "none"
+      },
+      "latent_slots": 8,
+      "adapter": [
+        "python3",
+        "/ABSOLUTE/PATH/TO/QUALIFIED_LOCAL_LATENT_ADAPTER"
+      ]
+    },
+    {
+      "id": "latent-zero",
+      "mode": "latent",
+      "intervention": {
+        "kind": "zero"
+      },
+      "latent_slots": 8,
+      "adapter": [
+        "python3",
+        "/ABSOLUTE/PATH/TO/QUALIFIED_LOCAL_LATENT_ADAPTER"
+      ]
+    },
+    {
+      "id": "latent-random",
+      "mode": "latent",
+      "intervention": {
+        "kind": "random",
+        "seed": 42
+      },
+      "latent_slots": 8,
+      "adapter": [
+        "python3",
+        "/ABSOLUTE/PATH/TO/QUALIFIED_LOCAL_LATENT_ADAPTER"
+      ]
+    },
+    {
+      "id": "latent-shuffled",
+      "mode": "latent",
+      "intervention": {
+        "kind": "shuffled",
+        "seed": 42
+      },
+      "latent_slots": 8,
+      "adapter": [
+        "python3",
+        "/ABSOLUTE/PATH/TO/QUALIFIED_LOCAL_LATENT_ADAPTER"
+      ]
+    },
+    {
+      "id": "latent-wrong-task",
+      "mode": "latent",
+      "intervention": {
+        "kind": "wrong_task",
+        "descriptor_digest": "REPLACE_WITH_SEALED_DONOR_DESCRIPTOR_DIGEST"
+      },
+      "latent_slots": 8,
+      "adapter": [
+        "python3",
+        "/ABSOLUTE/PATH/TO/QUALIFIED_LOCAL_LATENT_ADAPTER"
+      ]
+    }
+  ]
+}

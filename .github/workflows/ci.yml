@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, codex/pactrail-2-architecture, "feat/v2-*"]
+    branches: [main, codex/pactrail-2-architecture, "feat/v2-*", "feat/v2.1-*"]
   workflow_dispatch:
 
 concurrency:
@@ -55,6 +55,11 @@ jobs:
       - run: cargo test --workspace --all-features --locked
       - run: cargo doc --workspace --all-features --no-deps --locked
       - run: cargo build --workspace --release --locked
+      - name: Agent benchmark runner correctness (no model download)
+        if: runner.os == 'Linux'
+        env:
+          PACTRAIL_BENCH_BINARY: ${{ github.workspace }}/target/release/pactrail
+        run: python3 -m unittest discover -s benchmarks/agent-runtime-v1 -p 'test_*.py' -v
       - name: Exercise checksum-verifying installer before publication
         shell: python {0}
         run: |

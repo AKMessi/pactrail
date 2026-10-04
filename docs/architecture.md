@@ -4,6 +4,19 @@ Pactrail separates probabilistic reasoning from deterministic authority. A
 model can propose typed actions. It never owns policy, filesystem resolution,
 durable state, evidence grading, or the apply boundary.
 
+## Experimental agent reasoning plane
+
+The opt-in [bounded agent runtime](multi-agent.md) keeps independent specialist
+conversations inside one parent run and one candidate. Its deterministic serial
+coordinator narrows each participant's offered and executable tool set; every
+permitted action still passes through the existing Tool Kernel. Role labels and
+peer messages grant no authority or evidence. Text collaboration and optional
+internal-state extensions share the same effect, accounting and recovery plane.
+Hosted adapters without internal-state support reject latent mode explicitly.
+Experimental agent session artifacts and atomic transition/checkpoint batches
+preserve ordinary checkpoint readers and single-agent behavior. See
+[design 0018](design/0018-bounded-agent-runtime.md) for research and threat boundaries.
+
 ## System flow
 
 ```text

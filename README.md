@@ -660,3 +660,11 @@ for Pactrail. Third-party dependencies retain their own licenses.
 
 This change applies to this revision and subsequent distributions under this
 license; it does not revoke license grants for previously distributed versions.
+
+## Experimental v2.1 collaboration
+
+The feature branch adds bounded specialist collaboration while retaining one
+governed authority plane. Single-agent remains the default. See
+[experimental agents](docs/multi-agent.md) for text profiles, durable status,
+latent capability limits and research qualification. Latent runtime tests do not
+establish a real-model performance improvement.

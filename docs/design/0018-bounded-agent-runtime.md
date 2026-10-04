@@ -101,6 +101,9 @@ message descriptors, delivery cursor and accounting alongside candidate and
 runtime identity. Validate every referenced artifact and model identity before
 resuming. Before-model checkpoints may repeat an interrupted probabilistic
 invocation, spending resources again; reserved attempt limits remain consumed.
+Completed provider usage is checkpointed before message preparation, so a crash
+between artifact storage and delivery does not erase billed inference. Recovery
+may recompute the unfinished reasoning transition using another reserved attempt.
 Completed deliveries are not delivered twice. Artifact-store/delivery crashes
 leave either an orphan plus the old checkpoint or the whole new transition.
 BeforeTools and uncertain effects still fail closed. Unknown provider billing
@@ -152,8 +155,13 @@ Receiver authority is independent of sender role; peer suggestions cannot grant
 capabilities. Exact checkpoint/profile/artifact bindings reject corrupt state.
 No anonymous broadcast, agent-selected child creation, executable pickle, network
 downloads, or hidden queues. Backend cancellation must drop pending work and
-release backend resources according to its extension contract. A malicious
-backend can lie about reasoning but cannot gain tool authority.
+release backend resources according to its extension contract. A remote backend
+can lie about weights or representations; capability metadata alone is not
+attestation. Qualification must hash local weights/tokenizers and test fusion.
+A statically linked provider is trusted host code and, like any plugin compiled
+into the process, can bypass Rust traits using host APIs. These interfaces do
+not sandbox such code. Model-generated proposals still have no direct tool
+authority; remote untrusted state remains bounded and policy-independent.
 
 ## 15. Tests
 

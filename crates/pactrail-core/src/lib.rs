@@ -1,5 +1,6 @@
 //! Domain model and deterministic state machine for Pactrail.
 
+pub mod agent;
 mod approval;
 mod contract;
 mod event;

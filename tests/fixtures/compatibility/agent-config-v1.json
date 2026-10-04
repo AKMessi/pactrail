@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "communication": "text",
+  "latent_slots_per_message": 8,
+  "budget": {
+    "max_agents": 5,
+    "max_model_attempts": 24,
+    "max_rounds": 1,
+    "max_messages": 32,
+    "max_text_bytes": 65536,
+    "max_latent_logical_bytes": 1048576,
+    "max_latent_stored_bytes": 1048576,
+    "max_bytes_per_message": 262144,
+    "max_latent_slots": 128
+  },
+  "agents": [
+    {
+      "id": "localizer",
+      "role": "localizer",
+      "model_route": "primary",
+      "capabilities": [
+        "file_read"
+      ],
+      "max_turns": 4
+    },
+    {
+      "id": "implementer",
+      "role": "implementer",
+      "model_route": "primary",
+      "capabilities": [
+        "file_read",
+        "file_write"
+      ],
+      "max_turns": 12
+    }
+  ]
+}

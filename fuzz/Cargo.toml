@@ -8,6 +8,8 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
+pactrail-models = { path = "../crates/pactrail-models" }
+pactrail-engine = { path = "../crates/pactrail-engine" }
 libfuzzer-sys = "0.4"
 pactrail-core = { path = "../crates/pactrail-core" }
 pactrail-mcp = { path = "../crates/pactrail-mcp" }
@@ -38,3 +40,10 @@ bench = false
 
 [workspace]
 members = ["."]
+
+[[bin]]
+name = "agent_state"
+path = "fuzz_targets/agent_state.rs"
+test = false
+doc = false
+bench = false

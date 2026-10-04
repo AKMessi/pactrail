@@ -14,6 +14,12 @@ pub trait ModelStreamObserver: Send + Sync {
 /// Capability-driven model endpoint used by the execution engine.
 #[async_trait]
 pub trait ModelDriver: Send + Sync {
+    /// Optional experimental internal-state extension. Hosted adapters return
+    /// None; callers must reject latent mode rather than substituting text.
+    fn latent_backend(&self) -> Option<&dyn crate::latent::LatentModelDriver> {
+        None
+    }
+
     /// Stable provider configuration name.
     fn name(&self) -> &str;
 

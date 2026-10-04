@@ -5,11 +5,17 @@ the real Pactrail kernel without the bundled CLI. It is not a native plugin
 loader: the host chooses and links model and tool implementations at build time,
 so a repository cannot cause arbitrary extension code to load.
 
-The facade crate is `pactrail-sdk`. The v1 distribution contract is an immutable
-Git tag; crates.io publication is not required or promised for 1.0. The facade
-follows Pactrail's 1.x SemVer contract while implementation crates remain
-internal. `SDK_API_REVISION` is currently 7 and lets embedders require a specific
+The facade crate is `pactrail-sdk`. Distribution uses immutable Git tags;
+crates.io publication is not required or promised. The stable facade follows
+Pactrail's 2.x SemVer contract while implementation crates remain internal. `SDK_API_REVISION` is currently 8 and lets embedders require a specific
 additive extension surface independently of durable schema versions.
+
+Revision 8 adds the opt-in `experimental::agents` namespace and
+`ModelDriver::latent_backend()` with a `None` default. Ordinary providers and
+text request/response IR remain source compatible. Experimental agent sessions
+and latent descriptors have their own exact schema-one contracts. See
+[multi-agent execution](multi-agent.md) before opting in. No first-party provider
+currently exports or imports hidden states.
 
 Revision 7 exposes `AcceptanceCheck` in the core facade and prelude. Embedders
 can bind exact process checks to task obligations; the engine routes them

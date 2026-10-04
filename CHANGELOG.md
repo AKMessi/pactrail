@@ -6,6 +6,21 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Experimental bounded agents (v2.1)
+
+- Add opt-in independent specialist conversations with deterministic serial
+  routing, capability ceilings and shared governed candidate authority.
+- Add `agent-template`, `run --agent-config`, validated durable manifests and
+  `agents RUN_ID [--json]`; ordinary single-agent behavior remains the default.
+- Add versioned agent-session checkpoints, atomic lifecycle/delivery batches,
+  non-refundable inference attempts and separately persisted model usage.
+- Add integrity-bound finite f32 latent artifacts and an optional provider-neutral
+  SDK extension. Built-in providers explicitly reject unsupported latent mode.
+- Add text baselines, a CPU correctness mock, causal interventions, recovery and
+  privilege tests, a fuzz target and matched external-grader trial infrastructure.
+- No first-party real hidden-state model adapter or performance gain is claimed.
+
+
 ## [2.0.0] - 2026-10-03
 
 ### Guided model setup

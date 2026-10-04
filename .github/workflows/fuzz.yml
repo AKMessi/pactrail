@@ -24,6 +24,7 @@ jobs:
           - workspace_path
           - event_envelope
           - mcp_schema
+          - agent_state
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: dtolnay/rust-toolchain@eac0f66a48bc4b70a10b9acd4c4e930f835d95ff # 1.95.0 action

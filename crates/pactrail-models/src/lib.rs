@@ -3,6 +3,7 @@
 mod anthropic;
 mod driver;
 mod gemini;
+pub mod latent;
 mod openai_compatible;
 mod openai_responses;
 mod probe;

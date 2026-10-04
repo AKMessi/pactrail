@@ -9,11 +9,24 @@
 //!
 //! See `docs/embedding.md` in the repository for a complete composition guide.
 
-/// SDK surface revision shipped by Pactrail 1.x.
+/// SDK surface revision shipped by Pactrail 2.x.
 ///
 /// This revision tracks source-level extension compatibility independently of
 /// durable task, event, receipt, checkpoint, and MCP schema versions.
-pub const SDK_API_REVISION: u32 = 7;
+pub const SDK_API_REVISION: u32 = 8;
+
+/// Opt-in research surfaces, versioned independently of stable model/tool IR.
+pub mod experimental {
+    /// Bounded participants, status and internal-state backend extension.
+    pub mod agents {
+        pub use pactrail_core::agent::*;
+        pub use pactrail_engine::agents::{
+            AgentAccounting, AgentLifecycle, AgentMessage, AgentRunSummary, AgentStatus,
+            CommunicationReceipt, LatentInterventionReport,
+        };
+        pub use pactrail_models::latent::*;
+    }
+}
 
 /// Provider-neutral model extension contracts and built-in adapters.
 pub mod model {

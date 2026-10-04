@@ -85,6 +85,7 @@ fn external_model_and_tool_compose_with_the_real_kernel() {
 
     let _engine = RunEngine::new(&model, &registry, &policy);
     assert_eq!(model.name(), "custom-provider");
+    assert!(model.latent_backend().is_none());
     assert_eq!(registry.descriptors()[0].name, "custom_workspace_fact");
-    assert_eq!(pactrail_sdk::SDK_API_REVISION, 7);
+    assert_eq!(pactrail_sdk::SDK_API_REVISION, 8);
 }

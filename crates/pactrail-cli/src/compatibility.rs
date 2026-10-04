@@ -58,6 +58,30 @@ pub(crate) struct CompatibilityManifest {
 pub(crate) fn manifest() -> CompatibilityManifest {
     let mut formats = vec![
         format(
+            "agent_config",
+            "pactrail-core",
+            1_u32,
+            1_u32,
+            CompatibilityStrategy::ExactVersion,
+            true,
+        ),
+        format(
+            "agent_session",
+            "pactrail-engine",
+            1_u32,
+            1_u32,
+            CompatibilityStrategy::ExactVersion,
+            true,
+        ),
+        format(
+            "latent_descriptor",
+            "pactrail-models",
+            1_u32,
+            1_u32,
+            CompatibilityStrategy::ExactVersion,
+            true,
+        ),
+        format(
             "approval_record",
             "pactrail-core",
             pactrail_core::ApprovalRecord::SCHEMA_VERSION,

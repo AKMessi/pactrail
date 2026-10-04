@@ -7,6 +7,20 @@ use pactrail_store::{ArtifactError, ArtifactStore, EventStore, StoreError, Store
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::agents::AgentRuntime;
+
+/// Current experimental agent session and coordinator-state schema.
+pub const AGENT_SESSION_SCHEMA_VERSION: u32 = 1;
+
+/// Experimental agent session artifact; ordinary `RunCheckpoint` remains unchanged.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentSessionCheckpoint {
+    pub schema_version: u32,
+    pub checkpoint: RunCheckpoint,
+    pub agents: AgentRuntime,
+}
+
 /// Current schema for content-addressed run checkpoints.
 pub const CHECKPOINT_SCHEMA_VERSION: u32 = 3;
 
@@ -205,6 +219,210 @@ pub struct CheckpointStore {
 }
 
 impl CheckpointStore {
+    /// Reads the latest verified agent session without exposing conversations.
+    ///
+    /// # Errors
+    /// Rejects broken event/agent/artifact bindings; None means no recorded agent session.
+    pub fn agent_summary(
+        &self,
+        events: &EventStore,
+        run_id: RunId,
+    ) -> Result<Option<crate::agents::AgentRunSummary>, CheckpointError> {
+        let envelopes = events.load(run_id)?;
+        if envelopes.is_empty() {
+            return Err(CheckpointError::NotFound(run_id));
+        }
+        for envelope in envelopes.iter().rev() {
+            if let RunEvent::CheckpointCreated { checkpoint } = &envelope.event
+                && checkpoint.starts_with("agents-v1:")
+            {
+                let (checkpoint, agents) = self.decode_reference(checkpoint)?;
+                if checkpoint.run_id != run_id
+                    || checkpoint.event_sequence.saturating_add(1) != envelope.sequence
+                    || checkpoint.event_hash != envelope.previous_hash
+                {
+                    return Err(CheckpointError::InvalidPhase(
+                        "agent checkpoint/event binding mismatch",
+                    ));
+                }
+                if let Some(agents) = &agents {
+                    agents
+                        .validate_history(&envelopes, checkpoint.event_sequence)
+                        .map_err(agent_decode_error)?;
+                }
+                let parent_state = events.snapshot(run_id)?.state;
+                return Ok(agents.map(|agents| {
+                    let mut summary = agents.summary();
+                    summary.parent_state = Some(parent_state);
+                    if !summary.finished {
+                        let lifecycle = match parent_state {
+                            RunState::Failed => Some(crate::agents::AgentLifecycle::Failed),
+                            RunState::Cancelled => Some(crate::agents::AgentLifecycle::Cancelled),
+                            _ => None,
+                        };
+                        if let Some(lifecycle) = lifecycle {
+                            summary.agents[agents.active].lifecycle = lifecycle;
+                        }
+                    }
+                    summary
+                }));
+            }
+        }
+        Ok(None)
+    }
+
+    pub(crate) const fn agent_artifacts(&self) -> &ArtifactStore {
+        &self.artifacts
+    }
+
+    pub(crate) fn put_agents(
+        &self,
+        checkpoint: &RunCheckpoint,
+        agents: &AgentRuntime,
+    ) -> Result<StoredArtifact, CheckpointError> {
+        #[derive(Serialize)]
+        struct Bundle<'a> {
+            schema_version: u32,
+            checkpoint: &'a RunCheckpoint,
+            agents: &'a AgentRuntime,
+        }
+        checkpoint.validate()?;
+        agents
+            .validate(checkpoint.run_id)
+            .map_err(agent_decode_error)?;
+        let bundle = Bundle {
+            schema_version: AGENT_SESSION_SCHEMA_VERSION,
+            checkpoint,
+            agents,
+        };
+        let mut buffer = BoundedBuffer {
+            bytes: Vec::new(),
+            limit: 16 * 1024 * 1024,
+        };
+        serde_json::to_writer(&mut buffer, &bundle).map_err(CheckpointError::Encoding)?;
+        let bytes = buffer.bytes;
+        self.artifacts
+            .put(&bytes)
+            .map_err(CheckpointError::Artifact)
+    }
+
+    fn decode_reference(
+        &self,
+        reference: &str,
+    ) -> Result<(RunCheckpoint, Option<AgentRuntime>), CheckpointError> {
+        if let Some(digest) = reference.strip_prefix("agents-v1:") {
+            validate_digest("agent_session", digest)?;
+            let bytes = self.artifacts.get_bounded(digest, 16 * 1024 * 1024)?;
+            let bundle: AgentSessionCheckpoint =
+                serde_json::from_slice(&bytes).map_err(CheckpointError::Decoding)?;
+            if bundle.schema_version != AGENT_SESSION_SCHEMA_VERSION {
+                return Err(CheckpointError::UnsupportedSchema(bundle.schema_version));
+            }
+            bundle.checkpoint.validate()?;
+            bundle
+                .agents
+                .validate(bundle.checkpoint.run_id)
+                .map_err(agent_decode_error)?;
+            if let pactrail_core::agent::CommunicationIntervention::WrongTask {
+                descriptor_digest,
+            } = &bundle.agents.config.intervention
+            {
+                let model = bundle
+                    .agents
+                    .messages
+                    .first()
+                    .and_then(|m| m.message.descriptors().first().map(|d| &d.model));
+                crate::interventions::validate_donor(
+                    &self.artifacts,
+                    descriptor_digest,
+                    bundle.checkpoint.run_id,
+                    model,
+                    bundle.agents.config.latent_slots_per_message,
+                    bundle.agents.config.budget.max_bytes_per_message,
+                )
+                .map_err(agent_decode_error)?;
+            }
+            for agent in &bundle.agents.agents {
+                let mut conversation_check = bundle.checkpoint.clone();
+                conversation_check
+                    .conversation
+                    .clone_from(&agent.conversation);
+                conversation_check.phase = ResumePhase::BeforeModel;
+                conversation_check.validate()?;
+            }
+            if bundle.agents.agents[bundle.agents.active].conversation
+                != bundle.checkpoint.conversation
+            {
+                return Err(CheckpointError::InvalidPhase(
+                    "active agent conversation differs from the model checkpoint",
+                ));
+            }
+            for receipt in &bundle.agents.messages {
+                for (digest, bytes, stored_bytes) in receipt.message.artifacts() {
+                    let payload = self.artifacts.get_bounded(digest, bytes)?;
+                    if self.artifacts.stored_size(digest)? != stored_bytes
+                        || u64::try_from(payload.len()).unwrap_or(u64::MAX) != bytes
+                    {
+                        return Err(CheckpointError::InvalidPhase(
+                            "communication artifact metadata differs from checkpoint",
+                        ));
+                    }
+                }
+                for descriptor in receipt.message.descriptors() {
+                    let payload = self
+                        .artifacts
+                        .get_bounded(&descriptor.payload_digest, descriptor.logical_bytes)?;
+                    pactrail_models::latent::LatentState::from_bytes(
+                        descriptor.clone(),
+                        payload.into(),
+                        bundle.checkpoint.run_id,
+                        &descriptor.model,
+                        bundle.agents.config.budget.max_bytes_per_message,
+                    )
+                    .map_err(agent_decode_error)?;
+                }
+            }
+            return Ok((bundle.checkpoint, Some(bundle.agents)));
+        }
+        let digest = reference
+            .strip_prefix(CHECKPOINT_EVENT_PREFIX)
+            .ok_or_else(|| CheckpointError::InvalidEventReference(reference.to_owned()))?;
+        validate_digest("checkpoint", digest)?;
+        let bytes = self.artifacts.get(digest)?;
+        let checkpoint: RunCheckpoint =
+            serde_json::from_slice(&bytes).map_err(CheckpointError::Decoding)?;
+        checkpoint.validate()?;
+        Ok((checkpoint, None))
+    }
+
+    pub(crate) fn load_agents(
+        &self,
+        events: &EventStore,
+        checkpoint: &RunCheckpoint,
+    ) -> Result<Option<AgentRuntime>, CheckpointError> {
+        let envelopes = events.load(checkpoint.run_id)?;
+        let reference = envelopes
+            .iter()
+            .find(|event| event.sequence == checkpoint.event_sequence.saturating_add(1))
+            .and_then(|event| match &event.event {
+                RunEvent::CheckpointCreated { checkpoint } => Some(checkpoint),
+                _ => None,
+            })
+            .ok_or(CheckpointError::NotFound(checkpoint.run_id))?;
+        let (stored, agents) = self.decode_reference(reference)?;
+        if &stored != checkpoint {
+            return Err(CheckpointError::InvalidPhase(
+                "agent session does not name the requested checkpoint",
+            ));
+        }
+        if let Some(agents) = &agents {
+            agents
+                .validate_history(&envelopes, checkpoint.event_sequence)
+                .map_err(agent_decode_error)?;
+        }
+        Ok(agents)
+    }
+
     /// Opens the checkpoint artifact directory.
     ///
     /// # Errors
@@ -290,14 +508,12 @@ impl CheckpointStore {
                 risk: effect.risk.clone(),
             });
         }
-        let digest = checkpoint
-            .strip_prefix(CHECKPOINT_EVENT_PREFIX)
-            .ok_or_else(|| CheckpointError::InvalidEventReference(checkpoint.clone()))?;
-        validate_digest("checkpoint", digest)?;
-        let bytes = self.artifacts.get(digest)?;
-        let checkpoint: RunCheckpoint =
-            serde_json::from_slice(&bytes).map_err(CheckpointError::Decoding)?;
-        checkpoint.validate()?;
+        let (checkpoint, agents) = self.decode_reference(checkpoint)?;
+        if let Some(agents) = &agents {
+            agents
+                .validate_history(&envelopes, checkpoint.event_sequence)
+                .map_err(agent_decode_error)?;
+        }
         if failed_model_boundary && checkpoint.phase != ResumePhase::BeforeModel {
             return Err(CheckpointError::NotAtHead {
                 run_id,
@@ -338,22 +554,20 @@ impl CheckpointStore {
     ) -> Result<usize, CheckpointError> {
         let envelopes = events.load(run_id)?;
         let mut validated = 0_usize;
-        for envelope in envelopes {
+        for envelope in &envelopes {
             let RunEvent::CheckpointCreated { checkpoint } = &envelope.event else {
                 continue;
             };
-            let Some(digest) = checkpoint.strip_prefix(CHECKPOINT_EVENT_PREFIX) else {
-                if let Some(context_digest) = checkpoint.strip_prefix("context:") {
-                    validate_digest("context", context_digest)?;
-                    continue;
-                }
-                return Err(CheckpointError::InvalidEventReference(checkpoint.clone()));
-            };
-            validate_digest("checkpoint", digest)?;
-            let bytes = self.artifacts.get(digest)?;
-            let checkpoint: RunCheckpoint =
-                serde_json::from_slice(&bytes).map_err(CheckpointError::Decoding)?;
-            checkpoint.validate()?;
+            if let Some(context_digest) = checkpoint.strip_prefix("context:") {
+                validate_digest("context", context_digest)?;
+                continue;
+            }
+            let (checkpoint, agents) = self.decode_reference(checkpoint)?;
+            if let Some(agents) = &agents {
+                agents
+                    .validate_history(&envelopes, checkpoint.event_sequence)
+                    .map_err(agent_decode_error)?;
+            }
             if checkpoint.run_id != run_id {
                 return Err(CheckpointError::WrongRun {
                     expected: run_id,
@@ -380,6 +594,13 @@ impl CheckpointStore {
     }
 }
 
+fn agent_decode_error(error: impl std::fmt::Display) -> CheckpointError {
+    CheckpointError::Decoding(serde_json::Error::io(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        error.to_string(),
+    )))
+}
+
 /// Computes the canonical task-contract digest used in resume identity checks.
 ///
 /// # Errors
@@ -388,6 +609,33 @@ impl CheckpointStore {
 pub fn contract_digest(contract: &TaskContract) -> Result<String, CheckpointError> {
     let bytes = serde_json::to_vec(contract).map_err(CheckpointError::Encoding)?;
     Ok(blake3::hash(&bytes).to_hex().to_string())
+}
+
+struct BoundedBuffer {
+    bytes: Vec<u8>,
+    limit: usize,
+}
+impl std::io::Write for BoundedBuffer {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if self
+            .bytes
+            .len()
+            .checked_add(bytes.len())
+            .is_none_or(|size| size > self.limit)
+        {
+            return Err(std::io::Error::other(
+                "agent checkpoint exceeds its byte ceiling",
+            ));
+        }
+        self.bytes
+            .try_reserve(bytes.len())
+            .map_err(std::io::Error::other)?;
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 fn validate_digest(field: &'static str, digest: &str) -> Result<(), CheckpointError> {
@@ -470,6 +718,45 @@ pub enum CheckpointError {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn agent_session_compatibility_fixture_runs_through_the_artifact_reader() {
+        let directory = tempfile::tempdir().unwrap_or_else(|e| unreachable!("directory: {e}"));
+        let store =
+            CheckpointStore::open(directory.path()).unwrap_or_else(|e| unreachable!("store: {e}"));
+        let fixture = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/compatibility/agent-session-v1.json"
+        ));
+        let artifact = store
+            .artifacts
+            .put(fixture)
+            .unwrap_or_else(|e| unreachable!("artifact: {e}"));
+        let (checkpoint, agents) = store
+            .decode_reference(&format!("agents-v1:{}", artifact.digest))
+            .unwrap_or_else(|e| unreachable!("reader: {e}"));
+        assert_eq!(checkpoint.schema_version, CHECKPOINT_SCHEMA_VERSION);
+        assert_eq!(
+            agents
+                .unwrap_or_else(|| unreachable!("agent session"))
+                .accounting
+                .model_attempts,
+            1
+        );
+        let mut future: serde_json::Value =
+            serde_json::from_slice(fixture).unwrap_or_else(|e| unreachable!("json: {e}"));
+        future["schema_version"] = serde_json::json!(2);
+        let bytes = serde_json::to_vec(&future).unwrap_or_else(|e| unreachable!("encode: {e}"));
+        let artifact = store
+            .artifacts
+            .put(&bytes)
+            .unwrap_or_else(|e| unreachable!("artifact: {e}"));
+        assert!(
+            store
+                .decode_reference(&format!("agents-v1:{}", artifact.digest))
+                .is_err()
+        );
+    }
+
     use pactrail_core::{EffectPrepared, RunEvent, RunState};
     use pactrail_models::{ImageArtifact, Message, UserContent};
 

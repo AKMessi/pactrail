@@ -350,6 +350,63 @@ impl EventStore {
         Ok(envelope)
     }
 
+    /// Atomically appends a bounded, pre-hashed event batch. This permits an
+    /// artifact checkpoint to bind the exact preceding lifecycle events before
+    /// any of those events become visible. A changed head rejects the whole batch.
+    ///
+    /// # Errors
+    /// Rejects malformed chains, invalid lifecycle transitions, stale heads and
+    /// database failures without committing any prefix of the batch.
+    pub fn append_prepared(
+        &mut self,
+        run_id: RunId,
+        envelopes: &[EventEnvelope],
+    ) -> Result<(), StoreError> {
+        if envelopes.is_empty() || envelopes.len() > 64 {
+            return Err(StoreError::InvalidBatch);
+        }
+        let mut snapshot = self.snapshot(run_id)?;
+        for envelope in envelopes {
+            if envelope.run_id != run_id {
+                return Err(StoreError::InvalidBatch);
+            }
+            snapshot.apply(envelope).map_err(StoreError::State)?;
+        }
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(StoreError::Database)?;
+        let head: Option<(i64, String)> = transaction.query_row(
+            "SELECT sequence, hash FROM events WHERE run_id = ?1 ORDER BY sequence DESC LIMIT 1",
+            [run_id.to_string()], |row| Ok((row.get(0)?, row.get(1)?)),
+        ).optional().map_err(StoreError::Database)?;
+        let actual_sequence = match head.as_ref() {
+            Some((sequence, _)) => u64::try_from(*sequence)
+                .map_err(|_| StoreError::InvalidSequence(*sequence))?
+                .checked_add(1)
+                .ok_or(StoreError::InvalidBatch)?,
+            None => 0,
+        };
+        let previous_hash = head.map_or_else(EventHash::genesis, |(_, hash)| EventHash(hash));
+        if actual_sequence != envelopes[0].sequence || previous_hash != envelopes[0].previous_hash {
+            return Err(StoreError::Concurrency {
+                expected: envelopes[0].sequence,
+                actual: actual_sequence,
+            });
+        }
+        for envelope in envelopes {
+            let event_json =
+                serde_json::to_string(&envelope.event).map_err(StoreError::Serialization)?;
+            let sequence = i64::try_from(envelope.sequence)
+                .map_err(|_| StoreError::SequenceOverflow(envelope.sequence))?;
+            transaction.execute(
+                "INSERT INTO events (run_id, sequence, schema_version, timestamp, previous_hash, event_json, hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![envelope.run_id.to_string(), sequence, i64::from(envelope.schema_version), envelope.timestamp.format(&time::format_description::well_known::Rfc3339).map_err(StoreError::Time)?, envelope.previous_hash.0, event_json, envelope.hash.0],
+            ).map_err(StoreError::Database)?;
+        }
+        transaction.commit().map_err(StoreError::Database)
+    }
+
     /// Loads and integrity-checks all events for a run.
     ///
     /// # Errors
@@ -494,6 +551,8 @@ fn validate_lease_owner(owner: &str) -> Result<(), StoreError> {
 /// Durable event store failure.
 #[derive(Debug, Error)]
 pub enum StoreError {
+    #[error("prepared event batch must be a valid, run-bound chain of 1-64 events")]
+    InvalidBatch,
     #[error("event database error: {0}")]
     Database(rusqlite::Error),
     #[error("event database I/O failed at {path}: {source}")]
@@ -552,6 +611,74 @@ pub enum StoreError {
 mod tests {
     use super::*;
     use pactrail_core::{RunState, TaskContract};
+
+    #[test]
+    fn prepared_batch_commits_whole_chain_and_rejects_invalid_or_stale_batches() {
+        let mut store = EventStore::open_in_memory().unwrap_or_else(|e| unreachable!("store: {e}"));
+        let run = RunId::new();
+        let first = EventEnvelope::new(
+            run,
+            0,
+            OffsetDateTime::now_utc(),
+            EventHash::genesis(),
+            RunEvent::NoteRecorded {
+                message: "delivery".to_owned(),
+            },
+        )
+        .unwrap_or_else(|e| unreachable!("event: {e}"));
+        let second = EventEnvelope::new(
+            run,
+            1,
+            OffsetDateTime::now_utc(),
+            first.hash.clone(),
+            RunEvent::CheckpointCreated {
+                checkpoint: "session:fixture".to_owned(),
+            },
+        )
+        .unwrap_or_else(|e| unreachable!("event: {e}"));
+        let mut corrupt = second.clone();
+        corrupt.hash.0 = "0".repeat(64);
+        assert!(
+            store
+                .append_prepared(run, &[first.clone(), corrupt])
+                .is_err()
+        );
+        assert!(
+            store
+                .load(run)
+                .unwrap_or_else(|e| unreachable!("load: {e}"))
+                .is_empty()
+        );
+        store.connection.execute_batch("CREATE TRIGGER reject_checkpoint BEFORE INSERT ON events WHEN NEW.sequence = 1 BEGIN SELECT RAISE(ABORT, 'injected crash boundary'); END;").unwrap_or_else(|e| unreachable!("trigger: {e}"));
+        assert!(
+            store
+                .append_prepared(run, &[first.clone(), second.clone()])
+                .is_err()
+        );
+        assert!(
+            store
+                .load(run)
+                .unwrap_or_else(|e| unreachable!("load: {e}"))
+                .is_empty()
+        );
+        store
+            .connection
+            .execute_batch("DROP TRIGGER reject_checkpoint;")
+            .unwrap_or_else(|e| unreachable!("drop trigger: {e}"));
+        assert!(
+            store
+                .append_prepared(run, &[first.clone(), second.clone()])
+                .is_ok()
+        );
+        assert!(store.append_prepared(run, &[first, second]).is_err());
+        assert_eq!(
+            store
+                .load(run)
+                .unwrap_or_else(|e| unreachable!("load: {e}"))
+                .len(),
+            2
+        );
+    }
 
     #[test]
     fn events_round_trip_and_project() {

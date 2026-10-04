@@ -1435,6 +1435,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
+name = "httpdate"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2066,7 +2072,7 @@ checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
 
 [[package]]
 name = "pactrail-context"
-version = "0.7.0"
+version = "2.0.0"
 dependencies = [
  "blake3",
  "ignore",
@@ -2084,7 +2090,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-core"
-version = "0.7.0"
+version = "2.0.0"
 dependencies = [
  "blake3",
  "schemars",
@@ -2096,12 +2102,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "pactrail-engine"
+version = "2.0.0"
+dependencies = [
+ "blake3",
+ "futures-util",
+ "pactrail-context",
+ "pactrail-core",
+ "pactrail-memory",
+ "pactrail-models",
+ "pactrail-store",
+ "pactrail-tools",
+ "pactrail-workspace",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "pactrail-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "pactrail-core",
+ "pactrail-engine",
  "pactrail-mcp",
+ "pactrail-models",
  "pactrail-workspace",
  "serde_json",
  "time",
@@ -2109,7 +2139,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-git"
-version = "0.7.0"
+version = "2.0.0"
 dependencies = [
  "gix",
  "ignore",
@@ -2121,7 +2151,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-mcp"
-version = "0.7.0"
+version = "2.0.0"
 dependencies = [
  "async-trait",
  "blake3",
@@ -2146,7 +2176,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-memory"
-version = "0.7.0"
+version = "2.0.0"
 dependencies = [
  "pactrail-core",
  "rusqlite",
@@ -2159,8 +2189,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "pactrail-models"
+version = "2.0.0"
+dependencies = [
+ "async-trait",
+ "base64",
+ "blake3",
+ "futures-util",
+ "httpdate",
+ "pactrail-core",
+ "pactrail-tools",
+ "reqwest",
+ "schemars",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "pactrail-store"
+version = "2.0.0"
+dependencies = [
+ "blake3",
+ "pactrail-core",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "time",
+ "zstd",
+]
+
+[[package]]
 name = "pactrail-tools"
-version = "0.7.0"
+version = "2.0.0"
 dependencies = [
  "async-trait",
  "blake3",
@@ -2169,12 +2235,14 @@ dependencies = [
  "pactrail-core",
  "pactrail-git",
  "pactrail-memory",
+ "pactrail-store",
  "pactrail-workspace",
  "rustix",
  "schemars",
  "serde",
  "serde_json",
  "similar",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -2182,7 +2250,7 @@ dependencies = [
 
 [[package]]
 name = "pactrail-workspace"
-version = "0.7.0"
+version = "2.0.0"
 dependencies = [
  "blake3",
  "ignore",
@@ -2556,6 +2624,16 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "secrecy"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e891af845473308773346dc847b2c23ee78fe442e0472ac50e22a18a93d3ae5a"
+dependencies = [
+ "serde",
+ "zeroize",
+]
 
 [[package]]
 name = "security-framework"
@@ -3629,3 +3707,31 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zstd"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e91ee311a569c327171651566e07972200e76fcfe2242a4fa446149a3881c08a"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "7.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64d80649ab6db9d9f6f9c80a40becd948eda4714a0a5ac8c4d157a32231c7882"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.1.0+zstd.1.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ef0a8027ec3ee71300ab3bcbcd0393f434aa72b91ca6d635a39941deae8eea0"
+dependencies = [
+ "cc",
+ "pkg-config",
+]
