@@ -53,6 +53,14 @@ pub enum Command {
     },
     /// Execute a task in an isolated transaction.
     Run(Box<RunArgs>),
+    /// Print an experimental bounded coding-agent profile as JSON.
+    AgentTemplate {
+        /// Request latent transport; requires a genuinely state-capable backend.
+        #[arg(long)]
+        latent: bool,
+    },
+    /// Inspect verified experimental agent status and communication accounting.
+    Agents(RunIdArgs),
     /// Continue an interrupted or recoverable failed run from a validated checkpoint.
     Resume(ResumeArgs),
     /// Probe positive model capabilities without executing returned tools.
@@ -351,6 +359,16 @@ pub enum McpApprovalArg {
 #[serde(deny_unknown_fields)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct RunArgs {
+    /// Experimental bounded agent profile JSON; single-agent is the default.
+    #[arg(long = "agent-config", value_name = "PATH")]
+    #[serde(skip)]
+    pub agent_config_file: Option<PathBuf>,
+
+    /// Validated configuration persisted in the run manifest, not a mutable path.
+    #[arg(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_config: Option<pactrail_core::agent::AgentRunConfig>,
+
     /// Natural-language software task.
     #[arg(required_unless_present = "task", conflicts_with = "task")]
     pub goal: Option<String>,

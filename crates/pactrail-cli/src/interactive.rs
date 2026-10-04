@@ -2981,6 +2981,11 @@ impl Session {
             ),
             ("credential", key.0, key.1),
             (
+                "latent state",
+                "unavailable · this CLI adapter has no internal-state extension".to_owned(),
+                TimelineTone::Muted,
+            ),
+            (
                 "capabilities",
                 capability_summary(&self.settings),
                 TimelineTone::Normal,
@@ -5147,6 +5152,8 @@ fn run_args_from_settings(
     model: String,
 ) -> RunArgs {
     RunArgs {
+        agent_config_file: None,
+        agent_config: None,
         goal,
         task: None,
         images: Vec::new(),

@@ -995,7 +995,7 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
     let compatibility: Value = serde_json::from_slice(&compatibility.stdout)
         .unwrap_or_else(|error| unreachable!("compatibility JSON: {error}"));
     assert_eq!(compatibility["manifest_schema"], 1);
-    assert_eq!(compatibility["formats"].as_array().map(Vec::len), Some(18));
+    assert_eq!(compatibility["formats"].as_array().map(Vec::len), Some(21));
     assert!(
         compatibility["formats"]
             .as_array()
@@ -1005,6 +1005,16 @@ fn static_commands_and_memory_lifecycle_are_scriptable() {
                     && format["minimum_readable_schema"] == 1
             }))
     );
+
+    for id in ["agent_config", "agent_session", "latent_descriptor"] {
+        assert!(
+            compatibility["formats"]
+                .as_array()
+                .is_some_and(|formats| formats.iter().any(|format| format["id"] == id
+                    && format["current_schema"] == 1
+                    && format["minimum_readable_schema"] == 1))
+        );
+    }
 
     for shell in ["bash", "elvish", "fish", "powershell", "zsh"] {
         let completion = pactrail(workspace.path(), ["completion", shell]);
@@ -1609,4 +1619,85 @@ fn v2_rejects_removed_process_alias_before_creating_state() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("--allow-process"));
     assert!(!workspace.path().join(".pactrail").exists());
+}
+
+#[test]
+fn experimental_agent_configuration_is_admitted_and_latent_mode_fails_before_state_creation() {
+    let workspace = tempfile::tempdir().unwrap_or_else(|e| unreachable!("workspace: {e}"));
+    let profile = pactrail(workspace.path(), ["agent-template", "--latent"]);
+    assert!(profile.status.success());
+    let profile_path = workspace.path().join("agents.json");
+    std::fs::write(&profile_path, profile.stdout).unwrap_or_else(|e| unreachable!("profile: {e}"));
+    let rejected = pactrail(
+        workspace.path(),
+        [
+            "run",
+            "Explain this repository",
+            "--agent-config",
+            path_text(&profile_path),
+            "--provider",
+            "open-ai-compatible",
+            "--base-url",
+            "http://127.0.0.1:65535/v1",
+            "--model",
+            "mock",
+        ],
+    );
+    assert!(!rejected.status.success());
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("latent"));
+    assert!(!workspace.path().join(".pactrail").exists());
+    let text = pactrail(workspace.path(), ["agent-template"]);
+    assert!(text.status.success());
+    std::fs::write(&profile_path, text.stdout).unwrap_or_else(|e| unreachable!("profile: {e}"));
+    let listener =
+        TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("listener: {e}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|e| unreachable!("address: {e}"));
+    let server = thread::spawn(move || {
+        let responses: Vec<_> = ["Localization advice.", "Solution advice.", "Critique advice.", "This repository contains an agent profile."].iter().map(|text| json!({"id":"fixture", "choices":[{"message":{"content":text}, "finish_reason":"stop"}], "usage":{"prompt_tokens":20, "completion_tokens":5}})).collect();
+        serve_responses(&listener, &responses);
+    });
+    let result = pactrail(
+        workspace.path(),
+        [
+            "run",
+            "Explain this repository",
+            "--agent-config",
+            path_text(&profile_path),
+            "--provider",
+            "open-ai-compatible",
+            "--base-url",
+            &format!("http://{address}/v1"),
+            "--model",
+            "mock",
+            "--no-stream",
+            "--output",
+            "json",
+        ],
+    );
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let result: Value =
+        serde_json::from_slice(&result.stdout).unwrap_or_else(|e| unreachable!("result: {e}"));
+    let id = result["run_id"]
+        .as_str()
+        .unwrap_or_else(|| unreachable!("run id"));
+    let status = pactrail(workspace.path(), ["agents", id, "--json"]);
+    assert!(status.status.success());
+    let status: Value =
+        serde_json::from_slice(&status.stdout).unwrap_or_else(|e| unreachable!("status: {e}"));
+    assert_eq!(status["accounting"]["messages"], 3);
+    assert_eq!(status["accounting"]["model_attempts"], 4);
+    assert_eq!(
+        status["accounting"]["intermediate_text_tokens"],
+        Value::Null
+    );
+    assert_eq!(status["finished"], true);
+    server
+        .join()
+        .unwrap_or_else(|_| unreachable!("server panic"));
 }

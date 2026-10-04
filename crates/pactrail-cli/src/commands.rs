@@ -63,6 +63,18 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
             .await
             .map_err(CliError::Argument),
         Command::Run(args) => run(&cli.workspace, cli.state_dir.as_deref(), *args).await,
+        Command::AgentTemplate { latent } => write_json(
+            &pactrail_core::agent::AgentRunConfig::coding(if latent {
+                pactrail_core::agent::CommunicationMode::Latent
+            } else {
+                pactrail_core::agent::CommunicationMode::Text
+            })
+            .map_err(|e| CliError::Argument(e.to_string()))?,
+        ),
+        Command::Agents(args) => {
+            let state = state_dir(&cli.workspace, cli.state_dir.as_deref())?;
+            agent_status(&state, &args)
+        }
         Command::Resume(args) => resume(&cli.workspace, cli.state_dir.as_deref(), args).await,
         Command::Probe(args) => probe(args).await,
         Command::Inspect(args) => {
@@ -115,6 +127,47 @@ pub async fn dispatch(cli: Cli) -> Result<(), CliError> {
             crate::upgrade::execute(&state, json)
         }
     }
+}
+
+fn agent_status(state: &Path, args: &RunIdArgs) -> Result<(), CliError> {
+    let run_id: RunId = args
+        .run_id
+        .parse()
+        .map_err(|e| CliError::Argument(format!("invalid run id: {e}")))?;
+    let events = EventStore::open_read_only(state.join("events.sqlite3"))?;
+    let checkpoints = CheckpointStore::open(state.join("artifacts").join("checkpoints"))
+        .map_err(EngineError::from)?;
+    let summary = checkpoints
+        .agent_summary(&events, run_id)
+        .map_err(EngineError::from)?;
+    if args.json {
+        return write_json(&summary);
+    }
+    let Some(summary) = summary else {
+        write_human_stdout("No experimental agent session checkpoint is recorded for this run.\n")
+            .map_err(CliError::Output)?;
+        return Ok(());
+    };
+    let mut lines = vec![format!(
+        "Agents · {:?} communication · round {} / {}",
+        summary.communication, summary.round, summary.max_rounds
+    )];
+    for agent in summary.agents {
+        lines.push(format!(
+            "  {} · {:?} · {:?} · {} / {} attempts",
+            agent.id, agent.role, agent.lifecycle, agent.attempts, agent.max_turns
+        ));
+    }
+    lines.push(format!("Communication · {} messages · {} text bytes · {} logical latent bytes · {} stored latent bytes · {} slots", summary.accounting.messages, summary.accounting.text_bytes, summary.accounting.latent_logical_bytes, summary.accounting.latent_stored_bytes, summary.accounting.latent_slots));
+    lines.push(format!("Configured agent limits · {} / {} attempts · {} / {} logical latent bytes · {} suppressed messages. Task limits also apply.", summary.accounting.model_attempts, summary.configured_budget.max_model_attempts, summary.accounting.latent_logical_bytes, summary.configured_budget.max_latent_logical_bytes, summary.accounting.suppressed_messages));
+    lines.push(format!(
+        "Inter-agent generated text tokens: {}",
+        summary
+            .accounting
+            .intermediate_text_tokens
+            .map_or_else(|| "not reported".to_owned(), |n| n.to_string())
+    ));
+    write_human_stdout(&format!("{}\n", lines.join("\n"))).map_err(CliError::Output)
 }
 
 fn compatibility(json_output: bool) -> Result<(), CliError> {
@@ -215,6 +268,8 @@ fn probe_observation_label(observed: bool) -> &'static str {
 
 fn probe_run_args(args: ProbeArgs) -> RunArgs {
     RunArgs {
+        agent_config_file: None,
+        agent_config: None,
         goal: None,
         task: None,
         images: Vec::new(),
@@ -469,6 +524,7 @@ async fn execute_resume_inner(
     mcp_runtime.register(&mut registry, &cancellation)?;
     let policy = PolicyEngine::new(contract.permissions.clone());
     let driver = build_driver(&contract, &args)?;
+    validate_agent_backend(args.agent_config.as_ref(), driver.as_ref())?;
     let engine = RunEngine::new(driver.as_ref(), &registry, &policy)
         .with_memory(&memory)
         .with_context_fragments(mcp_runtime.context_fragments())
@@ -572,11 +628,58 @@ pub(crate) async fn execute_resume_with_observer_and_cancellation(
 async fn execute_run_inner(
     cli_workspace: &Path,
     state_override: Option<&Path>,
-    args: RunArgs,
+    mut args: RunArgs,
     observer: Option<&dyn RunObserver>,
     cancellation: CancellationToken,
     supplemental_context: Vec<pactrail_context::ContextFragment>,
 ) -> Result<CompletedRun, CliError> {
+    if let Some(path) = args.agent_config_file.take() {
+        if !fs::symlink_metadata(&path)
+            .map_err(|source| CliError::Io {
+                path: path.clone(),
+                source,
+            })?
+            .is_file()
+        {
+            return Err(CliError::Argument(
+                "agent configuration must be a regular file".to_owned(),
+            ));
+        }
+        let file = fs::File::open(&path).map_err(|source| CliError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        if !file
+            .metadata()
+            .map_err(|source| CliError::Io {
+                path: path.clone(),
+                source,
+            })?
+            .is_file()
+        {
+            return Err(CliError::Argument(
+                "agent configuration must be a regular file".to_owned(),
+            ));
+        }
+        let mut bytes = Vec::new();
+        file.take(65_537)
+            .read_to_end(&mut bytes)
+            .map_err(|source| CliError::Io {
+                path: path.clone(),
+                source,
+            })?;
+        if bytes.len() > 65_536 {
+            return Err(CliError::Argument(
+                "agent configuration exceeds 64 KiB".to_owned(),
+            ));
+        }
+        let config: pactrail_core::agent::AgentRunConfig = serde_json::from_slice(&bytes)
+            .map_err(|e| CliError::Argument(format!("invalid agent configuration: {e}")))?;
+        config
+            .validate()
+            .map_err(|e| CliError::Argument(e.to_string()))?;
+        args.agent_config = Some(config);
+    }
     let input_images = prepare_input_images(cli_workspace, &args)?;
     let process_backend = effective_process_backend(&args)?;
     let process_approval = effective_process_approval(&args)?;
@@ -599,6 +702,7 @@ async fn execute_run_inner(
     // sandbox configuration must fail without leaving an empty run behind for users to diagnose.
     let process_backend = build_process_backend(process_backend, &args, &workspace).await?;
     let driver = build_driver(&contract, &args)?;
+    validate_agent_backend(args.agent_config.as_ref(), driver.as_ref())?;
 
     fs::create_dir_all(state.join("runs")).map_err(|source| CliError::Io {
         path: state.clone(),
@@ -1472,10 +1576,34 @@ fn effective_process_backend(args: &RunArgs) -> Result<ProcessBackendArg, CliErr
     Ok(backend)
 }
 
+fn validate_agent_backend(
+    config: Option<&pactrail_core::agent::AgentRunConfig>,
+    driver: &dyn ModelDriver,
+) -> Result<(), CliError> {
+    if let Some(config) = config {
+        config
+            .validate()
+            .map_err(|e| CliError::Argument(e.to_string()))?;
+        if config.communication == pactrail_core::agent::CommunicationMode::Latent
+            && driver.latent_backend().is_none()
+        {
+            return Err(CliError::Argument(
+                pactrail_models::latent::LatentError::Unsupported.to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn configure_engine_pricing<'a>(
-    mut engine: RunEngine<'a>,
+    engine: RunEngine<'a>,
     args: &RunArgs,
 ) -> Result<RunEngine<'a>, CliError> {
+    let mut engine = if let Some(config) = &args.agent_config {
+        engine.with_agents(config.clone())
+    } else {
+        engine
+    };
     if let Some(pricing) = configured_pricing(args)? {
         engine = engine.with_pricing(pricing);
     }
@@ -3882,6 +4010,8 @@ mod tests {
             output: OutputFormat::Human,
         });
         let mut args = RunArgs {
+            agent_config_file: None,
+            agent_config: None,
             allow_shell: true,
             ..args
         };

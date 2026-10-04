@@ -137,3 +137,15 @@ Publishing individual workspace crates to crates.io is not part of the 2.0
 contract. See the [support matrix](support.md), [upgrade guide](upgrading.md),
 and [security policy](../SECURITY.md) for platform tiers and maintenance
 windows.
+
+## Experimental agent formats
+
+The schema-one `agent_config`, `agent_session`, and `latent_descriptor` formats
+are exact-version experimental contracts. Agent sessions are separately named
+`agents-v1:DIGEST` content-addressed artifacts wrapping an ordinary checkpoint.
+Old single-agent checkpoints, event database migrations, task contracts, receipts,
+and provider request/response IR retain their readable ranges. No tensor enters
+ordinary conversation IR. Existing `action_completed` records carry bounded
+`agent_schema=1` / `agent_data` lifecycle provenance; unknown ordinary event kinds
+have not been introduced. Older binaries cannot resume an agent-session prefix
+and must reject it. SDK revision 8 adds an opt-in experimental namespace.

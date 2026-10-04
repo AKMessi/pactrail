@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "run_id": "01900000-0000-7000-8000-000000000001",
+  "source_agent": "localizer",
+  "model": {
+    "schema_version": 1,
+    "checkpoint_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "architecture": "test",
+    "tokenizer_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "representation": "selected-slots-test-v1",
+    "layer": 1,
+    "hidden_width": 2,
+    "max_slots": 8
+  },
+  "dtype": "f32_le",
+  "codec": "selected_slots_v1",
+  "slots": 1,
+  "payload_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "logical_bytes": 8
+}

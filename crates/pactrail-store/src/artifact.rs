@@ -120,6 +120,16 @@ impl ArtifactStore {
     /// Returns an error for an invalid digest, failed I/O, decompression failure,
     /// or content that no longer matches its address.
     pub fn get(&self, digest: &str) -> Result<Vec<u8>, ArtifactError> {
+        self.get_bounded(digest, MAX_ARTIFACT_BYTES)
+    }
+
+    /// Loads an artifact under a caller's stricter logical-byte ceiling.
+    ///
+    /// # Errors
+    /// Rejects oversized output before it can grow beyond the admitted bound,
+    /// as well as the normal path, compression and integrity failures.
+    pub fn get_bounded(&self, digest: &str, max_bytes: u64) -> Result<Vec<u8>, ArtifactError> {
+        let max_bytes = max_bytes.min(MAX_ARTIFACT_BYTES);
         let path = self.path_for(digest)?;
         let metadata = fs::symlink_metadata(&path).map_err(|source| ArtifactError::Io {
             path: path.clone(),
@@ -146,17 +156,17 @@ impl ArtifactStore {
             })?;
         let mut content = Vec::new();
         decoder
-            .take(MAX_ARTIFACT_BYTES + 1)
+            .take(max_bytes + 1)
             .read_to_end(&mut content)
             .map_err(|source| ArtifactError::Io {
                 path: path.clone(),
                 source,
             })?;
         let uncompressed_bytes = u64::try_from(content.len()).unwrap_or(u64::MAX);
-        if uncompressed_bytes > MAX_ARTIFACT_BYTES {
+        if uncompressed_bytes > max_bytes {
             return Err(ArtifactError::TooLarge {
                 actual: uncompressed_bytes,
-                limit: MAX_ARTIFACT_BYTES,
+                limit: max_bytes,
             });
         }
         let actual = blake3::hash(&content).to_hex().to_string();
@@ -176,6 +186,31 @@ impl ArtifactStore {
     /// Returns [`ArtifactError::InvalidDigest`] when `digest` is not a BLAKE3 hex digest.
     pub fn contains(&self, digest: &str) -> Result<bool, ArtifactError> {
         optional_real_file(&self.path_for(digest)?)
+    }
+
+    /// Reports compressed storage size for an existing regular artifact.
+    ///
+    /// # Errors
+    /// Rejects missing, unsafe or oversized files; payload integrity is checked
+    /// separately by `get_bounded` before this metadata is trusted.
+    pub fn stored_size(&self, digest: &str) -> Result<u64, ArtifactError> {
+        let path = self.path_for(digest)?;
+        if !optional_real_file(&path)? {
+            return Err(ArtifactError::Io {
+                path,
+                source: std::io::Error::from(std::io::ErrorKind::NotFound),
+            });
+        }
+        let bytes = fs::symlink_metadata(&path)
+            .map_err(|source| ArtifactError::Io { path, source })?
+            .len();
+        if bytes > MAX_COMPRESSED_BYTES {
+            return Err(ArtifactError::TooLarge {
+                actual: bytes,
+                limit: MAX_COMPRESSED_BYTES,
+            });
+        }
+        Ok(bytes)
     }
 
     fn path_for(&self, digest: &str) -> Result<PathBuf, ArtifactError> {
@@ -238,6 +273,27 @@ pub enum ArtifactError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bounded_reads_reject_compressible_bombs_at_the_caller_ceiling() {
+        let directory = tempfile::tempdir().unwrap_or_else(|e| unreachable!("directory: {e}"));
+        let store =
+            ArtifactStore::open(directory.path()).unwrap_or_else(|e| unreachable!("store: {e}"));
+        let artifact = store
+            .put(&vec![0; 1_048_576])
+            .unwrap_or_else(|e| unreachable!("put: {e}"));
+        assert!(matches!(
+            store.get_bounded(&artifact.digest, 1024),
+            Err(ArtifactError::TooLarge { limit: 1024, .. })
+        ));
+        assert_eq!(
+            store
+                .get_bounded(&artifact.digest, 1_048_576)
+                .unwrap_or_else(|e| unreachable!("get: {e}"))
+                .len(),
+            1_048_576
+        );
+    }
 
     #[test]
     fn artifacts_round_trip_and_deduplicate() {

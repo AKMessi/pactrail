@@ -429,3 +429,13 @@ not engine history. See [continuation details](persistent-task-continuation.md).
 ## Guided model connection
 
 Use `/setup` to select a provider and model without editing shell configuration. Your first task opens setup automatically if no model exists and remains saved if setup is cancelled. See [model setup](model-setup.md).
+
+## Experimental agents
+
+Multi-agent execution is opt-in through scriptable `run --agent-config PATH`.
+`pactrail agent-template` emits a bounded text coding profile; `pactrail agents
+RUN_ID --json` validates the durable session and reports roles, attempts,
+communication rounds and usage. The interactive default remains single-agent.
+`/status` identifies first-party latent-state support as unavailable. Generating
+`agent-template --latent` configures a requested mode; it does not grant a provider
+hidden-state access. See [the full workflow](multi-agent.md).

@@ -183,6 +183,19 @@ Its staged exit gates preserve V2 isolation, replay, policy, and public formats.
 - Provider-specific logic in the deterministic core.
 - Multi-agent concurrency before single-run replay and containment are proven.
 
+## Experimental v2.1 agent reasoning
+
+[Design 0018](design/0018-bounded-agent-runtime.md) introduces opt-in bounded
+specialists after the durable run/effect foundations. Initial scheduling is
+serial; future parallel reasoning must preserve deterministic journal order and
+cancellation. Parallel uncontrolled authority remains a non-goal. A shared
+candidate does not become concurrently writable because multiple models reason.
+
+Text collaboration, latent transport correctness and useful real-model latent
+reasoning are distinct gates. The CPU mock tests runtime mechanics; qualifying
+an open-weight backend and matched causal repository experiments are required
+before advertising latent reasoning or efficiency improvements.
+
 ## Proposing work
 
 Material changes should start as a design issue containing the user problem,

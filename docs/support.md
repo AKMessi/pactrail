@@ -65,3 +65,19 @@ Bug reports must include the Pactrail version, platform, provider family,
 process backend, reproduction, and a sanitized trace when available. Never post
 credentials or private source. Use the private channel in `SECURITY.md` for
 suspected vulnerabilities.
+
+## Experimental agent runtime (v2.1)
+
+| Surface | Availability |
+|---|---|
+| Single-agent default | Existing authority, provider and replay contracts |
+| Text specialists | Opt-in JSON profile; serial deterministic scheduling |
+| Read-only verifier role | Advisory model reviewer; kernel owns real checks |
+| Latent transport | Experimental SDK extension, bounded selected finite f32 slots |
+| Built-in hosted/local Chat Completions providers | Latent unavailable; explicit error, no text fallback |
+| CPU latent mock | Runtime tests only; no model-quality evidence |
+| Qualified real hidden-state inference adapter | Deferred; no shipped first-party backend |
+| Matched causal trial runner | Python 3.11+ on POSIX; real latent arms require a genuine adapter |
+
+A model route/role cannot grant authority. All permitted writes and commands use
+the same Tool Kernel and candidate. See [bounded agents](multi-agent.md).

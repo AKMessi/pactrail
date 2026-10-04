@@ -33,6 +33,7 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
+use crate::agents::{AgentRuntime, artifact_reference};
 use crate::checkpoint::{
     CheckpointIdentity, CheckpointStore, ResumePhase, RunCheckpoint, contract_digest,
 };
@@ -47,6 +48,7 @@ use crate::{
     AdaptiveRuntimeClass, AdaptiveRuntimeProfile, CheckpointError, ControllerPhase,
     VerificationCommand, detect_verification_commands,
 };
+use pactrail_core::agent::{AgentRole, AgentRunConfig, CommunicationMode};
 
 const DEFAULT_MAX_TURNS: u16 = 24;
 const STALLED_TOOL_TURN_LIMIT: u16 = 3;
@@ -320,9 +322,18 @@ pub struct RunEngine<'a> {
     investigation_price_provenance: Option<(String, String)>,
     adaptive_routing: bool,
     completion_audit: bool,
+    agent_config: Option<AgentRunConfig>,
 }
 
 impl<'a> RunEngine<'a> {
+    /// Enables experimental bounded agents. Admission validates configuration,
+    /// checkpoint availability and latent capabilities before model I/O.
+    #[must_use]
+    pub fn with_agents(mut self, config: AgentRunConfig) -> Self {
+        self.agent_config = Some(config);
+        self
+    }
+
     /// Creates an engine from explicit model, tool, and policy dependencies.
     #[must_use]
     pub fn new(
@@ -350,6 +361,7 @@ impl<'a> RunEngine<'a> {
             investigation_price_provenance: None,
             adaptive_routing: false,
             completion_audit: false,
+            agent_config: None,
         }
     }
 
@@ -645,6 +657,110 @@ impl<'a> RunEngine<'a> {
         observer: &dyn RunObserver,
         resume: Option<RunCheckpoint>,
     ) -> Result<RunOutcome, EngineError> {
+        if let Some(config) = &self.agent_config {
+            config
+                .validate()
+                .map_err(|e| EngineError::InvalidConfiguration(e.to_string()))?;
+            if self.checkpoint_store.is_none() {
+                return Err(EngineError::InvalidConfiguration(
+                    "agent execution requires durable checkpoint storage".to_owned(),
+                ));
+            }
+            if self.adaptive_routing {
+                return Err(EngineError::InvalidConfiguration(
+                    "agent routes are explicit; adaptive routing cannot override them".to_owned(),
+                ));
+            }
+            if config
+                .agents
+                .iter()
+                .any(|a| a.model_route == pactrail_core::agent::AgentModelRoute::Investigation)
+                && self.model.name() != "phase-router"
+            {
+                return Err(EngineError::InvalidConfiguration(
+                    "investigation agent route requires an explicitly configured phase router"
+                        .to_owned(),
+                ));
+            }
+            if config.communication == CommunicationMode::Latent {
+                let backend = self.model.latent_backend().ok_or_else(|| {
+                    EngineError::InvalidConfiguration(
+                        pactrail_models::latent::LatentError::Unsupported.to_string(),
+                    )
+                })?;
+                backend
+                    .latent_capabilities()
+                    .validate()
+                    .map_err(|e| EngineError::InvalidConfiguration(e.to_string()))?;
+                if let pactrail_core::agent::CommunicationIntervention::WrongTask {
+                    descriptor_digest,
+                } = &config.intervention
+                {
+                    let artifacts = self
+                        .checkpoint_store
+                        .ok_or_else(|| {
+                            EngineError::InvalidConfiguration(
+                                "latent artifacts unavailable".to_owned(),
+                            )
+                        })?
+                        .agent_artifacts();
+                    crate::interventions::validate_donor(
+                        artifacts,
+                        descriptor_digest,
+                        run_id,
+                        Some(backend.latent_capabilities()),
+                        config.latent_slots_per_message,
+                        config.budget.max_bytes_per_message,
+                    )
+                    .map_err(|e| EngineError::InvalidConfiguration(e.to_string()))?;
+                }
+                if config.latent_slots_per_message > backend.latent_capabilities().max_slots
+                    || u64::from(config.latent_slots_per_message)
+                        * u64::from(backend.latent_capabilities().hidden_width)
+                        * 4
+                        > config.budget.max_bytes_per_message
+                {
+                    return Err(EngineError::InvalidConfiguration(
+                        "requested latent slots exceed backend or per-message bounds".to_owned(),
+                    ));
+                }
+            }
+        }
+        let restored_agents = if let Some(checkpoint) = &resume {
+            let agents = self
+                .checkpoint_store
+                .ok_or_else(|| {
+                    EngineError::ResumeRejected("checkpoint storage is required".to_owned())
+                })?
+                .load_agents(store, checkpoint)
+                .map_err(|e| EngineError::ResumeRejected(e.to_string()))?;
+            if agents.as_ref().map(|a| &a.config) != self.agent_config.as_ref() {
+                return Err(EngineError::ResumeRejected(
+                    "agent topology or communication policy differs from the checkpoint".to_owned(),
+                ));
+            }
+            if let Some(agents) = &agents
+                && agents.config.communication == CommunicationMode::Latent
+            {
+                let backend = self.model.latent_backend().ok_or_else(|| {
+                    EngineError::ResumeRejected("latent backend is unavailable".to_owned())
+                })?;
+                for message in &agents.messages {
+                    for descriptor in message.message.descriptors() {
+                        descriptor
+                            .validate(
+                                run_id,
+                                backend.latent_capabilities(),
+                                agents.config.budget.max_bytes_per_message,
+                            )
+                            .map_err(|e| EngineError::ResumeRejected(e.to_string()))?;
+                    }
+                }
+            }
+            agents
+        } else {
+            None
+        };
         let active_started = Instant::now();
         let overgrants = self.policy.overgrants(&contract.permissions);
         if !overgrants.is_empty() {
@@ -1129,6 +1245,17 @@ impl<'a> RunEngine<'a> {
                 ),
             ]),
         }))?;
+        let mut agents = match (restored_agents, self.agent_config.as_ref()) {
+            (Some(state), _) => Some(state),
+            (None, Some(config)) => Some(
+                AgentRuntime::new(run_id, config.clone(), &conversation)
+                    .map_err(|e| EngineError::InvalidConfiguration(e.to_string()))?,
+            ),
+            (None, None) => None,
+        };
+        if let Some(agents) = &agents {
+            conversation.clone_from(&agents.agents[agents.active].conversation);
+        }
         let mut accepted_completion_gate = None;
         let mut completion_ledger = if self.completion_audit {
             CompletionLedger::restore(&journal.store.load(run_id)?)
@@ -1149,6 +1276,7 @@ impl<'a> RunEngine<'a> {
             transaction,
             &mut journal,
             CheckpointLoopState {
+                agents: agents.as_mut(),
                 phase: resume_phase,
                 next_turn: start_turn,
                 elapsed_active_ms: active_base_ms.saturating_add(elapsed_millis(active_started)),
@@ -1188,14 +1316,24 @@ impl<'a> RunEngine<'a> {
             }
             self.check_cancelled()?;
             let candidate_present = !transaction.changes()?.is_empty();
-            let control = controller.before_turn(turn, candidate_present, &tool_descriptors);
+            let mut control = controller.before_turn(turn, candidate_present, &tool_descriptors);
+            if let Some(agents) = &agents {
+                control.tools.retain(|tool| agents.permits(tool));
+                control.allowed_tool_names =
+                    control.tools.iter().map(|tool| tool.name.clone()).collect();
+                if agents.spec().role != AgentRole::Implementer {
+                    control.phase = ControllerPhase::Investigating;
+                    control.prompt = None;
+                    control.action_deadline = false;
+                }
+            }
             let model_phase = match control.phase {
                 ControllerPhase::Investigating => ModelPhase::Investigation,
                 ControllerPhase::Implementing => ModelPhase::Implementation,
                 ControllerPhase::Validating => ModelPhase::Validation,
                 ControllerPhase::Synthesizing => ModelPhase::Synthesis,
             };
-            let (route, route_reason) = self.select_adaptive_route(
+            let (mut route, mut route_reason) = self.select_adaptive_route(
                 model_phase,
                 active_route,
                 controller.no_progress_turns(),
@@ -1203,6 +1341,14 @@ impl<'a> RunEngine<'a> {
                 contract.budget.cost_microusd,
                 cost_spent,
             )?;
+            if let Some(agents) = &agents {
+                route = if self.model.name() == "phase-router" {
+                    Some(agents.route())
+                } else {
+                    None
+                };
+                route_reason = "explicit agent route";
+            }
             if let Some(route) = route {
                 journal.append(RunEvent::ActionCompleted(ActionRecord {
                     actor: "router".to_owned(),
@@ -1320,6 +1466,11 @@ impl<'a> RunEngine<'a> {
                 &mut journal,
                 observer,
             )?;
+            if let Some(agents) = &mut agents {
+                agents
+                    .reserve_turn(max_turns)
+                    .map_err(|e| EngineError::InvalidConfiguration(e.to_string()))?;
+            }
             // Controller phase events, phase prompts, and deterministic
             // compaction all precede provider I/O. Bind their exact result to
             // the event head so an interrupted model request resumes with the
@@ -1329,6 +1480,7 @@ impl<'a> RunEngine<'a> {
                 transaction,
                 &mut journal,
                 CheckpointLoopState {
+                    agents: agents.as_mut(),
                     phase: ResumePhase::BeforeModel,
                     next_turn: turn,
                     elapsed_active_ms: active_base_ms
@@ -1374,11 +1526,117 @@ impl<'a> RunEngine<'a> {
                 max_turns,
             });
             let model_started = Instant::now();
-            let mut response = match self.invoke_model(&request, observer).await {
+            let mut exported_latent = None;
+            let mut latent_inference_ms = None;
+            let mut latent_import_stats = None;
+            let invocation = if let Some(agents) = &agents {
+                if agents.config.communication == CommunicationMode::Latent {
+                    let backend = self.model.latent_backend().ok_or_else(|| {
+                        EngineError::InvalidConfiguration("latent backend unavailable".to_owned())
+                    })?;
+                    let artifacts = self
+                        .checkpoint_store
+                        .ok_or_else(|| {
+                            EngineError::InvalidConfiguration(
+                                "agent artifact storage unavailable".to_owned(),
+                            )
+                        })?
+                        .agent_artifacts();
+                    let imported = agents
+                        .imported(artifacts, backend.latent_capabilities())
+                        .map_err(|e| EngineError::InvalidConfiguration(e.to_string()))?;
+                    let import_bytes = imported
+                        .iter()
+                        .try_fold(0_u64, |sum, state| {
+                            sum.checked_add(state.descriptor().logical_bytes)
+                        })
+                        .ok_or_else(|| {
+                            EngineError::InvalidConfiguration(
+                                "latent import byte accounting overflow".to_owned(),
+                            )
+                        })?;
+                    latent_import_stats = Some((imported.len(), import_bytes));
+                    let latent_context = pactrail_models::latent::LatentTurnContext {
+                        run_id,
+                        agent: agents.spec().id.clone(),
+                        round: agents.round,
+                        max_rounds: agents.config.budget.max_rounds,
+                        allow_human_output: agents.active + 1 == agents.agents.len()
+                            && agents.round == agents.config.budget.max_rounds,
+                    };
+                    let result = tokio::select! {
+                        biased;
+                        () = self.cancellation.cancelled() => Err(EngineError::Cancelled),
+                        result = backend.invoke_latent(&request, &latent_context, &imported, agents.config.latent_slots_per_message) => result.map_err(|e| EngineError::InvalidConfiguration(e.to_string())),
+                    };
+                    result
+                        .and_then(|turn| {
+                            let checked = (|| {
+                                if let Some(state) = &turn.exported_slots {
+                                    state.descriptor().validate(
+                                        run_id,
+                                        backend.latent_capabilities(),
+                                        agents.config.budget.max_bytes_per_message,
+                                    )?;
+                                    if state.descriptor().slots > agents.config.latent_slots_per_message {
+                                    return Err(pactrail_models::latent::LatentError::Invalid("exported slots exceed the configured per-message bound"));
+                                }
+                                if state.descriptor().source_agent != agents.spec().id {
+                                        return Err(pactrail_models::latent::LatentError::Invalid(
+                                            "exported state sender mismatch",
+                                        ));
+                                    }
+                                }
+                                Ok(turn)
+                            })();
+                            checked.map_err(|e: pactrail_models::latent::LatentError| {
+                                EngineError::InvalidConfiguration(e.to_string())
+                            })
+                        })
+                        .map(|turn| {
+                            latent_inference_ms = turn.inference_ms;
+                            exported_latent = turn.exported_slots;
+                            turn.response
+                        })
+                } else {
+                    self.invoke_model(&request, observer).await
+                }
+            } else {
+                self.invoke_model(&request, observer).await
+            };
+            let mut response = match invocation {
                 Ok(response) => response,
-                Err(EngineError::Cancelled) => return Err(EngineError::Cancelled),
                 Err(error) => {
-                    transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                    if let Some(runtime) = &mut agents {
+                        runtime
+                            .interrupt(matches!(error, EngineError::Cancelled), &error.to_string());
+                        self.persist_checkpoint(
+                            &mut durable_checkpoint,
+                            transaction,
+                            &mut journal,
+                            CheckpointLoopState {
+                                agents: agents.as_mut(),
+                                phase: ResumePhase::BeforeModel,
+                                next_turn: turn,
+                                elapsed_active_ms: active_base_ms
+                                    .saturating_add(elapsed_millis(active_started)),
+                                conversation: &conversation,
+                                usage,
+                                cost_spent_microusd: cost_spent,
+                                active_route,
+                                call_ids: &call_ids,
+                                previous_tool_signature: previous_tool_signature.as_ref(),
+                                repeated_tool_turns,
+                                consecutive_failed_tool_turns,
+                                automatic_repair_cycles,
+                                final_text: &final_text,
+                                recovery_risk: recovery_risk.as_deref(),
+                            },
+                        )?;
+                    }
+                    if !matches!(error, EngineError::Cancelled) {
+                        transition(&mut journal, &mut state, RunState::Failed, observer)?;
+                    }
                     return Err(error);
                 }
             };
@@ -1501,6 +1759,28 @@ impl<'a> RunEngine<'a> {
                     prepared_context.digest.clone(),
                 ),
             ]);
+            if let Some((imports, import_bytes)) = latent_import_stats {
+                model_attributes.insert("latent_import_operations".to_owned(), imports.to_string());
+                model_attributes.insert("latent_import_bytes".to_owned(), import_bytes.to_string());
+                model_attributes.insert(
+                    "latent_export_bytes".to_owned(),
+                    exported_latent
+                        .as_ref()
+                        .map_or(0, |state| state.descriptor().logical_bytes)
+                        .to_string(),
+                );
+                model_attributes.insert(
+                    "latent_export_operations".to_owned(),
+                    u8::from(exported_latent.is_some()).to_string(),
+                );
+            }
+            if let Some(inference_ms) = latent_inference_ms {
+                model_attributes.insert("model_inference_ms".to_owned(), inference_ms.to_string());
+            }
+            if let Some(agents) = &agents {
+                model_attributes.insert("agent_id".to_owned(), agents.spec().id.to_string());
+                model_attributes.insert("agent_round".to_owned(), agents.round.to_string());
+            }
             if let Some(coverage) = cache_read_basis_points(response.usage) {
                 model_attributes.insert("cache_read_basis_points".to_owned(), coverage.to_string());
             }
@@ -1528,7 +1808,7 @@ impl<'a> RunEngine<'a> {
                 );
             }
             extend_provider_trace_attributes(&mut model_attributes, &response.extensions);
-            journal.append(RunEvent::ActionCompleted(ActionRecord {
+            let model_event = RunEvent::ActionCompleted(ActionRecord {
                 actor: format!("model:{}/{}", self.model.name(), self.model.model()),
                 action: "invoke".to_owned(),
                 summary: format!(
@@ -1542,7 +1822,41 @@ impl<'a> RunEngine<'a> {
                 succeeded: true,
                 duration_ms: model_duration_ms,
                 attributes: model_attributes,
-            }))?;
+            });
+            if let Some(agents) = &mut agents {
+                agents.pending_events.push(model_event);
+            } else {
+                journal.append(model_event)?;
+            }
+
+            if agents.is_some() {
+                // Persist charged inference before preparing peer artifacts. If this
+                // non-consequential step crashes, recovery may recompute reasoning,
+                // but never refunds its usage or reserved attempt.
+                self.persist_checkpoint(
+                    &mut durable_checkpoint,
+                    transaction,
+                    &mut journal,
+                    CheckpointLoopState {
+                        agents: agents.as_mut(),
+                        phase: ResumePhase::BeforeModel,
+                        next_turn: turn.saturating_add(1),
+                        elapsed_active_ms: active_base_ms
+                            .saturating_add(elapsed_millis(active_started)),
+                        conversation: &conversation,
+                        usage,
+                        cost_spent_microusd: cost_spent,
+                        active_route,
+                        call_ids: &call_ids,
+                        previous_tool_signature: previous_tool_signature.as_ref(),
+                        repeated_tool_turns,
+                        consecutive_failed_tool_turns,
+                        automatic_repair_cycles,
+                        final_text: &final_text,
+                        recovery_risk: recovery_risk.as_deref(),
+                    },
+                )?;
+            }
 
             if contract.budget.model_tokens != 0 && usage.total() > contract.budget.model_tokens {
                 transition(&mut journal, &mut state, RunState::Failed, observer)?;
@@ -1619,6 +1933,67 @@ impl<'a> RunEngine<'a> {
                     )));
                     continue;
                 }
+                if let Some(agent_runtime) = &mut agents {
+                    conversation.push(ConversationItem::Message(Message::assistant(
+                        response.text.clone(),
+                    )));
+                    let artifacts = self
+                        .checkpoint_store
+                        .ok_or_else(|| {
+                            EngineError::InvalidConfiguration(
+                                "agent artifact storage unavailable".to_owned(),
+                            )
+                        })?
+                        .agent_artifacts();
+                    let generated_text_tokens = response
+                        .extensions
+                        .get("generated_text_tokens")
+                        .and_then(Value::as_u64);
+                    let done = agent_runtime
+                        .finish(
+                            &response.text,
+                            generated_text_tokens,
+                            exported_latent.take(),
+                            &mut conversation,
+                            artifacts,
+                        )
+                        .map_err(|e| EngineError::InvalidConfiguration(e.to_string()))?;
+                    previous_tool_signature = None;
+                    repeated_tool_turns = 0;
+                    consecutive_failed_tool_turns = 0;
+                    controller = ControllerKernel::restore_with_discovery_cap(
+                        &contract.goal,
+                        max_turns,
+                        runtime_profile.discovery_turn_cap,
+                        &conversation,
+                    );
+                    if !done {
+                        self.persist_checkpoint(
+                            &mut durable_checkpoint,
+                            transaction,
+                            &mut journal,
+                            CheckpointLoopState {
+                                agents: agents.as_mut(),
+                                phase: ResumePhase::BeforeModel,
+                                next_turn: turn.saturating_add(1),
+                                elapsed_active_ms: active_base_ms
+                                    .saturating_add(elapsed_millis(active_started)),
+                                conversation: &conversation,
+                                usage,
+                                cost_spent_microusd: cost_spent,
+                                active_route,
+                                call_ids: &call_ids,
+                                previous_tool_signature: previous_tool_signature.as_ref(),
+                                repeated_tool_turns,
+                                consecutive_failed_tool_turns,
+                                automatic_repair_cycles,
+                                final_text: &final_text,
+                                recovery_risk: recovery_risk.as_deref(),
+                            },
+                        )?;
+                        continue;
+                    }
+                }
                 let candidate_changes = transaction.changes()?;
                 let candidate_digest = candidate_changes_digest(&candidate_changes);
                 let repair_turn_available = turn.saturating_add(1) < max_turns;
@@ -1647,6 +2022,9 @@ impl<'a> RunEngine<'a> {
                             )
                             .await?;
                         if validation.has_repairable_failure() {
+                            if let Some(runtime) = &mut agents {
+                                runtime.reopen_implementer();
+                            }
                             automatic_repair_cycles = automatic_repair_cycles.saturating_add(1);
                             conversation
                                 .push(ConversationItem::Message(Message::assistant(response.text)));
@@ -1668,6 +2046,7 @@ impl<'a> RunEngine<'a> {
                                 transaction,
                                 &mut journal,
                                 CheckpointLoopState {
+                                    agents: agents.as_mut(),
                                     phase: ResumePhase::BeforeModel,
                                     next_turn: turn.saturating_add(1),
                                     elapsed_active_ms: active_base_ms
@@ -1694,6 +2073,9 @@ impl<'a> RunEngine<'a> {
                 if self.completion_audit && goal_intent == GoalIntent::Change {
                     let remaining = max_turns.saturating_sub(turn.saturating_add(1));
                     if completion_ledger.can_review(&candidate_digest, remaining) {
+                        if let Some(runtime) = &mut agents {
+                            runtime.reopen_implementer();
+                        }
                         journal.append(RunEvent::ActionCompleted(
                             completion_ledger.record(&candidate_digest),
                         ))?;
@@ -1710,6 +2092,7 @@ impl<'a> RunEngine<'a> {
                             transaction,
                             &mut journal,
                             CheckpointLoopState {
+                                agents: agents.as_mut(),
                                 phase: ResumePhase::BeforeModel,
                                 next_turn: turn.saturating_add(1),
                                 elapsed_active_ms: active_base_ms
@@ -1782,6 +2165,7 @@ impl<'a> RunEngine<'a> {
                 transaction,
                 &mut journal,
                 CheckpointLoopState {
+                    agents: agents.as_mut(),
                     phase: ResumePhase::BeforeTools,
                     next_turn: turn,
                     elapsed_active_ms: active_base_ms
@@ -1801,9 +2185,12 @@ impl<'a> RunEngine<'a> {
             )?;
             let mut any_tool_succeeded = false;
             let mut controller_results = Vec::new();
-            for batch in
-                self.schedule_tool_batches(response.tool_calls, runtime_profile.parallel_read_width)
-            {
+            let tool_width = if agents.is_some() {
+                1
+            } else {
+                runtime_profile.parallel_read_width
+            };
+            for batch in self.schedule_tool_batches(response.tool_calls, tool_width) {
                 let candidate_before = candidate_changes_digest(&transaction.changes()?);
                 for call in &batch {
                     journal.append(RunEvent::EffectPrepared(
@@ -1823,7 +2210,17 @@ impl<'a> RunEngine<'a> {
                         batch,
                     )
                     .await?;
-                for execution in executions {
+                for mut execution in executions {
+                    if let Some(agents) = &agents {
+                        execution
+                            .action
+                            .attributes
+                            .insert("agent_id".to_owned(), agents.spec().id.to_string());
+                        execution
+                            .action
+                            .attributes
+                            .insert("agent_round".to_owned(), agents.round.to_string());
+                    }
                     any_tool_succeeded |= execution.succeeded;
                     let candidate_changed = execution
                         .action
@@ -2036,6 +2433,7 @@ impl<'a> RunEngine<'a> {
                 if transaction.changes()?.is_empty() {
                     let recovery_turn = turn.saturating_add(2);
                     if goal_intent == GoalIntent::Informational
+                        && agents.is_none()
                         && any_tool_succeeded
                         && tool_turn_read_only
                         && repeated_tool_turns >= STALLED_TOOL_TURN_LIMIT
@@ -2087,6 +2485,7 @@ impl<'a> RunEngine<'a> {
                 transaction,
                 &mut journal,
                 CheckpointLoopState {
+                    agents: agents.as_mut(),
                     phase: ResumePhase::BeforeModel,
                     next_turn: turn.saturating_add(1),
                     elapsed_active_ms: active_base_ms
@@ -2154,6 +2553,7 @@ impl<'a> RunEngine<'a> {
             transaction,
             &mut journal,
             CheckpointLoopState {
+                agents: agents.as_mut(),
                 phase: ResumePhase::BeforeVerification,
                 next_turn: max_turns,
                 elapsed_active_ms: active_base_ms.saturating_add(elapsed_millis(active_started)),
@@ -2981,8 +3381,8 @@ impl<'a> RunEngine<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
 struct CheckpointLoopState<'a> {
+    agents: Option<&'a mut AgentRuntime>,
     phase: ResumePhase,
     next_turn: u16,
     elapsed_active_ms: u64,
@@ -3355,6 +3755,8 @@ impl RunEngine<'_> {
             observation_root: Option<&'a Path>,
             max_turns: u16,
             runtime_identity: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            agent_config: Option<&'a AgentRunConfig>,
         }
 
         #[allow(clippy::trivially_copy_pass_by_ref)] // serde requires a borrowed predicate.
@@ -3376,6 +3778,7 @@ impl RunEngine<'_> {
             observation_root: self.observation_root.as_deref(),
             max_turns: self.max_turns,
             runtime_identity: self.runtime_identity.as_deref(),
+            agent_config: self.agent_config.as_ref(),
         })
         .map_err(CheckpointError::Encoding)?;
         let tools = serde_json::to_vec(tools).map_err(CheckpointError::Encoding)?;
@@ -3416,6 +3819,53 @@ impl RunEngine<'_> {
         checkpoint.automatic_repair_cycles = state.automatic_repair_cycles;
         state.final_text.clone_into(&mut checkpoint.final_text);
         checkpoint.recovery_risk = state.recovery_risk.map(str::to_owned);
+        if let Some(agents) = state.agents {
+            agents.agents[agents.active]
+                .conversation
+                .clone_from(state.conversation);
+            let mut batch = Vec::new();
+            let mut sequence = journal.sequence;
+            let mut previous_hash = EventHash(journal.last_hash.clone());
+            for event in &agents.pending_events {
+                let envelope = pactrail_core::EventEnvelope::new(
+                    journal.run_id,
+                    sequence,
+                    time::OffsetDateTime::now_utc(),
+                    previous_hash,
+                    event.clone(),
+                )
+                .map_err(CheckpointError::Encoding)?;
+                previous_hash = envelope.hash.clone();
+                sequence = sequence.checked_add(1).ok_or_else(|| {
+                    EngineError::InvalidConfiguration("agent event sequence exhausted".to_owned())
+                })?;
+                batch.push(envelope);
+            }
+            if let Some(last) = batch.last() {
+                checkpoint.event_sequence = last.sequence;
+                checkpoint.event_hash = last.hash.clone();
+            }
+            let artifact = store.put_agents(checkpoint, agents)?;
+            batch.push(
+                pactrail_core::EventEnvelope::new(
+                    journal.run_id,
+                    sequence,
+                    time::OffsetDateTime::now_utc(),
+                    previous_hash,
+                    RunEvent::CheckpointCreated {
+                        checkpoint: artifact_reference(&artifact),
+                    },
+                )
+                .map_err(CheckpointError::Encoding)?,
+            );
+            journal.store.append_prepared(journal.run_id, &batch)?;
+            if let Some(last) = batch.last() {
+                journal.sequence = last.sequence.saturating_add(1);
+                journal.last_hash.clone_from(&last.hash.0);
+            }
+            agents.pending_events.clear();
+            return Ok(());
+        }
         let artifact = store.put(checkpoint)?;
         journal.append(RunEvent::CheckpointCreated {
             checkpoint: CheckpointStore::event_reference(&artifact),

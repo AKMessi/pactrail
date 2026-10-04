@@ -129,3 +129,21 @@ The retained results make this clear:
 Those reports are available in the [earlier comparison](benchmarks/results/2026-07-18-deepseek-v4/README.md), [harder comparison](benchmarks/results/2026-07-22-v1-confirmation/README.md), and [recent calibration](benchmarks/results/2026-09-26-space-bunny-v4-calibration/README.md). The historical comparisons describe the tested versions and configurations; they do not establish the performance of the current V2 architecture.
 
 Pactrail has a strong foundation for controlled, auditable coding work. Its main remaining proof is reliable completion of difficult tasks at a competitive cost. The V2 upgrades address known causes of wasted investigation and weak verification, but a fresh comparative evaluation must establish how much those changes improved real results.
+
+## Experimental collaboration in v2.1
+
+Think of several specialists sitting beside one workshop supervisor. Each has
+its own notes. The localizer looks for relevant code; the solver proposes a fix;
+the critic challenges it; the implementer asks the supervisor to make changes.
+Pactrail's kernel still decides which actions are permitted and performs them in
+the isolated copy. Calling a model an implementer does not give it filesystem
+access. Actual tests, files and tool observations supply evidence.
+
+The first profile runs these specialists in a fixed order with finite turns,
+rounds and communication limits. Text advice is stored and addressed to the next
+specialist. An experimental latent extension can transport compatible internal
+model state by checked binary artifact instead of generating a peer-language
+message. The bundled providers do not expose that state and reject latent mode.
+A CPU mock checks the machinery; a real-model adapter and causal experiments are
+still needed to establish useful latent reasoning. This makes no claim of free
+inference or better task performance. See [the specification](docs/multi-agent.md).
