@@ -143,7 +143,10 @@ matched-trial runner. No new scoring or behavior experiment is admitted yet.
 
 Actual first preparation: 22 sealed baseline/gold trees, eight retained refusals
 for tracked symlinks/submodules. Native preparation is not independent grading.
-Container execution is currently unavailable and noninteractive sudo cannot
-install it. Complete local base/gold test validation remains a gate, not a waived
+Container execution is now available. One Axios case passed actual base/gold
+validation; the full population campaign is running. The adapter pins official
+external parser code and image identities, strips provider environment, disables
+grading network and retains raw shell exits separately from behavioral outcomes.
+Complete local base/gold test validation remains a gate, not a waived
 requirement. No normalization, task substitution, anchor editing or delegate
 policy change has been made to obtain favorable results.

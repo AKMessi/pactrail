@@ -75,3 +75,29 @@ Docker is installed and account membership includes its group, but the current
 agent process has not inherited the new supplementary group. Container grader
 execution remains blocked pending a refreshed session. Immutable manifests for
 22 prepared cases are pinned; that is not proof of grader correctness.
+
+### Docker access resolved and first grader qualification
+
+The operator granted access to the current Docker socket. Docker server 29.8.2
+is now accessible; no daemon authority is exposed to agents. Linux/amd64 Axios
+issue #4738 ran in two fresh containers with networking disabled, no host mounts
+or provider credentials, dropped capabilities, bounded output/time/processes and
+explicit memory/CPU limits. Base: one targeted failure and three regression
+passes. Gold: one targeted pass and three regression passes. Both raw shell
+exits were zero; the behavioral result was established by the commit-pinned
+official SWE-bench TAP parser, not the shell status. Evidence is retained under
+`validation-v1/`; its external parser environment and dependency inventory are
+under `grading-sources/`.
+
+The full population campaign is under `validation-population-v1/`, including a
+runner-source snapshot. Unsupported preparation and grader failures remain in
+the ledger. The first Gin case illustrates an admission failure: its upstream
+grader declares no regression tests, so it cannot satisfy the nonempty-regression
+gate. This is not converted into a pass or silently removed. No scored model
+request or behavior change has occurred.
+
+All six jobs in CI run [37292023633](https://github.com/AKMessi/pactrail/actions/runs/37292023633)
+passed for commit `83ffb6a54c47d8bdbafce8e35d482d89614e391e`: Linux, macOS and
+Windows quality, dependency policy, real terminal workflows and Docker
+containment. This qualifies that earlier interpretation-component milestone,
+not subsequent grading adapter changes.

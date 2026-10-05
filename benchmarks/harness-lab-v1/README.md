@@ -29,9 +29,9 @@ test ignored; fmt, strict Clippy, docs, release build, seven agent-runner tests,
 four completion-runner tests, real terminal checks and installers passed.
 Three 5,000-file index/context lifecycles passed with stable identities.
 Raw data: `benchmark-results/agent-quality-program-20261005/`.
-Docker is now installed, but the current account cannot access its daemon socket.
-Upstream container evaluation remains **not qualified**, and no scored request
-has been admitted. Installation alone does not validate grading environments.
+Docker is now accessible. The first actual container validation (Axios #4738)
+proved base-targeted failure and gold-targeted/regression passes. Population
+validation remains in progress; no scored model request has been admitted.
 
 ## Reproduce admission checks
 
@@ -106,8 +106,34 @@ missing, skipped, errored, timed-out or infrastructure-failed tests cannot quali
 either a base failure or a gold pass. Extra passing tests cannot replace a missing
 required test. Shell exit status alone is never behavioral evidence.
 
-This is a tested interpretation component, not a completed execution adapter.
-The forthcoming container runner must bind the upstream parser revision and
-input-log hashes, execute digest-pinned images without provider credentials,
-retain every attempt, and feed complete measured records into `lab.py` admission.
-No container or model-quality result is inferred from these unit tests.
+`container_grade.py` executes one prepared base/gold case in a fresh container,
+with no host mounts, no network, no provider environment, bounded time/output,
+explicit CPU/memory/PID limits, dropped capabilities and cleanup. It refuses an
+image whose platform, digest, clean tracked source or pre-fix commit does not match.
+Added gold files are included by applying the integrity-bound reference patch.
+It never pulls implicitly. `parse_upstream.py` uses the externally installed
+official SWE-bench parsers pinned to commit
+`02e7a74ffd0b707aab73d203fe87bdc7c76afc8e`; their source hashes and parsed statuses
+are retained. The external development dependency is not part of Pactrail runtime.
+
+`validate_population.py` explicitly pulls locked images and serially validates
+base/gold for the whole declared population, retaining unsupported cases and
+infrastructure failures. Output is exclusive and every model result is unscored.
+This is a validation adapter; scored-candidate grading and admission-record export
+still need integration before any baseline protocol can be admitted.
+
+Example (after explicitly pulling the declared immutable image):
+
+```sh
+python3 benchmarks/harness-lab-v1/container_grade.py \
+  --catalogue benchmarks/harness-lab-v1/catalogue.json \
+  --prepared benchmark-results/agent-quality-program-20261005/prepared-v1/results.json \
+  --images benchmark-results/agent-quality-program-20261005/image-lock-v1.json \
+  --parser-python /home/akmessi/.cache/pactrail-harness-lab-swebench/bin/python \
+  --task axios-axios-4738 --source base --output /tmp/axios-base-evidence
+```
+
+Actual Axios validation found a failing targeted test despite shell exit `0`.
+The reference fix passed that test and three regressions in a separate container.
+Reports distinguish raw `shell_exit_code` from behavioral test outcomes. Unit
+tests establish interpretation/bounds, not container or model-quality results.
