@@ -97,3 +97,17 @@ The local campaign pinned 22 image manifests and retained eight unsupported
 preparation cases. Its `manifest_locked_not_executed` status is deliberately
 different from a validated grader. Container execution must use these immutable
 identities and separately prove base failure and gold targeted/regression passes.
+
+## Behavioral grading boundary
+
+`grading.py` summarizes the exact declared targeted/regression test identities
+from an external parser's status map. It rejects malformed/duplicate identities;
+missing, skipped, errored, timed-out or infrastructure-failed tests cannot qualify
+either a base failure or a gold pass. Extra passing tests cannot replace a missing
+required test. Shell exit status alone is never behavioral evidence.
+
+This is a tested interpretation component, not a completed execution adapter.
+The forthcoming container runner must bind the upstream parser revision and
+input-log hashes, execute digest-pinned images without provider credentials,
+retain every attempt, and feed complete measured records into `lab.py` admission.
+No container or model-quality result is inferred from these unit tests.
