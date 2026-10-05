@@ -1,8 +1,9 @@
 # Harness Lab v1 — admission foundation
 
-This expands the candidate population to 30 public historical issues across
-Python, Rust, JavaScript/TypeScript and Go. It does **not** yet qualify them for
-scoring. Repository-disjoint development/confirmation splits reduce shared-repo
+The initial candidate population contains 30 public historical issues across
+Python, Rust, JavaScript/TypeScript and Go. A pre-scoring expansion to 44 cases
+qualified 22 environments (13 development, nine confirmation). Admission is
+evidence-bound; a catalogue entry by itself does not qualify a task for scoring. Repository-disjoint development/confirmation splits reduce shared-repo
 coupling; upstream public data can still have training contamination. The set
 is not independently curated for Pactrail.
 
@@ -30,8 +31,9 @@ four completion-runner tests, real terminal checks and installers passed.
 Three 5,000-file index/context lifecycles passed with stable identities.
 Raw data: `benchmark-results/agent-quality-program-20261005/`.
 Docker is now accessible. The first actual container validation (Axios #4738)
-proved base-targeted failure and gold-targeted/regression passes. Population
-validation remains in progress; no scored model request has been admitted.
+proved base-targeted failure and gold-targeted/regression passes. The expanded population campaign is complete; every exclusion remains retained.
+The first Apodex model campaign was interrupted by account-wide provider quota
+after nine completed trials. It is not a complete quality estimate.
 
 ## Reproduce admission checks
 

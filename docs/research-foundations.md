@@ -268,3 +268,29 @@ Primary snapshots for these method-level reviews are retained in
   no-gold cases explicitly. No-gold abstention is a separate task; it must not
   silently leave a positive-recall denominator. Do not import the paper's ranker
   ordering as evidence for mandatory embeddings in Pactrail.
+
+### Collaboration methodology controls
+
+Primary snapshots are retained in `paper-methods-v4/`; neither paper establishes
+Pactrail performance or security.
+
+- [OpenCollab v1](https://arxiv.org/html/2609.38345v1) distinguishes declared
+  organization from observed handoffs and warns against filtering evaluation to
+  runs that actually collaborated. Its reported team execution is serialized,
+  so those experiments do not prove parallel-reasoning gains. Pactrail already
+  has durable agent/message accounting. Future adaptive-delegate trials should
+  retain all assigned tasks, including those with no delegation, and record
+  requested/admitted/delivered/consumed handoffs separately. Declaring a scout
+  does not prove the implementer used it. Causal attribution needs explicit
+  assumptions and interventions; handoff completion alone cannot establish
+  usefulness. Code-controlled order is a runtime guarantee, not model evidence.
+- [AsynCodeBench v1](https://arxiv.org/html/2609.32662v1) measures dependency
+  satisfaction on integrated workspace checkpoints separately from private
+  specialist artifacts and final test fractions. For Pactrail's initial read-only
+  delegates, private reasoning/checks cannot qualify the shared candidate.
+  If future independent candidates are evaluated, record regressions after each
+  accepted integration on the exact integrated revision. Never substitute a
+  specialist's earlier successful test result for current candidate evidence.
+  Test fraction can diagnose partial work but must not replace strict task
+  success. The asynchronous benchmark does not justify concurrent uncontrolled
+  mutations or bypassing Pactrail's serialized effect authority.

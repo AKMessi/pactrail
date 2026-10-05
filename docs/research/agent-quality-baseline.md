@@ -254,3 +254,13 @@ duplicate identities and can report strict completion separately. Cache-hit
 ratios now require complete explicit provider usage coverage rather than treating
 legacy normalized zero as measured. Nine runner/analysis tests pass. No earlier
 aggregate or frozen scored protocol is overwritten by this measurement repair.
+
+Post-interruption engineering checkpoint: all five local Rust gates passed with
+460 tests passed, zero failed and one existing local OCI skip. Thirty-one lab
+tests and ten runner/real-CLI tests passed. The offline retrieval probe's invariant
+test passed, strict all-target Clippy passed, and all 13 development navigation
+diagnostics completed under a frozen hash-bound pilot protocol. These path-only
+rankings have no validated relevance labels or equal context packing yet; no
+retrieval benefit or task-quality result is claimed. Production retrieval and
+editing/delegation defaults remain unchanged. Newest branch CI remains a separate
+gate; the memory fix passed all six jobs in run `37345124780`.
