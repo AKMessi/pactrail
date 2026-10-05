@@ -204,3 +204,22 @@ are explicitly excluded. A regression detects ignored empty-file creation and
 changed bytes. Thirty lab tests and nine matched-runner/real-CLI fixture tests
 pass. This is an assurance measurement repair before scoring, not an agent-quality
 improvement or a rewrite of earlier results.
+
+The expanded campaign is complete: 44 declared cases, 22 qualified, 12
+unsupported preparations and 10 grading-validation failures. The evidence-bound
+cohort contains 13 development and nine confirmation tasks. All exclusions remain
+in the admission ledger; confirmation tasks have not been scored or used to tune.
+
+Failed runs may now receive explicitly opt-in partial-candidate diagnostic grading
+only after trace and source-isolation checks pass. Diagnostic passes never turn a
+failed run into functional or strict success. This preserves evidence of a correct
+partial patch when completion fails. Normal scored-candidate grading is unchanged.
+
+A live SIGTERM fault test removed its named grading container and retained the
+cancellation failure; subsequent normal gold grading passed targeted and regression
+checks. Container identity is persisted before creation. SIGKILL cannot run cleanup;
+its retained identity supports operator cleanup, not an automatic-recovery claim.
+Stray candidate arguments on base/gold grading are rejected. Thirty-one lab tests
+and nine runner/real-CLI fixture tests pass. Full formatting, strict Clippy, workspace
+tests, warnings-denied docs and release-build gates passed again; logs are retained
+in `diagnostic-milestone-gates/`. No coding-quality trial has yet been scored.

@@ -25,6 +25,15 @@ class ContainerBoundaryTests(unittest.TestCase):
         with self.assertRaises(subprocess.TimeoutExpired):
             container_grade.control([sys.executable, "-c", "import time; time.sleep(10)"], env, timeout=0.1)
 
+    def test_candidate_flags_cannot_silently_grade_gold_instead(self):
+        command = [sys.executable, str(Path(container_grade.__file__)), "--source", "gold", "--task", "fixture"]
+        for field in ("catalogue", "prepared", "images", "parser-python", "output"):
+            command += ["--" + field, "nonexistent-fixture-input"]
+        for extra in (["--candidate", "."], ["--phase", "targeted"]):
+            result = subprocess.run(command + extra, capture_output=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(b"only valid for candidate grading", result.stderr)
+
     def test_ledger_size_and_shape_are_bounded(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ledger.json"

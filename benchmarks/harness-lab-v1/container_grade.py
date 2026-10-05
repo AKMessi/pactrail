@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import signal
 import tempfile
 import time
 import uuid
@@ -119,6 +120,8 @@ def execute(args):
         # response without relying on a returned container ID.
         container = "pactrail-grade-" + uuid.uuid4().hex
         report["container_name"] = container
+        (args.output / "container.json").write_text(json.dumps({
+            "container_name": container, "task": args.task, "image": immutable}, indent=2) + "\n")
         control(docker + ["create", "--name", container, "--label", "pactrail.harness-lab.task=" + args.task,
                             "--pull", "never", "--network", "none",
                             "--memory", "6g", "--cpus", "2", "--pids-limit", "512",
@@ -151,15 +154,20 @@ def execute(args):
         with log.open("wb") as output:
             process = subprocess.Popen(docker + ["exec", container, "bash", "/tmp/eval.sh"],
                                        env=env, stdout=output, stderr=subprocess.STDOUT)
-            deadline = time.monotonic() + args.timeout
-            while process.poll() is None:
-                timed_out = time.monotonic() >= deadline
-                oversized = log.stat().st_size > MAX_LOG_BYTES
-                if timed_out or oversized:
+            try:
+                deadline = time.monotonic() + args.timeout
+                while process.poll() is None:
+                    timed_out = time.monotonic() >= deadline
+                    oversized = log.stat().st_size > MAX_LOG_BYTES
+                    if timed_out or oversized:
+                        process.kill()
+                        break
+                    time.sleep(0.05)
+                shell_exit = process.wait()
+            finally:
+                if process.poll() is None:
                     process.kill()
-                    break
-                time.sleep(0.05)
-            shell_exit = process.wait()
+                process.wait()
         report.update(shell_exit_code=shell_exit, timed_out=timed_out, output_limit=oversized,
                       log_sha256=sha256(log))
         if timed_out or oversized:
@@ -188,6 +196,12 @@ def execute(args):
     return report
 
 
+def interrupted(signum, _frame):
+    # Allow the named-container cleanup path to run when the outer benchmark
+    # deadline cancels this CLI. A hard SIGKILL still cannot execute cleanup.
+    raise InterruptedError(f"grading cancelled by signal {signum}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     for field in ("catalogue", "prepared", "images", "parser-python", "output"):
@@ -200,8 +214,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if not 1 <= args.timeout <= 3600:
         parser.error("timeout must be 1–3600 seconds")
-    if (args.source == "candidate") != (args.candidate is not None and args.phase is not None):
+    if args.source == "candidate" and (args.candidate is None or args.phase is None):
         parser.error("candidate grading requires --candidate and --phase")
+    if args.source != "candidate" and (args.candidate is not None or args.phase is not None):
+        parser.error("--candidate and --phase are only valid for candidate grading")
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
     result = execute(args)
     print(json.dumps(result, allow_nan=False))
     raise SystemExit(0 if result.get("qualified") else 1)

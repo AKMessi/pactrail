@@ -162,7 +162,9 @@ def main():
         binary_digest = hashlib.file_digest(executable, "sha256").hexdigest()
     (root / "result.json").write_text(json.dumps({"schema_version": 1, "provenance": {"binary_sha256": binary_digest, "source_tree_before_sha256": source_before,
         "source_tree_after_sha256": source_after}, "model_identity": identity,
-        "candidate": str(Path(result["receipt"]).parent / "workspace") if result else None, "checks": checks,
+        "candidate": str(Path(result["receipt"]).parent / "workspace") if result else None,
+        "partial_candidate": str(trace.parent / "workspace") if not result and checks["trace_valid"] and checks["source_isolation_valid"] and (trace.parent / "workspace").is_dir() else None,
+        "checks": checks,
         "metrics": measured, "usage_coverage": {key: {"explicit_reported_turns": sum("provider.reported_" + key in r.get("attributes", {}) for r in model), "positive_legacy_turns": sum(int(r.get("attributes", {}).get(key, "0")) > 0 for r in model), "total_turns": len(model)} for key in ("input_tokens", "output_tokens", "cached_input_tokens")}}, indent=2) + "\n")
     return code
 

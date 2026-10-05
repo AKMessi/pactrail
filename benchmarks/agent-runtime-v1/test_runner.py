@@ -103,14 +103,16 @@ assert set(r['task']) == {'id','goal','commit'}
 if r['arm']['id']=='unsupported': sys.exit(78)
 if r['arm']['id']=='malformed': Path(r['trial_directory'],'result.json').write_text('{}'); sys.exit(0)
 p=Path(r['workspace'],'value.txt');p.write_text('after')
+if r['arm']['id']=='partial':
+ Path(r['trial_directory'],'result.json').write_text(json.dumps({'schema_version':1,'model_identity':r['model_identity'],'partial_candidate':r['workspace'],'checks':{'trace_valid':True,'source_isolation_valid':True},'metrics':{'input_tokens':99}})); sys.exit(1)
 Path(r['trial_directory'],'result.json').write_text(json.dumps({'schema_version':1,'model_identity':r['model_identity'],'candidate':r['workspace'],'metrics':{'cost_microusd':0}}))
 ''')
             grader = [sys.executable, "-c", "from pathlib import Path; assert Path('value.txt').read_text() == 'after'; assert not Path('grader-output').exists(); Path('grader-output').write_text('hidden overlay or generated artifact')"]
-            protocol = {"schema_version": 1, "seed": 42, "repetitions": 1, "model_identity": {"model": "fixture-not-inference"},
+            protocol = {"schema_version": 1, "seed": 42, "repetitions": 1, "grade_partial_candidates": True, "model_identity": {"model": "fixture-not-inference"},
                 "permissions": {"process": "disabled", "write_paths": ["."]}, "normalization": "equal declared ceilings",
                 "limits": {"model_turns": 4, "wall_seconds": 5, "output_tokens": 256, "context_tokens": 4096, "model_tokens": 16384},
                 "tasks": [{"id": "fixture", "repository": str(source), "commit": commit, "goal": "Change value.", "targeted": grader, "regression": grader}],
-                "arms": [{"id": name, "mode": "single", "adapter": [sys.executable, str(adapter)]} for name in ["valid", "unsupported", "malformed"]]}
+                "arms": [{"id": name, "mode": "single", "adapter": [sys.executable, str(adapter)]} for name in ["valid", "unsupported", "malformed", "partial"]]}
             path = root / "protocol.json"
             runner.write(path, protocol)
             rows = runner.run(path, root / "results")
@@ -119,6 +121,12 @@ Path(r['trial_directory'],'result.json').write_text(json.dumps({'schema_version'
             self.assertEqual(by_arm["valid"]["metrics"]["cost_microusd"], 0)
             self.assertEqual(by_arm["unsupported"]["status"], "unsupported")
             self.assertEqual(by_arm["malformed"]["status"], "invalid")
+            self.assertEqual(by_arm["partial"]["status"], "failed")
+            self.assertFalse(by_arm["partial"]["task_success"])
+            self.assertFalse(by_arm["partial"]["strict_completion"])
+            self.assertTrue(by_arm["partial"]["diagnostic_targeted_passed"])
+            self.assertTrue(by_arm["partial"]["diagnostic_regression_passed"])
+            self.assertEqual(by_arm["partial"]["metrics"]["input_tokens"], 99)
             self.assertEqual((source / "value.txt").read_text(), "before")
             self.assertTrue((root / "results" / "fixture--valid--0" / "sha256.json").exists())
             for bad in ["../escape", "A", ""]:

@@ -83,6 +83,28 @@ def metrics(result):
     return normalized
 
 
+def grade_candidate(candidate_path, root, task, *, diagnostic=False):
+    candidate = Path(candidate_path).resolve(strict=True)
+    candidate.relative_to(root)
+    if not candidate.is_dir():
+        raise ValueError("candidate must be a trial-local directory")
+    for path in candidate.rglob("*"):
+        if path.is_symlink():
+            path.resolve(strict=True).relative_to(candidate)
+    clean_env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "TMPDIR") if key in os.environ}
+    results = {}
+    for key in ("targeted", "regression"):
+        grading = root / "grading" / key
+        grading.parent.mkdir(exist_ok=True)
+        shutil.copytree(candidate, grading, ignore=shutil.ignore_patterns(".git", ".pactrail"), symlinks=True)
+        logs = root / key
+        logs.mkdir()
+        graded = command(task[key], grading, logs, task.get("grader_timeout_seconds", 120), clean_env)
+        write(logs / "execution.json", graded)
+        results[("diagnostic_" if diagnostic else "") + key + "_passed"] = graded["exit_code"] == 0 and not graded["timed_out"]
+    return results
+
+
 def strict_completion(functional_success, checks):
     """Keep functional behavior distinct from Pactrail completion assurance.
 
@@ -112,6 +134,8 @@ def validate(protocol):
         raise ValueError("seed and bounded repetitions required")
     if protocol.get("source_policy", "historical") not in ("historical", "sealed"):
         raise ValueError("unknown source policy")
+    if type(protocol.get("grade_partial_candidates", False)) is not bool:
+        raise ValueError("partial-candidate diagnostics must be explicitly boolean")
     limits = protocol.get("limits", {})
     for key, high in [("model_turns", 200), ("wall_seconds", 3600), ("output_tokens", 131072), ("context_tokens", 1048576), ("model_tokens", 1000000000)]:
         if type(limits.get(key)) is not int or not 1 <= limits[key] <= high:
@@ -230,35 +254,23 @@ def run(protocol_path, output):
                     row["checks"] = response.get("checks")
                     row["usage_coverage"] = response.get("usage_coverage")
                     row["provenance"] = response.get("provenance")
+                    if protocol.get("grade_partial_candidates") and not execution["timed_out"] and response.get("partial_candidate"):
+                        checks = response.get("checks") or {}
+                        if checks.get("trace_valid") is not True or checks.get("source_isolation_valid") is not True:
+                            raise ValueError("partial-candidate diagnostics require validated trace and source isolation")
+                        try:
+                            row.update(grade_candidate(response["partial_candidate"], root, task, diagnostic=True))
+                        except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:
+                            row["diagnostic_error"] = f"{type(error).__name__}: {error}"
             elif not execution["timed_out"] and execution["exit_code"] == 0:
                 response = bounded_json(root / "result.json")
                 if response.get("schema_version") != 1 or response.get("model_identity") != protocol["model_identity"]:
                     raise ValueError("adapter result identity mismatch")
-                candidate = Path(response["candidate"]).resolve(strict=True)
-                candidate.relative_to(root)
-                if not candidate.is_dir():
-                    raise ValueError("candidate must be a trial-local directory")
                 row["metrics"] = metrics(response)
                 row["usage_coverage"] = response.get("usage_coverage")
                 row["provenance"] = response.get("provenance")
                 row["checks"] = response.get("checks")
-                # Separate grading copy; build artifacts cannot mutate the scored candidate.
-                for path in candidate.rglob("*"):
-                    if path.is_symlink():
-                        path.resolve(strict=True).relative_to(candidate)
-                clean_env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "TMPDIR") if key in os.environ}
-                for key in ("targeted", "regression"):
-                    # A grader may install hidden tests or generate outputs.
-                    # Each phase starts from the unchanged candidate so those
-                    # writes cannot contaminate another phase's policy checks.
-                    grading = root / "grading" / key
-                    grading.parent.mkdir(exist_ok=True)
-                    shutil.copytree(candidate, grading, ignore=shutil.ignore_patterns(".git", ".pactrail"), symlinks=True)
-                    logs = root / key
-                    logs.mkdir()
-                    graded = command(task[key], grading, logs, task.get("grader_timeout_seconds", 120), clean_env)
-                    write(logs / "execution.json", graded)
-                    row[key + "_passed"] = graded["exit_code"] == 0 and not graded["timed_out"]
+                row.update(grade_candidate(response["candidate"], root, task))
                 row["status"] = "scored"
                 row["task_success"] = row["targeted_passed"] and row["regression_passed"]
                 row["strict_completion"] = strict_completion(row["task_success"], row["checks"])
