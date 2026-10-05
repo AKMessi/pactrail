@@ -162,3 +162,39 @@ must use validated historical issues, not the old six synthetic cases.
   must retain deterministic retrieval.
 - Multiple candidate sampling and patch ranking require isolated child budgets
   and receipts; they will not share mutable tool state.
+
+## Methods review for the first quality experiments
+
+The versioned primary-paper methods below inform experiments; they do not qualify
+Pactrail changes. Captured source bytes and SHA-256 manifests are retained under
+`benchmark-results/agent-quality-program-20261005/paper-methods-v1/`.
+
+- [SWE-agent v1, ACI design and experimental setup](https://arxiv.org/html/2405.15793v1)
+  studies tool documentation, feedback, edit guardrails and observation management.
+  Its interface ablations use a smaller Python issue subset than its main results.
+  For Pactrail, change the edit interface while keeping mutation feedback, context
+  policy, model and total ceilings fixed. Otherwise improvements cannot be
+  attributed to anchors. Measure rejected edits and redundant post-edit reads;
+  safety rejection alone is not an edit failure. Do not add implicit compiler
+  execution when process capability is denied.
+- [Agentless v2, localization/repair/validation ablations](https://arxiv.org/html/2407.01489v2)
+  varies components separately and measures retained gold locations alongside
+  context size. Patch sampling and validation are additional work, not a free
+  comparison with a single candidate. Pactrail's retrieval lab should record
+  whether selected context contains reference-touched files/symbols, while noting
+  that alternate valid fixes can touch different locations. Candidate sampling
+  needs independent budgets and external grading. A delegate that localizes well
+  can still hurt final repair; localization and final success must remain separate.
+- [RepoGraph v1, construction and integration](https://arxiv.org/html/2410.14684v1)
+  constructs repository relationships from parsed code and exposes graph retrieval
+  to existing workflows. Pactrail already has parsed definitions and bounded
+  lexical relationships. The useful experiment is selection under equal bytes,
+  not another graph implementation. Compare lexical-only, graph-only and hybrid
+  retrieval with the same labels and candidate revision. Name and lexical matches
+  cannot be promoted to type-resolved call edges. Measure warm-index reuse and
+  truncation as well as recall, since extra navigation can spend more inference.
+
+Engineering deductions above are hypotheses to falsify in the Harness Lab. They
+are not a reproduction of paper results or evidence of benefits for either
+configured OpenRouter model. Remaining mechanisms require their own method-level
+review before implementation.
