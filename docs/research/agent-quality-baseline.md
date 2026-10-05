@@ -52,3 +52,26 @@ Flask issues, but the upstream population had fewer than two; Pylint replaced
 Flask before any validation/model outcomes. No task was removed based on scored
 performance. The exact catalogue and source snapshot hashes preserve the final
 candidate selection. All cases remain ineligible until retained local checks pass.
+
+## Unscored model connectivity and platform checks
+
+Both exact configured models completed read-only connectivity runs against the
+frozen current-main binary: `stealth/space-bunny-alpha` and
+`apodex/apodex-1.1-mini:free`, through `https://openrouter.ai/api/v1`.
+Both outcomes were `answered`, with unchanged source fixtures. These are not
+benchmark results. Raw responses, traces and receipts are retained under
+`model-availability-v2/` in the ignored evidence root. The first attempt failed
+CLI parsing before model I/O because `--temperature` is not a supported CLI flag;
+that failed setup remains retained separately under `model-availability/`.
+
+Branch CI run 37289618974 passed all Rust quality gates on Linux, macOS and
+Windows, but the new lab test failed on macOS and Windows: its expected temporary
+path spelling differed from the canonical path correctly stored in the protocol.
+The test now compares canonical identities and their exact hashes. This repairs
+the expectation without weakening admission, changing runtime behavior or skipping
+platform coverage. Final-head CI must still pass before this milestone qualifies.
+
+Docker is installed and account membership includes its group, but the current
+agent process has not inherited the new supplementary group. Container grader
+execution remains blocked pending a refreshed session. Immutable manifests for
+22 prepared cases are pinned; that is not proof of grader correctness.

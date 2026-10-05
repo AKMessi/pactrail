@@ -141,8 +141,10 @@ class AdmissionTests(unittest.TestCase):
             out = root / "frozen.json"
             lab.freeze(root / "catalogue.json", root / "protocol.json", root, out)
             frozen = lab.read_json(out)
-            self.assertIn(str(log), frozen["frozen_inputs"])
-            self.assertIn(str(grader), frozen["frozen_inputs"])
+            # macOS /var aliases and Windows short temporary paths resolve to
+            # different spellings; the protocol deliberately binds canonical paths.
+            self.assertEqual(frozen["frozen_inputs"][str(log.resolve())], lab.sha256(log))
+            self.assertEqual(frozen["frozen_inputs"][str(grader.resolve())], lab.sha256(grader))
             with self.assertRaises(FileExistsError):
                 lab.freeze(root / "catalogue.json", root / "protocol.json", root, out)
             log.write_text("tampered")
