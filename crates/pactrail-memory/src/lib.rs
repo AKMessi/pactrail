@@ -28,7 +28,8 @@ const MAX_TITLE_BYTES: usize = 512;
 const MAX_CONTENT_BYTES: usize = 64 * 1024;
 const MAX_TAGS: usize = 32;
 const MAX_TAG_BYTES: usize = 64;
-const MAX_QUERY_BYTES: usize = 4 * 1024;
+/// Maximum UTF-8 byte length accepted by a memory search query.
+pub const MAX_QUERY_BYTES: usize = 4 * 1024;
 const MAX_RESULTS: usize = 100;
 const SEARCH_CANDIDATES: usize = 2_000;
 const MAX_RECEIPT_ANCHORS: usize = 2_048;

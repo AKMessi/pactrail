@@ -223,3 +223,18 @@ Stray candidate arguments on base/gold grading are rejected. Thirty-one lab test
 and nine runner/real-CLI fixture tests pass. Full formatting, strict Clippy, workspace
 tests, warnings-denied docs and release-build gates passed again; logs are retained
 in `diagnostic-milestone-gates/`. No coding-quality trial has yet been scored.
+
+Exact runner commit `96f42de75ed6eb4d2bff7ff6fd2922006d845f9b` passed all
+six CI jobs in run `37340695463`, including Windows, macOS, Linux, Docker
+containment and real terminal checks. The frozen Apodex development campaign
+then encountered account-wide OpenRouter `free-models-per-day` HTTP 429 errors.
+The campaign was interrupted and retained in full; it is not a completed quality
+estimate. Laguna campaigns never started. Space Bunny was withdrawn by the user
+before scoring because its free period ended. All unused protocols are retained.
+
+The incomplete campaign also exposed a pre-model harness failure: a long issue
+brief exceeded the memory search interface's 4,096-byte query bound. The CLI now
+bounds only the advisory retrieval query at a UTF-8 boundary; the contract/model
+still receive the complete task. Direct oversized memory queries remain rejected.
+A real memory-context setup regression covers a multibyte character crossing the
+limit. This fix requires a new scored protocol; earlier outcomes are not rewritten.
