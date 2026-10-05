@@ -5,6 +5,33 @@ deterministic, bounded, inspectable, and compatible with its transaction trust
 boundary. A paper result is evidence for testing a mechanism, not permission to
 copy its benchmark claim into Pactrail.
 
+## Agent-quality program: falsifiable mechanisms
+
+The [October 2026 program](design/0020-agent-quality-program.md) begins with an
+expanded lab and retained current-main baseline. The following are experimental
+hypotheses, not shipped improvements. No paper's pass rate is a Pactrail result.
+
+| Primary research | Problem/mechanism | Already present | Cheapest falsification and promotion criterion |
+| --- | --- | --- | --- |
+| [SWE-agent](https://arxiv.org/abs/2405.15793) | Interface shape and concise action feedback influence repository navigation and editing | Typed bounded tools and post-edit source windows | Exact vs anchored editing under identical ceilings; reject if stale edits can pass or correctness declines |
+| [Agentless](https://arxiv.org/abs/2407.01489) | Simpler localization/repair/validation and issue-quality audit can challenge complex agents | Structural navigation and independent verification | Primary vs fixed pipeline vs bounded scout, same total budget; retain delegates only for measured outcome value |
+| [AutoCodeRover](https://arxiv.org/abs/2404.05427) | Structural search and test-guided localization narrow relevant context | Parsed definitions and lexical reference/impact tools | Retrieval-only file/symbol recall at equal bytes, then task outcome ablation |
+| [RepoCoder](https://arxiv.org/abs/2303.12570) | Iterative retrieval updates context after task information changes | Current-candidate graph queries | Fixed initial retrieval vs bounded updated selection; require reduced missed context or inference waste without stale source |
+| [RepoGraph](https://arxiv.org/abs/2410.14684) | Repository relationships augment navigation | Bounded definition/reference graph | Lexical vs graph vs hybrid with frozen gold labels; do not treat lexical edges as runtime calls |
+| [Context as a Tool](https://arxiv.org/abs/2512.22087) | Explicit context maintenance and trained compression address long-horizon drift | Deterministic digest-bound compaction and recoverable observations | Measure repeated reads, omitted facts and context bytes before adding a new controller; trained-paper compressor gains do not transfer automatically |
+| [What Context Does a Coding Agent Actually Need to Act?](https://arxiv.org/abs/2607.09691) | Separates localization from edit-site representation; reports null results for some surrounding context | Source re-read requirement, advisory navigation evidence | Hold localization fixed for context ablation; repeated trials and exact current source, never prose-as-source |
+| [Agent Retrieval Bench](https://arxiv.org/abs/2607.24882) | Next-step workflow relevance differs from query similarity; selective retrieval has calibration gaps | No broad retrieval-only task label suite | Recall@K, budgeted yield and no-relevant-context cases; accept a broker only if recall/noise/latency tradeoff improves |
+| [SWE-Gym](https://arxiv.org/abs/2412.21139) | Executable repository environments support agent and verifier training/evaluation | Isolated external graders and candidate checks | Validate base failure and reference passes locally; verifier selection later requires independent candidate budgets and regression checks |
+| [AsynCodeBench](https://arxiv.org/abs/2609.32662) | Final task success can conceal failed dependency coordination | Durable addressed messages; no useful-handoff metric | Count actual handoff consumption and grounded downstream findings; do not infer useful collaboration from message counts |
+| [OpenCollab](https://arxiv.org/abs/2609.38345) | Declared topology may differ from realized execution; shared controls and fine-grained events improve attribution | Deterministic lifecycle/sequence/accounting | Verify actual delegate routing against protocol and measure outcome under total resource constraints; no adoption of paper superiority claims |
+
+This initial mechanism review uses primary paper descriptions and existing
+Pactrail code/evidence. Full experimental methods and dataset caveats require
+deeper review before implementing each proposed mechanism. In particular,
+learned compressors/verifiers and asynchronous collaboration are not being
+implemented merely because their papers report gains. The next scored baseline
+must use validated historical issues, not the old six synthetic cases.
+
 ## Repository navigation
 
 - [SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering](https://arxiv.org/abs/2405.15793)

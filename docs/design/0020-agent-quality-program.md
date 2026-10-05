@@ -130,3 +130,20 @@ External source ledger: `docs/research/harness-review-2026.md` (pending).
 Final research report: `docs/research/agent-quality-final-report.md` (pending).
 Harness Lab expansion and scored baseline: pending. No improvement or program
 completion is claimed at this stage. Release/publication is outside this branch.
+
+### Admission-foundation progress
+
+The current-main baseline and scoped external source review are recorded in
+`docs/research/agent-quality-baseline.md` and `docs/research/harness-review-2026.md`.
+Harness Lab has a deterministic 30-issue registry (16 development, 14 confirmation),
+repository-disjoint splits, external source sealing, validated-evidence admission,
+exclusive protocol creation, hash-bound logs/graders/binaries/adapters, seven
+infrastructure regression tests and a platform-CI test step. It reuses the existing
+matched-trial runner. No new scoring or behavior experiment is admitted yet.
+
+Actual first preparation: 22 sealed baseline/gold trees, eight retained refusals
+for tracked symlinks/submodules. Native preparation is not independent grading.
+Container execution is currently unavailable and noninteractive sudo cannot
+install it. Complete local base/gold test validation remains a gate, not a waived
+requirement. No normalization, task substitution, anchor editing or delegate
+policy change has been made to obtain favorable results.
