@@ -60,6 +60,8 @@ jobs:
         env:
           PACTRAIL_BENCH_BINARY: ${{ github.workspace }}/target/release/pactrail
         run: python3 -m unittest discover -s benchmarks/agent-runtime-v1 -p 'test_*.py' -v
+      - name: Harness Lab admission and frozen-input integrity
+        run: python3 -m unittest discover -s benchmarks/harness-lab-v1 -p 'test_*.py' -v
       - name: Exercise checksum-verifying installer before publication
         shell: python {0}
         run: |
