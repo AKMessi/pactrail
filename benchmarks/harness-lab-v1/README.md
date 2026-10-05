@@ -29,8 +29,9 @@ test ignored; fmt, strict Clippy, docs, release build, seven agent-runner tests,
 four completion-runner tests, real terminal checks and installers passed.
 Three 5,000-file index/context lifecycles passed with stable identities.
 Raw data: `benchmark-results/agent-quality-program-20261005/`.
-Neither Docker nor Podman is installed locally. Upstream container evaluation
-is therefore **not qualified**, and no scored request has been admitted.
+Docker is now installed, but the current account cannot access its daemon socket.
+Upstream container evaluation remains **not qualified**, and no scored request
+has been admitted. Installation alone does not validate grading environments.
 
 ## Reproduce admission checks
 
@@ -84,3 +85,15 @@ tracked symlinks/submodules. The exact paths and all failures are retained in th
 ignored evidence directory. No refused task has been replaced or scored, and no
 image tag has been treated as an immutable image digest. Those issues need an
 explicit pre-scoring decision and validated environments before any protocol.
+
+## Immutable grading image identities
+
+`image_lock.py PREPARED_RESULTS NEW_OUTPUT` resolves explicitly declared public
+SWE-bench image tags to integrity-checked Linux/amd64 manifest digests. Responses
+are bounded; redirects and other image namespaces are rejected. Anonymous registry
+tokens stay in memory. This step downloads manifests only, not image layers.
+
+The local campaign pinned 22 image manifests and retained eight unsupported
+preparation cases. Its `manifest_locked_not_executed` status is deliberately
+different from a validated grader. Container execution must use these immutable
+identities and separately prove base failure and gold targeted/regression passes.
