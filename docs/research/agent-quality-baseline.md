@@ -176,3 +176,10 @@ Local admission-milestone gates passed: full workspace tests, strict Clippy,
 formatting, rustdoc warnings and all-feature release build. Evidence is retained
 under `admission-milestone-gates/`; final branch CI must qualify the eventual
 committed implementation independently.
+
+A pre-scoring source-sealing audit found that Git cloning a sealed baseline still
+adds `origin` with the operator-side path. Harness Lab now requires explicit
+`source_policy: sealed`; the shared runner verifies one reachable baseline commit,
+removes remotes and checks cleanliness before invoking an adapter. A real Git
+regression verifies removal and refusal of additional history. Existing historical
+protocol defaults remain compatible. Seven runner tests and 27 lab tests pass.

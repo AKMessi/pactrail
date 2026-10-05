@@ -90,6 +90,8 @@ def validate(protocol):
         raise ValueError("explicit shared permissions and resource normalization required")
     if type(protocol.get("seed")) is not int or not 1 <= protocol.get("repetitions", 0) <= 100:
         raise ValueError("seed and bounded repetitions required")
+    if protocol.get("source_policy", "historical") not in ("historical", "sealed"):
+        raise ValueError("unknown source policy")
     limits = protocol.get("limits", {})
     for key, high in [("model_turns", 200), ("wall_seconds", 3600), ("output_tokens", 131072), ("context_tokens", 1048576), ("model_tokens", 1000000000)]:
         if type(limits.get(key)) is not int or not 1 <= limits[key] <= high:
@@ -119,6 +121,24 @@ def validate(protocol):
         for key in ("targeted", "regression"):
             if not isinstance(task.get(key), list) or not task[key]:
                 raise ValueError("external targeted and regression grader argv required")
+
+
+def seal_workspace(workspace, expected_commit, env):
+    """Remove clone metadata before an agent can observe a sealed source.
+
+    A local clone normally adds origin, including an operator-side filesystem
+    path. Sealed tasks expose neither that path nor additional reachable history.
+    """
+    git = ["git", "-c", "core.hooksPath=" + os.devnull, "-C", str(workspace)]
+    def output(*args):
+        return subprocess.check_output(git + list(args), env=env, timeout=30, text=True).strip()
+    if output("rev-parse", "HEAD") != expected_commit or output("rev-list", "--all", "--count") != "1":
+        raise ValueError("sealed workspace must contain only its synthetic baseline commit")
+    for remote in output("remote").splitlines():
+        subprocess.run(git + ["remote", "remove", remote], env=env, check=True, timeout=30,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if output("remote") or output("status", "--porcelain", "--untracked-files=all"):
+        raise ValueError("sealed workspace must be clean with no remote")
 
 
 def run(protocol_path, output):
@@ -165,6 +185,8 @@ def run(protocol_path, output):
             actual = subprocess.check_output(["git", "-C", str(workspace), "rev-parse", "HEAD"], text=True).strip()
             if actual != task["commit"]:
                 raise ValueError("source commit mismatch")
+            if protocol.get("source_policy") == "sealed":
+                seal_workspace(workspace, task["commit"], git_env)
             request = {"schema_version": 1, "task": {key: task[key] for key in ("id", "goal", "commit")}, "arm": arm,
                        "model_identity": protocol["model_identity"], "limits": protocol["limits"],
                        "workspace": str(workspace), "trial_directory": str(root), "repeat": repeat,

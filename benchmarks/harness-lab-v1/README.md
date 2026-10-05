@@ -171,3 +171,10 @@ reproduce it. This is an environment-qualified sampling process, not independent
 held-out curation; its exclusions and selection bias must accompany results.
 Original campaigns are retained. A final eligible catalogue and its protocol are
 not yet frozen; this expansion itself is not evidence of model quality.
+
+Harness Lab protocols must declare `source_policy: sealed`. The matched runner
+checks exactly one reachable synthetic commit and removes clone-added remotes
+before the adapter/model can observe the workspace. This prevents local clone
+metadata from revealing operator-side source paths. Existing non-lab historical
+protocols retain their declared legacy behavior. A real Git fixture verifies
+remote removal and refusal of extra history without changing the source mirror.

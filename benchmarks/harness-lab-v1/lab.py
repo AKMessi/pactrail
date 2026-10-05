@@ -149,6 +149,8 @@ def freeze(catalogue_path, protocol_path, validation_directory, output):
         if not isinstance(protocol.get(key), list) or any(not isinstance(item, dict) for item in protocol[key]):
             raise ValueError("protocol arms/tasks must contain objects")
     load_matched_runner().validate(protocol)
+    if protocol.get("source_policy") != "sealed":
+        raise ValueError("Harness Lab requires sealed source policy")
     split = protocol.get("lab_split")
     if split not in ("development", "confirmation"):
         raise ValueError("protocol must declare lab_split")

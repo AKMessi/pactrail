@@ -32,6 +32,30 @@ class RunnerTests(unittest.TestCase):
                 result = subprocess.run([sys.executable, str(grader), str(manifest), "cache", "targeted"], cwd=workspace, capture_output=True)
                 self.assertEqual(result.returncode == 0, value == 1, result.stdout + result.stderr)
 
+    def test_sealed_workspace_removes_origin_and_rejects_additional_history(self):
+        import os
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, workspace = root / "source", root / "workspace"
+            source.mkdir()
+            subprocess.run(["git", "init", str(source)], capture_output=True, check=True)
+            def git(*args):
+                return subprocess.check_output(["git", "-C", str(source), *args], text=True).strip()
+            (source / "value").write_text("baseline")
+            git("add", ".")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "commit", "-m", "baseline")
+            commit = git("rev-parse", "HEAD")
+            subprocess.run(["git", "clone", "--no-hardlinks", str(source), str(workspace)],
+                           capture_output=True, check=True)
+            runner.seal_workspace(workspace, commit, os.environ)
+            self.assertEqual(subprocess.check_output(["git", "-C", str(workspace), "remote"], text=True), "")
+            self.assertEqual(git("rev-parse", "HEAD"), commit)
+            (source / "value").write_text("future fix")
+            git("add", ".")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "commit", "-m", "future")
+            with self.assertRaisesRegex(ValueError, "synthetic baseline"):
+                runner.seal_workspace(source, git("rev-parse", "HEAD"), os.environ)
+
     def test_missing_and_zero_metrics_differ(self):
         measured = runner.metrics({"metrics": {"cost_microusd": 0}})
         self.assertEqual(measured["cost_microusd"], 0)

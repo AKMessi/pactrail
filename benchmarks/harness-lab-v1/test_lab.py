@@ -82,7 +82,7 @@ class AdmissionTests(unittest.TestCase):
             protocol = {"schema_version": 1, "seed": 22, "repetitions": 1,
                         "model_identity": {"model": "fixture-only"},
                         "permissions": {"process": "disabled"}, "normalization": "equal ceilings",
-                        "lab_split": "development",
+                        "lab_split": "development", "source_policy": "sealed",
                         "limits": {"model_turns": 24, "wall_seconds": 300, "output_tokens": 1024,
                                    "context_tokens": 32768, "model_tokens": 500000},
                         "arms": [{"id": "single", "mode": "single", "adapter": ["python3"]}],
@@ -117,7 +117,7 @@ class AdmissionTests(unittest.TestCase):
             protocol = {"schema_version": 1, "seed": 22, "repetitions": 1,
                         "model_identity": {"model": "fixture-only"},
                         "permissions": {"process": "disabled"}, "normalization": "equal ceilings",
-                        "lab_split": "development", "runtime_identity": {
+                        "lab_split": "development", "source_policy": "sealed", "runtime_identity": {
                             "binary": str(binary), "binary_sha256": lab.sha256(binary), "commit": "e" * 40},
                         "limits": {"model_turns": 24, "wall_seconds": 300, "output_tokens": 1024,
                                    "context_tokens": 32768, "model_tokens": 500000},
