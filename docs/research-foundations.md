@@ -198,3 +198,37 @@ Engineering deductions above are hypotheses to falsify in the Harness Lab. They
 are not a reproduction of paper results or evidence of benefits for either
 configured OpenRouter model. Remaining mechanisms require their own method-level
 review before implementation.
+
+### Additional methods controls: retrieval and candidate selection
+
+Primary HTML snapshots and SHA-256 identities for this review are retained under
+`paper-methods-v2/` in the ignored program evidence directory. These are engineering
+hypotheses, not Pactrail benchmark results.
+
+- [RepoCoder v3, iterative retrieval and limitations](https://arxiv.org/html/2303.12570v3)
+  uses previous generated completion to reformulate retrieval queries. Its domain
+  is repository completion; improvement cannot be assumed for issue repair. It
+  reports unstable later iterations and weaker usefulness in low-duplication
+  repositories. A Pactrail experiment should compare task-only retrieval with one
+  bounded hypothesis-assisted query under equal total inference/context budgets.
+  Generated names remain advisory; resolve them against current indexed bytes.
+  Measure retrieval misses, redundant snippets and final correctness separately.
+  Do not introduce repeated generation/retrieval loops without a stopping rule.
+- [AutoCodeRover v3, contextual search and analysis](https://arxiv.org/html/2404.05427v3)
+  separates navigation and patch generation, with class/method search APIs and a
+  staged search strategy. Its spectrum-based localization experiment has access
+  to a test suite, unlike a hidden-grader repair setting. Pactrail already exposes
+  structural navigation; compare an explicit symbol-query policy before adding
+  another agent or API. A failing localization query is not evidence that the
+  suggested method is defective. Tests available only to the grader must not enter
+  agent navigation, coverage instrumentation or delegate packets. Extra execution
+  still requires process permission and belongs in the resource ledger.
+- [SWE-Gym v1, inference-time verifier methodology](https://arxiv.org/html/2412.21139v1)
+  distinguishes finding any successful sample from selecting one successful
+  sample. Learned selection can miss a working candidate, so pass-at-K is not
+  deployed selected-candidate success. For future Pactrail sampling, report both
+  separately with all generation/selection costs. Deterministic targeted and
+  regression checks remain the selection authority; an optional learned reviewer
+  is advisory. The paper's trained verifiers do not establish that an untrained
+  hosted judge will work. Equalize total attempts and isolate every candidate
+  before exploring sample selection, after editing/retrieval experiments qualify.
