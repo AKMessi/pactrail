@@ -169,7 +169,6 @@ impl OpenAiCompatibleDriver {
                 .and_then(|header| header.to_str().ok())
                 .map(str::to_owned);
             let server_retry_after = parse_retry_after(response.headers(), SystemTime::now());
-            let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
             let bytes = match read_bounded(response, MAX_RESPONSE_BYTES).await {
                 Ok(bytes) => bytes,
                 Err(ModelError::Transport(_error))
@@ -211,7 +210,7 @@ impl OpenAiCompatibleDriver {
                 return Ok((value, request_id));
             }
             let message = provider_message(&bytes);
-            if retryable && attempt < MAX_RETRIES {
+            if retryable_provider_response(status, &bytes) && attempt < MAX_RETRIES {
                 attempt += 1;
                 let delay = retry_delay(status, attempt, server_retry_after);
                 warn!(
@@ -269,10 +268,9 @@ impl OpenAiCompatibleDriver {
                 return accumulate_openai_stream(response, request_id, request_started, observer)
                     .await;
             }
-            let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
             let bytes = read_bounded(response, MAX_RESPONSE_BYTES).await?;
             let message = provider_message(&bytes);
-            if retryable && attempt < MAX_RETRIES {
+            if retryable_provider_response(status, &bytes) && attempt < MAX_RETRIES {
                 attempt += 1;
                 let delay = retry_delay(status, attempt, server_retry_after);
                 warn!(
@@ -290,6 +288,23 @@ impl OpenAiCompatibleDriver {
             });
         }
     }
+}
+
+fn retryable_provider_response(status: StatusCode, bytes: &[u8]) -> bool {
+    if status.is_server_error() {
+        return true;
+    }
+    if status != StatusCode::TOO_MANY_REQUESTS {
+        return false;
+    }
+    // Explicit account exhaustion cannot recover during our short retry window.
+    // Unknown 429 responses retain the existing bounded transient retry policy.
+    let value = serde_json::from_slice::<Value>(bytes).ok();
+    let insufficient_quota = value.as_ref().is_some_and(|value| {
+        value.pointer("/error/code").and_then(Value::as_str) == Some("insufficient_quota")
+    });
+    let message = provider_message(bytes);
+    !insufficient_quota && !message.starts_with("Rate limit exceeded: free-models-per-day")
 }
 
 fn parse_retry_after(headers: &HeaderMap, now: SystemTime) -> Option<Duration> {
@@ -1599,6 +1614,82 @@ mod tests {
             OpenAiCompatibleDriver::new(config),
             Err(ModelError::InvalidRequest(_))
         ));
+    }
+
+    #[test]
+    fn exhausted_quota_is_not_confused_with_transient_rate_limits() {
+        for body in [
+            br#"{"error":{"code":"insufficient_quota","message":"account exhausted"}}"#.as_slice(),
+            br#"{"error":{"message":"Rate limit exceeded: free-models-per-day. Add credits"}}"#
+                .as_slice(),
+            b"Rate limit exceeded: free-models-per-day. Add credits".as_slice(),
+        ] {
+            assert!(!retryable_provider_response(
+                StatusCode::TOO_MANY_REQUESTS,
+                body
+            ));
+            assert!(retryable_provider_response(
+                StatusCode::SERVICE_UNAVAILABLE,
+                body
+            ));
+        }
+        for body in [
+            b"too many requests".as_slice(),
+            b"{broken}".as_slice(),
+            br#"{"error":{"code":"rate_limit_exceeded"}}"#.as_slice(),
+        ] {
+            assert!(retryable_provider_response(
+                StatusCode::TOO_MANY_REQUESTS,
+                body
+            ));
+        }
+        assert!(!retryable_provider_response(StatusCode::UNAUTHORIZED, b""));
+    }
+
+    #[tokio::test]
+    async fn daily_quota_fails_promptly_for_buffered_and_streaming_requests() {
+        use std::{io::Write, net::TcpListener};
+        for streaming in [false, true] {
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
+            let address = listener
+                .local_addr()
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            let server = std::thread::spawn(move || -> std::io::Result<()> {
+                let (mut stream, _) = listener.accept()?;
+                stream.set_read_timeout(Some(Duration::from_secs(3)))?;
+                read_http_request(&mut stream)?;
+                let body = r#"{"error":{"message":"Rate limit exceeded: free-models-per-day"}}"#;
+                write!(
+                    stream,
+                    "HTTP/1.1 429 Too Many Requests\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )?;
+                Ok(())
+            });
+            let driver = OpenAiCompatibleDriver::new(config(&format!("http://{address}/v1")))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            let observer = RecordingObserver::default();
+            let result = tokio::time::timeout(Duration::from_secs(3), async {
+                if streaming {
+                    driver.send_stream(&json!({}), &observer).await.map(|_| ())
+                } else {
+                    driver.send(&json!({}), false).await.map(|_| ())
+                }
+            })
+            .await;
+            assert!(matches!(
+                result,
+                Ok(Err(ModelError::Provider { status: 429, .. }))
+            ));
+            assert!(matches!(server.join(), Ok(Ok(()))));
+            assert!(
+                observer
+                    .0
+                    .lock()
+                    .unwrap_or_else(|e| unreachable!("{e}"))
+                    .is_empty()
+            );
+        }
     }
 
     #[test]

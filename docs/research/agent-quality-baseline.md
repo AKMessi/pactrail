@@ -238,3 +238,12 @@ bounds only the advisory retrieval query at a UTF-8 boundary; the contract/model
 still receive the complete task. Direct oversized memory queries remain rejected.
 A real memory-context setup regression covers a multibyte character crossing the
 limit. This fix requires a new scored protocol; earlier outcomes are not rewritten.
+
+The quota interruption additionally exposed repeated retries of explicit daily
+account exhaustion (approximately 105 seconds of configured delay). A narrow
+provider-adapter change stops retrying HTTP 429 `insufficient_quota` and exact
+`free-models-per-day` denials. Unknown/transient 429s, Retry-After and server-error
+retry behavior remain. Local HTTP fixtures cover buffered/streaming denial before
+response acceptance. The CLI reports "response received" for the zero latency
+sentinel instead of presenting an unmeasured first-byte duration as 0ms. These
+are measured reliability/truthfulness repairs, not benchmark-quality gains.

@@ -1,6 +1,7 @@
 # Design 0020: evidence-led agent quality program
 
-Status: audit and baseline qualification in progress. No behavior experiment has
+Status: engineering baseline and 22-task admission complete; model baseline
+interrupted by account-wide provider quota. No behavior experiment has
 been promoted. Research branch: `research/v2.2-agent-quality-lab`.
 
 ## Baseline identity and constraints
@@ -126,9 +127,10 @@ no display of private reasoning. PTY checks supplement human-flow review.
 
 ## Deliverables and present status
 
-External source ledger: `docs/research/harness-review-2026.md` (pending).
+External source ledger: `docs/research/harness-review-2026.md` (scoped review complete).
 Final research report: `docs/research/agent-quality-final-report.md` (pending).
-Harness Lab expansion and scored baseline: pending. No improvement or program
+Harness Lab: 22 qualified issues (13 development, nine confirmation); complete
+scored baseline remains pending. No improvement or program
 completion is claimed at this stage. Release/publication is outside this branch.
 
 ### Admission-foundation progress
@@ -150,3 +152,27 @@ grading network and retains raw shell exits separately from behavioral outcomes.
 Complete local base/gold test validation remains a gate, not a waived
 requirement. No normalization, task substitution, anchor editing or delegate
 policy change has been made to obtain favorable results.
+
+### October 5 provider interruption and dependency gate
+
+The original Space Bunny protocol was withdrawn before scoring at the user's
+request. Apodex and both exact Laguna identifiers were publicly available with
+zero reported prompt/completion prices. The frozen Apodex campaign completed
+nine trials before interruption: two strict successes, seven failures. Several
+failures were explicit account-wide daily quota denials. This incomplete cohort
+is not an accuracy estimate. Laguna never started. All protocols, raw failures,
+validation evidence and the interruption ledger remain retained; no failure-only
+reruns or substitution have occurred.
+
+The completed trials exposed a genuine pre-model long-brief memory query failure.
+Its bounded advisory-query fix passed all five local Rust gates. A new protocol
+and binary identity are required for future scored evaluation. Explicit daily
+quota denials and misleading buffered first-byte timing are additional observed
+reliability/UX issues; narrow regression-tested fixes do not justify quality claims.
+
+The baseline-before-anchor promotion gate remains active. Offline interface
+design, adversarial fixtures and independent CLI repairs may proceed, but no
+anchor/delegation default or quality-based retention decision is admitted on this
+incomplete model campaign. Later shared-runtime, ACP and DAP work remains in
+dependency order. Provider availability is an external research dependency, not
+a reason to fabricate results or weaken task grading.

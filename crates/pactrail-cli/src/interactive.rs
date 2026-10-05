@@ -36,6 +36,16 @@ use crate::output::{sanitize_terminal_text, write_human_stdout, write_stdout};
 use crate::settings::{InteractiveSettings, SettingsStore};
 use crate::theme::Theme;
 
+fn response_arrival_label(time_to_first_byte_ms: u64) -> String {
+    // Zero also denotes the complete-response observer adapter, which does not
+    // measure first-byte latency. Do not present that sentinel as a benchmark.
+    if time_to_first_byte_ms == 0 {
+        "response received".to_owned()
+    } else {
+        format!("first byte · {time_to_first_byte_ms}ms")
+    }
+}
+
 const HISTORY_CAPACITY: usize = 2_000;
 const MAX_MODEL_LIST_BYTES: usize = 1024 * 1024;
 const MAX_DISCOVERED_MODELS: usize = 1_000;
@@ -1289,7 +1299,10 @@ impl RunActivity {
                 self.row(
                     "◉",
                     "stream",
-                    &format!("first byte · {time_to_first_byte_ms}ms{request}"),
+                    &format!(
+                        "{}{request}",
+                        response_arrival_label(*time_to_first_byte_ms)
+                    ),
                     TimelineTone::Accent,
                 );
                 self.set_message(format!(
@@ -5729,6 +5742,12 @@ mod tests {
     use pactrail_core::{Evidence, EvidenceKind, FileChange, ReceiptInput, TaskContract};
 
     use super::*;
+
+    #[test]
+    fn buffered_response_does_not_claim_zero_first_byte_latency() {
+        assert_eq!(response_arrival_label(0), "response received");
+        assert_eq!(response_arrival_label(83), "first byte · 83ms");
+    }
 
     fn receipt(outcome: ReceiptOutcome, has_change: bool) -> ChangeReceipt {
         let contract = TaskContract::new("test task", ".");
