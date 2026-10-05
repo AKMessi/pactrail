@@ -232,3 +232,39 @@ hypotheses, not Pactrail benchmark results.
   is advisory. The paper's trained verifiers do not establish that an untrained
   hosted judge will work. Equalize total attempts and isolate every candidate
   before exploring sample selection, after editing/retrieval experiments qualify.
+
+### Context representation and retrieval measurement controls
+
+Primary snapshots for these method-level reviews are retained in
+`paper-methods-v3/`. Their results are not attributed to Pactrail.
+
+- [Context as a Tool v1](https://arxiv.org/html/2512.22087v1) uses a structured
+  workspace with stable intent, historical summaries and recent exact interaction,
+  and trains context-management behavior with reconstructed trajectories. That
+  training setup cannot be assumed to transfer to untrained hosted models. Pactrail
+  already protects authoritative task/policy and exact tool protocol during
+  compaction. Any future model-requested compression must remain a bounded request
+  to deterministic context machinery. Summaries may guide navigation but never
+  mark obligations complete or replace verification evidence. Compare forgetting,
+  rereads, total token use and task correctness; compression ratio alone is not
+  success. No learned summarizer or durable reasoning memory is added here.
+- [What Context Does a Coding Agent Actually Need to Act? v1](https://arxiv.org/html/2607.09691v1)
+  separates finding locations from acting on source. Its representation experiment
+  uses oracle localization and checks edit expressibility before requests; those
+  are experimental ceilings, not deployable retrieval policies. Its repeated
+  temperature-zero runs caution against interpreting small outcome differences.
+  For Pactrail, require exact current bytes at the edit site and distinguish
+  navigation summaries from actionable source. Reference-guided oracle context
+  must never enter normal scored repair. Report total consumed context per solved
+  task, including failed/retry work where measured, rather than rewarding an arm
+  for dropping context on tasks it cannot solve.
+- [Agent Retrieval Bench v1](https://arxiv.org/html/2607.24882v1) separates file
+  ranking, context yield under a declared tokenizer/packing rule, and downstream
+  agent behavior. It distinguishes next-useful context from visible frames or
+  already-provided paths, and reports repository-weighted sensitivity. Pactrail's
+  path-only probe is consequently instrumentation, not a complete retrieval
+  evaluation. Add validated relevant-file/span labels and equal byte packing
+  before comparing Recall@K or context yield. Report given-context, new-file and
+  no-gold cases explicitly. No-gold abstention is a separate task; it must not
+  silently leave a positive-recall denominator. Do not import the paper's ranker
+  ordering as evidence for mandatory embeddings in Pactrail.
