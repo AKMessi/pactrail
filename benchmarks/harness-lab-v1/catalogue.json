@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "population_seed": "pactrail-quality-population-v1-20261005",
+  "partition_policy": "repository_disjoint",
   "selection": "two hash-ranked issues per declared repository; repository-disjoint stratified split",
   "curation": "public upstream task selection, not independent Pactrail held-out curation",
   "source_snapshots": {

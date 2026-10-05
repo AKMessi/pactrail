@@ -31,6 +31,8 @@ class AdmissionTests(unittest.TestCase):
         bad["tasks"][0]["base_commit"] = "main"
         with self.assertRaises(ValueError):
             lab.validate_catalogue(bad)
+        with self.assertRaisesRegex(ValueError, "repository overlaps"):
+            lab.validate_catalogue({**catalogue, "partition_policy": "repository_disjoint"})
 
     def test_zero_tests_setup_failure_and_log_tampering_never_qualify(self):
         with tempfile.TemporaryDirectory() as directory:

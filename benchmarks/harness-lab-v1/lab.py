@@ -80,6 +80,14 @@ def validate_catalogue(catalogue):
             raise ValueError("goal hash required")
     if {task["split"] for task in tasks} != {"development", "confirmation"}:
         raise ValueError("both development and confirmation sets required")
+    partition = catalogue.get("partition_policy", "task_disjoint")
+    if partition not in ("task_disjoint", "repository_disjoint"):
+        raise ValueError("unknown partition policy")
+    if partition == "repository_disjoint":
+        development = {task["repository"] for task in tasks if task["split"] == "development"}
+        confirmation = {task["repository"] for task in tasks if task["split"] == "confirmation"}
+        if development & confirmation:
+            raise ValueError("repository overlaps development and confirmation")
     return {task["id"]: task for task in tasks}
 
 

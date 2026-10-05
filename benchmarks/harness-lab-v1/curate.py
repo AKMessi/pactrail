@@ -66,6 +66,7 @@ def curate(inputs, output):
                           "reference_patch_sha256": hashlib.sha256(row["patch"].encode()).hexdigest(),
                           "validation": "pending_local_base_and_gold_execution"})
     catalogue = {"schema_version": 1, "population_seed": SEED,
+                 "partition_policy": "repository_disjoint",
                  "selection": "two hash-ranked issues per declared repository; repository-disjoint stratified split",
                  "curation": "public upstream task selection, not independent Pactrail held-out curation",
                  "source_snapshots": snapshots, "tasks": sorted(tasks, key=lambda task: task["id"])}
