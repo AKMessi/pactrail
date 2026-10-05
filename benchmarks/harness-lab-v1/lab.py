@@ -158,6 +158,13 @@ def freeze(catalogue_path, protocol_path, validation_directory, output):
     if {task["id"] for task in protocol["tasks"]} != expected:
         raise ValueError("protocol must include every declared task in its split")
     bound = {}
+    qualification_inputs = catalogue.get("qualification_inputs", {})
+    if not isinstance(qualification_inputs, dict):
+        raise ValueError("qualification inputs must be a hash map")
+    for name, expected_hash in qualification_inputs.items():
+        if not isinstance(name, str) or not isinstance(expected_hash, str) or sha256(name) != expected_hash:
+            raise ValueError("cohort qualification input changed")
+        bound[str(Path(name).resolve())] = expected_hash
     identity = protocol.get("runtime_identity", {})
     binary = identity.get("binary")
     if not binary or sha256(binary) != identity.get("binary_sha256"):

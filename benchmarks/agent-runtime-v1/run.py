@@ -83,6 +83,26 @@ def metrics(result):
     return normalized
 
 
+def strict_completion(functional_success, checks):
+    """Keep functional behavior distinct from Pactrail completion assurance.
+
+    Missing assurance is unknown. This Pactrail-specific result must not become
+    a universal harness score for adapters that cannot report these checks.
+    """
+    if not functional_success:
+        return False
+    if checks is None:
+        return None
+    if not isinstance(checks, dict):
+        raise ValueError("assurance checks must be an object")
+    values = [checks.get(key) for key in ("receipt_valid", "trace_valid", "source_isolation_valid", "ready_to_apply")]
+    if any(value is not None and type(value) is not bool for value in values):
+        raise ValueError("assurance checks must be booleans or unknown")
+    if any(value is False for value in values):
+        return False
+    return True if all(value is True for value in values) else None
+
+
 def validate(protocol):
     if protocol.get("schema_version") != 1 or not protocol.get("model_identity"):
         raise ValueError("schema 1 and pinned model identity required")
@@ -170,7 +190,8 @@ def run(protocol_path, output):
         root.mkdir()
         row = {"task": task["id"], "arm": arm["id"], "repeat": repeat,
                "execution": None, "status": "failed", "metrics": {x: None for x in METRICS},
-               "targeted_passed": None, "regression_passed": None, "task_success": False}
+               "targeted_passed": None, "regression_passed": None, "task_success": False,
+               "strict_completion": False}
         try:
             workspace = root / "workspace"
             # Detached, local clone: no network fetch and no caller working-tree writes.
@@ -239,6 +260,7 @@ def run(protocol_path, output):
                     row[key + "_passed"] = graded["exit_code"] == 0 and not graded["timed_out"]
                 row["status"] = "scored"
                 row["task_success"] = row["targeted_passed"] and row["regression_passed"]
+                row["strict_completion"] = strict_completion(row["task_success"], row["checks"])
         except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:
             row["status"] = "invalid"
             row["error"] = f"{type(error).__name__}: {error}"

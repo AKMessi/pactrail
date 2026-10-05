@@ -56,6 +56,16 @@ class RunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "synthetic baseline"):
                 runner.seal_workspace(source, git("rev-parse", "HEAD"), os.environ)
 
+    def test_functional_correctness_does_not_imply_strict_completion(self):
+        self.assertIsNone(runner.strict_completion(True, None))
+        self.assertIsNone(runner.strict_completion(True, {"receipt_valid": True}))
+        checks = {key: True for key in ("receipt_valid", "trace_valid", "source_isolation_valid", "ready_to_apply")}
+        self.assertTrue(runner.strict_completion(True, checks))
+        self.assertFalse(runner.strict_completion(False, checks))
+        self.assertFalse(runner.strict_completion(True, {**checks, "ready_to_apply": False}))
+        with self.assertRaises(ValueError):
+            runner.strict_completion(True, {**checks, "receipt_valid": 1})
+
     def test_missing_and_zero_metrics_differ(self):
         measured = runner.metrics({"metrics": {"cost_microusd": 0}})
         self.assertEqual(measured["cost_microusd"], 0)

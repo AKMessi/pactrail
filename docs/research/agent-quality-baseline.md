@@ -183,3 +183,16 @@ adds `origin` with the operator-side path. Harness Lab now requires explicit
 removes remotes and checks cleanliness before invoking an adapter. A real Git
 regression verifies removal and refusal of additional history. Existing historical
 protocol defaults remain compatible. Seven runner tests and 27 lab tests pass.
+
+Cohort derivation is now explicit: the complete all-case admission ledger selects
+only validated environments, retains every exclusion and binds population,
+admission and log hashes into later frozen protocols. It cannot produce a cohort
+with fewer than 20 eligible tasks. Local tests cover unchanged task specs,
+exclusive creation, insufficient cohorts and modified logs. The lab now has 29
+passing infrastructure tests.
+
+The matched runner separately records functional `task_success` and Pactrail
+`strict_completion`. Strict completion requires targeted/regression success plus
+validated receipt, trace, isolated source and ready-to-apply state. Missing checks
+remain unknown. Existing functional scoring and old protocols/results are not
+rewritten. Eight runner tests pass, including missing-vs-false assurance.

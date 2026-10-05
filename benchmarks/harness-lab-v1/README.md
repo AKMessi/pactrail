@@ -178,3 +178,17 @@ before the adapter/model can observe the workspace. This prevents local clone
 metadata from revealing operator-side source paths. Existing non-lab historical
 protocols retain their declared legacy behavior. A real Git fixture verifies
 remote removal and refusal of extra history without changing the source mirror.
+
+`cohort.py POPULATION ADMISSION_DIRECTORY NEW_COHORT.json` derives the final
+eligible registry only from a complete matching admission ledger. It preserves
+original task specs, exclusions and population provenance. It refuses fewer than
+20 eligible cases, tampered evidence or changed logs. Population/admission/log
+hashes are bound into subsequent `lab.py freeze` outputs. This selection must be
+completed before scored requests; it never uses model outcomes.
+
+New matched-runner results distinguish `task_success` (external targeted and
+regression correctness) from `strict_completion` (that correctness plus validated
+receipt, trace, source isolation and ready-to-apply state). Missing assurance is
+`null`, not a false claim of passing checks. Pactrail-specific strict completion
+must not be substituted for a universal comparison score when another harness
+cannot expose equivalent assurance. Existing frozen trial results are unchanged.
