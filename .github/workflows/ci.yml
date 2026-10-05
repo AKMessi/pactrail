@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, codex/pactrail-2-architecture, "feat/v2-*", "feat/v2.1-*"]
+    branches: [main, codex/pactrail-2-architecture, "feat/v2-*", "feat/v2.1-*", "research/v2.*"]
   workflow_dispatch:
 
 concurrency:
