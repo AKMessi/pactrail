@@ -151,3 +151,23 @@ or reference patch. This handles upstream environment-setup checkouts and instal
 dependency edits without changing graders/gold fixes or deleting dependency caches.
 An unavailable commit or failed restoration still fails closed; there is no fetch
 inside grading. No model requests have been scored under either campaign.
+
+## Admission export and pre-scoring pool expansion
+
+`admit.py CATALOGUE PREPARED_RESULTS COMPLETE_CAMPAIGN NEW_OUTPUT` checks the
+campaign/input hashes, reinterprets named test statuses against the exact grader,
+checks retained log hashes and emits admission records plus an all-case ledger.
+Incomplete campaigns emit no directory. `exit_code_kind: derived_behavioral`
+explicitly distinguishes the admission result from the raw `shell_exit_code`;
+no shell success is converted into evidence of passing tests.
+
+The initial population has environment-ineligible cases (nonregular source,
+empty regression declarations and offline service dependencies). Before scored
+model requests, an expanded pool selects up to three hash-ranked issues per
+original repository with the same seed and repository partition. This yields
+44 cases because Immutable.js has only two captured rows. All original 30 task
+specifications are unchanged. Use `curate.py --issues-per-repository 3` to
+reproduce it. This is an environment-qualified sampling process, not independent
+held-out curation; its exclusions and selection bias must accompany results.
+Original campaigns are retained. A final eligible catalogue and its protocol are
+not yet frozen; this expansion itself is not evidence of model quality.

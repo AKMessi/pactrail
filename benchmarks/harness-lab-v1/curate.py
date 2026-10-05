@@ -28,7 +28,9 @@ def rank(value):
     return hashlib.sha256((SEED + ":" + value).encode()).hexdigest()
 
 
-def curate(inputs, output):
+def curate(inputs, output, issues_per_repository=2):
+    if type(issues_per_repository) is not int or issues_per_repository not in (2, 3):
+        raise ValueError("two or three ranked issues per repository required")
     records = {}
     snapshots = {}
     for path in inputs:
@@ -53,7 +55,7 @@ def curate(inputs, output):
                          key=lambda entry: rank(entry[0]["instance_id"]))
         if len(choices) < 2:
             raise ValueError("two historical issues required: " + repo)
-        for row, source in choices[:2]:
+        for row, source in choices[:issues_per_repository]:
             grader = {key: row[key] for key in ("test_patch", "eval_script", "log_parser",
                                                "FAIL_TO_PASS", "PASS_TO_PASS")}
             tasks.append({"id": row["instance_id"].replace("__", "-").replace("_", "-"),
@@ -67,7 +69,8 @@ def curate(inputs, output):
                           "validation": "pending_local_base_and_gold_execution"})
     catalogue = {"schema_version": 1, "population_seed": SEED,
                  "partition_policy": "repository_disjoint",
-                 "selection": "two hash-ranked issues per declared repository; repository-disjoint stratified split",
+                 "selection": ("two" if issues_per_repository == 2 else "up to three") +
+                 " hash-ranked issues per declared repository; repository-disjoint stratified split",
                  "curation": "public upstream task selection, not independent Pactrail held-out curation",
                  "source_snapshots": snapshots, "tasks": sorted(tasks, key=lambda task: task["id"])}
     validate_catalogue(catalogue)
@@ -79,5 +82,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("inputs", nargs="+", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--issues-per-repository", type=int, choices=(2, 3), default=2)
     args = parser.parse_args()
-    curate(args.inputs, args.output)
+    curate(args.inputs, args.output, args.issues_per_repository)

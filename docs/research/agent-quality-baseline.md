@@ -134,3 +134,45 @@ in one unscored attempt; this remains recorded as a provider/protocol failure,
 not silently replaced or converted into a successful trial. Its earlier streamed
 connectivity succeeded. Transport settings and model-identity coverage still need
 qualification and explicit preregistration before scored requests.
+
+### Pre-scoring admission integration and expansion
+
+The admission exporter rechecks parsed named outcomes against exact grader hashes
+and retained log digests; raw shell exits stay separate from explicitly derived
+behavioral exit codes. All rejected cases remain in an admission ledger. Its
+regressions cover forged summaries, modified logs, incomplete campaigns and
+exclusive output creation. Together with bounded candidate grading and population
+expansion there are 27 local infrastructure tests, all passing.
+
+The original 30-case pool cannot provide the requested minimum 20 fully qualified
+tasks in these environments. Before any model scoring, an expanded candidate pool
+uses the same seed, repositories and partitions, selecting up to three hash-ranked
+issues per repository. Its 44 cases contain byte-identical specifications for all
+30 originals; no task was chosen using model performance. Original failures remain
+retained. Final environment-based eligibility introduces selection bias and must
+be reported alongside future outcomes; public data is not independently sealed.
+
+The pytest #10081 campaign rejects an upstream `XFAIL` status not supported by the
+current strict interpreter. This is a parser/grading qualification failure, not a
+model failure. No status is silently treated as a pass, and the original campaign
+has not been rewritten. Any interpretation change needs separate tests and a new
+explicit grading campaign before this task can qualify.
+
+The completed original campaign retained 30 outcomes: 16 validated, eight
+unsupported source preparations and six validation failures. Admission export
+rechecked all 16 against exact parsed named tests, grader/source identities and
+log hashes. The 44-case expanded campaign runs serially from a retained runner
+snapshot; its 32 prepared sources and 12 refused sources are not model results.
+
+A separate frozen buffered-transport diagnostic (`model-transport-qualification-v1`)
+ran all six declared trials with a seeded order and no experiment-level retry or
+fallback. Both exact configured models completed three of three; the CLI adapter
+required the requested response-model identity on every turn. Source isolation,
+engine trace and receipt inspection passed. The earlier Space Bunny malformed
+response remains retained separately. Connectivity success is not coding quality
+or a guarantee against later provider failures. No task has yet been scored.
+
+Local admission-milestone gates passed: full workspace tests, strict Clippy,
+formatting, rustdoc warnings and all-feature release build. Evidence is retained
+under `admission-milestone-gates/`; final branch CI must qualify the eventual
+committed implementation independently.
