@@ -136,6 +136,26 @@ Path(r['trial_directory'],'result.json').write_text(json.dumps({'schema_version'
 
 
 class PairedAnalysisTests(unittest.TestCase):
+    def test_analysis_keeps_invalid_and_unsupported_pairs_and_rejects_duplicates(self):
+        spec = importlib.util.spec_from_file_location("analysis", Path(__file__).with_name("analyze.py"))
+        analysis = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(analysis)
+        rows = [{"task": "one", "repeat": 0, "arm": "base", "status": "scored", "task_success": True, "strict_completion": None},
+                {"task": "one", "repeat": 0, "arm": "new", "status": "invalid", "task_success": False},
+                {"task": "two", "repeat": 0, "arm": "base", "status": "unsupported", "task_success": False},
+                {"task": "two", "repeat": 0, "arm": "new", "status": "scored", "task_success": True, "strict_completion": True}]
+        result = analysis.paired(rows, "base", "new", samples=100)
+        self.assertEqual(result["paired_tasks"], 2)
+        self.assertEqual(result["difference"], 0)
+        self.assertEqual(analysis.paired(rows, "base", "new", samples=100, metric="strict_completion")["difference"], .5)
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            analysis.paired(rows + [rows[0]], "base", "new")
+        metrics = {"input_tokens": 100, "cached_input_tokens": 0}
+        row = {"task": "one", "arm": "base", "task_success": True, "metrics": metrics}
+        self.assertIsNone(analysis.resource_summary([row], "base")["cache_hit_ratio"]["value"])
+        row["usage_coverage"] = {k: {"total_turns": 1, "explicit_reported_turns": 1} for k in metrics}
+        self.assertEqual(analysis.resource_summary([row], "base")["cache_hit_ratio"]["value"], 0)
+
     def test_paired_analysis_uses_tasks_as_clusters_and_exposes_no_coverage(self):
         spec = importlib.util.spec_from_file_location("analysis", Path(__file__).with_name("analyze.py"))
         analysis = importlib.util.module_from_spec(spec)

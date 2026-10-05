@@ -247,3 +247,10 @@ retry behavior remain. Local HTTP fixtures cover buffered/streaming denial befor
 response acceptance. The CLI reports "response received" for the zero latency
 sentinel instead of presenting an unmeasured first-byte duration as 0ms. These
 are measured reliability/truthfulness repairs, not benchmark-quality gains.
+
+A subsequent analysis audit found that paired comparisons excluded invalid and
+unsupported outcomes. New analysis retains those paired failures, rejects
+duplicate identities and can report strict completion separately. Cache-hit
+ratios now require complete explicit provider usage coverage rather than treating
+legacy normalized zero as measured. Nine runner/analysis tests pass. No earlier
+aggregate or frozen scored protocol is overwritten by this measurement repair.
