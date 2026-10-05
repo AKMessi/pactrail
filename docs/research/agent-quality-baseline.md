@@ -196,3 +196,11 @@ The matched runner separately records functional `task_success` and Pactrail
 validated receipt, trace, isolated source and ready-to-apply state. Missing checks
 remain unknown. Existing functional scoring and old protocols/results are not
 rewritten. Eight runner tests pass, including missing-vs-false assurance.
+
+Sealed adapter source isolation now also compares bounded byte-level tree digests
+before/after invocation, alongside Git status. The prior Git-only check could miss
+ignored/new empty files. Both digests remain in provenance; control directories
+are explicitly excluded. A regression detects ignored empty-file creation and
+changed bytes. Thirty lab tests and nine matched-runner/real-CLI fixture tests
+pass. This is an assurance measurement repair before scoring, not an agent-quality
+improvement or a rewrite of earlier results.

@@ -192,3 +192,10 @@ receipt, trace, source isolation and ready-to-apply state). Missing assurance is
 `null`, not a false claim of passing checks. Pactrail-specific strict completion
 must not be substituted for a universal comparison score when another harness
 cannot expose equivalent assurance. Existing frozen trial results are unchanged.
+
+Sealed CLI trials bind source isolation to a bounded byte-level tree identity
+before and after execution, in addition to Git cleanliness. This catches changed
+ignored files and newly created empty files that `git status` can miss. The
+adapter retains both digests in provenance; only Git/Pactrail control directories
+are excluded. The real single/text CLI fixture exercises the check. This does not
+apply or modify the candidate and is not a change to engine behavior.

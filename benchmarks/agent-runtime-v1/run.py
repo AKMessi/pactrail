@@ -212,7 +212,8 @@ def run(protocol_path, output):
                        "model_identity": protocol["model_identity"], "limits": protocol["limits"],
                        "workspace": str(workspace), "trial_directory": str(root), "repeat": repeat,
                        "permissions": protocol["permissions"], "normalization": protocol["normalization"],
-                       "runtime_identity": protocol.get("runtime_identity")}
+                       "runtime_identity": protocol.get("runtime_identity"),
+                       "source_policy": protocol.get("source_policy", "historical")}
             write(root / "request.json", request)
             execution = command(arm["adapter"] + [str(root / "request.json")], workspace, root,
                                 protocol["limits"]["wall_seconds"] + 30)

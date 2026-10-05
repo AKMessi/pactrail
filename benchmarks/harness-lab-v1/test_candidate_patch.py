@@ -40,6 +40,17 @@ class CandidatePatchTests(unittest.TestCase):
             self.assertEqual((applied / "binary.bin").read_bytes(), b"\x00\x01\xff")
             self.assertEqual((applied / "café.rs").read_bytes(), b"unicode path\r\n")
 
+    def test_identity_detects_new_empty_ignored_files_and_changed_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".gitignore").write_text("ignored.txt\n")
+            initial = candidate_patch.identity(root)
+            (root / "ignored.txt").write_bytes(b"")
+            self.assertNotEqual(candidate_patch.identity(root), initial)
+            empty = candidate_patch.identity(root)
+            (root / "ignored.txt").write_bytes(b"changed")
+            self.assertNotEqual(candidate_patch.identity(root), empty)
+
     def test_file_and_byte_limits_reject_before_staging(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

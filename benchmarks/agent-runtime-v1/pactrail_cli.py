@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Real single/text CLI adapter. Current CLI adapters cannot expose hidden states."""
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,17 @@ def invoke(argv, root, name):
         return subprocess.run(argv, stdout=stdout, stderr=stderr, check=False).returncode
 
 
+def source_identity(workspace):
+    # Sealed lab trials include ignored/new files in their isolation check;
+    # Git status alone can miss these. The bounded implementation is shared
+    # with external candidate grading, and is frozen with lab protocols.
+    path = Path(__file__).resolve().parents[1] / "harness-lab-v1/candidate_patch.py"
+    spec = importlib.util.spec_from_file_location("lab_candidate_identity", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.identity(workspace)
+
+
 def main():
     request = json.loads(Path(sys.argv[1]).read_text())
     root = Path(request["trial_directory"])
@@ -23,6 +35,8 @@ def main():
     if arm["mode"] == "latent":
         (root / "unsupported.txt").write_text("First-party CLI providers do not expose internal-state export/import. No text fallback was performed.\n")
         return 78
+    sealed = request.get("source_policy") == "sealed"
+    source_before = source_identity(request["workspace"]) if sealed else None
     binary = str(Path(os.environ["PACTRAIL_BENCH_BINARY"]).resolve(strict=True))
     expected_binary = (request.get("runtime_identity") or {}).get("binary_sha256")
     if expected_binary:
@@ -83,6 +97,9 @@ def main():
     run_id = result.get("run_id", rows[0]["run_id"])
     checks = {"receipt_valid": None, "trace_valid": None, "ready_to_apply": None,
               "source_isolation_valid": not subprocess.check_output(["git", "-C", request["workspace"], "status", "--porcelain"], text=True).strip()}
+    source_after = source_identity(request["workspace"]) if sealed else None
+    if sealed:
+        checks["source_isolation_valid"] = checks["source_isolation_valid"] and source_before == source_after
     checks["trace_valid"] = invoke(base + ["trace", run_id, "--json"], root, "validated-trace") == 0
     receipt = None
     if code == 0:
@@ -143,7 +160,8 @@ def main():
                          "latent_logical_bytes": accounting["latent_logical_bytes"], "latent_stored_bytes": accounting["latent_stored_bytes"]})
     with Path(binary).open("rb") as executable:
         binary_digest = hashlib.file_digest(executable, "sha256").hexdigest()
-    (root / "result.json").write_text(json.dumps({"schema_version": 1, "provenance": {"binary_sha256": binary_digest}, "model_identity": identity,
+    (root / "result.json").write_text(json.dumps({"schema_version": 1, "provenance": {"binary_sha256": binary_digest, "source_tree_before_sha256": source_before,
+        "source_tree_after_sha256": source_after}, "model_identity": identity,
         "candidate": str(Path(result["receipt"]).parent / "workspace") if result else None, "checks": checks,
         "metrics": measured, "usage_coverage": {key: {"explicit_reported_turns": sum("provider.reported_" + key in r.get("attributes", {}) for r in model), "positive_legacy_turns": sum(int(r.get("attributes", {}).get(key, "0")) > 0 for r in model), "total_turns": len(model)} for key in ("input_tokens", "output_tokens", "cached_input_tokens")}}, indent=2) + "\n")
     return code
