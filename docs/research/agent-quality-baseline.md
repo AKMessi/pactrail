@@ -101,3 +101,36 @@ passed for commit `83ffb6a54c47d8bdbafce8e35d482d89614e391e`: Linux, macOS and
 Windows quality, dependency policy, real terminal workflows and Docker
 containment. This qualifies that earlier interpretation-component milestone,
 not subsequent grading adapter changes.
+
+### Qualification correction before scored requests
+
+Campaign v1 revealed upstream image setup state: Requests #1724 had a different
+checkout than the task base (the task commit was present locally), and Preact
+#3562 retained installation changes in `package-lock.json`. Both failed the
+source-binding gate before grading. Their diagnostics, all completed case results,
+the runner snapshot and the interruption record remain retained. Campaign v2
+restores the declared base commit offline inside the grading container and verifies
+clean tracked source before applying any patch; it repeats the whole population.
+This repairs environment preparation rather than weakening the source-binding
+gate. Nonempty regression coverage remains required. Gold patches and external
+test definitions are unchanged. No model trial has been scored.
+
+Candidate-patch integration has 23 infrastructure tests, including binary changes,
+new ignored files, deletions, Unicode paths, CRLF under source-controlled EOL
+attributes, source preservation, metadata rejection and file/byte/entry/depth bounds. An actual
+Axios gold candidate passed targeted and regression tests through the candidate
+adapter. This establishes grading mechanics, not model task success.
+
+The next grading-adapter CI run (37293850155 at `8dd7b79`) passed Rust quality,
+macOS/Linux, containment, dependencies and terminal workflows, but its Windows
+byte-capture test expected LF from Python's platform-dependent `print`. The
+fixture now writes the exact expected bytes through stdout's binary buffer,
+preserving the stronger byte-for-byte assertion without changing capture behavior.
+
+Buffered-mode connectivity is retained separately under
+`model-availability-buffered-v1/`. Apodex reported the exact configured response
+model on both turns. Space Bunny returned a malformed response without `choices`
+in one unscored attempt; this remains recorded as a provider/protocol failure,
+not silently replaced or converted into a successful trial. Its earlier streamed
+connectivity succeeded. Transport settings and model-identity coverage still need
+qualification and explicit preregistration before scored requests.

@@ -119,8 +119,13 @@ are retained. The external development dependency is not part of Pactrail runtim
 `validate_population.py` explicitly pulls locked images and serially validates
 base/gold for the whole declared population, retaining unsupported cases and
 infrastructure failures. Output is exclusive and every model result is unscored.
-This is a validation adapter; scored-candidate grading and admission-record export
-still need integration before any baseline protocol can be admitted.
+Candidate grading is available through `--source candidate --candidate . --phase
+targeted|regression`, using a separate external grading copy. Patch preparation
+preserves added/deleted/ignored files, binary data and raw line endings; source
+attributes cannot invoke filters or normalize bytes. Source size/file counts are
+bounded, and nested Git metadata is rejected. An actual Axios gold candidate
+passed through this path. Admission-record export and the frozen cohort protocol
+still need integration before any scored baseline can be admitted.
 
 Example (after explicitly pulling the declared immutable image):
 
@@ -137,3 +142,12 @@ Actual Axios validation found a failing targeted test despite shell exit `0`.
 The reference fix passed that test and three regressions in a separate container.
 Reports distinguish raw `shell_exit_code` from behavioral test outcomes. Unit
 tests establish interpretation/bounds, not container or model-quality results.
+
+Qualification campaign v1 remains retained, including image setup failures and
+unstarted cases at interruption. Campaign v2 repeats the whole population. It
+restores the exact pre-fix Git commit inside each fresh container using existing
+objects, verifies the resulting tracked source is clean, then applies the candidate
+or reference patch. This handles upstream environment-setup checkouts and installed
+dependency edits without changing graders/gold fixes or deleting dependency caches.
+An unavailable commit or failed restoration still fails closed; there is no fetch
+inside grading. No model requests have been scored under either campaign.

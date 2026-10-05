@@ -13,10 +13,12 @@ import re
 import subprocess
 import tempfile
 import time
+import uuid
 
 from grading import summarize
 from lab import canonical, read_json, sha256, validate_catalogue
 from prepare import tree_identity
+from candidate_patch import build as build_candidate_patch, identity as candidate_identity
 
 MAX_LOG_BYTES = 8 * 1024 * 1024
 
@@ -50,7 +52,8 @@ def control(argv, env, *, timeout=60):
                 raise ValueError("control response exceeds bound")
             error.seek(0)
             if process.returncode:
-                raise RuntimeError(error.read(2000).decode("utf-8", errors="replace"))
+                detail = error.read(2000).decode("utf-8", errors="replace")
+                raise RuntimeError(f"command failed with exit {process.returncode}: {argv[0]}: {detail}")
             output.seek(0)
             return output.read(MAX_LOG_BYTES)
         finally:
@@ -77,11 +80,15 @@ def execute(args):
         raise ValueError("immutable declared public image required")
     if immutable.rsplit("@", 1)[1] != image["image_digest"] or image["image_tag"] != prepared["image_tag"]:
         raise ValueError("image identity mismatch")
-    source = Path(prepared["baseline" if args.source == "base" else "gold"]).resolve(strict=True)
-    expected = prepared["source_tree_sha256" if args.source == "base" else "gold_tree_sha256"]
-    if tree_identity(source) != expected:
+    baseline = Path(prepared["baseline"]).resolve(strict=True)
+    source = (Path(args.candidate) if args.source == "candidate" else
+              Path(prepared["baseline" if args.source == "base" else "gold"])).resolve(strict=True)
+    expected = (candidate_identity(source) if args.source == "candidate" else
+                prepared["source_tree_sha256" if args.source == "base" else "gold_tree_sha256"])
+    actual = candidate_identity(source) if args.source == "candidate" else tree_identity(source)
+    if actual != expected:
         raise ValueError("prepared source tree changed")
-    grader_path = source.parent / "grader.json"
+    grader_path = baseline.parent / "grader.json"
     grader = read_json(grader_path)
     if hashlib.sha256(canonical(grader)).hexdigest() != task["grader_identity"]:
         raise ValueError("grader identity changed")
@@ -93,10 +100,11 @@ def execute(args):
         raise ValueError("installed image does not match its immutable platform identity")
     # Validation uses the identity-bound reference patch, including added files
     # that a plain git diff of an unindexed gold tree would silently omit.
-    reference = source.parent / "reference.patch"
+    reference = baseline.parent / "reference.patch"
     if sha256(reference) != task["reference_patch_sha256"]:
         raise ValueError("reference fix changed")
-    patch = reference.read_bytes() if args.source == "gold" else b""
+    patch = (build_candidate_patch(baseline, source, control) if args.source == "candidate" else
+             reference.read_bytes() if args.source == "gold" else b"")
     args.output.mkdir(parents=True, exist_ok=False)
     (args.output / "candidate.patch").write_bytes(patch)
     (args.output / "eval.sh").write_text(grader["eval_script"], encoding="utf-8")
@@ -107,15 +115,32 @@ def execute(args):
               "patch_sha256": sha256(args.output / "candidate.patch")}
     started = time.monotonic()
     try:
-        container = control(docker + ["create", "--pull", "never", "--network", "none",
+        # Name before admission so cleanup can address an uncertain create
+        # response without relying on a returned container ID.
+        container = "pactrail-grade-" + uuid.uuid4().hex
+        report["container_name"] = container
+        control(docker + ["create", "--name", container, "--label", "pactrail.harness-lab.task=" + args.task,
+                            "--pull", "never", "--network", "none",
                             "--memory", "6g", "--cpus", "2", "--pids-limit", "512",
                             "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-                            "--entrypoint", "/bin/bash", immutable, "-c", "sleep 3600"], env).decode().strip()
+                            "--entrypoint", "/bin/bash", immutable, "-c", "sleep 3600"], env)
         control(docker + ["start", container], env)
+        head = control(docker + ["exec", container, "git", "-C", "/testbed", "rev-parse", "HEAD"], env).decode().strip()
+        report["image_checkout_commit"] = head
+        # Upstream images may preserve an environment-setup commit or dependency
+        # installation edits. Restore actual task source without deleting the
+        # already installed untracked dependencies or fetching any history.
+        control(docker + ["exec", container, "git", "-C", "/testbed", "cat-file", "-e",
+                         task["base_commit"] + "^{commit}"], env)
+        control(docker + ["exec", container, "git", "-C", "/testbed", "reset", "--hard", task["base_commit"]], env)
         head = control(docker + ["exec", container, "git", "-C", "/testbed", "rev-parse", "HEAD"], env).decode().strip()
         if head != task["base_commit"]:
             raise ValueError("grading image source commit mismatch")
-        control(docker + ["exec", container, "git", "-C", "/testbed", "diff", "--quiet", "HEAD"], env)
+        try:
+            control(docker + ["exec", container, "git", "-C", "/testbed", "diff", "--quiet", "HEAD"], env)
+        except RuntimeError as error:
+            raise ValueError("grading source remains modified after reset") from error
+        report["grading_source_commit"] = head
         for filename in ("candidate.patch", "eval.sh"):
             control(docker + ["cp", str(args.output / filename), container + ":/tmp/" + filename], env)
         if patch:
@@ -147,6 +172,8 @@ def execute(args):
         regression = summarize(grader["PASS_TO_PASS"], statuses)
         report.update(targeted=targeted, regression=regression,
                       qualified=(targeted["behavior_failed"] if args.source == "base" else
+                                 targeted["behavior_passed"] if args.source == "candidate" and args.phase == "targeted" else
+                                 regression["behavior_passed"] if args.source == "candidate" and args.phase == "regression" else
                                  targeted["behavior_passed"] and regression["behavior_passed"]))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, KeyError) as error:
         report.update(qualified=False, infrastructure_error=str(error))
@@ -166,11 +193,15 @@ if __name__ == "__main__":
     for field in ("catalogue", "prepared", "images", "parser-python", "output"):
         parser.add_argument("--" + field, type=Path, required=True)
     parser.add_argument("--task", required=True)
-    parser.add_argument("--source", choices=("base", "gold"), required=True)
+    parser.add_argument("--source", choices=("base", "gold", "candidate"), required=True)
+    parser.add_argument("--candidate", type=Path)
+    parser.add_argument("--phase", choices=("targeted", "regression"))
     parser.add_argument("--timeout", type=int, default=600)
     args = parser.parse_args()
     if not 1 <= args.timeout <= 3600:
         parser.error("timeout must be 1–3600 seconds")
+    if (args.source == "candidate") != (args.candidate is not None and args.phase is not None):
+        parser.error("candidate grading requires --candidate and --phase")
     result = execute(args)
     print(json.dumps(result, allow_nan=False))
     raise SystemExit(0 if result.get("qualified") else 1)

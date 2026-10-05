@@ -15,7 +15,8 @@ import parse_upstream
 class ContainerBoundaryTests(unittest.TestCase):
     def test_control_success_error_output_limit_and_timeout(self):
         env = {"PATH": os.environ["PATH"]}
-        self.assertEqual(container_grade.control([sys.executable, "-c", "print('measured')"], env), b"measured\n")
+        self.assertEqual(container_grade.control(
+            [sys.executable, "-c", "import sys; sys.stdout.buffer.write(b'measured\\n')"], env), b"measured\n")
         with self.assertRaisesRegex(RuntimeError, "fixture error"):
             container_grade.control([sys.executable, "-c", "import sys; sys.stderr.write('fixture error'); sys.exit(1)"], env)
         with mock.patch.object(container_grade, "MAX_LOG_BYTES", 100):
