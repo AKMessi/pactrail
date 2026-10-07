@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pactrail_lab.process import Oci
+from pactrail_lab import budget
 from pactrail_lab.safe import Refusal
 from pactrail_lab.store import Store
 
@@ -118,7 +119,7 @@ class RealContainment(unittest.TestCase):
             changed = next(e for e in store.load(outcome["candidate_source"])["entries"] if e["path"] == "value.txt")
             self.assertEqual(store.get(changed["digest"]), b"after")
             self.assertEqual((source / "value.txt").read_text(), "before")
-            self.assertEqual(len(store.value("reservations")), 2)
+            self.assertEqual(len(budget.reservations(store)), 2)
 
 
 if __name__ == "__main__": unittest.main()

@@ -5,7 +5,7 @@ import random
 import time
 import uuid
 
-from . import contracts
+from . import contracts, budget
 from .execution import Execution, freeze_inputs, supervisor_inputs, verify_supervisor
 from .gateway import Gateway
 from .judge import decide
@@ -69,7 +69,7 @@ def status(store):
             "active": store.value("active"), "baseline": store.value("baseline"), "lineage": store.value("lineage"),
             "pending": store.value("pending"), "inflight": store.value("inflight"),
             "confirmation_spent": store.value("confirmation-spent"), "proposals": store.value("proposals", []),
-            "verdicts": store.value("verdicts", {}), "reservations": store.value("reservations", {}),
+            "verdicts": store.value("verdicts", {}), "reservations": budget.reservations(store),
             "qualified": store.value("qualified", False), "baseline_results": store.value("baseline-results")}
 
 
@@ -194,7 +194,7 @@ class Campaign:
                        ("source_isolation_valid", "trace_valid", "receipt_valid", "ready_to_apply")),
                    "task_success": functional, "checks": checks, "grading": graded, "outcome": outcome,
                    "wall_time_ms": round((time.monotonic() - started) * 1000)}
-            reservations = [r for r in self.store.value("reservations", {}).values() if r["lease"] == trial_id]
+            reservations = [r for r in budget.reservations(self.store).values() if r["lease"] == trial_id]
             def total(field):
                 values = [(r.get("usage") or {}).get(field) for r in reservations]
                 return sum(values) if values and all(v is not None for v in values) else None

@@ -83,13 +83,43 @@ class Foundation(unittest.TestCase):
         budget.settle(self.store, "request-one", self.store.put(b"response"))
         budget.reserve(self.store, "request-two", {"model": "m"}, model, limits, lease)
         with self.assertRaises(Refusal): budget.reserve(self.store, "request-three", {}, model, limits, lease)
-        self.assertEqual(2400, sum(r["reserved"] for r in self.store.value("reservations").values()))
+        self.assertEqual(2400, sum(r["reserved"] for r in budget.reservations(self.store).values()))
 
     def test_reopening_does_not_reset_charges(self):
         with self.store.transaction(): self.store.set("charged", 42)
         self.store.close()
         self.store = Store(self.root / "campaign")
         self.assertEqual(42, self.store.value("charged"))
+
+    def test_large_request_history_uses_individual_bounded_records(self):
+        with self.store.transaction():
+            for i in range(3000):
+                request_id = "request-" + str(i).zfill(32)
+                row = dict(request_id=request_id, request_hash="a" * 64, reserved=1,
+                           lease="previous-" + "x" * 40, state="settled", dispatched=True,
+                           usage=dict(input_tokens=1024, output_tokens=128, cached_input_tokens=0), response="b" * 64)
+                self.store.set("model-reservation-" + request_id, row)
+        rows = budget.reservations(self.store)
+        # A monolithic projection would now breach the admitted JSON boundary.
+        with self.assertRaises(Refusal): self.store.record(rows)
+        model = dict(context_tokens=1024, output_tokens=128, input_rate=0, output_rate=0)
+        limits = dict(requests=3001, cost_microusd=3000)
+        lease = dict(id="last", requests=1, deadline_ns=time.time_ns() + 30 * 10**9)
+        budget.reserve(self.store, "final-request", {}, model, limits, lease)
+        self.assertEqual(len(budget.reservations(self.store)), 3001)
+        self.store.verify()
+
+    def test_old_reservation_projection_keeps_charge_and_uncertain_dispatch(self):
+        old = dict(request_id="old-request", request_hash="a" * 64, reserved=7,
+                   lease="old", state="reserved", usage=None)
+        with self.store.transaction():
+            self.store.set("reservations", {"old-request": old})
+            self.store.set("dispatched", {"old-request": True})
+        self.assertEqual(budget.reservations(self.store)["old-request"]["reserved"], 7)
+        budget.settle(self.store, "old-request", self.store.put(b"old response"))
+        self.assertEqual(budget.reservations(self.store)["old-request"]["state"], "settled")
+        self.assertEqual(budget.reservations(self.store)["old-request"]["reserved"], 7)
+        self.store.verify()
 
 
 if __name__ == "__main__": unittest.main()

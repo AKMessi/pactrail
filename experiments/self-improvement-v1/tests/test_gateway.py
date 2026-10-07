@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pactrail_lab.gateway import Gateway, validate_request
 from pactrail_lab.process import command
+from pactrail_lab import budget
 from pactrail_lab.safe import Refusal, canonical
 from pactrail_lab.store import Store
 
@@ -25,7 +26,7 @@ class GatewayTests(unittest.TestCase):
             calls = []
             def transport(body):
                 with Store(root) as store:
-                    self.assertEqual(len(store.value("dispatched")), len(calls) + 1)
+                    self.assertEqual(sum(row.get("dispatched") is True for row in budget.reservations(store).values()), len(calls) + 1)
                 calls.append(body)
                 return canonical(dict(model=MODEL["id"], choices=[dict(message=dict(content=key))]))
             gateway = Gateway(root, MODEL, LIMITS, key, transport)
@@ -35,7 +36,7 @@ class GatewayTests(unittest.TestCase):
             self.assertEqual(calls[0]["temperature"], 0)
             with self.assertRaises(Refusal): gateway.submit(token, BODY)
             with Store(root) as store:
-                row = next(iter(store.value("reservations").values()))
+                row = next(iter(budget.reservations(store).values()))
                 self.assertIsNone(row["usage"])
                 self.assertEqual(row["reserved"], 4608)
                 for value, in store.db.execute("SELECT body FROM objects"):
@@ -50,8 +51,8 @@ class GatewayTests(unittest.TestCase):
             with self.assertRaises(Refusal): gateway.submit(token, BODY)
             with self.assertRaises(Refusal): gateway.submit(token, BODY)
             with Store(root) as store:
-                self.assertEqual(len(store.value("reservations")), 1)
-                self.assertEqual(next(iter(store.value("reservations").values()))["state"], "reserved")
+                self.assertEqual(len(budget.reservations(store)), 1)
+                self.assertEqual(next(iter(budget.reservations(store).values()))["state"], "reserved")
             gateway.revoke(token)
             with self.assertRaises(Refusal): gateway.submit(token, BODY)
 

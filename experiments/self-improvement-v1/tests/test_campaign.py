@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from pactrail_lab import budget
 from pactrail_lab.campaign import Campaign, status, fork_campaign, grade
 from pactrail_lab.evidence import export, audit_export
 from pactrail_lab.execution import supervisor_inputs, write_frozen
@@ -162,8 +163,8 @@ class CampaignTests(unittest.TestCase):
         proposal = self.store.load(result["proposal"])
         self.assertEqual(proposal["parent"], self.parent)
         self.assertLessEqual(set(proposal["weaknesses"]), set(self.store.value("weaknesses")))
-        self.assertEqual(len(self.store.value("reservations")), 1)
-        self.assertIsNone(next(iter(self.store.value("reservations").values()))["usage"])
+        self.assertEqual(len(budget.reservations(self.store)), 1)
+        self.assertIsNone(next(iter(budget.reservations(self.store).values()))["usage"])
 
     def test_fixture_executor_refused_in_research_campaign(self):
         with self.store.transaction(): self.store.set("manifest", self.store.record({**self.manifest, "kind": "research"}))
