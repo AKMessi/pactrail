@@ -120,6 +120,10 @@ class RealContainment(unittest.TestCase):
             self.assertEqual(store.get(changed["digest"]), b"after")
             self.assertEqual((source / "value.txt").read_text(), "before")
             self.assertEqual(len(budget.reservations(store)), 2)
+            if os.environ.get("PACTRAIL_LAB_EVIDENCE_DIR"):
+                from pactrail_lab.evidence import export
+                with store.transaction(): store.set("active", baseline)
+                export(store, Path(os.environ["PACTRAIL_LAB_EVIDENCE_DIR"]) / "real-engine")
 
 
 if __name__ == "__main__": unittest.main()

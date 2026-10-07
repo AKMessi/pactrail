@@ -47,6 +47,8 @@ class CampaignTests(unittest.TestCase):
         for name in ("bad", "good"):
             (self.root / name).mkdir()
             (self.root / name / "lib.rs").write_text(name)
+            # A source file named like the root inventory remains ordinary data.
+            (self.root / name / "sha256.json").write_text("{}")
         self.bad, self.good = (import_tree(self.store, self.root / name) for name in ("bad", "good"))
         operation = lambda name: dict(argv=[name], inputs={"/outside/verifier.py": "0" * 64}, timeout_seconds=1)
         self.manifest = dict(kind="fixture", model={"id": "deterministic-fixture"}, image="sha256:" + "0" * 64,

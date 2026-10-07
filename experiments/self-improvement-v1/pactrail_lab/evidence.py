@@ -32,6 +32,6 @@ def audit_export(output):
     for name, expected in inventory["files"].items():
         if digest(read(output / str(relative(name)))) != expected:
             raise Refusal("export inventory mismatch")
-    actual = {p.relative_to(output).as_posix() for p in output.rglob("*") if p.is_file() and p.name != "sha256.json"}
+    actual = {p.relative_to(output).as_posix() for p in output.rglob("*") if p.is_file() and p != output / "sha256.json"}
     if actual != set(inventory["files"]): raise Refusal("export has additional or missing files")
     return {"verified_files": len(actual), "head": inventory["head"]}
