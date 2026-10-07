@@ -19,6 +19,9 @@ def reserve(store, request_id, request, model, limits, lease):
             raise Refusal("campaign model-request budget exhausted")
         if time.time_ns() >= lease["deadline_ns"]:
             raise Refusal("model lease expired")
+        deadline = store.value("deadline-ns")
+        if deadline is not None and time.time_ns() >= deadline:
+            raise Refusal("campaign wall-clock budget exhausted")
         if sum(r["reserved"] for r in reservations.values()) + charge > limits["cost_microusd"]:
             raise Refusal("campaign spending reservation would exceed cap")
         count = sum(r["lease"] == lease["id"] for r in reservations.values())

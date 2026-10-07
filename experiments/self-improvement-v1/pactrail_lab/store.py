@@ -116,7 +116,7 @@ class Store:
         return [decode(row[0]) for row in self.db.execute("SELECT body FROM events ORDER BY seq")]
 
     def verify(self):
-        previous, count, projection = "0" * 64, 0, {}
+        previous, count, projection, commands = "0" * 64, 0, {}, {}
         for seq, before, body, key in self.db.execute("SELECT * FROM events ORDER BY seq"):
             value = decode(body)
             if seq != count or before != previous or digest(body) != key or value.get("sequence") != seq or value.get("previous") != before:
@@ -125,23 +125,31 @@ class Store:
             if value.get("kind") == "projection-set":
                 payload = value["payload"]
                 projection[payload["name"]] = self.load(payload["record"])
+            elif value.get("kind") == "command-completed":
+                payload = value["payload"]
+                self.load(payload["result"])
+                commands[payload["id"]] = (payload["request"], payload["result"])
         persisted = {name: decode(value) for name, value in self.db.execute("SELECT * FROM values_store")}
         if persisted != projection:
             raise Refusal("campaign projection differs from authoritative journal")
+        persisted_commands = {name: (request, result) for name, request, result in self.db.execute("SELECT * FROM commands")}
+        if persisted_commands != commands:
+            raise Refusal("command cache differs from authoritative journal")
 
     def mutate(self, command_id, expected_head, request, action):
         identifier(command_id)
         request_hash = digest(canonical(request))
         with self.transaction():
+            self.verify()
             old = self.db.execute("SELECT request,result FROM commands WHERE id=?", (command_id,)).fetchone()
             if old:
                 if old[0] != request_hash:
                     raise Refusal("command ID reused with different content")
                 return self.load(old[1])
-            self.verify()
             if expected_head != self.head():
                 raise Refusal("stale campaign head; inspect before retry")
             result = action()
             result_key = self.record(result)
+            self.append("command-completed", {"id": command_id, "request": request_hash, "result": result_key})
             self.db.execute("INSERT INTO commands VALUES (?, ?, ?)", (command_id, request_hash, result_key))
             return result
