@@ -9,6 +9,7 @@ from . import contracts
 from .execution import Execution, freeze_inputs, supervisor_inputs, verify_supervisor
 from .gateway import Gateway
 from .judge import decide
+from .mining import classify, source_context
 from .process import Oci
 from .safe import Refusal, canonical, decode, digest, hash_id, read, real_path, fields, integer
 from .snapshots import diff, import_git, revision
@@ -55,6 +56,10 @@ def initialize(root, manifest_path):
                 gold = import_git(store, task["repository"], task["gold_commit"])
                 tasks.append({**task, "base_source": base, "gold_source": gold})
             store.set(name + "-protocol", store.record({**protocol, "tasks": tasks}))
+        cohorts = [{task["base_source"] for task in store.load(store.value(name + "-protocol"))["tasks"]}
+                   for name in ("development", "confirmation")]
+        if cohorts[0] & cohorts[1]:
+            raise Refusal("development and confirmation contain identical source snapshots")
         store.append("campaign-admitted", {"baseline": baseline, "kind": admitted["kind"]})
         return status(store)
 
@@ -222,7 +227,7 @@ class Campaign:
                 for row in rows:
                     if not row["strict_completion"]:
                         weaknesses.append(self.store.record({"schema_version": 1, "task": row["task"],
-                            "trial": self.store.record(row), "classification": "unresolved-development-failure",
+                            "trial": self.store.record(row), "classification": classify(row),
                             "observed": {"functional": row["task_success"], "assurance": row["checks"],
                                          "trace_observations": row["outcome"].get("observations", [])}}))
                 self.store.set("weaknesses", weaknesses)
@@ -244,10 +249,14 @@ class Campaign:
                         "hypothesis": "a specific falsifiable statement", "mechanism": "one coherent change and its predicted observable effect",
                         "predicted_gain": .05, "risks": "security and regression risks", "primary_metric": "strict_completion"}
             observations = [self.store.load(key) for key in weaknesses[:4]]
+            for observation in observations:
+                observation["observed"]["trace_observations"] = observation["observed"]["trace_observations"][-6:]
+            context_budget = max(0, model["context_tokens"] - model["output_tokens"] - len(canonical(observations)) - len(canonical(template)) - 4096)
+            code = source_context(self.store, parent, min(16000, context_budget))
             body = {"model": model["id"], "max_tokens": model["output_tokens"],
                     "reasoning_effort": model["reasoning_effort"], "messages": [
                         {"role": "system", "content": "Propose one testable harness change, never a benchmark-specific fix. Return only JSON matching the template. No claims of improvement without measurement. Preserve the supplied IDs and evidence references. The external verifier, credentials, budgets and promotion authority cannot be changed."},
-                        {"role": "user", "content": canonical({"template": template, "observations": observations}).decode()}]}
+                        {"role": "user", "content": canonical({"template": template, "observations": observations, "parent_source_excerpts": code}).decode()}]}
             try: response = decode(gateway.submit(token, body), 8_388_608)
             finally: gateway.revoke(token)
             proposed = contracts.proposal(decode(response["choices"][0]["message"]["content"]))
@@ -276,7 +285,8 @@ class Campaign:
             protocol = self.store.load(self.store.value("development-protocol"))
             goal = "Implement this single harness proposal in the isolated candidate. Do not change evaluation criteria or invent evidence. Preserve compatibility.\n" + canonical(proposed).decode()
             outcome = self.execution.trial(proposed["parent"], parent["source"], goal, protocol["limits"], "implement-" + uuid.uuid4().hex)
-            if not outcome.get("candidate_source") or not all(outcome["checks"].values()):
+            if not outcome.get("candidate_source") or not all(outcome.get("checks", {}).get(name) is True for name in
+                ("source_isolation_valid", "trace_valid", "receipt_valid", "ready_to_apply")):
                 raise Refusal("implementation did not produce a parent-validated reviewable candidate")
             if not diff(self.store, parent["source"], outcome["candidate_source"]): raise Refusal("proposal produced no change")
             built = self.execution.operation(outcome["candidate_source"], parent["binary"], self.manifest["build"])
@@ -386,6 +396,9 @@ class Campaign:
                 lineage[restore]["state"] = "active"
                 self.store.set("lineage", lineage)
                 self.store.set("active", restore)
+                self.store.set("baseline", restore)
+                self.store.set("qualified", False)
+                self.store.set("baseline-results", None)
                 self.store.set("pending", None)
                 self.store.set("weaknesses", [])
                 self.store.append("revision-undone", {"restored": restore, "retired": sorted(retired),

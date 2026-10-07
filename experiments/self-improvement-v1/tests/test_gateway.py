@@ -59,6 +59,7 @@ class GatewayTests(unittest.TestCase):
         for body in ({**BODY, "model": "other"}, {**BODY, "stream": True},
                      {**BODY, "temperature": 1}, {**BODY, "reasoning_effort": "high"},
                      {**BODY, "max_tokens": 257}, {**BODY, "messages": [{"role": "user", "content": [{}]}]},
+                     {**BODY, "messages": [{"role": "assistant", "content": "x", "audio": {"id": "hidden-billing"}}]},
                      {**BODY, "messages": [{"role": "user", "content": "x" * 4096}]},
                      {**BODY, "unknown": True}):
             with self.subTest(body=body), self.assertRaises(Refusal): validate_request(body, MODEL)

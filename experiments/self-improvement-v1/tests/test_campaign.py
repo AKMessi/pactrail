@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
+import os
 import unittest
 from unittest.mock import patch
 
@@ -141,6 +142,28 @@ class CampaignTests(unittest.TestCase):
         write_frozen(self.store, output, include_verifiers=False)
         self.assertFalse((output / "inputs").exists())
         self.assertTrue((output / "agent-runtime-v1/pactrail_cli.py").exists())
+
+    def test_core_model_proposal_is_bound_to_observed_failure_and_parent(self):
+        from pactrail_lab.safe import canonical, decode
+        self.campaign.qualify("qualify", self.store.head())
+        self.campaign.baseline("baseline", self.store.head())
+        model = dict(id="offline-proposer", endpoint="https://example.invalid/v1/chat/completions",
+                     api_key_env="LAB_PROPOSAL_KEY", context_tokens=32768, output_tokens=1024,
+                     input_rate=0, output_rate=0, temperature=0, reasoning_effort=None)
+        self.campaign.manifest["model"] = model
+        def provider(_gateway, body):
+            packet = decode(body["messages"][1]["content"])
+            self.assertTrue(packet["observations"])
+            self.assertTrue(packet["parent_source_excerpts"])
+            template = packet["template"]
+            return canonical({"model": model["id"], "choices": [{"message": {"content": canonical(template).decode()}}]})
+        with patch.dict(os.environ, LAB_PROPOSAL_KEY="scripted-not-a-real-key"), patch("pactrail_lab.gateway.Gateway._provider", provider):
+            result = self.campaign.propose("propose", self.store.head())
+        proposal = self.store.load(result["proposal"])
+        self.assertEqual(proposal["parent"], self.parent)
+        self.assertLessEqual(set(proposal["weaknesses"]), set(self.store.value("weaknesses")))
+        self.assertEqual(len(self.store.value("reservations")), 1)
+        self.assertIsNone(next(iter(self.store.value("reservations").values()))["usage"])
 
     def test_fixture_executor_refused_in_research_campaign(self):
         with self.store.transaction(): self.store.set("manifest", self.store.record({**self.manifest, "kind": "research"}))

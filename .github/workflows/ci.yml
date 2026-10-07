@@ -31,11 +31,11 @@ jobs:
       - name: Check review JavaScript
         run: node --check experiments/self-improvement-v1/web/app.js
       - name: Explicitly provision development-only containment image
-        run: docker pull python:3.13-slim
+        run: docker build --tag pactrail-lab-qualification:local experiments/self-improvement-v1/tests/oci-fixture
       - name: Qualify real containment using the exact local image identity
         shell: bash
         run: |
-          export PACTRAIL_LAB_TEST_IMAGE="$(docker image inspect --format '{{.Id}}' python:3.13-slim)"
+          export PACTRAIL_LAB_TEST_IMAGE="$(docker image inspect --format '{{.Id}}' pactrail-lab-qualification:local)"
           python3 -m unittest discover -s experiments/self-improvement-v1/tests -p test_oci.py -v
 
   quality:
@@ -81,6 +81,14 @@ jobs:
         run: python3 -m unittest discover -s benchmarks/agent-runtime-v1 -p 'test_*.py' -v
       - name: Harness Lab admission and frozen-input integrity
         run: python3 -m unittest discover -s benchmarks/harness-lab-v1 -p 'test_*.py' -v
+      - name: Real self-improvement engine / gateway / parent verification (no paid model)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          docker build --tag pactrail-lab-qualification:local experiments/self-improvement-v1/tests/oci-fixture
+          export PACTRAIL_LAB_TEST_IMAGE="$(docker image inspect --format '{{.Id}}' pactrail-lab-qualification:local)"
+          export PACTRAIL_BENCH_BINARY="${{ github.workspace }}/target/release/pactrail"
+          python3 -m unittest discover -s experiments/self-improvement-v1/tests -v
       - name: Offline retrieval probe invariants
         run: cargo test -p pactrail-context --all-features --example retrieval_probe --locked
       - name: Exercise checksum-verifying installer before publication

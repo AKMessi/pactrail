@@ -38,6 +38,8 @@ def validate_request(body, config):
     for message in messages:
         if not isinstance(message, dict) or message.get("role") not in ("system", "user", "assistant", "tool"):
             raise Refusal("invalid message role")
+        if set(message) - {"role", "content", "name", "tool_call_id", "tool_calls"}:
+            raise Refusal("unsupported message fields; v1 admits text and function calls only")
         content = message.get("content")
         if content is not None and not isinstance(content, str):
             raise Refusal("v1 admits text only; multimodal billing is unsupported")

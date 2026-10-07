@@ -7,7 +7,7 @@ import subprocess
 import time
 import uuid
 
-from .safe import Refusal, clean_environment, real_path, hash_id, relative
+from .safe import Refusal, clean_environment, real_path, hash_id, relative, integer
 
 
 def command(argv, *, timeout=30, limit=1_048_576, env=None, cwd=None):
@@ -70,8 +70,17 @@ class Oci:
         if result["exit_code"] or result["reason"] or result["stdout"].decode().strip() != self.image:
             raise Refusal("pinned local OCI image unavailable; no pull/native fallback")
 
-    def run(self, argv, mounts, *, timeout=120, memory_mb=2048, output_limit=8_388_608, environment=None):
+    def run(self, argv, mounts, *, timeout=120, memory_mb=2048, scratch_bytes=1073741824, output_limit=8_388_608, environment=None):
+        if not argv or any(not isinstance(v, str) or not v or "\x00" in v for v in argv):
+            raise Refusal("container command must be explicit nonempty argv")
         self.probe()
+        integer(memory_mb, 512, 16384, "container memory MiB")
+        integer(scratch_bytes, 67108864, 17179869184, "container scratch bytes")
+        deadline = self.store.value("deadline-ns")
+        if deadline is not None:
+            remaining = (deadline - time.time_ns()) / 10**9
+            if remaining <= 0: raise Refusal("campaign wall-clock ceiling reached before container admission")
+            timeout = min(timeout, remaining)
         arguments_mounts, destinations = [], set()
         for source, target, writable in mounts:
             if not isinstance(target, str) or not target.startswith("/"):
@@ -109,12 +118,11 @@ class Oci:
                      "--security-opt=no-new-privileges", "--pids-limit=128", "--memory", str(memory_mb) + "m",
                      "--cpus=2", "--user", f"{os.getuid()}:{os.getgid()}",
                      "--tmpfs", "/tmp:rw,noexec,nosuid,size=67108864,mode=1777", "--workdir", "/work",
-                     "--tmpfs", f"/work:rw,nosuid,size=1073741824,mode=0700,uid={os.getuid()},gid={os.getgid()}",
+                     "--tmpfs", f"/work:rw,nosuid,size={scratch_bytes},mode=0700,uid={os.getuid()},gid={os.getgid()}",
                      "--env", "HOME=/tmp", "--env", "PYTHONDONTWRITEBYTECODE=1"]
         arguments += arguments_mounts
         for key, value in environment.items():
             arguments += ["--env", key + "=" + value]
-        if not argv: raise Refusal("container command is required")
         arguments += ["--entrypoint", argv[0], self.image, *argv[1:]]
         try:
             created = command(arguments)

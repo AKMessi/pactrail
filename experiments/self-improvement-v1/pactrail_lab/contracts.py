@@ -34,10 +34,14 @@ def model(value):
 def manifest(value):
     fields(value, {"schema_version", "id", "model", "limits", "image", "baseline_binary",
                    "baseline_binary_sha256", "source", "source_commit", "configuration", "memory",
-                   "gates", "build", "development_protocol", "confirmation_protocol", "kind"})
+                   "gates", "build", "development_protocol", "confirmation_protocol", "kind"}, {"containment"})
     identifier(value["id"])
     if value["kind"] not in ("research", "fixture"):
         raise Refusal("unknown campaign kind")
+    value.setdefault("containment", {"memory_mb": 2048, "scratch_bytes": 1073741824})
+    fields(value["containment"], {"memory_mb", "scratch_bytes"})
+    integer(value["containment"]["memory_mb"], 512, 16384, "container memory MiB")
+    integer(value["containment"]["scratch_bytes"], 67108864, 17179869184, "container scratch bytes")
     model(value["model"])
     fields(value["limits"], {"cost_microusd", "requests", "wall_seconds", "cycles", "repetitions"})
     for name, bounds in {"cost_microusd": (1, 10**12), "requests": (1, 10000),

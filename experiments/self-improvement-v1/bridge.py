@@ -43,6 +43,10 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     request["model_identity"]["base_url"] = f"http://127.0.0.1:{server.server_port}/v1"
     request["model_identity"]["api_key_env"] = "PACTRAIL_LAB_LEASE"
+    # Identity is enforced for every physical response by the external gateway.
+    # A candidate's trace attributes cannot establish this guarantee, and older
+    # accepted parents may not expose the attribute used by the benchmark adapter.
+    request["model_identity"]["require_response_model"] = False
     request["workspace"] = "/source"
     request["trial_directory"] = "/work"
     request["runtime_identity"] = {"binary_sha256": request["arm"]["binary_sha256"]}
@@ -55,7 +59,10 @@ def main():
         Path("/work/adapter.stdout").write_bytes(result["stdout"])
         Path("/work/adapter.stderr").write_bytes(result["stderr"])
         Path("/work/execution.json").write_bytes(canonical({k: v for k, v in result.items() if k not in ("stdout", "stderr")}))
-        verification = verify("/work")
+        try:
+            verification = verify("/work")
+        except (Refusal, OSError, ValueError) as error:
+            verification = {"checks": {}, "candidate": None, "verification_error": str(error)[:2000]}
         if result["exit_code"] or result["reason"]:
             verification["checks"]["ready_to_apply"] = False
         verification["model_identity"] = original_identity
@@ -69,4 +76,6 @@ def main():
 
 if __name__ == "__main__":
     try: sys.exit(main())
-    except (Refusal, OSError, ValueError): sys.exit(65)
+    except (Refusal, OSError, ValueError) as error:
+        print(type(error).__name__ + ": " + str(error)[:2000], file=sys.stderr)
+        sys.exit(65)

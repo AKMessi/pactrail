@@ -60,8 +60,9 @@ def change_view(store, key):
             "proposal": store.load(after["proposal"]) if after["proposal"] else None}
 
 
-def serve(root, port):
-    integer(port, 1024, 65535, "review port")
+def create_server(root, port):
+    """Create a loopback server; port zero is reserved for OS-assigned tests."""
+    integer(port, 0, 65535, "review port")
     session = secrets.token_urlsafe(32)
     host = "127.0.0.1:" + str(port)
     static = {"/": ("index.html", "text/html; charset=utf-8"),
@@ -123,7 +124,14 @@ def serve(root, port):
                 self.send(409, canonical({"error": str(error)}))
     # A serial server ensures this review surface cannot interleave operations.
     server = http.server.HTTPServer(("127.0.0.1", port), Handler)
-    print("Pactrail lab review: http://" + host + " (approval selects the lab harness only)", flush=True)
+    host = "127.0.0.1:" + str(server.server_port)
+    return server
+
+
+def serve(root, port):
+    integer(port, 1024, 65535, "review port")
+    server = create_server(root, port)
+    print("Pactrail lab review: http://127.0.0.1:" + str(server.server_port) + " (approval selects the lab harness only)", flush=True)
     try: server.serve_forever()
     except KeyboardInterrupt: pass
     finally: server.server_close()

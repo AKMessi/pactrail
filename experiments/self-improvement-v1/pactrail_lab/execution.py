@@ -88,7 +88,8 @@ class Execution:
                 ["python3", "/frozen/worker.py"],
                 [(root / "source", "/source", False), (root / "frozen", "/frozen", False),
                  (root / "binary", "/harness", False), (root / "request.json", "/request.json", False)],
-                timeout=operation["timeout_seconds"] + 30, output_limit=MAX_ARTIFACT)
+                timeout=operation["timeout_seconds"] + 30, output_limit=MAX_ARTIFACT,
+                **self.manifest.get("containment", {}))
             retained = retain(self.store, result, {"source": source, "binary": binary, "operation": operation})
             if result["exit_code"] or result["reason"]:
                 raise Refusal("contained check failed; retained execution " + retained)
@@ -140,7 +141,7 @@ class Execution:
                      (root / "binary", "/harness", False), (root / "parent", "/parent", False),
                      (root / "request.json", "/request.json", False), (socket, "/gateway.sock", False)],
                     timeout=limits["wall_seconds"] + 120, output_limit=MAX_ARTIFACT,
-                    environment={"PACTRAIL_LAB_LEASE": token})
+                    environment={"PACTRAIL_LAB_LEASE": token}, **self.manifest.get("containment", {}))
             finally: gateway.revoke(token)
             retained = retain(self.store, output, {"revision": revision, "task_source": task_source, "lease": lease_name})
             if output["exit_code"] or output["reason"]:
@@ -148,6 +149,9 @@ class Execution:
             unpack(output["stdout"], root / "output")
             verification = decode(read(root / "output/trusted-verification.json"))
             if verification["model_identity"] != identity: raise Refusal("trial model binding mismatch")
+            if not verification.get("candidate"):
+                return {"status": "failed", "record": retained, "checks": verification["checks"], "candidate_source": None,
+                        "verification_error": verification.get("verification_error")}
             candidate = root / "output" / str(relative(verification["candidate"]))
             from .snapshots import import_tree
             source = import_tree(self.store, candidate)
