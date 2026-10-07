@@ -55,7 +55,11 @@ class Store:
             yield
             self.db.execute("COMMIT")
         except BaseException:
-            self.db.execute("ROLLBACK")
+            # SQLITE_FULL/IOERR may already have aborted the transaction. A
+            # second rollback must not replace the actual storage diagnostic.
+            if self.db.in_transaction:
+                try: self.db.execute("ROLLBACK")
+                except sqlite3.Error: pass
             raise
 
     def put(self, data):

@@ -4,6 +4,7 @@ import http.server
 import os
 from pathlib import Path
 import secrets
+import sqlite3
 import socketserver
 import tempfile
 import threading
@@ -132,7 +133,7 @@ class Gateway:
                     token = self.headers.get("Authorization", "").removeprefix("Bearer ")
                     data = gateway.submit(token, decode(self.rfile.read(length)))
                     code = 200
-                except (Refusal, ValueError, OSError):
+                except (Refusal, ValueError, OSError, sqlite3.Error):
                     data, code = canonical({"error": {"message": "model gateway refused request; inspect supervisor journal"}}), 403
                 self.send_response(code)
                 self.send_header("Content-Type", "application/json")

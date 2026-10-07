@@ -3,6 +3,7 @@ import difflib
 import http.server
 from pathlib import Path
 import secrets
+import sqlite3
 from urllib.parse import parse_qs, urlsplit
 
 from .campaign import Campaign, status
@@ -101,7 +102,7 @@ def create_server(root, port):
                         result = store.load(hash_id(parse_qs(path.query, strict_parsing=True)["digest"][0]))
                     else: raise Refusal("unknown review endpoint")
                 self.send(200, canonical(result))
-            except (Refusal, OSError, KeyError, ValueError):
+            except (Refusal, OSError, sqlite3.Error, KeyError, ValueError):
                 self.send(403, canonical({"error": "Review request refused; inspect campaign integrity and session."}))
         def do_POST(self):
             try:
@@ -120,7 +121,7 @@ def create_server(root, port):
                     elif self.path == "/api/undo": result = campaign.undo(body["command_id"], body["head"], body["revision"])
                     else: raise Refusal("unknown mutation")
                 self.send(200, canonical(result))
-            except (Refusal, OSError, KeyError, TypeError, ValueError) as error:
+            except (Refusal, OSError, sqlite3.Error, KeyError, TypeError, ValueError) as error:
                 self.send(409, canonical({"error": str(error)}))
     # A serial server ensures this review surface cannot interleave operations.
     server = http.server.HTTPServer(("127.0.0.1", port), Handler)

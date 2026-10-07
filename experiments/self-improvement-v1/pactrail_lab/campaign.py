@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import random
+import sqlite3
 import time
 import uuid
 
@@ -126,9 +127,12 @@ class Campaign:
                 self.store.set("inflight", None)
                 self.store.append("operation-completed", {"id": command_id, "record": key})
             return result
-        except Exception:
-            with self.store.transaction():
-                self.store.append("operation-interrupted", {"id": command_id, "kind": kind, "no_automatic_replay": True})
+        except Exception as error:
+            try:
+                with self.store.transaction():
+                    self.store.append("operation-interrupted", {"id": command_id, "kind": kind, "no_automatic_replay": True})
+            except sqlite3.Error:
+                error.add_note("Storage could not retain the interruption marker; recover the previously admitted operation before continuing.")
             raise
 
     def qualify(self, command_id, head):

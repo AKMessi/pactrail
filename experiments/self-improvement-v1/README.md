@@ -7,7 +7,9 @@ and explicit human review. **No performance improvement has been measured yet.**
 
 Python 3.11+, Linux, Docker access, a prepared local image and an exact release
 binary are required. No runtime dependencies, images, models or data are fetched
-automatically. The ordinary Pactrail CLI, SDK and durable schemas are unchanged.
+automatically. The ordinary Pactrail CLI, SDK and durable schemas are unchanged. Large request
+histories use individual journal-bound records; earlier lab reservation maps
+remain readable. Campaigns still have a finite physical-request cap.
 
 ## Run the implementation checks
 
@@ -179,6 +181,9 @@ confirmation source identities cannot become development or confirmation tasks.
 After interruption: `recover --campaign CAMPAIGN --expected-head HEAD` cleans
 only named, ownership-bound containers, keeps model reservations, and marks
 incomplete experiments unqualified. A provider error is not silently retried.
+If storage reports a disk/quota/I/O failure, stop, make storage available and
+check the journal before recovery. SQLite auto-abort preserves the original
+error; uncertain model calls are not refunded or replayed.
 Only status/export/recovery should be used until the interrupted operation is
 reconciled. New work needs a new command/proposal; there is no free crash retry.
 

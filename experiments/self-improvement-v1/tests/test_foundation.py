@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from pactrail_lab import budget, snapshots
 from pactrail_lab.safe import Refusal, decode, integer, relative, tree
 from pactrail_lab.store import Store
+from unittest.mock import patch
 
 
 class Foundation(unittest.TestCase):
@@ -50,6 +51,24 @@ class Foundation(unittest.TestCase):
         with self.assertRaises(OSError): self.store.mutate("failed", head, {}, broken)
         self.assertEqual(head, self.store.head())
         self.assertIsNone(self.store.value("active"))
+
+    def test_auto_aborted_sqlite_commit_preserves_storage_error(self):
+        database = self.store.db
+        class StorageFailure:
+            @property
+            def in_transaction(self): return database.in_transaction
+            def execute(self, sql, *args):
+                if sql == "COMMIT":
+                    database.execute("ROLLBACK")
+                    raise sqlite3.OperationalError("injected disk I/O error")
+                return database.execute(sql, *args)
+        before = self.store.head()
+        with patch.object(self.store, "db", StorageFailure()):
+            with self.assertRaisesRegex(sqlite3.OperationalError, "injected disk I/O"):
+                with self.store.transaction(): self.store.set("active", "uncommitted-child")
+        self.assertEqual(self.store.head(), before)
+        self.assertIsNone(self.store.value("active"))
+        self.store.verify()
 
     def test_corruption_unavailable_and_schema(self):
         key = self.store.put(b"evidence")

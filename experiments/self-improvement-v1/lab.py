@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import sqlite3
 import uuid
 
 from pactrail_lab.campaign import Campaign, initialize, status, fork_campaign
@@ -69,6 +70,9 @@ def main():
 
 if __name__ == "__main__":
     try: main()
+    except sqlite3.Error:
+        print("Lab storage is unavailable; no uncertain operation will be replayed. Check disk/quota and journal integrity, then recover before continuing.", file=sys.stderr)
+        sys.exit(2)
     except (Refusal, OSError, KeyError, TypeError, ValueError) as error:
         print("Lab refused operation: " + str(error), file=sys.stderr)
         sys.exit(2)
