@@ -1,6 +1,7 @@
 # Recursive harness improvement: frozen external qualification
 
-Status: experimental implementation; final qualification in progress.
+Status: experimental implementation with local engineering qualification.
+See `recursive-self-improvement-qualification.md` for exact evidence and CI scope.
 No model-quality claim. See the implementation qualification ledger.
 Base: `385a8407853f6c7fd53fc103c083645df168e642` (2.1.2 research infrastructure).
 Branch: `research/recursive-self-improvement-v1`. No main/tag/release changes.
@@ -32,7 +33,8 @@ fixtures, containment and human review supply the acceptance evidence.
 Candidates/build scripts execute only in Linux OCI containers: pinned image,
 non-root UID, read-only root, no host repository or socket, no networking,
 dropped capabilities, no-new-privileges, bounded time/memory/PIDs/output. Writable
-scratch uses a 1 GiB tmpfs (plus 64 MiB temporary space); no writable host bind.
+scratch defaults to a 1 GiB tmpfs (plus 64 MiB temporary space); higher bounded
+limits must be explicitly frozen in the manifest. No writable host bind.
 A bounded uncompressed archive retains output before container cleanup. A
 read-only Unix socket provides access to an endpoint-bound external model
 gateway via a frozen HTTP shim. Trial tokens are ephemeral and limited; actual
