@@ -83,6 +83,48 @@ def metrics(result):
     return normalized
 
 
+def grade_candidate(candidate_path, root, task, *, diagnostic=False):
+    candidate = Path(candidate_path).resolve(strict=True)
+    candidate.relative_to(root)
+    if not candidate.is_dir():
+        raise ValueError("candidate must be a trial-local directory")
+    for path in candidate.rglob("*"):
+        if path.is_symlink():
+            path.resolve(strict=True).relative_to(candidate)
+    clean_env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "TMPDIR") if key in os.environ}
+    results = {}
+    for key in ("targeted", "regression"):
+        grading = root / "grading" / key
+        grading.parent.mkdir(exist_ok=True)
+        shutil.copytree(candidate, grading, ignore=shutil.ignore_patterns(".git", ".pactrail"), symlinks=True)
+        logs = root / key
+        logs.mkdir()
+        graded = command(task[key], grading, logs, task.get("grader_timeout_seconds", 120), clean_env)
+        write(logs / "execution.json", graded)
+        results[("diagnostic_" if diagnostic else "") + key + "_passed"] = graded["exit_code"] == 0 and not graded["timed_out"]
+    return results
+
+
+def strict_completion(functional_success, checks):
+    """Keep functional behavior distinct from Pactrail completion assurance.
+
+    Missing assurance is unknown. This Pactrail-specific result must not become
+    a universal harness score for adapters that cannot report these checks.
+    """
+    if not functional_success:
+        return False
+    if checks is None:
+        return None
+    if not isinstance(checks, dict):
+        raise ValueError("assurance checks must be an object")
+    values = [checks.get(key) for key in ("receipt_valid", "trace_valid", "source_isolation_valid", "ready_to_apply")]
+    if any(value is not None and type(value) is not bool for value in values):
+        raise ValueError("assurance checks must be booleans or unknown")
+    if any(value is False for value in values):
+        return False
+    return True if all(value is True for value in values) else None
+
+
 def validate(protocol):
     if protocol.get("schema_version") != 1 or not protocol.get("model_identity"):
         raise ValueError("schema 1 and pinned model identity required")
@@ -90,6 +132,10 @@ def validate(protocol):
         raise ValueError("explicit shared permissions and resource normalization required")
     if type(protocol.get("seed")) is not int or not 1 <= protocol.get("repetitions", 0) <= 100:
         raise ValueError("seed and bounded repetitions required")
+    if protocol.get("source_policy", "historical") not in ("historical", "sealed"):
+        raise ValueError("unknown source policy")
+    if type(protocol.get("grade_partial_candidates", False)) is not bool:
+        raise ValueError("partial-candidate diagnostics must be explicitly boolean")
     limits = protocol.get("limits", {})
     for key, high in [("model_turns", 200), ("wall_seconds", 3600), ("output_tokens", 131072), ("context_tokens", 1048576), ("model_tokens", 1000000000)]:
         if type(limits.get(key)) is not int or not 1 <= limits[key] <= high:
@@ -121,6 +167,24 @@ def validate(protocol):
                 raise ValueError("external targeted and regression grader argv required")
 
 
+def seal_workspace(workspace, expected_commit, env):
+    """Remove clone metadata before an agent can observe a sealed source.
+
+    A local clone normally adds origin, including an operator-side filesystem
+    path. Sealed tasks expose neither that path nor additional reachable history.
+    """
+    git = ["git", "-c", "core.hooksPath=" + os.devnull, "-C", str(workspace)]
+    def output(*args):
+        return subprocess.check_output(git + list(args), env=env, timeout=30, text=True).strip()
+    if output("rev-parse", "HEAD") != expected_commit or output("rev-list", "--all", "--count") != "1":
+        raise ValueError("sealed workspace must contain only its synthetic baseline commit")
+    for remote in output("remote").splitlines():
+        subprocess.run(git + ["remote", "remove", remote], env=env, check=True, timeout=30,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if output("remote") or output("status", "--porcelain", "--untracked-files=all"):
+        raise ValueError("sealed workspace must be clean with no remote")
+
+
 def run(protocol_path, output):
     if os.name != "posix":
         raise ValueError("this runner requires POSIX process-group cancellation")
@@ -150,7 +214,8 @@ def run(protocol_path, output):
         root.mkdir()
         row = {"task": task["id"], "arm": arm["id"], "repeat": repeat,
                "execution": None, "status": "failed", "metrics": {x: None for x in METRICS},
-               "targeted_passed": None, "regression_passed": None, "task_success": False}
+               "targeted_passed": None, "regression_passed": None, "task_success": False,
+               "strict_completion": False}
         try:
             workspace = root / "workspace"
             # Detached, local clone: no network fetch and no caller working-tree writes.
@@ -165,11 +230,14 @@ def run(protocol_path, output):
             actual = subprocess.check_output(["git", "-C", str(workspace), "rev-parse", "HEAD"], text=True).strip()
             if actual != task["commit"]:
                 raise ValueError("source commit mismatch")
+            if protocol.get("source_policy") == "sealed":
+                seal_workspace(workspace, task["commit"], git_env)
             request = {"schema_version": 1, "task": {key: task[key] for key in ("id", "goal", "commit")}, "arm": arm,
                        "model_identity": protocol["model_identity"], "limits": protocol["limits"],
                        "workspace": str(workspace), "trial_directory": str(root), "repeat": repeat,
                        "permissions": protocol["permissions"], "normalization": protocol["normalization"],
-                       "runtime_identity": protocol.get("runtime_identity")}
+                       "runtime_identity": protocol.get("runtime_identity"),
+                       "source_policy": protocol.get("source_policy", "historical")}
             write(root / "request.json", request)
             execution = command(arm["adapter"] + [str(root / "request.json")], workspace, root,
                                 protocol["limits"]["wall_seconds"] + 30)
@@ -186,37 +254,26 @@ def run(protocol_path, output):
                     row["checks"] = response.get("checks")
                     row["usage_coverage"] = response.get("usage_coverage")
                     row["provenance"] = response.get("provenance")
+                    if protocol.get("grade_partial_candidates") and not execution["timed_out"] and response.get("partial_candidate"):
+                        checks = response.get("checks") or {}
+                        if checks.get("trace_valid") is not True or checks.get("source_isolation_valid") is not True:
+                            raise ValueError("partial-candidate diagnostics require validated trace and source isolation")
+                        try:
+                            row.update(grade_candidate(response["partial_candidate"], root, task, diagnostic=True))
+                        except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:
+                            row["diagnostic_error"] = f"{type(error).__name__}: {error}"
             elif not execution["timed_out"] and execution["exit_code"] == 0:
                 response = bounded_json(root / "result.json")
                 if response.get("schema_version") != 1 or response.get("model_identity") != protocol["model_identity"]:
                     raise ValueError("adapter result identity mismatch")
-                candidate = Path(response["candidate"]).resolve(strict=True)
-                candidate.relative_to(root)
-                if not candidate.is_dir():
-                    raise ValueError("candidate must be a trial-local directory")
                 row["metrics"] = metrics(response)
                 row["usage_coverage"] = response.get("usage_coverage")
                 row["provenance"] = response.get("provenance")
                 row["checks"] = response.get("checks")
-                # Separate grading copy; build artifacts cannot mutate the scored candidate.
-                for path in candidate.rglob("*"):
-                    if path.is_symlink():
-                        path.resolve(strict=True).relative_to(candidate)
-                clean_env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "TMPDIR") if key in os.environ}
-                for key in ("targeted", "regression"):
-                    # A grader may install hidden tests or generate outputs.
-                    # Each phase starts from the unchanged candidate so those
-                    # writes cannot contaminate another phase's policy checks.
-                    grading = root / "grading" / key
-                    grading.parent.mkdir(exist_ok=True)
-                    shutil.copytree(candidate, grading, ignore=shutil.ignore_patterns(".git", ".pactrail"), symlinks=True)
-                    logs = root / key
-                    logs.mkdir()
-                    graded = command(task[key], grading, logs, task.get("grader_timeout_seconds", 120), clean_env)
-                    write(logs / "execution.json", graded)
-                    row[key + "_passed"] = graded["exit_code"] == 0 and not graded["timed_out"]
+                row.update(grade_candidate(response["candidate"], root, task))
                 row["status"] = "scored"
                 row["task_success"] = row["targeted_passed"] and row["regression_passed"]
+                row["strict_completion"] = strict_completion(row["task_success"], row["checks"])
         except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:
             row["status"] = "invalid"
             row["error"] = f"{type(error).__name__}: {error}"

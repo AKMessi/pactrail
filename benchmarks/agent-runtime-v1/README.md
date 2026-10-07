@@ -122,3 +122,15 @@ integer micro-USD per million tokens. The CLI adapter rejects incomplete cards.
 Provide all four explicit zeros only when intentionally estimating a zero-priced
 model; omit the card when pricing is unknown. Grader commands and paths are
 never included in the adapter's task request.
+
+### Analysis outcome and coverage
+
+`analyze.py --control A --treatment B --metric strict_completion RESULTS.json`
+selects strict assurance-qualified success; the default remains functional
+`task_success`. Invalid and unsupported declared pairs count as unsuccessful,
+alongside failed trials. Unknown assurance cannot count as strict success.
+Duplicate trial identities are rejected. Paired-task/trial coverage is explicit;
+an interrupted campaign is not a complete experiment. Cache-hit ratios require
+explicit provider coverage for input and cached tokens on every covered turn.
+An unreported normalized zero is not a measured cache miss. Historical raw
+results remain unchanged; new analysis requires its own retained version/hash.

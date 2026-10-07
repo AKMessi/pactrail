@@ -32,6 +32,40 @@ class RunnerTests(unittest.TestCase):
                 result = subprocess.run([sys.executable, str(grader), str(manifest), "cache", "targeted"], cwd=workspace, capture_output=True)
                 self.assertEqual(result.returncode == 0, value == 1, result.stdout + result.stderr)
 
+    def test_sealed_workspace_removes_origin_and_rejects_additional_history(self):
+        import os
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, workspace = root / "source", root / "workspace"
+            source.mkdir()
+            subprocess.run(["git", "init", str(source)], capture_output=True, check=True)
+            def git(*args):
+                return subprocess.check_output(["git", "-C", str(source), *args], text=True).strip()
+            (source / "value").write_text("baseline")
+            git("add", ".")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "commit", "-m", "baseline")
+            commit = git("rev-parse", "HEAD")
+            subprocess.run(["git", "clone", "--no-hardlinks", str(source), str(workspace)],
+                           capture_output=True, check=True)
+            runner.seal_workspace(workspace, commit, os.environ)
+            self.assertEqual(subprocess.check_output(["git", "-C", str(workspace), "remote"], text=True), "")
+            self.assertEqual(git("rev-parse", "HEAD"), commit)
+            (source / "value").write_text("future fix")
+            git("add", ".")
+            git("-c", "user.name=Fixture", "-c", "user.email=fixture@invalid", "commit", "-m", "future")
+            with self.assertRaisesRegex(ValueError, "synthetic baseline"):
+                runner.seal_workspace(source, git("rev-parse", "HEAD"), os.environ)
+
+    def test_functional_correctness_does_not_imply_strict_completion(self):
+        self.assertIsNone(runner.strict_completion(True, None))
+        self.assertIsNone(runner.strict_completion(True, {"receipt_valid": True}))
+        checks = {key: True for key in ("receipt_valid", "trace_valid", "source_isolation_valid", "ready_to_apply")}
+        self.assertTrue(runner.strict_completion(True, checks))
+        self.assertFalse(runner.strict_completion(False, checks))
+        self.assertFalse(runner.strict_completion(True, {**checks, "ready_to_apply": False}))
+        with self.assertRaises(ValueError):
+            runner.strict_completion(True, {**checks, "receipt_valid": 1})
+
     def test_missing_and_zero_metrics_differ(self):
         measured = runner.metrics({"metrics": {"cost_microusd": 0}})
         self.assertEqual(measured["cost_microusd"], 0)
@@ -69,14 +103,16 @@ assert set(r['task']) == {'id','goal','commit'}
 if r['arm']['id']=='unsupported': sys.exit(78)
 if r['arm']['id']=='malformed': Path(r['trial_directory'],'result.json').write_text('{}'); sys.exit(0)
 p=Path(r['workspace'],'value.txt');p.write_text('after')
+if r['arm']['id']=='partial':
+ Path(r['trial_directory'],'result.json').write_text(json.dumps({'schema_version':1,'model_identity':r['model_identity'],'partial_candidate':r['workspace'],'checks':{'trace_valid':True,'source_isolation_valid':True},'metrics':{'input_tokens':99}})); sys.exit(1)
 Path(r['trial_directory'],'result.json').write_text(json.dumps({'schema_version':1,'model_identity':r['model_identity'],'candidate':r['workspace'],'metrics':{'cost_microusd':0}}))
 ''')
             grader = [sys.executable, "-c", "from pathlib import Path; assert Path('value.txt').read_text() == 'after'; assert not Path('grader-output').exists(); Path('grader-output').write_text('hidden overlay or generated artifact')"]
-            protocol = {"schema_version": 1, "seed": 42, "repetitions": 1, "model_identity": {"model": "fixture-not-inference"},
+            protocol = {"schema_version": 1, "seed": 42, "repetitions": 1, "grade_partial_candidates": True, "model_identity": {"model": "fixture-not-inference"},
                 "permissions": {"process": "disabled", "write_paths": ["."]}, "normalization": "equal declared ceilings",
                 "limits": {"model_turns": 4, "wall_seconds": 5, "output_tokens": 256, "context_tokens": 4096, "model_tokens": 16384},
                 "tasks": [{"id": "fixture", "repository": str(source), "commit": commit, "goal": "Change value.", "targeted": grader, "regression": grader}],
-                "arms": [{"id": name, "mode": "single", "adapter": [sys.executable, str(adapter)]} for name in ["valid", "unsupported", "malformed"]]}
+                "arms": [{"id": name, "mode": "single", "adapter": [sys.executable, str(adapter)]} for name in ["valid", "unsupported", "malformed", "partial"]]}
             path = root / "protocol.json"
             runner.write(path, protocol)
             rows = runner.run(path, root / "results")
@@ -85,6 +121,12 @@ Path(r['trial_directory'],'result.json').write_text(json.dumps({'schema_version'
             self.assertEqual(by_arm["valid"]["metrics"]["cost_microusd"], 0)
             self.assertEqual(by_arm["unsupported"]["status"], "unsupported")
             self.assertEqual(by_arm["malformed"]["status"], "invalid")
+            self.assertEqual(by_arm["partial"]["status"], "failed")
+            self.assertFalse(by_arm["partial"]["task_success"])
+            self.assertFalse(by_arm["partial"]["strict_completion"])
+            self.assertTrue(by_arm["partial"]["diagnostic_targeted_passed"])
+            self.assertTrue(by_arm["partial"]["diagnostic_regression_passed"])
+            self.assertEqual(by_arm["partial"]["metrics"]["input_tokens"], 99)
             self.assertEqual((source / "value.txt").read_text(), "before")
             self.assertTrue((root / "results" / "fixture--valid--0" / "sha256.json").exists())
             for bad in ["../escape", "A", ""]:
@@ -94,6 +136,26 @@ Path(r['trial_directory'],'result.json').write_text(json.dumps({'schema_version'
 
 
 class PairedAnalysisTests(unittest.TestCase):
+    def test_analysis_keeps_invalid_and_unsupported_pairs_and_rejects_duplicates(self):
+        spec = importlib.util.spec_from_file_location("analysis", Path(__file__).with_name("analyze.py"))
+        analysis = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(analysis)
+        rows = [{"task": "one", "repeat": 0, "arm": "base", "status": "scored", "task_success": True, "strict_completion": None},
+                {"task": "one", "repeat": 0, "arm": "new", "status": "invalid", "task_success": False},
+                {"task": "two", "repeat": 0, "arm": "base", "status": "unsupported", "task_success": False},
+                {"task": "two", "repeat": 0, "arm": "new", "status": "scored", "task_success": True, "strict_completion": True}]
+        result = analysis.paired(rows, "base", "new", samples=100)
+        self.assertEqual(result["paired_tasks"], 2)
+        self.assertEqual(result["difference"], 0)
+        self.assertEqual(analysis.paired(rows, "base", "new", samples=100, metric="strict_completion")["difference"], .5)
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            analysis.paired(rows + [rows[0]], "base", "new")
+        metrics = {"input_tokens": 100, "cached_input_tokens": 0}
+        row = {"task": "one", "arm": "base", "task_success": True, "metrics": metrics}
+        self.assertIsNone(analysis.resource_summary([row], "base")["cache_hit_ratio"]["value"])
+        row["usage_coverage"] = {k: {"total_turns": 1, "explicit_reported_turns": 1} for k in metrics}
+        self.assertEqual(analysis.resource_summary([row], "base")["cache_hit_ratio"]["value"], 0)
+
     def test_paired_analysis_uses_tasks_as_clusters_and_exposes_no_coverage(self):
         spec = importlib.util.spec_from_file_location("analysis", Path(__file__).with_name("analyze.py"))
         analysis = importlib.util.module_from_spec(spec)

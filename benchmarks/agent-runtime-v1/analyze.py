@@ -6,11 +6,26 @@ from pathlib import Path
 import random
 
 
-def paired(rows, control, treatment, seed=42, samples=10000):
+def paired(rows, control, treatment, seed=42, samples=10000, metric="task_success"):
+    if control == treatment or metric not in ("task_success", "strict_completion"):
+        raise ValueError("distinct arms and a supported outcome metric required")
+    if type(samples) is not int or not 1 <= samples <= 1000000:
+        raise ValueError("bounded positive bootstrap samples required")
     groups = {}
     for row in rows:
-        if row["arm"] in (control, treatment) and row["status"] in ("scored", "failed"):
-            groups.setdefault((row["task"], row["repeat"]), {})[row["arm"]] = int(row["task_success"])
+        if row["arm"] not in (control, treatment):
+            continue
+        if row["status"] not in ("scored", "failed", "invalid", "unsupported"):
+            raise ValueError("unknown trial status")
+        arms = groups.setdefault((row["task"], row["repeat"]), {})
+        if row["arm"] in arms:
+            raise ValueError("duplicate trial identity")
+        outcome = row.get(metric)
+        if outcome is not None and type(outcome) is not bool:
+            raise ValueError("outcome must be boolean or unknown")
+        # Infrastructure/unsupported outcomes remain unsuccessful declared trials;
+        # unknown strict assurance never turns into a confirmed success.
+        arms[row["arm"]] = int(row["status"] == "scored" and outcome is True)
     tasks = {}
     for (task, _), arms in groups.items():
         if control in arms and treatment in arms:
@@ -40,7 +55,12 @@ def resource_summary(rows, arm):
                 by_task.setdefault(row["task"], []).append(value)
         report[key] = {"coverage": len(values), "total": sum(values) if values else None,
                        "task_mean": sum(sum(v) / len(v) for v in by_task.values()) / len(by_task) if by_task else None}
-    covered = [r for r in selected if r["metrics"].get("input_tokens") is not None and r["metrics"].get("cached_input_tokens") is not None]
+    def reported_complete(row, key):
+        coverage = (row.get("usage_coverage") or {}).get(key) or {}
+        total = coverage.get("total_turns", 0)
+        return type(total) is int and total > 0 and coverage.get("explicit_reported_turns") == total
+    covered = [r for r in selected if all(reported_complete(r, key) and r["metrics"].get(key) is not None
+                                        for key in ("input_tokens", "cached_input_tokens"))]
     inputs = sum(r["metrics"]["input_tokens"] for r in covered)
     report["cache_hit_ratio"] = {"covered_trials": len(covered), "value": sum(r["metrics"]["cached_input_tokens"] for r in covered) / inputs if inputs else None}
     return report
@@ -52,9 +72,11 @@ def main():
     parser.add_argument("--control", required=True)
     parser.add_argument("--treatment", required=True)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--metric", choices=("task_success", "strict_completion"), default="task_success")
     args = parser.parse_args()
     rows = json.loads(args.results.read_text())
-    report = paired(rows, args.control, args.treatment, args.seed)
+    report = paired(rows, args.control, args.treatment, args.seed, metric=args.metric)
+    report["outcome_metric"] = args.metric
     report["coverage"] = {arm: {status: sum(row["arm"] == arm and row["status"] == status for row in rows)
                                for status in ("scored", "failed", "invalid", "unsupported")} for arm in (args.control, args.treatment)}
     report["resources"] = {arm: resource_summary(rows, arm) for arm in (args.control, args.treatment)}

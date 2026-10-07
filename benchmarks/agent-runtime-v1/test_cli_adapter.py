@@ -58,7 +58,7 @@ class CliAdapterTests(unittest.TestCase):
             thread.start()
             try:
                 grader = [sys.executable, "-c", "from pathlib import Path; assert Path('value.txt').read_text() == 'after'"]
-                protocol = {"schema_version": 1, "seed": 42, "repetitions": 1,
+                protocol = {"schema_version": 1, "seed": 42, "repetitions": 1, "source_policy": "sealed",
                     "model_identity": {"provider": "open-ai-compatible", "model": "fixture-only", "base_url": f"http://127.0.0.1:{server.server_port}/v1", "api_key_env": "BENCH_FIXTURE_NO_KEY"},
                     "limits": {"model_turns": 24, "wall_seconds": 20, "output_tokens": 1024, "context_tokens": 32768, "model_tokens": 786432},
                     "permissions": {"process": "disabled", "write_paths": ["."]}, "normalization": "equal declared ceilings",
@@ -69,6 +69,11 @@ class CliAdapterTests(unittest.TestCase):
                 rows = {row["arm"]: row for row in runner.run(path, root / "results")}
                 self.assertTrue(rows["single"]["task_success"], rows["single"])
                 self.assertTrue(rows["text"]["task_success"], rows["text"])
+                for mode in ("single", "text"):
+                    self.assertTrue(rows[mode]["checks"]["source_isolation_valid"])
+                    provenance = rows[mode]["provenance"]
+                    self.assertEqual(provenance["source_tree_before_sha256"], provenance["source_tree_after_sha256"])
+                    self.assertIsNotNone(provenance["source_tree_before_sha256"])
                 self.assertEqual(rows["single"]["metrics"]["model_turns"], 2)
                 self.assertEqual(rows["text"]["metrics"]["model_turns"], 5)
                 self.assertIsNone(rows["text"]["metrics"]["inter_agent_text_tokens"])

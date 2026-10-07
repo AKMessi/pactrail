@@ -1060,7 +1060,13 @@ fn memory_context_fragments(
     let mut fragments = Vec::new();
     // Validate beyond the context cap so stale high-ranking history cannot
     // suppress current lower-ranking guidance.
-    for item in memory.search(&contract.goal, 32)? {
+    // A task brief may exceed the retrieval interface's query budget. Bound
+    // only the advisory lookup; the contract and model keep the full goal.
+    let mut query_end = contract.goal.len().min(pactrail_memory::MAX_QUERY_BYTES);
+    while !contract.goal.is_char_boundary(query_end) {
+        query_end -= 1;
+    }
+    for item in memory.search(&contract.goal[..query_end], 32)? {
         let item = item.validate_against(|path| transaction.current_file_digest(path))?;
         if !item.validation.eligible_for_model() {
             continue;
@@ -3887,6 +3893,23 @@ mod tests {
     use pactrail_core::{ActionRecord, Evidence, EvidenceKind};
 
     use super::*;
+
+    #[test]
+    fn long_unicode_task_does_not_fail_memory_context_lookup() {
+        let source = tempfile::tempdir().unwrap_or_else(|error| unreachable!("source: {error}"));
+        let state = tempfile::tempdir().unwrap_or_else(|error| unreachable!("state: {error}"));
+        let run_root = state.path().join("run");
+        let transaction = WorkspaceTransaction::create(source.path(), &run_root, &[".".to_owned()])
+            .unwrap_or_else(|error| unreachable!("transaction: {error}"));
+        let memory = MemoryStore::open(state.path().join("memory.sqlite3"))
+            .unwrap_or_else(|error| unreachable!("memory: {error}"));
+        let goal = format!("{}界{}", "a".repeat(4095), "x".repeat(5000));
+        let mut contract = TaskContract::new(goal.clone(), source.path().display().to_string());
+        contract.permissions.allow.insert(Capability::MemoryRead);
+        assert!(memory.search(&goal, 32).is_err());
+        assert!(memory_context_fragments(&contract, &memory, &transaction).is_ok());
+        assert_eq!(contract.goal, goal);
+    }
 
     #[test]
     fn rate_card_provenance_requires_valid_paired_metadata() {

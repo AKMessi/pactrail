@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, codex/pactrail-2-architecture, "feat/v2-*", "feat/v2.1-*"]
+    branches: [main, codex/pactrail-2-architecture, "feat/v2-*", "feat/v2.1-*", "research/v2.*"]
   workflow_dispatch:
 
 concurrency:
@@ -60,6 +60,10 @@ jobs:
         env:
           PACTRAIL_BENCH_BINARY: ${{ github.workspace }}/target/release/pactrail
         run: python3 -m unittest discover -s benchmarks/agent-runtime-v1 -p 'test_*.py' -v
+      - name: Harness Lab admission and frozen-input integrity
+        run: python3 -m unittest discover -s benchmarks/harness-lab-v1 -p 'test_*.py' -v
+      - name: Offline retrieval probe invariants
+        run: cargo test -p pactrail-context --all-features --example retrieval_probe --locked
       - name: Exercise checksum-verifying installer before publication
         shell: python {0}
         run: |
