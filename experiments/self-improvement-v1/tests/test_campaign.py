@@ -3,9 +3,10 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pactrail_lab.campaign import Campaign, status
+from pactrail_lab.campaign import Campaign, status, fork_campaign, grade
 from pactrail_lab.evidence import export, audit_export
 from pactrail_lab.execution import supervisor_inputs, write_frozen
 from pactrail_lab.safe import Refusal
@@ -22,7 +23,9 @@ class FixtureExecution:
     def operation(self, source, binary, operation, image=None):
         passed = source == self.good if operation["argv"] == ["targeted"] else True
         return {"passed": passed, "record": self.store.record({"fixture": True}),
-                "binary": self.store.put(b"improved") if operation["argv"] == ["build"] else None}
+                "binary": self.store.put(b"improved") if operation["argv"] == ["build"] else None,
+                "verification": dict(schema_version=1, executed=1, passed=int(passed), failed=int(not passed), errors=0, skipped=0),
+                "execution": dict(exit_code=0 if passed else 1, reason=None)}
 
     def trial(self, revision_key, task_source, goal, limits, lease_name):
         self.calls += 1
@@ -142,6 +145,46 @@ class CampaignTests(unittest.TestCase):
     def test_fixture_executor_refused_in_research_campaign(self):
         with self.store.transaction(): self.store.set("manifest", self.store.record({**self.manifest, "kind": "research"}))
         with self.assertRaises(Refusal): Campaign(self.store, self.execution)
+
+    def test_empty_skipped_setup_failure_and_exit_only_grading_are_refused(self):
+        good = dict(schema_version=1, executed=1, passed=1, failed=0, errors=0, skipped=0)
+        for report, code in ((None, 0), ({**good, "executed": 0, "passed": 0}, 0),
+                             ({**good, "skipped": 1}, 0), ({**good, "errors": 1}, 0),
+                             (good, 2), ({**good, "schema_version": True}, 0)):
+            with self.assertRaises(Refusal):
+                grade(dict(passed=True, verification=report, execution=dict(exit_code=code, reason=None)))
+
+    def test_fresh_campaign_preserves_ancestral_undo_and_retires_descendants(self):
+        candidate = self.candidate()
+        verdict = self.campaign.evaluate("evaluate", self.store.head(), candidate)
+        self.campaign.approve("approve", self.store.head(), verdict["verdict"], True)
+        child_root = self.root / "next-campaign"
+        def initialize_fixture(root, _manifest):
+            with Store(root, create=True) as child, child.transaction():
+                for key, body in self.store.db.execute("SELECT digest,body FROM objects"):
+                    child.put(body)
+                current = self.store.load(candidate)
+                baseline = revision(child, current["source"], child.get(current["binary"]), current["configuration"], current["memory"])
+                child.set("active", baseline)
+                child.set("manifest", child.record(self.manifest))
+                child.set("supervisor-inputs", self.store.value("supervisor-inputs"))
+                child.set("deadline-ns", time.time_ns() + 3600 * 10**9)
+                for name in ("development", "confirmation"):
+                    child.set(name + "-protocol", child.record({"tasks": [{"base_source": "f" * 64}]}))
+        with patch("pactrail_lab.campaign.initialize", initialize_fixture):
+            fork_campaign(self.store.root, child_root, "fixture-manifest")
+        with Store(child_root) as child:
+            grandchild = revision(child, self.good, b"generation-two", {"agent_mode": "text"}, ["descendant memory"], candidate)
+            with child.transaction():
+                lineage = child.value("lineage")
+                lineage[candidate]["state"] = "ancestor"
+                lineage[grandchild] = {"parent": candidate, "state": "active"}
+                child.set("lineage", lineage)
+                child.set("active", grandchild)
+            result = Campaign(child, FixtureExecution(child, self.bad, self.good)).undo("undo-ancestor", child.head(), candidate)
+            self.assertEqual(result["active"], self.parent)
+            self.assertEqual(set(result["retired"]), {candidate, grandchild})
+            self.assertEqual(child.load(result["active"])["memory"], ["original memory"])
 
 
 if __name__ == "__main__": unittest.main()

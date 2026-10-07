@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pactrail · Improvement lab</title><link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to review</a><header><a href="/">pactrail <span>Improvement lab</span></a><button id="refresh">Refresh evidence</button></header>
+<main id="main"><section class="intro"><p class="eyebrow">Research workspace</p><h1>Keep what the evidence supports.</h1><p>Review one change, its predictions and its measured result. Approval changes the lab’s active revision. Your installed Pactrail and source repository are unchanged.</p></section>
+<p id="notice" role="status"></p><p id="error" role="alert" hidden></p><section id="summary" aria-label="Campaign status"></section>
+<div class="layout"><nav aria-label="Revision history"><h2>Revision history</h2><div id="revisions"></div></nav><section id="review" aria-label="Selected change"><h2>Select a revision</h2><p>Every accepted change has an Undo control. Its descendants are retired together.</p></section></div></main>
+<dialog id="confirm"><form method="dialog"><h2 id="confirm-title">Review action</h2><p id="confirm-copy"></p><label id="ack-row"><input id="ack" type="checkbox"> I reviewed this exact change, its risks, gates, and confirmation evidence.</label><div class="actions"><button id="cancel" value="cancel" autofocus>Cancel</button><button id="execute" type="button">Confirm</button></div></form></dialog>
+<p class="sr-only" id="live" aria-live="polite"></p></body></html>

@@ -10,7 +10,7 @@ from .execution import Execution, freeze_inputs, supervisor_inputs, verify_super
 from .gateway import Gateway
 from .judge import decide
 from .process import Oci
-from .safe import Refusal, canonical, decode, digest, hash_id, read, real_path
+from .safe import Refusal, canonical, decode, digest, hash_id, read, real_path, fields, integer
 from .snapshots import diff, import_git, revision
 from .store import Store
 
@@ -68,6 +68,22 @@ def status(store):
             "qualified": store.value("qualified", False), "baseline_results": store.value("baseline-results")}
 
 
+def grade(result):
+    report = result.get("verification")
+    fields(report, {"schema_version", "executed", "passed", "failed", "errors", "skipped"})
+    for name in ("executed", "passed", "failed", "errors", "skipped"):
+        integer(report[name], 0, 100000, "grader " + name)
+    if not report["executed"] or report["executed"] != report["passed"] + report["failed"] or report["errors"] or report["skipped"]:
+        raise Refusal("grader did not execute the complete declared behavior checks")
+    execution = result.get("execution", {})
+    if execution.get("reason") or execution.get("exit_code") not in (0, 1):
+        raise Refusal("grader infrastructure failed")
+    passed = report["failed"] == 0
+    if passed != result["passed"] or execution["exit_code"] != (0 if passed else 1):
+        raise Refusal("grader report contradicts its execution")
+    return passed
+
+
 class Campaign:
     def __init__(self, store, execution=None):
         self.store = store
@@ -123,7 +139,7 @@ class Campaign:
                     tested = []
                     for source, name in ((task["base_source"], "targeted"), (task["gold_source"], "targeted"), (task["gold_source"], "regression")):
                         tested.append(self.execution.operation(source, baseline["binary"], task[name], task["image"]))
-                    if [r["passed"] for r in tested] != [False, True, True]:
+                    if [grade(r) for r in tested] != [False, True, True]:
                         raise Refusal("external grader failed bad/gold validation: " + task["id"])
                     validations[cohort + ":" + task["id"]] = tested
             with self.store.transaction():
@@ -165,6 +181,7 @@ class Campaign:
                 binary = self.store.load(self.store.value("baseline"))["binary"]
                 for name in graded:
                     graded[name] = self.execution.operation(outcome["candidate_source"], binary, task[name], task["image"])
+                    grade(graded[name])
             checks = outcome.get("checks", {})
             functional = all(graded[n] is not None and graded[n]["passed"] is True for n in graded)
             row = {"task": task["id"], "arm": arm, "repeat": repeat, "trial_id": trial_id,
@@ -172,6 +189,15 @@ class Campaign:
                        ("source_isolation_valid", "trace_valid", "receipt_valid", "ready_to_apply")),
                    "task_success": functional, "checks": checks, "grading": graded, "outcome": outcome,
                    "wall_time_ms": round((time.monotonic() - started) * 1000)}
+            reservations = [r for r in self.store.value("reservations", {}).values() if r["lease"] == trial_id]
+            def total(field):
+                values = [(r.get("usage") or {}).get(field) for r in reservations]
+                return sum(values) if values and all(v is not None for v in values) else None
+            row["metrics"] = {"physical_model_requests": len(reservations), "input_tokens": total("input_tokens"),
+                              "output_tokens": total("output_tokens"), "cached_input_tokens": total("cached_input_tokens"),
+                              "reserved_cost_microusd": sum(r["reserved"] for r in reservations),
+                              "actual_cost_microusd": None, "provider_model_time_ms": None,
+                              "token_coverage": sum(r.get("usage") is not None for r in reservations)}
             rows.append(row)
             with self.store.transaction():
                 experiments = self.store.value("experiments")
@@ -197,7 +223,8 @@ class Campaign:
                     if not row["strict_completion"]:
                         weaknesses.append(self.store.record({"schema_version": 1, "task": row["task"],
                             "trial": self.store.record(row), "classification": "unresolved-development-failure",
-                            "observed": {"functional": row["task_success"], "assurance": row["checks"]}}))
+                            "observed": {"functional": row["task_success"], "assurance": row["checks"],
+                                         "trace_observations": row["outcome"].get("observations", [])}}))
                 self.store.set("weaknesses", weaknesses)
             return {"results": key, "weaknesses": weaknesses}
         return self._action(command_id, head, "baseline", {}, work)
@@ -373,6 +400,8 @@ class Campaign:
             self.store.set("inflight", {"id": command_id, "kind": "recover", "interrupted": inflight})
             return {"interrupted": inflight}
         admitted = self.store.mutate(command_id, head, {"operation": "recover"}, admit)
+        completed = self.store.value("operation-results", {}).get(command_id)
+        if completed: return self.store.load(completed)
         Oci(self.store, self.manifest["image"]).recover()
         with self.store.transaction():
             experiments = self.store.value("experiments", {})
@@ -381,4 +410,56 @@ class Campaign:
             self.store.set("experiments", experiments)
             self.store.set("inflight", None)
             self.store.append("campaign-recovered", {**admitted, "requests_replayed": 0})
-        return {**admitted, "requests_replayed": 0}
+            result = {**admitted, "requests_replayed": 0}
+            results = self.store.value("operation-results", {})
+            results[command_id] = self.store.record(result)
+            self.store.set("operation-results", results)
+        return result
+
+
+def fork_campaign(parent_root, new_root, manifest_path):
+    """A fresh confirmation cohort and budget, with accepted ancestry preserved."""
+    with Store(parent_root) as previous:
+        verify_supervisor(previous)
+        if previous.value("inflight"): raise Refusal("recover parent campaign before forking")
+        active_key = previous.value("active")
+        active = previous.load(active_key)
+        lineage = previous.value("lineage")
+        if lineage[active_key]["parent"] is None:
+            raise Refusal("recursive continuation requires an accepted change")
+        initialize(new_root, manifest_path)
+        with Store(new_root) as store, store.transaction():
+            current = store.load(store.value("active"))
+            for field in ("source", "binary", "configuration", "memory"):
+                if current[field] != active[field]:
+                    raise Refusal("new campaign must bind exactly to the exported accepted parent")
+            previous_tasks = set(previous.value("used-confirmation-sources", []))
+            previous_tasks.update(t["base_source"] for t in previous.load(previous.value("confirmation-protocol"))["tasks"])
+            new_tasks = {t["base_source"] for name in ("development", "confirmation")
+                         for t in store.load(store.value(name + "-protocol"))["tasks"]}
+            if new_tasks & previous_tasks:
+                raise Refusal("previous confirmation tasks cannot be reused for development or confirmation")
+            # Evidence is copied by verified content identity, never by a mutable
+            # path dependency. Only records reachable from accepted ancestry are
+            # required for Undo; do not duplicate old trial archives or graders.
+            chain, key = {}, active_key
+            while key:
+                entry = lineage[key]
+                chain[key] = {"parent": entry["parent"], "state": "active" if key == active_key else "ancestor",
+                              "inherited_from": previous.head()}
+                record = previous.load(key)
+                store.put(previous.get(key))
+                store.put(previous.get(record["binary"]))
+                source = previous.load(record["source"])
+                store.put(previous.get(record["source"]))
+                for item in source["entries"]:
+                    if item["kind"] == "file": store.put(previous.get(item["digest"]))
+                if record["proposal"]: store.put(previous.get(record["proposal"]))
+                key = entry["parent"]
+            store.set("lineage", chain)
+            store.set("active", active_key)
+            store.set("baseline", active_key)
+            store.set("used-confirmation-sources", sorted(previous_tasks))
+            store.append("campaign-forked", {"parent_campaign_head": previous.head(), "active": active_key,
+                                           "fresh_confirmation": True, "production_installed": False})
+            return status(store)

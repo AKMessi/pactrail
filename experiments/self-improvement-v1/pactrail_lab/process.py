@@ -108,13 +108,14 @@ class Oci:
                      "--restart=no", "--read-only", "--network=none", "--cap-drop=ALL",
                      "--security-opt=no-new-privileges", "--pids-limit=128", "--memory", str(memory_mb) + "m",
                      "--cpus=2", "--user", f"{os.getuid()}:{os.getgid()}",
-                     "--tmpfs", "/tmp:rw,noexec,nosuid,size=67108864", "--workdir", "/work",
-                     "--tmpfs", "/work:rw,nosuid,size=1073741824",
+                     "--tmpfs", "/tmp:rw,noexec,nosuid,size=67108864,mode=1777", "--workdir", "/work",
+                     "--tmpfs", f"/work:rw,nosuid,size=1073741824,mode=0700,uid={os.getuid()},gid={os.getgid()}",
                      "--env", "HOME=/tmp", "--env", "PYTHONDONTWRITEBYTECODE=1"]
         arguments += arguments_mounts
         for key, value in environment.items():
             arguments += ["--env", key + "=" + value]
-        arguments += [self.image, *argv]
+        if not argv: raise Refusal("container command is required")
+        arguments += ["--entrypoint", argv[0], self.image, *argv[1:]]
         try:
             created = command(arguments)
             with self.store.transaction():

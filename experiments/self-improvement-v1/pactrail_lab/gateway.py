@@ -103,6 +103,10 @@ class Gateway:
                         observed = {"input_tokens": usage["prompt_tokens"], "output_tokens": usage["completion_tokens"]}
                         integer(observed["input_tokens"], 0, self.config["context_tokens"], "reported input")
                         integer(observed["output_tokens"], 0, self.config["output_tokens"], "reported output")
+                        cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens")
+                        if cached is not None:
+                            integer(cached, 0, observed["input_tokens"], "reported cache usage")
+                        observed["cached_input_tokens"] = cached
                     retained = store.put(data.replace(self.key.encode(), b"[redacted]"))
                     budget.settle(store, request_id, retained, observed)
                     return data.replace(self.key.encode(), b"[redacted]")

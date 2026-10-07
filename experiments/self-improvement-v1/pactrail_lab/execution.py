@@ -95,8 +95,10 @@ class Execution:
             unpack(result["stdout"], root / "output")
             execution = decode(read(root / "output/execution.json"))
             built = read(root / "output/pactrail") if (root / "output/pactrail").exists() else None
+            report = decode(read(root / "output/verification.json")) if (root / "output/verification.json").exists() else None
             return {"passed": execution["exit_code"] == 0 and execution["reason"] is None,
-                    "record": retained, "binary": self.store.put(built) if built is not None else None}
+                    "record": retained, "binary": self.store.put(built) if built is not None else None,
+                    "verification": report, "execution": execution}
 
     def trial(self, revision, task_source, goal, limits, lease_name):
         verify_supervisor(self.store)
@@ -149,4 +151,17 @@ class Execution:
             candidate = root / "output" / str(relative(verification["candidate"]))
             from .snapshots import import_tree
             source = import_tree(self.store, candidate)
-            return {"status": "completed", "record": retained, "checks": verification["checks"], "candidate_source": source}
+            observations = []
+            trace_path = root / "output/parent-trace.stdout"
+            if trace_path.exists():
+                trace = decode(read(trace_path, 8_388_608), 8_388_608)
+                rows = trace if isinstance(trace, list) else trace.get("events", [])
+                for row in rows[-24:]:
+                    event = row.get("event", {})
+                    data = event.get("data", {})
+                    observations.append({"sequence": row.get("sequence"), "type": event.get("type"),
+                                         "actor": data.get("actor"), "action": data.get("action"),
+                                         "summary": str(data.get("summary", data.get("message", "")))[:512],
+                                         "succeeded": data.get("succeeded")})
+            return {"status": "completed", "record": retained, "checks": verification["checks"],
+                    "candidate_source": source, "observations": observations}

@@ -17,7 +17,7 @@ def main():
     # host mount cannot be mutated even by a changed policy implementation.
     shutil.copytree("/source", work / "source")
     replacements = {"{source}": "/work/source", "{candidate}": "/work/source",
-                    "{binary}": "/harness", "{output}": "/work/pactrail"}
+                    "{binary}": "/harness", "{output}": "/work/pactrail", "{report}": "/work/verification.json"}
     argv = [replacements.get(arg, arg) for arg in request["argv"]]
     result = command(argv, cwd="/work/source", timeout=request["timeout_seconds"], limit=8_388_608)
     (work / "execution.json").write_bytes(canonical({key: value for key, value in result.items() if key not in ("stdout", "stderr")}))
@@ -31,4 +31,6 @@ def main():
 
 if __name__ == "__main__":
     try: sys.exit(main())
-    except (Refusal, OSError, ValueError): sys.exit(65)
+    except (Refusal, OSError, ValueError) as error:
+        print(type(error).__name__ + ": " + str(error)[:2000], file=sys.stderr)
+        sys.exit(65)

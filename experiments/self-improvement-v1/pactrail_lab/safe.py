@@ -49,7 +49,7 @@ def integer(value, low, high, name):
 def fields(value, required, optional=()):
     if not isinstance(value, dict) or set(value) - set(required) - set(optional) or set(required) - set(value):
         raise Refusal("record has unknown or missing fields")
-    if "schema_version" in required and value["schema_version"] != 1:
+    if "schema_version" in required and (type(value["schema_version"]) is not int or value["schema_version"] != 1):
         raise Refusal("unsupported lab schema")
     if len(canonical(value)) > MAX_JSON:
         raise Refusal("oversized record")
@@ -143,4 +143,3 @@ def tree(root, exclude=()):
             if len(result) > MAX_FILES or size > MAX_TREE:
                 raise Refusal("source exceeds file/byte bounds")
     return sorted(result, key=lambda row: row["path"])
-

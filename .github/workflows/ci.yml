@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, codex/pactrail-2-architecture, "feat/v2-*", "feat/v2.1-*", "research/v2.*"]
+    branches: [main, codex/pactrail-2-architecture, "feat/v2-*", "feat/v2.1-*", "research/v2.*", "research/recursive-*"]
   workflow_dispatch:
 
 concurrency:
@@ -19,6 +19,25 @@ env:
   RUSTDOCFLAGS: "-D warnings"
 
 jobs:
+  self-improvement-lab:
+    name: Frozen improvement lab / Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Test journal, selection, gateway, authority and recursive Undo
+        run: python3 -m unittest discover -s experiments/self-improvement-v1/tests -v
+      - name: Exercise finite hostile input campaign
+        run: python3 experiments/self-improvement-v1/fuzz.py --seed 20261007 --iterations 2500
+      - name: Check review JavaScript
+        run: node --check experiments/self-improvement-v1/web/app.js
+      - name: Explicitly provision development-only containment image
+        run: docker pull python:3.13-slim
+      - name: Qualify real containment using the exact local image identity
+        shell: bash
+        run: |
+          export PACTRAIL_LAB_TEST_IMAGE="$(docker image inspect --format '{{.Id}}' python:3.13-slim)"
+          python3 -m unittest discover -s experiments/self-improvement-v1/tests -p test_oci.py -v
+
   quality:
     name: Quality / ${{ matrix.os }}
     strategy:

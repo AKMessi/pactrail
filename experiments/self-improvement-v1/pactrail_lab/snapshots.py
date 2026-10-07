@@ -1,9 +1,9 @@
 """Source/configuration/memory revisions are immutable, never host-tree rewinds."""
 import os
 from pathlib import Path
-import subprocess
 
 from .safe import MAX_FILES, MAX_TREE, Refusal, canonical, clean_environment, digest, read, relative, tree
+from .process import command as bounded_command
 
 EXCLUDED = (".git", ".pactrail", "benchmark-results", "benchmarks", "experiments")
 
@@ -25,10 +25,15 @@ def import_git(store, root, commit):
     env = clean_environment()
     env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0")
     command = ["git", "-c", "core.hooksPath=" + os.devnull, "-C", str(root)]
-    actual = subprocess.check_output(command + ["rev-parse", "--verify", commit + "^{commit}"], env=env, timeout=30).decode().strip()
+    def invoke(args, limit):
+        output = bounded_command(command + args, env=env, timeout=30, limit=limit)
+        if output["exit_code"] or output["reason"]:
+            raise Refusal("bounded Git snapshot operation failed")
+        return output["stdout"]
+    actual = invoke(["rev-parse", "--verify", commit + "^{commit}"], 128).decode().strip()
     if actual != commit:
         raise Refusal("source commit identity mismatch")
-    listing = subprocess.check_output(command + ["ls-tree", "-rlz", commit], env=env, timeout=30)
+    listing = invoke(["ls-tree", "-rlz", commit], 16 * 1024 * 1024)
     if len(listing) > 16 * 1024 * 1024:
         raise Refusal("Git source manifest exceeds bound")
     entries, size = [], 0
@@ -49,7 +54,7 @@ def import_git(store, root, commit):
         size += n
         if n > 64 * 1024 * 1024 or size > MAX_TREE or len(entries) >= MAX_FILES:
             raise Refusal("Git source exceeds bounds")
-        data = subprocess.check_output(command + ["cat-file", "blob", object_id.decode()], env=env, timeout=30)
+        data = invoke(["cat-file", "blob", object_id.decode()], n + 1)
         if len(data) != n:
             raise Refusal("Git source size mismatch")
         entries.append({"path": name, "kind": "file", "digest": store.put(data), "bytes": n,
@@ -100,4 +105,3 @@ def diff(store, before, after):
     a = {e["path"]: e for e in store.load(before)["entries"]}
     b = {e["path"]: e for e in store.load(after)["entries"]}
     return [{"path": p, "before": a.get(p), "after": b.get(p)} for p in sorted(a.keys() | b.keys()) if a.get(p) != b.get(p)]
-

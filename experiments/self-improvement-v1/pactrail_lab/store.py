@@ -108,6 +108,7 @@ class Store:
         previous = self.head()
         body = canonical({"schema_version": 1, "sequence": seq, "previous": previous,
                           "kind": kind, "payload": payload, "time_ns": time.time_ns()})
+        if len(body) > MAX_JSON: raise Refusal("event exceeds journal read limit")
         key = digest(body)
         self.db.execute("INSERT INTO events VALUES (?, ?, ?, ?)", (seq, previous, body, key))
         return key
@@ -119,7 +120,8 @@ class Store:
         previous, count, projection, commands = "0" * 64, 0, {}, {}
         for seq, before, body, key in self.db.execute("SELECT * FROM events ORDER BY seq"):
             value = decode(body)
-            if seq != count or before != previous or digest(body) != key or value.get("sequence") != seq or value.get("previous") != before:
+            if not isinstance(value, dict) or value.get("schema_version") != 1 or type(value.get("sequence")) is not int or \
+                    seq != count or before != previous or digest(body) != key or canonical(value) != body or value.get("sequence") != seq or value.get("previous") != before:
                 raise Refusal("campaign journal integrity mismatch")
             previous, count = key, count + 1
             if value.get("kind") == "projection-set":

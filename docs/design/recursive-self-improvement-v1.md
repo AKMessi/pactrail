@@ -1,6 +1,7 @@
 # Recursive harness improvement: frozen external qualification
 
-Status: implementation in progress. Experimental; no model-quality claim.
+Status: experimental implementation; final qualification in progress.
+No model-quality claim. See the implementation qualification ledger.
 Base: `385a8407853f6c7fd53fc103c083645df168e642` (2.1.2 research infrastructure).
 Branch: `research/recursive-self-improvement-v1`. No main/tag/release changes.
 
@@ -30,7 +31,9 @@ fixtures, containment and human review supply the acceptance evidence.
 
 Candidates/build scripts execute only in Linux OCI containers: pinned image,
 non-root UID, read-only root, no host repository or socket, no networking,
-dropped capabilities, no-new-privileges, bounded time/memory/PIDs/output. A
+dropped capabilities, no-new-privileges, bounded time/memory/PIDs/output. Writable
+scratch uses a 1 GiB tmpfs (plus 64 MiB temporary space); no writable host bind.
+A bounded uncompressed archive retains output before container cleanup. A
 read-only Unix socket provides access to an endpoint-bound external model
 gateway via a frozen HTTP shim. Trial tokens are ephemeral and limited; actual
 provider keys never enter the container. Host processes are never a fallback.
@@ -43,7 +46,7 @@ Unavailable OCI or loopback support is BLOCKED, not PASS.
 * SQLite transactions commit an append-only hash-linked event chain and
   content-addressed immutable records. A rebuildable projection selects the
   active lab revision. Every mutation has a caller command ID and expected head.
-* Artifacts use SHA-256, exclusive atomic writes, length bounds, no symlinks and
+* Artifacts use SHA-256, transactional SQLite blob insertion, length bounds, no symlinks and
   verified reads. Source exports reject links, special entries, paths escaping
   the root, excess files/bytes and secret/control metadata.
 * Model reservations precede I/O. Ambiguous attempts retain maximum charge;
@@ -55,13 +58,15 @@ Unavailable OCI or loopback support is BLOCKED, not PASS.
 
 ## Loop and causal evaluation
 
-Admission verifies known-bad and gold grader evidence using existing Harness Lab
-gates. Diagnostics contain development evidence only, with bounded drill-down
-artifacts. The core model proposes up to three alternatives; one mechanism is
+Qualification reruns known-bad and gold validation in pinned OCI environments;
+structured executed-test reports are required in addition to process exit.
+The existing frozen Pactrail CLI adapter is reused. Diagnostics contain
+development evidence only, with bounded trace observations and raw drill-down
+artifacts. The core model proposes one mechanism per reserved cycle; it is
 implemented. Its hypothesis names a weakness, predicted metric, risks and exact
 parent. Changes require a fresh candidate and registration once scoring starts.
 
-Development uses paired A/B runs. Confirmation uses A (accepted parent), B
+Development and confirmation use A (accepted parent), B
 (candidate), R (independently restored parent). Verify R's source, configuration
 and memory identities against A before scoring. Equal model/routes, permissions,
 budgets, task sources, graders and repeated randomized order are frozen. Default
@@ -86,8 +91,10 @@ immutable objects. An uncertain external effect cannot be guessed away.
 
 ## APIs, compatibility and UI
 
-Standalone `lab.py`: init, qualify, baseline, cycle, status, review, approve,
-undo, resume, export. JSON is versioned and bounded. Existing ModelDriver,
+Standalone `lab.py`: init, fork, qualify, baseline, cycle, propose, implement,
+evaluate, status, review, approve, undo, recover, export, verify-export.
+Recovery reconciles containers and invalidates interrupted experiments rather
+than replaying ambiguous model requests. JSON is versioned and bounded. Existing ModelDriver,
 TaskContract, RunCheckpoint, SDK and ordinary CLI defaults remain unchanged.
 The local review UI has external static assets, strict CSP, loopback binding,
 origin/session checks, safe text rendering and hash-bound approval/undo. It
