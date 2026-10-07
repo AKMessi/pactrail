@@ -77,6 +77,10 @@ class Oci:
             if not isinstance(target, str) or not target.startswith("/"):
                 raise Refusal("invalid container mount")
             relative(target[1:])
+            if target == "/work" or target.startswith("/work/") or target == "/tmp" or target.startswith("/tmp/"):
+                raise Refusal("writable storage must use bounded container tmpfs")
+            if writable:
+                raise Refusal("candidate host bind mounts must be read-only")
             if target in destinations or any(target.startswith(p + "/") or p.startswith(target + "/") for p in destinations):
                 raise Refusal("overlapping container mounts")
             path = Path(source)
@@ -105,6 +109,7 @@ class Oci:
                      "--security-opt=no-new-privileges", "--pids-limit=128", "--memory", str(memory_mb) + "m",
                      "--cpus=2", "--user", f"{os.getuid()}:{os.getgid()}",
                      "--tmpfs", "/tmp:rw,noexec,nosuid,size=67108864", "--workdir", "/work",
+                     "--tmpfs", "/work:rw,nosuid,size=1073741824",
                      "--env", "HOME=/tmp", "--env", "PYTHONDONTWRITEBYTECODE=1"]
         arguments += arguments_mounts
         for key, value in environment.items():

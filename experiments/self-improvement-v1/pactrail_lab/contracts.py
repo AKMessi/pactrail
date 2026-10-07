@@ -34,7 +34,7 @@ def model(value):
 def manifest(value):
     fields(value, {"schema_version", "id", "model", "limits", "image", "baseline_binary",
                    "baseline_binary_sha256", "source", "source_commit", "configuration", "memory",
-                   "gates", "development_protocol", "confirmation_protocol", "kind"})
+                   "gates", "build", "development_protocol", "confirmation_protocol", "kind"})
     identifier(value["id"])
     if value["kind"] not in ("research", "fixture"):
         raise Refusal("unknown campaign kind")
@@ -50,13 +50,16 @@ def manifest(value):
         raise Refusal("source requires a full pinned Git commit")
     if not isinstance(value["configuration"], dict) or not isinstance(value["memory"], list):
         raise Refusal("configuration and advisory memory must be explicit snapshots")
+    fields(value["configuration"], {"agent_mode"})
+    if value["configuration"]["agent_mode"] not in ("single", "text"):
+        raise Refusal("v1 supports only explicit single/text candidate strategies")
     if len(value["memory"]) > 100:
         raise Refusal("too many memory entries")
     for entry in value["memory"]:
         text(entry, "memory", 4096)
     if not isinstance(value["gates"], dict) or set(value["gates"]) != GATES:
         raise Refusal("all five frozen gate families are required")
-    for gate in value["gates"].values():
+    for gate in [value["build"], *value["gates"].values()]:
         fields(gate, {"argv", "inputs", "timeout_seconds"})
         if not isinstance(gate["argv"], list) or not gate["argv"] or len(gate["argv"]) > 32:
             raise Refusal("gate command must be a bounded argv")
@@ -68,6 +71,47 @@ def manifest(value):
             text(key, "gate input", 4096)
             hash_id(expected)
         integer(gate["timeout_seconds"], 1, 3600, "gate timeout")
+    return value
+
+
+def protocol(value, repetitions):
+    fields(value, {"schema_version", "id", "seed", "repetitions", "limits", "tasks"})
+    identifier(value["id"])
+    integer(value["seed"], 0, 2**32 - 1, "protocol seed")
+    if value["repetitions"] != repetitions:
+        raise Refusal("protocol repetitions differ from campaign")
+    fields(value["limits"], {"model_turns", "wall_seconds", "output_tokens", "context_tokens", "model_tokens"})
+    for name, high in {"model_turns": 200, "wall_seconds": 3600, "output_tokens": 131072,
+                       "context_tokens": 1048576, "model_tokens": 1000000000}.items():
+        integer(value["limits"][name], 1, high, name)
+    tasks = value["tasks"]
+    if not isinstance(tasks, list) or not 1 <= len(tasks) <= 50:
+        raise Refusal("protocol requires 1–50 tasks")
+    if len({t.get("id") for t in tasks}) != len(tasks):
+        raise Refusal("duplicate task identity")
+    for task in tasks:
+        fields(task, {"id", "repository", "commit", "gold_commit", "goal", "targeted", "regression", "image"})
+        identifier(task["id"])
+        text(task["goal"], "goal")
+        for name in ("commit", "gold_commit"):
+            if not re.fullmatch(r"[0-9a-f]{40}", task[name]):
+                raise Refusal("task requires full base/gold commit")
+        if task["commit"] == task["gold_commit"]:
+            raise Refusal("gold cannot equal known bad state")
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", task["image"]):
+            raise Refusal("grader image must be locally pinned")
+        for name in ("targeted", "regression"):
+            gate = task[name]
+            fields(gate, {"argv", "inputs", "timeout_seconds"})
+            if not isinstance(gate["argv"], list) or not 1 <= len(gate["argv"]) <= 32:
+                raise Refusal("invalid grader argv")
+            for arg in gate["argv"]: text(arg, "grader argument", 4096)
+            if not isinstance(gate["inputs"], dict) or not gate["inputs"]:
+                raise Refusal("external grader inputs are required")
+            for path, expected in gate["inputs"].items():
+                text(path, "grader input", 4096)
+                hash_id(expected)
+            integer(gate["timeout_seconds"], 1, 3600, "grader timeout")
     return value
 
 
@@ -87,4 +131,3 @@ def proposal(value):
     if type(value["predicted_gain"]) not in (float, int) or not 0.05 <= value["predicted_gain"] <= 1:
         raise Refusal("predicted gain must be finite and at least five percentage points")
     return value
-

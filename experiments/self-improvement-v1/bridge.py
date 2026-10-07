@@ -4,9 +4,12 @@ import json
 import os
 from pathlib import Path
 import socket
-import subprocess
 import sys
 import threading
+from pactrail_lab.process import command
+from pactrail_lab.archive import pack
+from pactrail_lab.safe import canonical, decode, read, Refusal
+from verifier import verify
 
 
 class Forward(http.server.BaseHTTPRequestHandler):
@@ -34,7 +37,8 @@ class Forward(http.server.BaseHTTPRequestHandler):
 
 
 def main():
-    request = json.loads(Path("/work/request.json").read_text())
+    request = decode(read("/request.json"))
+    original_identity = dict(request["model_identity"])
     server = http.server.HTTPServer(("127.0.0.1", 0), Forward)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     request["model_identity"]["base_url"] = f"http://127.0.0.1:{server.server_port}/v1"
@@ -46,10 +50,23 @@ def main():
     environment = {"PATH": os.environ["PATH"], "HOME": "/tmp", "PACTRAIL_BENCH_BINARY": "/harness",
                    "PACTRAIL_LAB_LEASE": os.environ["PACTRAIL_LAB_LEASE"], "PYTHONDONTWRITEBYTECODE": "1"}
     try:
-        return subprocess.call(["python3", "/frozen/agent-runtime-v1/pactrail_cli.py", "/work/request.json"], env=environment)
+        result = command(["python3", "/frozen/agent-runtime-v1/pactrail_cli.py", "/work/request.json"],
+                         env=environment, timeout=request["limits"]["wall_seconds"], limit=1_048_576)
+        Path("/work/adapter.stdout").write_bytes(result["stdout"])
+        Path("/work/adapter.stderr").write_bytes(result["stderr"])
+        Path("/work/execution.json").write_bytes(canonical({k: v for k, v in result.items() if k not in ("stdout", "stderr")}))
+        verification = verify("/work")
+        if result["exit_code"] or result["reason"]:
+            verification["checks"]["ready_to_apply"] = False
+        verification["model_identity"] = original_identity
+        Path("/work/trusted-verification.json").write_bytes(canonical(verification))
+        sys.stdout.buffer.write(pack("/work"))
+        return 0
     finally:
         server.shutdown()
         server.server_close()
 
 
-if __name__ == "__main__": sys.exit(main())
+if __name__ == "__main__":
+    try: sys.exit(main())
+    except (Refusal, OSError, ValueError): sys.exit(65)
