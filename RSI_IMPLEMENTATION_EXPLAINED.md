@@ -101,7 +101,7 @@ for the later DeepSeek/GLM benchmark, after implementation qualification.
 * `experiments/self-improvement-v1/README.md` — configuration, commands and verifier contracts.
 * `docs/design/recursive-self-improvement-qualification.md` — exact checks and remaining limitations.
 
-The implementation checks include 33 lab tests, the real Pactrail binary inside
+The implementation checks include 34 lab tests, the real Pactrail binary inside
 a pinned container, 460 Rust tests, and the existing terminal and installer
 checks. Scripted model fixtures make these software tests; they are not paid
 model-quality benchmarks. Browser visual review has not been qualified.

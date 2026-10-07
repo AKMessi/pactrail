@@ -1,6 +1,9 @@
 import sys
 import tempfile
 import unittest
+import http.server
+import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -18,6 +21,49 @@ BODY = dict(model="frozen/model", messages=[dict(role="user", content="Fix the p
 
 
 class GatewayTests(unittest.TestCase):
+    def test_real_transport_total_deadline_keeps_uncertain_charge(self):
+        # Local HTTP is a transport fixture only; research admission requires HTTPS.
+        class Handler(http.server.BaseHTTPRequestHandler):
+            stall = False
+            def log_message(self, *_): pass
+            def do_POST(self):
+                self.rfile.read(int(self.headers["Content-Length"]))
+                if self.stall: time.sleep(3)
+                data = canonical(dict(model=MODEL["id"], choices=[dict(message=dict(content="fixture"))]))
+                try:
+                    self.send_response(200)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                except (BrokenPipeError, ConnectionResetError): pass
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "campaign"
+                Store(root, create=True).close()
+                model = {**MODEL, "endpoint": f"http://127.0.0.1:{server.server_port}/v1/chat/completions"}
+                gateway = Gateway(root, model, LIMITS, "offline-transport-fixture-key")
+                token = gateway.lease("transport", 2, 30)
+                self.assertIn(b"fixture", gateway.submit(token, BODY))
+                Handler.stall = True
+                with Store(root) as store, store.transaction():
+                    store.set("deadline-ns", time.time_ns() + 600_000_000)
+                started = time.monotonic()
+                with self.assertRaises(Refusal): gateway.submit(token, BODY)
+                self.assertLess(time.monotonic() - started, 3)
+                with Store(root) as store:
+                    rows = list(budget.reservations(store).values())
+                    self.assertEqual(len(rows), 2)
+                    self.assertEqual(sum(r["reserved"] for r in rows), 9216)
+                    self.assertEqual(sorted(r["state"] for r in rows), ["reserved", "settled"])
+                    store.verify()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
     def test_physical_calls_are_charged_before_io_and_unknown_usage_stays_unknown(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "campaign"

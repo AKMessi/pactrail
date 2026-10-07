@@ -1,6 +1,7 @@
 """Text-only provider gateway outside candidate authority and credentials."""
 import contextlib
 import http.server
+import multiprocessing
 import os
 from pathlib import Path
 import secrets
@@ -16,6 +17,27 @@ import uuid
 from . import budget
 from .safe import MAX_JSON, Refusal, canonical, decode, integer, text
 from .store import Store
+
+
+def _provider_bytes(endpoint, key, encoded, sender):
+    """Trusted host worker; a stalled DNS/TLS/body read can be terminated.
+
+    Only bounded bytes cross back. Exceptions never serialize credentials,
+    headers or upstream URLs into the campaign or child process diagnostics.
+    """
+    try:
+        request = urllib.request.Request(endpoint, data=encoded, method="POST",
+            headers={"Content-Type": "application/json", "Authorization": "Bearer " + key})
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *_):
+                raise Refusal("provider redirect refused")
+        with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect).open(request, timeout=120) as response:
+            data = response.read(8_388_609)
+        sender.send_bytes(b"S" + data if len(data) <= 8_388_608 else b"E")
+    except Exception:
+        sender.send_bytes(b"E")
+    finally:
+        sender.close()
 
 
 def validate_request(body, config):
@@ -72,16 +94,31 @@ class Gateway:
         self.leases.pop(token, None)
 
     def _provider(self, body):
-        request = urllib.request.Request(self.config["endpoint"], data=canonical(body), method="POST",
-                                         headers={"Content-Type": "application/json", "Authorization": "Bearer " + self.key})
-        class NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *_):
-                raise Refusal("provider redirect refused; credentials are endpoint-bound")
-        with urllib.request.build_opener(NoRedirect).open(request, timeout=120) as response:
-            data = response.read(8_388_609)
-        if len(data) > 8_388_608:
-            raise Refusal("provider response exceeds limit")
-        return data
+        deadline = min(time.time_ns() + 120 * 10**9, self.network_deadline_ns)
+        remaining = (deadline - time.time_ns()) / 10**9
+        if remaining <= 0: raise Refusal("provider deadline exhausted")
+        context = multiprocessing.get_context("spawn")
+        receiver, sender = context.Pipe(duplex=False)
+        child = context.Process(target=_provider_bytes,
+            args=(self.config["endpoint"], self.key, canonical(body), sender), daemon=True)
+        try:
+            child.start()
+            sender.close()
+            remaining = max(0, (deadline - time.time_ns()) / 10**9)
+            if not receiver.poll(remaining): raise Refusal("provider total deadline reached")
+            frame = receiver.recv_bytes(8_388_609)
+            if not frame.startswith(b"S"): raise Refusal("provider transport failed")
+            return frame[1:]
+        finally:
+            sender.close()
+            receiver.close()
+            if child.pid is not None:
+                if child.is_alive(): child.terminate()
+                child.join(timeout=1)
+                if child.is_alive():
+                    child.kill()
+                    child.join(timeout=1)
+                child.close()
 
     def submit(self, token, body):
         with self.lock:
@@ -96,6 +133,7 @@ class Gateway:
                 request_key = store.put(canonical(body).replace(self.key.encode(), b"[redacted]"))
                 with store.transaction(): store.append("model-request", {"id": request_id, "artifact": request_key})
                 try:
+                    self.network_deadline_ns = min(lease["deadline_ns"], store.value("deadline-ns", lease["deadline_ns"]))
                     data = self.transport(body)
                     result = decode(data, 8_388_608)
                     if not isinstance(result, dict) or result.get("model") != self.config["id"] or not isinstance(result.get("choices"), list) or not result["choices"]:

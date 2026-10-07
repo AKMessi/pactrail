@@ -29,7 +29,7 @@ failure handling and retained artifacts. Every milestone was pushed separately.
 | Explicit original OCI test | PASS | Previously ignored hostile-effects test executed separately: one passed |
 | Rust documentation | PASS | workspace/all features/no deps; warnings denied |
 | Release build | PASS | workspace/all features/locked/offline |
-| Lab tests with actual engine and OCI | PASS | 33 passed, zero failures/skips |
+| Lab tests with actual engine and OCI | PASS | 34 passed, zero failures/skips |
 | Existing agent-runner tests | PASS | 10 passed, including the real CLI adapter |
 | Existing Harness Lab tests | PASS | 31 passed |
 | Terminal workflows | PASS | 42 checks using the release binary and loopback fixture |
@@ -93,6 +93,11 @@ candidate. It does not establish useful autonomous self-improvement.
     global state. Out-of-order responses cannot overwrite the selected card.
     Executed Node tests cover these control semantics; they are not browser QA.
 
+11. **Provider total deadline:** network I/O runs in a bounded trusted host
+    worker with no implicit proxy routing. Stalled DNS/TLS/body reads can be
+    terminated; endpoint credentials never enter the candidate. A real loopback
+    transport test covers success and timeout with the uncertain charge retained.
+
 Failed local build logs are retained. No scored trial was run or removed.
 
 ## Security and recovery coverage
@@ -141,7 +146,8 @@ not an autonomous editor for the user's production memory database.
 ## Evidence retention and CI
 
 Local evidence:
-`benchmark-results/self-improvement-qualification/20261008/` (ignored).
+`benchmark-results/self-improvement-qualification/20261008-final/` (ignored).
+Earlier attempts are retained in the neighboring `20261008/` directory.
 
 It contains stdout/stderr logs, terminal captures, source-input hashes,
 environment metadata, a real-engine content-addressed export, raw request and

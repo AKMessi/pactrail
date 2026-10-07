@@ -52,6 +52,9 @@ unknown fields fail. Do not put credentials in JSON, source, argv or artifacts.
 Rates are an explicitly declared conservative bound. Cache discounts are not
 assumed. Reservations cover the full context/output ceiling for each physical
 request and remain charged after failure/crash. Actual invoice cost is unknown.
+Provider network I/O runs in a trusted bounded host worker, so a stalled
+DNS/TLS/body read cannot evade the total request deadline. Endpoint credentials
+remain outside the candidate; redirects and implicit proxy routing are refused.
 The byte-based input ceiling is deliberately pessimistic for textual providers;
 multimodal requests are unsupported. Provider/model drift fails, never falls back.
 
