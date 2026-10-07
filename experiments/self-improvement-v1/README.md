@@ -17,6 +17,7 @@ remain readable. Campaigns still have a finite physical-request cap.
 python3 -m unittest discover -s experiments/self-improvement-v1/tests -v
 python3 experiments/self-improvement-v1/fuzz.py --seed 20261007 --iterations 2500
 node --check experiments/self-improvement-v1/web/app.js
+node experiments/self-improvement-v1/web/tests/review.test.cjs
 docker build --tag pactrail-lab-qualification:local experiments/self-improvement-v1/tests/oci-fixture
 export PACTRAIL_LAB_TEST_IMAGE="$(docker image inspect --format '{{.Id}}' pactrail-lab-qualification:local)"
 export PACTRAIL_BENCH_BINARY=/absolute/path/to/current/release/pactrail

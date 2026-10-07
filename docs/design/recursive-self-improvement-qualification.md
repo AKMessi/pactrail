@@ -38,6 +38,7 @@ failure handling and retained artifacts. Every milestone was pushed separately.
 | Review JavaScript / installer syntax | PASS | Node syntax check / `sh -n` |
 | Finite hostile-input smoke | PASS | Seed 20261007, 2,500 random inputs; 5,000 JSON/archive refusals, no crash |
 | Actual review HTTP controls | PASS | Cookie/session, Host/Origin, stale head, approval retry, complete Undo |
+| Frontend state-binding races | PASS | Executed Node control tests; displayed approval binding and out-of-order selection |
 | Browser visual/accessibility review | NOT QUALIFIED | No browser surface available in this session; no screenshots claimed |
 | Paid-model improvement experiment | NOT QUALIFIED | Deferred by the user until implementation is complete |
 | Independent security certification | NOT QUALIFIED | Tests and containment are not a formal security proof |
@@ -87,6 +88,10 @@ candidate. It does not establish useful autonomous self-improvement.
    rather than accidentally excluded as though it were the root inventory.
 9. **Admission hardening:** identical source snapshots across cohorts, incomplete
    implementation checks and unsupported nested provider modalities fail closed.
+
+10. **Review race:** dialogs bind the displayed revision/verdict/head, not later
+    global state. Out-of-order responses cannot overwrite the selected card.
+    Executed Node tests cover these control semantics; they are not browser QA.
 
 Failed local build logs are retained. No scored trial was run or removed.
 

@@ -29,7 +29,9 @@ jobs:
       - name: Exercise finite hostile input campaign
         run: python3 experiments/self-improvement-v1/fuzz.py --seed 20261007 --iterations 2500
       - name: Check review JavaScript
-        run: node --check experiments/self-improvement-v1/web/app.js
+        run: |
+          node --check experiments/self-improvement-v1/web/app.js
+          node experiments/self-improvement-v1/web/tests/review.test.cjs
       - name: Explicitly provision development-only containment image
         run: docker build --tag pactrail-lab-qualification:local experiments/self-improvement-v1/tests/oci-fixture
       - name: Qualify real containment using the exact local image identity
