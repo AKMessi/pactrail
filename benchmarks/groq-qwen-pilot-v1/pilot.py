@@ -198,8 +198,9 @@ def run(args):
                      lab / "image-lock-expanded-v1.json"):
             inputs[str(path)] = digest(read(path))
         code_inputs = supervisor_inputs()
-        for name, expected in inputs.items():
-            if store.put(read(name)) != expected: raise Refusal("input changed")
+        with store.transaction():
+            for name, expected in inputs.items():
+                if store.put(read(name)) != expected: raise Refusal("input changed")
         image = command(["docker", "image", "inspect", "--format", "{{.Id}}", "pactrail-lab-qualification:local"])
         image_id = image["stdout"].decode().strip()
         if image["exit_code"] or not image_id.startswith("sha256:"):
@@ -211,13 +212,15 @@ def run(args):
                 "limits": dict(requests=24, cost_microusd=1, wall_seconds=3600)}))
             store.set("deadline-ns", time.time_ns() + 3600 * 10**9)
         sha = command(["git", "-C", str(REPO), "rev-parse", "HEAD"])["stdout"].decode().strip()
-        harness = import_git(store, REPO, sha)
         binary = read(args.binary.resolve(strict=True))
-        parent = revision(store, harness, binary, {"agent_mode": "single"}, [])
+        with store.transaction():
+            harness = import_git(store, REPO, sha)
+            parent = revision(store, harness, binary, {"agent_mode": "single"}, [])
         tasks = []
         for task in TASKS:
             prep = json.loads(read(lab / "prepared-expanded-v1" / task / "preparation.json"))
-            source = import_tree(store, prep["baseline"])
+            with store.transaction():
+                source = import_tree(store, prep["baseline"])
             goal = prep["goal"] + "\nFix the reported behavior with a focused production-code change. Do not edit tests or manifests. Commands are disabled: do not claim tests ran. External hidden tests will grade your isolated candidate."
             tasks.append({"id": task, "source": source, "goal": goal,
                           "source_tree_sha256": prep["source_tree_sha256"], "synthetic_commit": prep["synthetic_commit"]})
