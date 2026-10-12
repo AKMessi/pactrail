@@ -39,7 +39,7 @@ python3 benchmarks/groq-qwen-pilot-v1/pilot.py \
 The protocol is written and hashed before the first scored request. It freezes
 the binary/code/image, public source snapshots, input hashes, goal, seed/order,
 permissions and limits. Each trial permits six physical model attempts and
-900 seconds, with an 8,192-token engine context target and 2,048 output-token
+900 seconds, with a 16,384-token engine context target and 2,048 output-token
 ceiling. Gateway byte-based admission uses a separate, pessimistic 65,536-token
 reservation ceiling; these are not claims of actual token usage.
 
@@ -62,3 +62,9 @@ candidate snapshots, grader logs and usage are retained in ignored results.
 Missing cache/invoice metrics remain unavailable. Summaries should report task
 counts and failure causes; four runs cannot establish broad performance or
 causal self-improvement. Do not rewrite an experiment after observing results.
+
+The pilot explicitly maps Pactrail's `reasoning: {effort: low}` request to
+Groq's `reasoning_effort: low`, preserving both request artifacts. The gateway
+validates either representation against the frozen effort and refuses mixed
+or additional reasoning settings. This is declared provider-format adaptation,
+not a model or reasoning-policy fallback.

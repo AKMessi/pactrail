@@ -21,6 +21,17 @@ BODY = dict(model="frozen/model", messages=[dict(role="user", content="Fix the p
 
 
 class GatewayTests(unittest.TestCase):
+    def test_reasoning_representations_match_frozen_effort_without_expansion(self):
+        model = {**MODEL, "reasoning_effort": "low"}
+        for extra in ({"reasoning_effort": "low"}, {"reasoning": {"effort": "low"}}):
+            self.assertEqual(validate_request({**BODY, **extra}, model), {**BODY, **extra})
+        for extra in ({"reasoning": {"effort": "high"}},
+                      {"reasoning": {"effort": "low", "max_tokens": 9999}},
+                      {"reasoning": {"effort": None}},
+                      {"reasoning": "low"},
+                      {"reasoning": {"effort": "low"}, "reasoning_effort": "low"}):
+            with self.assertRaises(Refusal): validate_request({**BODY, **extra}, model)
+
     def test_real_transport_total_deadline_keeps_uncertain_charge(self):
         # Local HTTP is a transport fixture only; research admission requires HTTPS.
         class Handler(http.server.BaseHTTPRequestHandler):

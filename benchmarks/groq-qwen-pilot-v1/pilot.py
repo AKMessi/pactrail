@@ -79,6 +79,11 @@ def provider_worker(key, body, sender):
 
 class FreeGateway(Gateway):
     def _provider(self, body):
+        # Pactrail's compatible adapter emits OpenRouter's reasoning object.
+        # Groq requires the equivalent top-level field; freeze and retain both.
+        wire = dict(body)
+        if "reasoning" in wire:
+            wire["reasoning_effort"] = wire.pop("reasoning")["effort"]
         with Store(self.root) as store:
             if store.value("free-provider-blocked", False):
                 raise Refusal("provider previously failed; no automatic retry/substitution")
@@ -100,10 +105,11 @@ class FreeGateway(Gateway):
             time.sleep(min(1, (wait_until - time.time_ns()) / 10**9))
         context = multiprocessing.get_context("spawn")
         receiver, sender = context.Pipe(duplex=False)
-        child = context.Process(target=provider_worker, args=(self.key, canonical(body), sender), daemon=True)
+        child = context.Process(target=provider_worker, args=(self.key, canonical(wire), sender), daemon=True)
         try:
             with Store(self.root) as store, store.transaction():
                 store.set("next-provider-ns", time.time_ns() + 65 * 10**9)
+                store.append("free-provider-wire-request", {"artifact": store.put(canonical(wire).replace(self.key.encode(), b"[REDACTED]"))})
             child.start()
             sender.close()
             if not receiver.poll(max(0, (deadline - time.time_ns()) / 10**9)):
@@ -187,7 +193,7 @@ def run(args):
         raise Refusal("exact model is inactive; no fallback")
     model = dict(id=MODEL, endpoint=ENDPOINT, api_key_env="GROQ_API_KEY", context_tokens=65536,
                  output_tokens=2048, input_rate=0, output_rate=0, temperature=0, reasoning_effort="low")
-    limits = dict(model_turns=6, wall_seconds=900, context_tokens=8192,
+    limits = dict(model_turns=6, wall_seconds=900, context_tokens=16384,
                   output_tokens=2048, model_tokens=80000)
     with Store(output / "campaign", create=True) as store:
         inputs = supervisor_inputs()
@@ -240,7 +246,7 @@ def run(args):
             "analysis": "Per-task pass counts, physical usage and observable failure categories; no superiority/significance claim.",
             "limitations": ["No candidate harness improvement or causal RSI comparison", "Small quota-bound sample",
                 "Free status is operator-attested, not cryptographically verified", "Cache/invoice metrics absent unless reported",
-                "Strict failure may leave an ungraded partial candidate", "Gateway byte reservation is 65536; engine context target is 8192"]}
+                "Strict failure may leave an ungraded partial candidate", "Gateway byte reservation is 65536; engine context target is 16384"]}
         (output / "protocol.json").write_bytes(canonical(protocol))
         (output / "protocol.sha256").write_text(digest(canonical(protocol)) + "\n")
         os.environ["GROQ_API_KEY"] = key
@@ -272,11 +278,15 @@ def run(args):
                                 len(outcome["checks"]) >= 4 and all(v is True for v in outcome["checks"].values()))
                         else:
                             unpack(store.get(retained["stdout"]), trial / "raw")
-                        if store.value("free-provider-blocked", False): stopped = True
+                        if store.value("free-provider-blocked", False) or (
+                                not any(r["lease"] == trial.name for r in budget.reservations(store).values())
+                                and not row["strict_success"]): stopped = True
                     except (Refusal, OSError, ValueError) as error:
                         row.update(status="infrastructure-failed", error=str(error).replace(key, "[REDACTED]")[:2000])
                         stopped = True
                 row["wall_seconds"] = time.monotonic() - started
+                if row["status"] == "completed" and not all(row.get("checks", {}).values()):
+                    row["status"] = "harness-incomplete"
                 rows.append(row)
                 (output / "results.json").write_bytes(canonical(rows))
                 print(task_id, repeat + 1, row["status"], "strict_success", row["strict_success"], flush=True)
