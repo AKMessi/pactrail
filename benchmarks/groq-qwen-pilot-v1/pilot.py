@@ -121,12 +121,15 @@ class FreeGateway(Gateway):
                 if (metadata["status"] != 200 or headers.get("x-ratelimit-limit-requests") != "1000"
                         or headers.get("x-ratelimit-limit-tokens") != "8000"):
                     store.set("free-provider-blocked", True)
+            if not receiver.poll(max(0, (deadline - time.time_ns()) / 10**9)):
+                raise Refusal("provider body deadline reached")
+            data = receiver.recv_bytes(MAX_BODY)
+            with Store(self.root) as store, store.transaction():
+                store.append("free-provider-raw-response", {"status": metadata["status"], "artifact": store.put(data)})
             if (metadata["status"] != 200 or headers.get("x-ratelimit-limit-requests") != "1000"
                     or headers.get("x-ratelimit-limit-tokens") != "8000"):
                 raise Refusal("provider failed or expected free-tier limits changed")
-            if not receiver.poll(max(0, (deadline - time.time_ns()) / 10**9)):
-                raise Refusal("provider body deadline reached")
-            return receiver.recv_bytes(MAX_BODY)
+            return data
         except Exception:
             with Store(self.root) as store, store.transaction():
                 store.set("free-provider-blocked", True)
@@ -192,9 +195,9 @@ def run(args):
     if metadata.get("active") is not True:
         raise Refusal("exact model is inactive; no fallback")
     model = dict(id=MODEL, endpoint=ENDPOINT, api_key_env="GROQ_API_KEY", context_tokens=65536,
-                 output_tokens=2048, input_rate=0, output_rate=0, temperature=0, reasoning_effort="low")
-    limits = dict(model_turns=6, wall_seconds=900, context_tokens=16384,
-                  output_tokens=2048, model_tokens=80000)
+                 output_tokens=1024, input_rate=0, output_rate=0, temperature=0, reasoning_effort="low")
+    limits = dict(model_turns=6, wall_seconds=900, context_tokens=10240,
+                  output_tokens=1024, model_tokens=80000)
     with Store(output / "campaign", create=True) as store:
         inputs = supervisor_inputs()
         inputs[str(Path(__file__).resolve())] = digest(read(__file__))
@@ -246,7 +249,7 @@ def run(args):
             "analysis": "Per-task pass counts, physical usage and observable failure categories; no superiority/significance claim.",
             "limitations": ["No candidate harness improvement or causal RSI comparison", "Small quota-bound sample",
                 "Free status is operator-attested, not cryptographically verified", "Cache/invoice metrics absent unless reported",
-                "Strict failure may leave an ungraded partial candidate", "Gateway byte reservation is 65536; engine context target is 16384"]}
+                "Strict failure may leave an ungraded partial candidate", "Gateway byte reservation is 65536; engine context target is 10240"]}
         (output / "protocol.json").write_bytes(canonical(protocol))
         (output / "protocol.sha256").write_text(digest(canonical(protocol)) + "\n")
         os.environ["GROQ_API_KEY"] = key
