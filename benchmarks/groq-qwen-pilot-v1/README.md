@@ -68,3 +68,21 @@ Groq's `reasoning_effort: low`, preserving both request artifacts. The gateway
 validates either representation against the frozen effort and refuses mixed
 or additional reasoning settings. This is declared provider-format adaptation,
 not a model or reasoning-policy fallback.
+
+After a campaign finishes, audit it and create a SHA-256 inventory:
+
+```sh
+python3 benchmarks/groq-qwen-pilot-v1/analyze.py /absolute/completed-output
+```
+
+The analysis checks the protocol hash, declared trial order, journal/projection
+integrity, every retained content-addressed artifact, usage export and accepted
+response model identity. Token sums carry explicit coverage; absent cache usage
+is null even when the ordinary engine trace normalizes it to zero. The original
+pilot summaries are preserved unchanged; use `analysis.json` for coverage-aware
+metrics. This local integrity audit does not independently attest the machine.
+
+Frozen protocols and analyses from the initial qualification attempts are in
+`preregistered/`. See `docs/research/groq-qwen-free-pilot-20261012.md` for the
+failure ledger and interpretation. None produced a completed candidate; do not
+use their strict-success counts as a model-quality comparison.
