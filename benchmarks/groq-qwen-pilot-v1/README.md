@@ -39,7 +39,7 @@ python3 benchmarks/groq-qwen-pilot-v1/pilot.py \
 The protocol is written and hashed before the first scored request. It freezes
 the binary/code/image, public source snapshots, input hashes, goal, seed/order,
 permissions and limits. Each trial permits six physical model attempts and
-900 seconds, with a 10,240-token engine context target and 1,024 output-token
+900 seconds, with a 8,192-token engine context target and 1,024 output-token
 ceiling. Gateway byte-based admission uses a separate, pessimistic 65,536-token
 reservation ceiling; these are not claims of actual token usage.
 

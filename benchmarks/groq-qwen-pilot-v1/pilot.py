@@ -196,7 +196,7 @@ def run(args):
         raise Refusal("exact model is inactive; no fallback")
     model = dict(id=MODEL, endpoint=ENDPOINT, api_key_env="GROQ_API_KEY", context_tokens=65536,
                  output_tokens=1024, input_rate=0, output_rate=0, temperature=0, reasoning_effort="low")
-    limits = dict(model_turns=6, wall_seconds=900, context_tokens=10240,
+    limits = dict(model_turns=6, wall_seconds=900, context_tokens=8192,
                   output_tokens=1024, model_tokens=80000)
     with Store(output / "campaign", create=True) as store:
         inputs = supervisor_inputs()
@@ -249,7 +249,7 @@ def run(args):
             "analysis": "Per-task pass counts, physical usage and observable failure categories; no superiority/significance claim.",
             "limitations": ["No candidate harness improvement or causal RSI comparison", "Small quota-bound sample",
                 "Free status is operator-attested, not cryptographically verified", "Cache/invoice metrics absent unless reported",
-                "Strict failure may leave an ungraded partial candidate", "Gateway byte reservation is 65536; engine context target is 10240"]}
+                "Strict failure may leave an ungraded partial candidate", "Gateway byte reservation is 65536; engine context target is 8192"]}
         (output / "protocol.json").write_bytes(canonical(protocol))
         (output / "protocol.sha256").write_text(digest(canonical(protocol)) + "\n")
         os.environ["GROQ_API_KEY"] = key
