@@ -115,7 +115,7 @@ jobs:
           & ./unpacked/pactrail.exe compatibility --json | ConvertFrom-Json | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "packaged compatibility failed" }
           if (!(Test-Path unpacked/LICENSE) -or !(Test-Path unpacked/THIRD_PARTY_NOTICES)) { throw "package notices missing" }
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
@@ -152,7 +152,7 @@ jobs:
           rss_kib="$(awk -F: '/Maximum resident set size/ {gsub(/^[[:space:]]+/, "", $2); print $2}' artifacts/release-soak-resource-usage.txt)"
           test -n "$rss_kib"
           test "$rss_kib" -le 1572864
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: release-soak-evidence
