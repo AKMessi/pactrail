@@ -57,9 +57,10 @@ def trace_metrics(root):
     tools = [a for a in actions if a.get("actor", "").startswith("tool:")]
     counts = Counter(a["actor"].removeprefix("tool:") for a in tools)
     reads = {"read_file", "read_many_files", "read_observation", "search", "list_files", "search_code_graph", "search_change_impact"}
-    writes = {"edit_file", "write_file", "replace_text", "remove_file"}
+    writes = {"edit_file", "write_file", "replace_text", "remove_file", "apply_patch"}
     return {"events": len(rows), "model_turns": len(models), "tool_calls": len(tools),
             "tool_failures": sum(a.get("succeeded") is False for a in tools), "tool_counts": dict(sorted(counts.items())),
+            "unavailable_tool_rejections": sum(a.get("action") == "reject_unavailable_tool" for a in actions),
             "read_calls": sum(counts[k] for k in reads), "write_calls": sum(counts[k] for k in writes),
             "process_calls": counts["run_process"],
             "model_action_duration_ms": sum(number(a.get("duration_ms")) or 0 for a in models)}
@@ -120,6 +121,13 @@ def analyze(root):
         lines = patch.read_text(errors="replace").splitlines() if patch.exists() else None
         execution = trial / "raw/execution.json"
         runtime = json.loads(execution.read_bytes()).get("wall_time_ms") if execution.exists() else None
+        receipt_path = trial / "raw/parent-inspect.stdout"
+        changed_paths = None
+        if receipt_path.exists():
+            try:
+                receipt = json.loads(receipt_path.read_bytes())
+                if isinstance(receipt.get("changes"), list): changed_paths = [c["path"] for c in receipt["changes"]]
+            except ValueError: pass
         trials.append({**row, "functional_success": functional(row),
             "failure_category": category(row, failed, errors), "provider_dispatch_attempts": sent[name],
             "reserved_model_attempts": len(records), "provider_statuses": [r["status"] for r in received],
@@ -127,6 +135,7 @@ def analyze(root):
             "runtime_wall_ms": runtime, "provider_roundtrip_ms": sum(r["roundtrip_ms"] for r in received) if received else None,
             "model_inference_time_ms": None,
             "trace": trace_metrics(trial), "reported_cost": sum(costs) if costs and all(v is not None for v in costs) else None,
+            "files_changed": len(changed_paths) if changed_paths is not None else None, "changed_paths": changed_paths,
             "cost_coverage": {"reported": sum(v is not None for v in costs), "responses": len(received)},
             "lines_added": sum(line.startswith("+") and not line.startswith("+++") for line in lines) if lines is not None else None,
             "lines_removed": sum(line.startswith("-") and not line.startswith("---") for line in lines) if lines is not None else None})
