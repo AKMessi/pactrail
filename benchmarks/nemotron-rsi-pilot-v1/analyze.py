@@ -33,6 +33,7 @@ def category(row, provider_failed, errors):
     if functional(row) is True: return "functional-pass-incomplete-workflow"
     if any(word in errors.lower() for word in ("exhausted", "turn limit", "token limit", "budget")):
         return "budget-or-output-exhaustion"
+    if "every tool request failed" in errors.lower(): return "tool-interface-stall"
     if functional(row) is False: return "targeted-or-regression-failure"
     return "incomplete-ungraded-candidate"
 

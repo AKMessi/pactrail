@@ -28,6 +28,8 @@ class AnalysisTests(unittest.TestCase):
     def test_unattempted_and_budget_are_explicit(self):
         self.assertEqual(analysis.category({"status": "not-attempted"}, False, ""), "not-attempted-after-stop")
         self.assertEqual(analysis.category({"status": "failed", "strict_success": False}, False, "output tokens exhausted"), "budget-or-output-exhaustion")
+        self.assertEqual(analysis.category({"status": "failed", "strict_success": False}, False,
+                                          "model stalled because every tool request failed"), "tool-interface-stall")
 
     def test_completed_export_is_journal_bound(self):
         with tempfile.TemporaryDirectory() as tmp:

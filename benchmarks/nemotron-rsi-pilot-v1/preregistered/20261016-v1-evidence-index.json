@@ -1,0 +1,8 @@
+{
+  "analysis.json": "e7e561f16d126ff0c41c9c7f328f54baadce2e1834b61a9ef6b5464f508ca567",
+  "analysis_code_sha256": "0f68bb9b46d19a36ab21efaa7d525361222ec23d98d7dbd1da5aa16de6e1b0e5",
+  "audit-checks.json": "cff1895a2b9493b086c140e8fb94a029a5ea1f53899c3a98c90d492a32c7ecff",
+  "credential-scan.json": "cb64c8a4bffbd14fbadd33e50f1ae96b54205ca6886155e73b3ae6b3248ad86c",
+  "inventory.sha256.json": "0d7b552a7d6cc9c473ad3e31547f30f394b9305cb620fea738fb5e5a3d8353f8",
+  "protocol.json": "8e0c843dd55dec7216e92dadfb885e18a7c142c05f3076e48ceb442975a4f5b3"
+}

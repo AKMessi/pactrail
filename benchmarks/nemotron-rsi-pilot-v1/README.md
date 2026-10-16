@@ -57,3 +57,22 @@ and shared imports; no Groq transport or model is used. These two cases were
 already inspected during development, so their results cannot serve as held-out
 confirmation or establish general harness quality. No statistical claim from
 six trials, no causal self-improvement claim, and no automatic promotion.
+
+## Audit a completed run
+
+```sh
+python3 benchmarks/nemotron-rsi-pilot-v1/analyze.py /absolute/completed-output
+```
+
+The analyzer verifies the frozen protocol, all stored artifact digests,
+journal-bound trial results, usage exports and exact response model identities.
+It writes `analysis.json` and `inventory.sha256.json`. Missing grading/usage stays
+unknown; functional success is separate from strict workflow completion. Trace
+metrics include rejected tools and patch writes. Failure labels are descriptive
+log-derived summaries, not independent causal diagnoses. Raw artifacts remain
+the evidence. Do not redirect stdout into the inventoried directory while
+creating the inventory, or regenerate it after the output file closes.
+
+The first completed result is documented in
+`docs/research/nemotron-rsi-baseline-20261016.md`. The two development tasks must
+not be recycled as independent held-out confirmation for a later RSI proposal.
