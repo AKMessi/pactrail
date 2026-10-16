@@ -1,0 +1,60 @@
+{
+  "artifact_count": 1089,
+  "assurance": {
+    "receipt_valid": {
+      "checked": 1,
+      "passed": 0
+    },
+    "source_isolation_valid": {
+      "checked": 1,
+      "passed": 1
+    },
+    "trace_valid": {
+      "checked": 1,
+      "passed": 1
+    }
+  },
+  "attempted_trials": 1,
+  "billing": {
+    "free_plan_operator_attested": true,
+    "invoice_verified": false
+  },
+  "causal_improvement_evidence": false,
+  "commit": "cac767baca64228af188ac94de5f4922e436f6c7",
+  "declared_trials": 4,
+  "journal_head": "65074a1da1854d31b41f110b0e8c29db7a5dc68f3edb71568e2dbd268f9e7d03",
+  "model": "qwen/qwen3.8-27b",
+  "physical_requests": 2,
+  "protocol_sha256": "efb65acb0f557d2ba5feb3400af6b8aa0ac60733afc04fb1678c30277d60218b",
+  "provider_statuses": [
+    200,
+    413
+  ],
+  "quality_qualified": false,
+  "ready_to_apply_trials": 0,
+  "response_models": [
+    "qwen/qwen3.8-27b"
+  ],
+  "strict_successes": 0,
+  "tokens": {
+    "cached_input_tokens": {
+      "coverage": "absent",
+      "reported_requests": 0,
+      "reported_sum": null,
+      "total_requests": 2
+    },
+    "input_tokens": {
+      "coverage": "partial",
+      "reported_requests": 1,
+      "reported_sum": 6913,
+      "total_requests": 2
+    },
+    "output_tokens": {
+      "coverage": "partial",
+      "reported_requests": 1,
+      "reported_sum": 565,
+      "total_requests": 2
+    }
+  },
+  "unattempted_trials": 3
+}

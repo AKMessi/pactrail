@@ -42,14 +42,22 @@ def _provider_bytes(endpoint, key, encoded, sender):
 
 def validate_request(body, config):
     allowed = {"model", "messages", "tools", "tool_choice", "max_tokens", "max_completion_tokens",
-               "temperature", "stream", "reasoning_effort", "parallel_tool_calls", "response_format"}
+               "temperature", "stream", "reasoning_effort", "reasoning", "parallel_tool_calls", "response_format"}
     if not isinstance(body, dict) or set(body) - allowed or body.get("model") != config["id"]:
         raise Refusal("provider model/fields differ from frozen capability profile")
     if body.get("stream", False) is not False:
         raise Refusal("v1 gateway admits buffered requests only")
     if body.get("temperature", 0) != 0:
         raise Refusal("temperature differs from frozen configuration")
-    if body.get("reasoning_effort") != config["reasoning_effort"]:
+    if "reasoning" in body and "reasoning_effort" in body:
+        raise Refusal("ambiguous reasoning configuration")
+    effort = body.get("reasoning_effort")
+    if "reasoning" in body:
+        reasoning = body["reasoning"]
+        if not isinstance(reasoning, dict) or set(reasoning) != {"effort"} or not isinstance(reasoning["effort"], str):
+            raise Refusal("unsupported reasoning configuration")
+        effort = reasoning["effort"]
+    if effort != config["reasoning_effort"]:
         raise Refusal("reasoning setting differs from frozen configuration")
     if "max_tokens" in body and "max_completion_tokens" in body:
         raise Refusal("ambiguous output ceiling")
