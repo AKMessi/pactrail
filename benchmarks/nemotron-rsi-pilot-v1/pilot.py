@@ -364,7 +364,8 @@ def run(args):
                     try:
                         with patch("pactrail_lab.execution.Gateway", FreeGateway):
                             outcome = Execution(store).trial(parent, task["source"], task["goal"], limits, trial.name)
-                        row.update(status=outcome["status"], checks=outcome["checks"], record=outcome["record"])
+                        row.update(status=outcome["status"], checks=outcome["checks"], record=outcome["record"],
+                                   candidate_source=outcome.get("candidate_source"), raw_candidate_source=outcome.get("raw_candidate_source"))
                         retained = store.load(outcome["record"])
                         unpack(store.get(retained["stdout"]), trial / "raw")
                         if outcome.get("candidate_source") and outcome["checks"].get("receipt_valid") is True:

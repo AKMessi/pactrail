@@ -168,6 +168,9 @@ class Execution:
             if verification["checks"].get("receipt_valid") is True:
                 receipt = decode(read(root / "output/parent-inspect.stdout", 8_388_608), 8_388_608)
                 source = project_verified_changes(self.store, task_source, raw_source, receipt["changes"])
+                with self.store.transaction():
+                    self.store.append("candidate-projected", {"baseline": task_source, "raw_candidate": raw_source,
+                        "projected": source, "receipt": self.store.put(read(root / "output/parent-inspect.stdout", 8_388_608))})
             observations = []
             trace_path = root / "output/parent-trace.stdout"
             if trace_path.exists():
