@@ -1,0 +1,21 @@
+{
+  "analysis_code_sha256": "81bf56372cc4ec96411f8134d5337a024d40f526271027e5cbcf7b3110b43c8d",
+  "v1": {
+    "analysis.json": "950a977f717f22ecf872af74def1ed70575bdd9a82011e11630435b6f8fa93ac",
+    "inventory.sha256.json": "4098eb7c36ce20647719330fb6c6cc4d94e985fd01ce31152aa8bc6ad2e2fd51",
+    "protocol.json": "86fe5a28968dd1d1b203ea329e65d32612211a1e9c50ac1c672bfd3f9b9a777f",
+    "qualification.json": "d27f75db477b0e0802052680d067e0d5a904d4281094ccb9d01d239192d38d94"
+  },
+  "v2": {
+    "analysis.json": "a4b231016fa1606293b638c610db39c0e9698fee66d3868296e5c30e8313d913",
+    "inventory.sha256.json": "e583d0599711a49618b69d81cc50011e87839bd3c281a132576c47822000f696",
+    "protocol.json": "7ac3ec071d2a5b773471764a20e4e45ca94fffd359780d31ae34555c50514f11",
+    "qualification.json": "344f2ccfbd6d870c7ad6a0d37cbac0bc777fad45e97b64ec2b5bd80c9ae00fdb"
+  },
+  "v3": {
+    "analysis.json": "ff5bf4c9904016f3c379dd81ffbfd30c3b3bca0b4271dc86882a6e4bcbb55f3c",
+    "inventory.sha256.json": "6cd8c48984c237407d96ad8382e12c012c0b88581dd3d08ee7341bd518a36efe",
+    "protocol.json": "afbcccfcd6b900d323d89dff542937ee4a1bb3a64e0c87acba099999fd4830ad",
+    "qualification.json": "88b3ffdb1492fa885e7e74ec4a49fcefdbe15e6acc5ec1e831028a065b829bf2"
+  }
+}

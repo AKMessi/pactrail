@@ -1,0 +1,948 @@
+{
+  "account_after": {
+    "free_model_daily_requests": {
+      "limit": 50,
+      "remaining": 50,
+      "used": 0
+    },
+    "http_status": 200,
+    "is_free_tier": true
+  },
+  "account_before": {
+    "free_model_daily_requests": {
+      "limit": 50,
+      "remaining": 50,
+      "used": 0
+    },
+    "http_status": 200,
+    "is_free_tier": true
+  },
+  "analysis_code_sha256": "81bf56372cc4ec96411f8134d5337a024d40f526271027e5cbcf7b3110b43c8d",
+  "artifact_count": 2540,
+  "assurance": {
+    "ready_to_apply": {
+      "checked": 4,
+      "passed": 1
+    },
+    "receipt_valid": {
+      "checked": 4,
+      "passed": 1
+    },
+    "source_isolation_valid": {
+      "checked": 4,
+      "passed": 4
+    },
+    "trace_valid": {
+      "checked": 4,
+      "passed": 4
+    }
+  },
+  "attempted_trials": 4,
+  "by_task": {
+    "preactjs-preact-3562": {
+      "declared_trials": 3,
+      "strict_successes": 1
+    },
+    "psf-requests-6028": {
+      "declared_trials": 3,
+      "strict_successes": 0
+    },
+    "tokio-rs-tokio-6752": {
+      "declared_trials": 3,
+      "strict_successes": 0
+    },
+    "vuejs-core-11915": {
+      "declared_trials": 3,
+      "strict_successes": 0
+    }
+  },
+  "causal_improvement_evidence": false,
+  "commit": "ab80c21b76a5a3e6bc7979a13209a1ba41e98f6c",
+  "declared_trials": 12,
+  "failure_taxonomy": {
+    "budget-or-output-exhaustion": 2,
+    "not-attempted-after-stop": 8,
+    "provider-or-transport": 1,
+    "success": 1
+  },
+  "functional_successes": 1,
+  "functionally_graded_trials": 1,
+  "invoice_verified": false,
+  "journal_head": "d0c87296b2804d7e7515b4b9f69c1eb8f645f64fbcd0ef8719a18cd8c4dbca6d",
+  "mechanisms": {
+    "cache_write_tokens": {
+      "coverage": "partial",
+      "reported": 49,
+      "reported_sum": 0,
+      "total": 50
+    },
+    "finish_reasons": {
+      "stop": 1,
+      "tool_calls": 48
+    },
+    "observable_failure_taxonomy": {
+      "not-attempted-after-stop": 8,
+      "provider-or-admission": 1,
+      "success": 1,
+      "turn-exhaustion": 2
+    },
+    "providers": {
+      "Stealth": 49,
+      "not_reported": 1
+    },
+    "reasoning_tokens": {
+      "coverage": "partial",
+      "reported": 49,
+      "reported_sum": 202,
+      "total": 50
+    },
+    "repeated_exact_tool_requests_within_trial": 0,
+    "repetition_is_redundancy_proof": false,
+    "reported_cost": {
+      "coverage": "partial",
+      "reported": 49,
+      "reported_sum": 0,
+      "total": 50
+    },
+    "requested_tool_counts": {
+      "edit_file": 1,
+      "git_history": 3,
+      "list_files": 2,
+      "read_file": 23,
+      "read_many_files": 2,
+      "read_observation": 6,
+      "search": 24,
+      "workspace_changes": 1
+    },
+    "tool_counts": {
+      "edit_file": 1,
+      "git_history": 3,
+      "list_files": 2,
+      "read_file": 23,
+      "read_many_files": 2,
+      "read_observation": 6,
+      "search": 24,
+      "workspace_changes": 1
+    },
+    "tool_error_counts": {},
+    "tool_output_bytes": {
+      "reported_actions": 62,
+      "reported_sum": 384670,
+      "total_actions": 62
+    }
+  },
+  "model": "stealth/crouton-alpha",
+  "protocol_sha256": "afbcccfcd6b900d323d89dff542937ee4a1bb3a64e0c87acba099999fd4830ad",
+  "provider_dispatch_attempts": 50,
+  "reserved_model_attempts": 50,
+  "strict_successes": 1,
+  "tokens": {
+    "cached_input_tokens": {
+      "coverage": "partial",
+      "reported_requests": 49,
+      "reported_sum": 0,
+      "total_requests": 50
+    },
+    "input_tokens": {
+      "coverage": "partial",
+      "reported_requests": 49,
+      "reported_sum": 538149,
+      "total_requests": 50
+    },
+    "output_tokens": {
+      "coverage": "partial",
+      "reported_requests": 49,
+      "reported_sum": 1479,
+      "total_requests": 50
+    }
+  },
+  "trials": [
+    {
+      "candidate_source": "3062610e1d2e91bd87bf55e6910ec4c5f033ea0162cb36a3ca05492547de1f44",
+      "changed_paths": null,
+      "checks": {
+        "ready_to_apply": false,
+        "receipt_valid": false,
+        "source_isolation_valid": true,
+        "trace_valid": true
+      },
+      "context_compactions": 2,
+      "cost_coverage": {
+        "reported": 16,
+        "responses": 16
+      },
+      "failed_tool_observations": [],
+      "failure_category": "budget-or-output-exhaustion",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "turn-exhaustion",
+      "provider_dispatch_attempts": 16,
+      "provider_roundtrip_ms": 99899,
+      "provider_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "raw_candidate_source": "3062610e1d2e91bd87bf55e6910ec4c5f033ea0162cb36a3ca05492547de1f44",
+      "record": "37f880e311fc3e5f5983673244682f4e63b0522456b92762ea7ad8c237c51ce1",
+      "repeat": 2,
+      "reported_cost": 0,
+      "reserved_model_attempts": 16,
+      "runtime_error_excerpt": "error: engine failed for run 01a1a7df-8eb3-7751-a2ae-af9184a384cf: model did not complete within 16 turns\nPortable trace: /work/state/runs/01a1a7df-8eb3-7751-a2ae-af9184a384cf/trace.jsonl\nCheckpoint stored. The engine must validate candidate contents, identity, and recovery eligibility before resuming with `pactrail resume 01a1a7df-8eb3-7751-a2ae-af9184a384cf` (remaining budgets and permissions still apply).\n",
+      "runtime_wall_ms": 106311,
+      "scope_review_needed": null,
+      "status": "harness-incomplete",
+      "strict_success": false,
+      "task": "psf-requests-6028",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "complete",
+          "reported_requests": 16,
+          "reported_sum": 0,
+          "total_requests": 16
+        },
+        "input_tokens": {
+          "coverage": "complete",
+          "reported_requests": 16,
+          "reported_sum": 171152,
+          "total_requests": 16
+        },
+        "output_tokens": {
+          "coverage": "complete",
+          "reported_requests": 16,
+          "reported_sum": 330,
+          "total_requests": 16
+        }
+      },
+      "trace": {
+        "events": 162,
+        "model_action_duration_ms": 105054,
+        "model_turns": 16,
+        "process_calls": 0,
+        "read_calls": 20,
+        "tool_calls": 21,
+        "tool_counts": {
+          "git_history": 1,
+          "read_file": 11,
+          "read_many_files": 1,
+          "search": 8
+        },
+        "tool_failures": 0,
+        "unavailable_tool_rejections": 0,
+        "write_calls": 0
+      },
+      "wall_seconds": 108.49615886299944
+    },
+    {
+      "candidate_source": "00bdc9848407e205d11151b9b8b2f08da67560b19777d7654c453d99ae6ae518",
+      "changed_paths": [
+        "compat/src/render.js"
+      ],
+      "checks": {
+        "ready_to_apply": true,
+        "receipt_valid": true,
+        "source_isolation_valid": true,
+        "trace_valid": true
+      },
+      "context_compactions": 0,
+      "cost_coverage": {
+        "reported": 10,
+        "responses": 10
+      },
+      "failed_tool_observations": [],
+      "failure_category": "success",
+      "files_changed": 1,
+      "functional_success": true,
+      "lines_added": 19,
+      "lines_removed": 0,
+      "model_inference_time_ms": null,
+      "observable_failure": "success",
+      "provider_dispatch_attempts": 10,
+      "provider_roundtrip_ms": 70503,
+      "provider_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "raw_candidate_source": "2bec78ac72f1972374f3157ad37b885fc422a5b4eaaaebfc84ce27ceb2e48077",
+      "record": "83fe95cdb491edf2f716c8d576c1dbd8924586cd350599917abbacb8495b9b30",
+      "regression": {
+        "behavior_failed": false,
+        "behavior_passed": true,
+        "coverage_complete": true,
+        "errors": [],
+        "infrastructure_error": false,
+        "missing": [],
+        "required_tests": 31,
+        "skipped": [],
+        "tests_executed": 31,
+        "tests_failed": 0,
+        "tests_passed": 31,
+        "timed_out": false
+      },
+      "repeat": 1,
+      "reported_cost": 0,
+      "reserved_model_attempts": 10,
+      "runtime_error_excerpt": "",
+      "runtime_wall_ms": 80162,
+      "scope_review_needed": [],
+      "status": "completed",
+      "strict_success": true,
+      "targeted": {
+        "behavior_failed": false,
+        "behavior_passed": true,
+        "coverage_complete": true,
+        "errors": [],
+        "infrastructure_error": false,
+        "missing": [],
+        "required_tests": 1,
+        "skipped": [],
+        "tests_executed": 1,
+        "tests_failed": 0,
+        "tests_passed": 1,
+        "timed_out": false
+      },
+      "task": "preactjs-preact-3562",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "complete",
+          "reported_requests": 10,
+          "reported_sum": 0,
+          "total_requests": 10
+        },
+        "input_tokens": {
+          "coverage": "complete",
+          "reported_requests": 10,
+          "reported_sum": 112261,
+          "total_requests": 10
+        },
+        "output_tokens": {
+          "coverage": "complete",
+          "reported_requests": 10,
+          "reported_sum": 606,
+          "total_requests": 10
+        }
+      },
+      "trace": {
+        "events": 102,
+        "model_action_duration_ms": 78703,
+        "model_turns": 10,
+        "process_calls": 0,
+        "read_calls": 9,
+        "tool_calls": 11,
+        "tool_counts": {
+          "edit_file": 1,
+          "list_files": 1,
+          "read_file": 4,
+          "search": 4,
+          "workspace_changes": 1
+        },
+        "tool_failures": 0,
+        "unavailable_tool_rejections": 0,
+        "write_calls": 1
+      },
+      "wall_seconds": 97.67242608200013
+    },
+    {
+      "candidate_source": "223b63d4d9f1d3508bf409facdef14904a84c363532f8bc24d584191f4d25ddd",
+      "changed_paths": null,
+      "checks": {
+        "ready_to_apply": false,
+        "receipt_valid": false,
+        "source_isolation_valid": true,
+        "trace_valid": true
+      },
+      "context_compactions": 2,
+      "cost_coverage": {
+        "reported": 16,
+        "responses": 16
+      },
+      "failed_tool_observations": [],
+      "failure_category": "budget-or-output-exhaustion",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "turn-exhaustion",
+      "provider_dispatch_attempts": 16,
+      "provider_roundtrip_ms": 84564,
+      "provider_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "raw_candidate_source": "223b63d4d9f1d3508bf409facdef14904a84c363532f8bc24d584191f4d25ddd",
+      "record": "f4b673fa9cf0292b4b84b02ecd5e0272d114c89078f1c75fc9eca0c39b6a890f",
+      "repeat": 0,
+      "reported_cost": 0,
+      "reserved_model_attempts": 16,
+      "runtime_error_excerpt": "error: engine failed for run 01a1a7e2-b3d9-73c3-987c-3b67ee9ea9fc: model did not complete within 16 turns\nPortable trace: /work/state/runs/01a1a7e2-b3d9-73c3-987c-3b67ee9ea9fc/trace.jsonl\nCheckpoint stored. The engine must validate candidate contents, identity, and recovery eligibility before resuming with `pactrail resume 01a1a7e2-b3d9-73c3-987c-3b67ee9ea9fc` (remaining budgets and permissions still apply).\n",
+      "runtime_wall_ms": 94697,
+      "scope_review_needed": null,
+      "status": "harness-incomplete",
+      "strict_success": false,
+      "task": "preactjs-preact-3562",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "complete",
+          "reported_requests": 16,
+          "reported_sum": 0,
+          "total_requests": 16
+        },
+        "input_tokens": {
+          "coverage": "complete",
+          "reported_requests": 16,
+          "reported_sum": 188039,
+          "total_requests": 16
+        },
+        "output_tokens": {
+          "coverage": "complete",
+          "reported_requests": 16,
+          "reported_sum": 368,
+          "total_requests": 16
+        }
+      },
+      "trace": {
+        "events": 154,
+        "model_action_duration_ms": 92876,
+        "model_turns": 16,
+        "process_calls": 0,
+        "read_calls": 17,
+        "tool_calls": 18,
+        "tool_counts": {
+          "git_history": 1,
+          "list_files": 1,
+          "read_file": 5,
+          "read_observation": 6,
+          "search": 5
+        },
+        "tool_failures": 0,
+        "unavailable_tool_rejections": 0,
+        "write_calls": 0
+      },
+      "wall_seconds": 97.34641541099973
+    },
+    {
+      "candidate_source": "3062610e1d2e91bd87bf55e6910ec4c5f033ea0162cb36a3ca05492547de1f44",
+      "changed_paths": null,
+      "checks": {
+        "ready_to_apply": false,
+        "receipt_valid": false,
+        "source_isolation_valid": true,
+        "trace_valid": true
+      },
+      "context_compactions": 2,
+      "cost_coverage": {
+        "reported": 7,
+        "responses": 8
+      },
+      "failed_tool_observations": [],
+      "failure_category": "provider-or-transport",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "provider-or-admission",
+      "provider_dispatch_attempts": 8,
+      "provider_roundtrip_ms": 73504,
+      "provider_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        200,
+        429
+      ],
+      "raw_candidate_source": "3062610e1d2e91bd87bf55e6910ec4c5f033ea0162cb36a3ca05492547de1f44",
+      "record": "4059bd5eade1426de7b44ce85281b513b9f8017fe5e870e6bd84a8cf75ebe0bb",
+      "repeat": 1,
+      "reported_cost": null,
+      "reserved_model_attempts": 8,
+      "runtime_error_excerpt": "error: engine failed for run 01a1a7e4-30a2-7a93-814a-5430b71e9363: model invocation failed: provider rejected the request with HTTP 403: model gateway refused request; inspect supervisor journal\nPortable trace: /work/state/runs/01a1a7e4-30a2-7a93-814a-5430b71e9363/trace.jsonl\nCheckpoint stored. The engine must validate candidate contents, identity, and recovery eligibility before resuming with `pactrail resume 01a1a7e4-30a2-7a93-814a-5430b71e9363` (remaining budgets and permissions still apply).\n",
+      "runtime_wall_ms": 77316,
+      "scope_review_needed": null,
+      "status": "harness-incomplete",
+      "strict_success": false,
+      "task": "psf-requests-6028",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "partial",
+          "reported_requests": 7,
+          "reported_sum": 0,
+          "total_requests": 8
+        },
+        "input_tokens": {
+          "coverage": "partial",
+          "reported_requests": 7,
+          "reported_sum": 66697,
+          "total_requests": 8
+        },
+        "output_tokens": {
+          "coverage": "partial",
+          "reported_requests": 7,
+          "reported_sum": 175,
+          "total_requests": 8
+        }
+      },
+      "trace": {
+        "events": 89,
+        "model_action_duration_ms": 74064,
+        "model_turns": 7,
+        "process_calls": 0,
+        "read_calls": 11,
+        "tool_calls": 12,
+        "tool_counts": {
+          "git_history": 1,
+          "read_file": 3,
+          "read_many_files": 1,
+          "search": 7
+        },
+        "tool_failures": 0,
+        "unavailable_tool_rejections": 0,
+        "write_calls": 0
+      },
+      "wall_seconds": 79.06556154400005
+    },
+    {
+      "changed_paths": null,
+      "context_compactions": 0,
+      "cost_coverage": {
+        "reported": 0,
+        "responses": 0
+      },
+      "failed_tool_observations": [],
+      "failure_category": "not-attempted-after-stop",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "not-attempted-after-stop",
+      "provider_dispatch_attempts": 0,
+      "provider_roundtrip_ms": null,
+      "provider_statuses": [],
+      "repeat": 0,
+      "reported_cost": null,
+      "reserved_model_attempts": 0,
+      "runtime_error_excerpt": "",
+      "runtime_wall_ms": null,
+      "scope_review_needed": null,
+      "status": "not-attempted",
+      "strict_success": false,
+      "task": "psf-requests-6028",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "output_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        }
+      },
+      "trace": null,
+      "wall_seconds": 1.8159998944611289e-06
+    },
+    {
+      "changed_paths": null,
+      "context_compactions": 0,
+      "cost_coverage": {
+        "reported": 0,
+        "responses": 0
+      },
+      "failed_tool_observations": [],
+      "failure_category": "not-attempted-after-stop",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "not-attempted-after-stop",
+      "provider_dispatch_attempts": 0,
+      "provider_roundtrip_ms": null,
+      "provider_statuses": [],
+      "repeat": 1,
+      "reported_cost": null,
+      "reserved_model_attempts": 0,
+      "runtime_error_excerpt": "",
+      "runtime_wall_ms": null,
+      "scope_review_needed": null,
+      "status": "not-attempted",
+      "strict_success": false,
+      "task": "vuejs-core-11915",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "output_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        }
+      },
+      "trace": null,
+      "wall_seconds": 1.886000063677784e-06
+    },
+    {
+      "changed_paths": null,
+      "context_compactions": 0,
+      "cost_coverage": {
+        "reported": 0,
+        "responses": 0
+      },
+      "failed_tool_observations": [],
+      "failure_category": "not-attempted-after-stop",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "not-attempted-after-stop",
+      "provider_dispatch_attempts": 0,
+      "provider_roundtrip_ms": null,
+      "provider_statuses": [],
+      "repeat": 0,
+      "reported_cost": null,
+      "reserved_model_attempts": 0,
+      "runtime_error_excerpt": "",
+      "runtime_wall_ms": null,
+      "scope_review_needed": null,
+      "status": "not-attempted",
+      "strict_success": false,
+      "task": "tokio-rs-tokio-6752",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "output_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        }
+      },
+      "trace": null,
+      "wall_seconds": 2.3049997253110632e-06
+    },
+    {
+      "changed_paths": null,
+      "context_compactions": 0,
+      "cost_coverage": {
+        "reported": 0,
+        "responses": 0
+      },
+      "failed_tool_observations": [],
+      "failure_category": "not-attempted-after-stop",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "not-attempted-after-stop",
+      "provider_dispatch_attempts": 0,
+      "provider_roundtrip_ms": null,
+      "provider_statuses": [],
+      "repeat": 2,
+      "reported_cost": null,
+      "reserved_model_attempts": 0,
+      "runtime_error_excerpt": "",
+      "runtime_wall_ms": null,
+      "scope_review_needed": null,
+      "status": "not-attempted",
+      "strict_success": false,
+      "task": "preactjs-preact-3562",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "output_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        }
+      },
+      "trace": null,
+      "wall_seconds": 1.8850005290005356e-06
+    },
+    {
+      "changed_paths": null,
+      "context_compactions": 0,
+      "cost_coverage": {
+        "reported": 0,
+        "responses": 0
+      },
+      "failed_tool_observations": [],
+      "failure_category": "not-attempted-after-stop",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "not-attempted-after-stop",
+      "provider_dispatch_attempts": 0,
+      "provider_roundtrip_ms": null,
+      "provider_statuses": [],
+      "repeat": 2,
+      "reported_cost": null,
+      "reserved_model_attempts": 0,
+      "runtime_error_excerpt": "",
+      "runtime_wall_ms": null,
+      "scope_review_needed": null,
+      "status": "not-attempted",
+      "strict_success": false,
+      "task": "vuejs-core-11915",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "output_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        }
+      },
+      "trace": null,
+      "wall_seconds": 1.8159998944611289e-06
+    },
+    {
+      "changed_paths": null,
+      "context_compactions": 0,
+      "cost_coverage": {
+        "reported": 0,
+        "responses": 0
+      },
+      "failed_tool_observations": [],
+      "failure_category": "not-attempted-after-stop",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "not-attempted-after-stop",
+      "provider_dispatch_attempts": 0,
+      "provider_roundtrip_ms": null,
+      "provider_statuses": [],
+      "repeat": 0,
+      "reported_cost": null,
+      "reserved_model_attempts": 0,
+      "runtime_error_excerpt": "",
+      "runtime_wall_ms": null,
+      "scope_review_needed": null,
+      "status": "not-attempted",
+      "strict_success": false,
+      "task": "vuejs-core-11915",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "output_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        }
+      },
+      "trace": null,
+      "wall_seconds": 2.3749998945277184e-06
+    },
+    {
+      "changed_paths": null,
+      "context_compactions": 0,
+      "cost_coverage": {
+        "reported": 0,
+        "responses": 0
+      },
+      "failed_tool_observations": [],
+      "failure_category": "not-attempted-after-stop",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "not-attempted-after-stop",
+      "provider_dispatch_attempts": 0,
+      "provider_roundtrip_ms": null,
+      "provider_statuses": [],
+      "repeat": 1,
+      "reported_cost": null,
+      "reserved_model_attempts": 0,
+      "runtime_error_excerpt": "",
+      "runtime_wall_ms": null,
+      "scope_review_needed": null,
+      "status": "not-attempted",
+      "strict_success": false,
+      "task": "tokio-rs-tokio-6752",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "output_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        }
+      },
+      "trace": null,
+      "wall_seconds": 1.886000063677784e-06
+    },
+    {
+      "changed_paths": null,
+      "context_compactions": 0,
+      "cost_coverage": {
+        "reported": 0,
+        "responses": 0
+      },
+      "failed_tool_observations": [],
+      "failure_category": "not-attempted-after-stop",
+      "files_changed": null,
+      "functional_success": null,
+      "lines_added": null,
+      "lines_removed": null,
+      "model_inference_time_ms": null,
+      "observable_failure": "not-attempted-after-stop",
+      "provider_dispatch_attempts": 0,
+      "provider_roundtrip_ms": null,
+      "provider_statuses": [],
+      "repeat": 2,
+      "reported_cost": null,
+      "reserved_model_attempts": 0,
+      "runtime_error_excerpt": "",
+      "runtime_wall_ms": null,
+      "scope_review_needed": null,
+      "status": "not-attempted",
+      "strict_success": false,
+      "task": "tokio-rs-tokio-6752",
+      "tokens": {
+        "cached_input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "input_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        },
+        "output_tokens": {
+          "coverage": "absent",
+          "reported_requests": 0,
+          "reported_sum": null,
+          "total_requests": 0
+        }
+      },
+      "trace": null,
+      "wall_seconds": 1.4659999578725547e-06
+    }
+  ],
+  "unlimited_access_verified": false
+}

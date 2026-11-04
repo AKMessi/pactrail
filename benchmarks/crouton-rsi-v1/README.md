@@ -39,7 +39,7 @@ python3 benchmarks/nemotron-rsi-pilot-v1/pilot.py \
   --output /absolute/fresh-output-with-grader-validation \
   --binary /absolute/qualified/pactrail \
   --env-file /absolute/pactrail/.env
-python3 benchmarks/nemotron-rsi-pilot-v1/analyze.py /absolute/completed-output
+python3 benchmarks/crouton-rsi-v1/analyze.py /absolute/completed-output
 ```
 
 Raw artifacts remain in ignored `benchmark-results/`; protocols and sanitized
@@ -82,3 +82,9 @@ grade and counts as strict failure. No real source is applied or modified.
 and grading reconstruction, not the model or engine. Use a fresh output directory.
 V1/v2 results and their failure/invalidation reasons remain in `preregistered/`;
 their apparent successes must not be used as qualified performance results.
+
+The retained v3 run stopped on a real upstream HTTP 429 after four attempted
+trials (one strict success, two turn-limit failures, one provider interruption).
+Eight declared trials were unattempted. The full four-task comparison is NOT
+QUALIFIED. See `docs/research/crouton-rsi-baseline-20261104.md`. Do not rerun only
+the failures, silently resume this protocol or call the endpoint unlimited.

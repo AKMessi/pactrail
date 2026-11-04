@@ -1,0 +1,14 @@
+{
+  "attempted": 4,
+  "causal_improvement_evidence": false,
+  "declared": 12,
+  "inference_stopped": true,
+  "provider_interruptions": 1,
+  "status": "NOT QUALIFIED FOR COMPLETE COMPARISON",
+  "stop_reason": "HTTP 429 upstream_provider_shared_pool",
+  "strict_successes": 1,
+  "turn_limit_failures": 2,
+  "unattempted": 8,
+  "unlimited_access": false,
+  "valid_partial_observations": true
+}
