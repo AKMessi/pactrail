@@ -1,0 +1,8 @@
+{
+  "status": "NOT QUALIFIED",
+  "reason": "Second trial had a 120-second provider total timeout; ten declared trials unattempted. Preserve protocol; do not interpret zero successes as 0/12 model accuracy.",
+  "completed_trial_failures": 1,
+  "provider_interrupted_trials": 1,
+  "unattempted_trials": 10,
+  "no_paid_fallback": true
+}
