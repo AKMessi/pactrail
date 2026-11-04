@@ -10,7 +10,7 @@ REPO = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("shared_analysis", REPO / "benchmarks/nemotron-rsi-pilot-v1/analyze.py")
 shared = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(shared)
-from pactrail_lab.safe import digest, read
+from pactrail_lab.safe import canonical, digest, read
 from pactrail_lab.store import Store
 
 
@@ -40,6 +40,8 @@ def analyze(root):
     events_export = json.loads(read(root / "events.json", 8_388_608))
     costs, reasoning, cache_write, finishes, providers = [], [], [], Counter(), Counter()
     dispatches = 0
+    requested_tools = Counter()
+    requested_signatures = Counter()
     with Store(root / "campaign") as store:
         events = store.events()
         if events_export != events: raise ValueError("event export differs from authoritative journal")
@@ -47,7 +49,11 @@ def analyze(root):
             if digest(read(name)) != expected: raise ValueError("frozen input or grader evidence changed")
         after = [e["payload"] for e in events if e["kind"] == "pilot-account-after"]
         if after != [report["account_after"]]: raise ValueError("account export differs from journal")
+        reservations = shared.budget.reservations(store)
+        current_lease = None
         for event in events:
+            if event["kind"] == "model-request":
+                current_lease = reservations[event["payload"]["id"]]["lease"]
             if event["kind"] == "free-provider-wire-request": dispatches += 1
             if event["kind"] != "free-provider-raw-response": continue
             payload = event["payload"]
@@ -58,6 +64,16 @@ def analyze(root):
             cache_write.append((usage.get("prompt_tokens_details") or {}).get("cache_write_tokens"))
             finishes.update(c.get("finish_reason") for c in response.get("choices", []))
             providers[response.get("provider")] += 1
+            for choice in response.get("choices", []):
+                for call in choice.get("message", {}).get("tool_calls", []):
+                    function = call.get("function") or {}
+                    name, args = function.get("name"), function.get("arguments")
+                    requested_tools[name] += 1
+                    try: arguments = json.loads(args) if isinstance(args, str) else args
+                    except ValueError: arguments = args
+                    # Scope the signature to the current trial: independent
+                    # repetitions must not be labelled redundant observations.
+                    requested_signatures[(current_lease, name, digest(canonical(arguments)))] += 1
     failures, all_tools, all_errors = Counter(), Counter(), []
     total_bytes, bytes_coverage = 0, 0
     for trial, original in zip(report["trials"], original_results):
@@ -102,6 +118,9 @@ def analyze(root):
         "tool_output_bytes": {"reported_sum": total_bytes if bytes_coverage else None,
                               "reported_actions": bytes_coverage, "total_actions": sum(all_tools.values())},
         "finish_reasons": dict(finishes), "providers": dict(providers),
+        "requested_tool_counts": dict(requested_tools),
+        "repeated_exact_tool_requests_within_trial": sum(max(0, count - 1) for count in requested_signatures.values()),
+        "repetition_is_redundancy_proof": False,
         "reasoning_tokens": coverage(reasoning, dispatches), "cache_write_tokens": coverage(cache_write, dispatches),
         "reported_cost": coverage(costs, dispatches)}
     report["analysis_code_sha256"] = digest(read(__file__))
