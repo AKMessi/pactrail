@@ -105,3 +105,45 @@ def diff(store, before, after):
     a = {e["path"]: e for e in store.load(before)["entries"]}
     b = {e["path"]: e for e in store.load(after)["entries"]}
     return [{"path": p, "before": a.get(p), "after": b.get(p)} for p in sorted(a.keys() | b.keys()) if a.get(p) != b.get(p)]
+
+
+def project_verified_changes(store, baseline, candidate, changes):
+    """Reconstruct apply semantics for external grading, never mutate the host.
+
+    The frozen parent must already have validated the receipt AND diff. Its
+    workspace is sparse by design; absence outside the receipt is not deletion.
+    Raw candidate snapshots remain retained separately for inspection.
+    """
+    original = {e["path"]: e for e in store.load(baseline)["entries"]}
+    isolated = {e["path"]: e for e in store.load(candidate)["entries"]}
+    seen = set()
+    if not isinstance(changes, list) or len(changes) > MAX_FILES:
+        raise Refusal("invalid verified change list")
+    for change in changes:
+        name = str(relative(change["path"]))
+        if name in seen:
+            raise Refusal("duplicate verified change path")
+        seen.add(name)
+        before, after = change.get("before_digest"), change.get("after_digest")
+        old, new = original.get(name), isolated.get(name)
+        if before is None and old is not None:
+            raise Refusal("verified addition conflicts with full source")
+        if before is not None and (old is None or old["kind"] != "file"):
+            raise Refusal("verified preimage missing from full source")
+        if after is None:
+            if before is None or new is not None:
+                raise Refusal("verified deletion conflicts with isolated candidate")
+            original.pop(name)
+        else:
+            if new is None or new["kind"] != "file":
+                raise Refusal("verified changed file missing from isolated candidate")
+            original[name] = new
+            for parent in Path(name).parents:
+                directory = parent.as_posix()
+                if directory == ".": continue
+                if directory in original and original[directory]["kind"] != "directory":
+                    raise Refusal("verified addition has a nondirectory ancestor")
+                original[directory] = {"path": directory, "kind": "directory"}
+    if len(original) > MAX_FILES:
+        raise Refusal("projected source exceeds file bound")
+    return store.record({"schema_version": 1, "entries": sorted(original.values(), key=lambda e: e["path"])})

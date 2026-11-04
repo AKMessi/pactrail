@@ -65,3 +65,20 @@ independently preregistered trials may continue. A quota, pricing, identity or
 other transport/infrastructure error still stops the campaign. No hidden retry
 or model/provider substitution is allowed. Use a fresh output directory and
 `--profile benchmarks/crouton-rsi-v1/profile-v2.json` to run it.
+
+## v3: grade what Apply would change
+
+V2 was invalidated after the grader patch included unrelated lockfile deletions
+that the engine receipt did not include. The engine workspace intentionally
+excludes ignored files; a sparse workspace is not a full-repository replacement.
+Force-tracking the sealed source alone did not resolve this, as the regression
+test demonstrated. The fix reconstructs a complete source snapshot from the
+immutable baseline and overlays only changes validated by the frozen parent's
+receipt AND diff. Ignored untouched files remain; explicit deletions still land.
+Raw workspaces stay retained. A run lacking a verified receipt has no functional
+grade and counts as strict failure. No real source is applied or modified.
+
+`profile-v3.json` keeps v2 model/tasks/order/budgets. It changes source admission
+and grading reconstruction, not the model or engine. Use a fresh output directory.
+V1/v2 results and their failure/invalidation reasons remain in `preregistered/`;
+their apparent successes must not be used as qualified performance results.

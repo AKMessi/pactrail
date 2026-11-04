@@ -162,8 +162,12 @@ class Execution:
                 return {"status": "failed", "record": retained, "checks": verification["checks"], "candidate_source": None,
                         "verification_error": verification.get("verification_error")}
             candidate = root / "output" / str(relative(verification["candidate"]))
-            from .snapshots import import_tree
+            from .snapshots import import_tree, project_verified_changes
             source = import_tree(self.store, candidate)
+            raw_source = source
+            if verification["checks"].get("receipt_valid") is True:
+                receipt = decode(read(root / "output/parent-inspect.stdout", 8_388_608), 8_388_608)
+                source = project_verified_changes(self.store, task_source, raw_source, receipt["changes"])
             observations = []
             trace_path = root / "output/parent-trace.stdout"
             if trace_path.exists():
@@ -177,4 +181,4 @@ class Execution:
                                          "summary": str(data.get("summary", data.get("message", "")))[:512],
                                          "succeeded": data.get("succeeded")})
             return {"status": "completed", "record": retained, "checks": verification["checks"],
-                    "candidate_source": source, "observations": observations}
+                    "candidate_source": source, "raw_candidate_source": raw_source, "observations": observations}

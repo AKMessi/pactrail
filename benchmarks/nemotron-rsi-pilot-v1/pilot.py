@@ -338,6 +338,7 @@ def run(args):
                 "Gateway byte reservation 131072 differs from engine context target 32768", "Invoice and unlimited-access status unverified",
                 "Per-run token cap is checked by engine after response; one invocation can overshoot", "No process tools inside agent; external grading only"]}
         if profile:
+            protocol["candidate_grading"] = "Reconstruct full immutable baseline plus only parent-verified receipt/diff changes. Raw sparse workspace is retained. Runs lacking a verified receipt have no functional grade and count as strict failures."
             protocol["provider_policy"]["transport_timeout_seconds"] = profile.get("transport_timeout_seconds", 120)
             protocol["provider_policy"]["continue_independent_trials_after_timeout"] = profile.get("continue_independent_trials_after_timeout", False)
             if profile.get("continue_independent_trials_after_timeout", False):
@@ -366,7 +367,7 @@ def run(args):
                         row.update(status=outcome["status"], checks=outcome["checks"], record=outcome["record"])
                         retained = store.load(outcome["record"])
                         unpack(store.get(retained["stdout"]), trial / "raw")
-                        if outcome.get("candidate_source"):
+                        if outcome.get("candidate_source") and outcome["checks"].get("receipt_valid") is True:
                             materialize(store, outcome["candidate_source"], trial / "candidate")
                             targeted = helpers.external_grade(lab, task_id, "candidate", trial / "targeted", trial / "candidate", "targeted")
                             regression = helpers.external_grade(lab, task_id, "candidate", trial / "regression", trial / "candidate", "regression")
