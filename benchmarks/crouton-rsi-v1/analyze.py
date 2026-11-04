@@ -62,12 +62,12 @@ def analyze(root):
             costs.append(usage.get("cost"))
             reasoning.append((usage.get("completion_tokens_details") or {}).get("reasoning_tokens"))
             cache_write.append((usage.get("prompt_tokens_details") or {}).get("cache_write_tokens"))
-            finishes.update(c.get("finish_reason") for c in response.get("choices", []))
-            providers[response.get("provider")] += 1
+            finishes.update(c.get("finish_reason") or "not_reported" for c in response.get("choices", []))
+            providers[response.get("provider") or "not_reported"] += 1
             for choice in response.get("choices", []):
                 for call in choice.get("message", {}).get("tool_calls", []):
                     function = call.get("function") or {}
-                    name, args = function.get("name"), function.get("arguments")
+                    name, args = function.get("name") or "not_reported", function.get("arguments")
                     requested_tools[name] += 1
                     try: arguments = json.loads(args) if isinstance(args, str) else args
                     except ValueError: arguments = args

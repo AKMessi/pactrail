@@ -89,3 +89,13 @@ class AnalysisTests(unittest.TestCase):
             self.assertEqual(report["mechanisms"]["reported_cost"]["reported_sum"], 0)
             self.assertEqual(report["mechanisms"]["repeated_exact_tool_requests_within_trial"], 1)
             self.assertIsNone(report["mechanisms"]["reasoning_tokens"]["reported_sum"])
+            # Real rate-limit responses omit provider/model/usage. Their absent
+            # metadata must not crash analysis or become measured zero usage.
+            with analysis.Store(root / "campaign") as store, store.transaction():
+                store.append("free-provider-wire-request", {"artifact": store.put(b"{}")})
+                store.append("free-provider-raw-response", {"status": 429, "wall_time_ms": 1,
+                    "artifact": store.put(analysis.canonical({"error": {"code": 429, "message": "rate limited"}}))})
+                (root / "events.json").write_bytes(analysis.canonical(store.events()))
+            report = analysis.analyze(root)
+            self.assertEqual(report["mechanisms"]["providers"]["not_reported"], 1)
+            self.assertEqual(report["mechanisms"]["reported_cost"]["coverage"], "partial")
