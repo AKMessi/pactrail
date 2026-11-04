@@ -10,7 +10,7 @@ REPO = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("shared_analysis", REPO / "benchmarks/nemotron-rsi-pilot-v1/analyze.py")
 shared = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(shared)
-from pactrail_lab.safe import canonical, digest, read
+from pactrail_lab.safe import canonical, digest, read, tree
 from pactrail_lab.store import Store
 
 
@@ -74,6 +74,24 @@ def analyze(root):
                     # Scope the signature to the current trial: independent
                     # repetitions must not be labelled redundant observations.
                     requested_signatures[(current_lease, name, digest(canonical(arguments)))] += 1
+        projections = {e["payload"]["projected"]: e["payload"] for e in events if e["kind"] == "candidate-projected"}
+        if protocol.get("candidate_grading"):
+            for row in original_results:
+                if row.get("checks", {}).get("receipt_valid") is not True: continue
+                candidate_key = row.get("candidate_source")
+                projection = projections.get(candidate_key)
+                if projection is None: raise ValueError("verified trial has no journal-bound projection")
+                task = next(t for t in protocol["tasks"] if t["id"] == row["task"])
+                if projection["baseline"] != task["source"]: raise ValueError("projection bound to wrong task baseline")
+                receipt = json.loads(store.get(projection["receipt"]))
+                allowed = {c["path"] for c in receipt["changes"]}
+                before = {e["path"]: e for e in store.load(task["source"])["entries"] if e["kind"] == "file"}
+                after = {e["path"]: e for e in store.load(candidate_key)["entries"] if e["kind"] == "file"}
+                changed = {p for p in before.keys() | after.keys() if before.get(p) != after.get(p)}
+                if not changed.issubset(allowed): raise ValueError("unreceipted changes in grading projection")
+                candidate_path = root / "trials" / f'{row["task"]}-r{row["repeat"] + 1}' / "candidate"
+                if tree(candidate_path) != store.load(candidate_key)["entries"]:
+                    raise ValueError("externally graded candidate differs from verified projection")
     failures, all_tools, all_errors = Counter(), Counter(), []
     total_bytes, bytes_coverage = 0, 0
     for trial, original in zip(report["trials"], original_results):
