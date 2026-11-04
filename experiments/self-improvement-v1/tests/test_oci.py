@@ -92,6 +92,11 @@ class RealContainment(unittest.TestCase):
             source = Path(tmp) / "source"
             source.mkdir()
             (source / "value.txt").write_text("before")
+            # Historical checkouts can track files their own ignore rules now
+            # exclude. Sealing must preserve them in the candidate baseline.
+            (source / ".gitignore").write_text("nested/package-lock.json\n")
+            (source / "nested").mkdir()
+            (source / "nested/package-lock.json").write_text('{"retained":true}\n')
             snapshot = import_tree(store, source)
             baseline = revision(store, snapshot, read(os.environ["PACTRAIL_BENCH_BINARY"]), {"agent_mode": "single"}, [])
             model = dict(id="offline-fixture", endpoint="https://example.invalid/v1/chat/completions", api_key_env="LAB_FIXTURE_KEY",
@@ -118,6 +123,9 @@ class RealContainment(unittest.TestCase):
             self.assertTrue(all(outcome["checks"].values()))
             changed = next(e for e in store.load(outcome["candidate_source"])["entries"] if e["path"] == "value.txt")
             self.assertEqual(store.get(changed["digest"]), b"after")
+            preserved = next(e for e in store.load(outcome["candidate_source"])["entries"]
+                             if e["path"] == "nested/package-lock.json")
+            self.assertEqual(store.get(preserved["digest"]), b'{"retained":true}\n')
             self.assertEqual((source / "value.txt").read_text(), "before")
             self.assertEqual(len(budget.reservations(store)), 2)
             if os.environ.get("PACTRAIL_LAB_EVIDENCE_DIR"):

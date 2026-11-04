@@ -117,9 +117,18 @@ class Execution:
             env = {**clean_environment(), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
                    "GIT_AUTHOR_NAME": "Pactrail lab", "GIT_AUTHOR_EMAIL": "lab@invalid",
                    "GIT_COMMITTER_NAME": "Pactrail lab", "GIT_COMMITTER_EMAIL": "lab@invalid"}
-            for args in (["init", "--quiet"], ["add", "--all"], ["commit", "--quiet", "-m", "sealed baseline"]):
+            # A prepared historical tree can contain tracked files matched by
+            # its own ignore rules. This synthetic index must preserve every
+            # admitted source file, not reinterpret those rules as deletions.
+            for args in (["init", "--quiet"], ["add", "--all", "--force"], ["commit", "--quiet", "-m", "sealed baseline"]):
                 output = command(["git", "-c", "core.hooksPath=" + os.devnull, "-C", str(root / "source"), *args], env=env)
                 if output["exit_code"] or output["reason"]: raise Refusal("sealed Git preparation failed")
+            indexed = command(["git", "-C", str(root / "source"), "ls-files", "-z"], env=env,
+                              limit=8_388_608)
+            expected = sorted(e["path"] for e in self.store.load(task_source)["entries"] if e["kind"] == "file")
+            actual = sorted(p.decode("utf-8") for p in indexed["stdout"].split(b"\0") if p)
+            if indexed["exit_code"] or indexed["reason"] or actual != expected:
+                raise Refusal("sealed Git index differs from admitted source snapshot")
             write_frozen(self.store, root / "frozen", include_verifiers=False)
             for name, key in (("binary", record["binary"]), ("parent", parent["binary"])):
                 (root / name).write_bytes(self.store.get(key))

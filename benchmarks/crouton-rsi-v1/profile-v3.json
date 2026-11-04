@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "crouton-rsi-baseline-20261104-v3",
+  "model": "stealth/crouton-alpha",
+  "tasks": [
+    "psf-requests-6028",
+    "vuejs-core-11915",
+    "preactjs-preact-3562",
+    "tokio-rs-tokio-6752"
+  ],
+  "seed": 20261104,
+  "max_requests": 192,
+  "max_reported_tokens": 4000000,
+  "transport_timeout_seconds": 240,
+  "continue_independent_trials_after_timeout": true,
+  "engine_limits": {
+    "model_turns": 16,
+    "wall_seconds": 900,
+    "context_tokens": 32768,
+    "output_tokens": 8192,
+    "model_tokens": 320000
+  }
+}
