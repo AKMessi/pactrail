@@ -1,0 +1,5 @@
+{
+  "status": "INVALID",
+  "reason": "Synthetic Git admission omitted upstream ignored-but-tracked lockfiles. Preact grader patches contain unrelated package-lock deletions absent from engine receipt. Operator invalidated and blocked further model dispatch. Apparent successes are not quality-qualified.",
+  "no_promotion": true
+}
