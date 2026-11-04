@@ -91,8 +91,8 @@ def zero(value):
         return False
 
 
-def check_catalog(entry):
-    if entry.get("id") != MODEL:
+def check_catalog(entry, model_id=MODEL):
+    if entry.get("id") != model_id:
         raise Refusal("exact free model unavailable; no substitution")
     pricing = entry.get("pricing", {})
     if not all(zero(pricing.get(k)) for k in ("prompt", "completion")) or (
@@ -128,7 +128,7 @@ class FreeGateway(Gateway):
                     if row.get("usage") is None:
                         raise Refusal("unknown settled usage; stop further inference")
                     total += row["usage"]["input_tokens"] + row["usage"]["output_tokens"]
-            if total + self.config["context_tokens"] + self.config["output_tokens"] > MAX_REPORTED_TOKENS:
+            if total + self.config["context_tokens"] + self.config["output_tokens"] > store.value("pilot-token-ceiling", MAX_REPORTED_TOKENS):
                 raise Refusal("campaign token admission ceiling reached")
             wait_until = store.value("next-provider-ns", 0)
         deadline = min(self.network_deadline_ns, time.time_ns() + 120 * 10**9)
@@ -162,7 +162,7 @@ class FreeGateway(Gateway):
             if metadata["status"] != 200:
                 raise Refusal("provider rejected request; stop all further inference")
             response = json.loads(data)
-            if response.get("model") != MODEL or not isinstance(response.get("choices"), list) or not response["choices"]:
+            if response.get("model") != self.config["id"] or not isinstance(response.get("choices"), list) or not response["choices"]:
                 raise Refusal("provider response model/protocol drift; stop")
             cost = (response.get("usage") or {}).get("cost")
             if cost is not None and not zero(cost):
@@ -191,9 +191,9 @@ def account(key):
     return {"http_status": 200, **{k: values.get(k) for k in ("is_free_tier", "free_model_daily_requests")}}
 
 
-def validations(output):
+def validations(output, tasks=TASKS):
     hashes = {}
-    for task in TASKS:
+    for task in tasks:
         for source in ("base", "gold"):
             root = output / "grader-validation" / task / source
             report = json.loads(read(root / "result.json"))
@@ -208,20 +208,56 @@ def validations(output):
     return hashes
 
 
+def load_profile(path):
+    from pactrail_lab.safe import fields, integer, identifier
+    value = json.loads(read(path))
+    fields(value, {"schema_version", "id", "model", "tasks", "seed", "max_requests", "max_reported_tokens", "engine_limits"})
+    identifier(value["id"])
+    if value["model"] != "stealth/crouton-alpha":
+        raise Refusal("only the explicitly authorized Crouton profile is admitted")
+    if not isinstance(value["tasks"], list) or not 1 <= len(value["tasks"]) <= 8:
+        raise Refusal("bounded unique development tasks required")
+    for task in value["tasks"]: identifier(task)
+    if len(set(value["tasks"])) != len(value["tasks"]):
+        raise Refusal("bounded unique development tasks required")
+    integer(value["seed"], 0, 2**32 - 1, "seed")
+    integer(value["max_requests"], 1, 192, "campaign request cap")
+    integer(value["max_reported_tokens"], 131072, 4000000, "campaign token admission cap")
+    limits = value["engine_limits"]
+    fields(limits, {"model_turns", "wall_seconds", "context_tokens", "output_tokens", "model_tokens"})
+    for name, high in {"model_turns": 16, "wall_seconds": 900, "context_tokens": 32768,
+                       "output_tokens": 8192, "model_tokens": 320000}.items():
+        integer(limits[name], 1, high, name)
+    if limits["output_tokens"] >= limits["context_tokens"]:
+        raise Refusal("output must fit context")
+    if value["max_requests"] != len(value["tasks"]) * 3 * limits["model_turns"]:
+        raise Refusal("campaign request cap must match three repetitions of every task")
+    return value
+
+
 def run(args):
     output, lab = args.output.resolve(), args.lab.resolve()
     if not output.is_dir() or (output / "protocol.json").exists():
         raise Refusal("fresh output with external grader validations required")
-    validation = validations(output)
+    profile = load_profile(args.profile) if getattr(args, "profile", None) else None
+    tasks_selected = tuple(profile["tasks"]) if profile else TASKS
+    model_id = profile["model"] if profile else MODEL
+    request_cap = profile["max_requests"] if profile else MAX_REQUESTS
+    token_cap = profile["max_reported_tokens"] if profile else MAX_REPORTED_TOKENS
+    seed = profile["seed"] if profile else 20261016
+    validation = validations(output, tasks_selected)
     key = credential(args.env_file.resolve())
     metadata, raw = request(key, "models", timeout=20)
     if metadata["status"] != 200: raise Refusal("model catalog unavailable")
-    entry = next((m for m in json.loads(raw)["data"] if m["id"] == MODEL), {})
-    check_catalog(entry)
+    entry = next((m for m in json.loads(raw)["data"] if m["id"] == model_id), {})
+    check_catalog(entry, model_id)
     before = account(key)
-    model = dict(id=MODEL, endpoint=ENDPOINT, api_key_env="OPENROUTER_API_KEY", context_tokens=131072,
+    model = dict(id=model_id, endpoint=ENDPOINT, api_key_env="OPENROUTER_API_KEY", context_tokens=131072,
                  output_tokens=4096, input_rate=0, output_rate=0, temperature=0, reasoning_effort="low")
     limits = dict(model_turns=12, wall_seconds=900, context_tokens=32768, output_tokens=4096, model_tokens=240000)
+    if profile:
+        limits = profile["engine_limits"]
+        model["output_tokens"] = limits["output_tokens"]
     with Store(output / "campaign", create=True) as store:
         inputs = supervisor_inputs()
         for directory in (REPO / "benchmarks/harness-lab-v1", Path(__file__).parent):
@@ -229,6 +265,8 @@ def run(args):
         inputs[str(REPO / "benchmarks/groq-qwen-pilot-v1/pilot.py")] = digest(read(REPO / "benchmarks/groq-qwen-pilot-v1/pilot.py"))
         for path in (lab / "cohort-qualified-v1.json", lab / "prepared-expanded-v1/results.json", lab / "image-lock-expanded-v1.json"):
             inputs[str(path)] = digest(read(path))
+        if profile:
+            inputs[str(args.profile.resolve())] = digest(read(args.profile.resolve()))
         image = command(["docker", "image", "inspect", "--format", "{{.Id}}", "pactrail-lab-qualification:local"])
         image_id = image["stdout"].decode().strip()
         if image["exit_code"] or not image_id.startswith("sha256:"):
@@ -239,12 +277,13 @@ def run(args):
             store.set("supervisor-inputs", supervisor_inputs())
             store.set("external-inputs", {})
             store.set("manifest", store.record({"image": image_id, "model": model,
-                "limits": dict(requests=MAX_REQUESTS, cost_microusd=1, wall_seconds=7200)}))
-            store.set("deadline-ns", time.time_ns() + 7200 * 10**9)
+                "limits": dict(requests=request_cap, cost_microusd=1, wall_seconds=14400 if profile else 7200)}))
+            store.set("deadline-ns", time.time_ns() + (14400 if profile else 7200) * 10**9)
+            store.set("pilot-token-ceiling", token_cap)
             harness = import_git(store, REPO, sha)
             parent = revision(store, harness, binary, {"agent_mode": "single"}, [])
         tasks = []
-        for task in TASKS:
+        for task in tasks_selected:
             preparation = lab / "prepared-expanded-v1" / task / "preparation.json"
             prep = json.loads(read(preparation))
             with store.transaction(): source = import_tree(store, prep["baseline"])
@@ -257,17 +296,17 @@ def run(args):
             for name, expected in inputs.items():
                 if store.put(read(name)) != expected: raise Refusal("input changed while freezing")
         order = [(task["id"], repeat) for task in tasks for repeat in range(3)]
-        random.Random(20261016).shuffle(order)
-        protocol = {"schema_version": 1, "id": "nemotron-rsi-baseline-20261016-v1", "commit": sha,
+        random.Random(seed).shuffle(order)
+        protocol = {"schema_version": 1, "id": profile["id"] if profile else "nemotron-rsi-baseline-20261016-v1", "commit": sha,
             "binary_sha256": digest(binary), "image": image_id, "model": model, "provider_metadata": entry,
-            "engine_limits": limits, "tasks": tasks, "order": order, "seed": 20261016, "repetitions": 3,
+            "engine_limits": limits, "tasks": tasks, "order": order, "seed": seed, "repetitions": 3,
             "frozen_inputs": inputs, "validations": validation, "account_before": before,
             "environment": {"python": sys.version, "platform": platform.platform(), "cpu_count": os.cpu_count()},
             "provider_policy": {"exact_free_model": True, "allow_fallbacks": False, "max_price": {"prompt": 0, "completion": 0},
-                                "max_requests": MAX_REQUESTS, "max_reported_tokens_plus_next_reservation": MAX_REPORTED_TOKENS,
+                                "max_requests": request_cap, "max_reported_tokens_plus_next_reservation": token_cap,
                                 "pacing_seconds": PACING_SECONDS, "unlimited_access_claimed": False},
             "permissions": {"process": "disabled", "write_paths": ["."]},
-            "population": "Two public historical development issues; not held out or representative.",
+            "population": "Public historical development issues; not held out or representative.",
             "success": "External targeted AND regression pass AND ready_to_apply, receipt_valid, trace_valid, source_isolation_valid.",
             "stopping": "No provider retries/substitution/paid fallback. Provider or infrastructure error stops all further requests. Retain all declared trials.",
             "analysis": "Per-task three-run counts, strict vs functional correctness, resource coverage, cache, latency and failure taxonomy. No causal improvement or broad superiority claim.",
@@ -331,4 +370,5 @@ def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("lab", "output", "binary", "env-file"): parser.add_argument("--" + name, type=Path, required=True)
+    parser.add_argument("--profile", type=Path)
     run(parser.parse_args())
