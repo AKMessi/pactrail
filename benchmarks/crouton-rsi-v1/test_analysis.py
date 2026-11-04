@@ -10,6 +10,41 @@ spec.loader.exec_module(analysis)
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_projection_audit_rejects_unrelated_grader_tree_changes(self):
+        from pactrail_lab.snapshots import import_tree, materialize, project_verified_changes
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base, raw = root / "base", root / "sparse"
+            base.mkdir(); raw.mkdir()
+            (base / "package-lock.json").write_text("keep")
+            (base / "value").write_text("before")
+            (raw / "value").write_text("after")
+            receipt = {"changes": [{"path": "value", "before_digest": "before", "after_digest": "after"}]}
+            with analysis.Store(root / "campaign", create=True) as store, store.transaction():
+                baseline, sparse = import_tree(store, base), import_tree(store, raw)
+                projected = project_verified_changes(store, baseline, sparse, receipt["changes"])
+                materialize(store, projected, root / "trials/task-r1/candidate")
+                protocol = {"commit": "fixture", "model": {"id": "fixture"}, "order": [["task", 0]],
+                            "tasks": [{"id": "task", "source": baseline}], "account_before": {},
+                            "frozen_inputs": {}, "validations": {}, "candidate_grading": "fixture"}
+                row = {"task": "task", "repeat": 0, "status": "completed", "strict_success": False,
+                       "checks": {"receipt_valid": True}, "candidate_source": projected}
+                store.append("candidate-projected", {"baseline": baseline, "raw_candidate": sparse,
+                    "projected": projected, "receipt": store.put(analysis.canonical(receipt))})
+                store.append("pilot-protocol-frozen", {"artifact": store.put(analysis.canonical(protocol))})
+                store.append("pilot-trial-result", {"artifact": store.record(row)})
+                store.append("pilot-account-after", {})
+                (root / "events.json").write_bytes(analysis.canonical(store.events()))
+            (root / "protocol.json").write_bytes(analysis.canonical(protocol))
+            (root / "protocol.sha256").write_text(analysis.digest(analysis.canonical(protocol)))
+            (root / "results.json").write_text(json.dumps([row]))
+            (root / "usage.json").write_text("[]")
+            (root / "account-after.json").write_text("{}")
+            analysis.analyze(root)
+            (root / "trials/task-r1/candidate/package-lock.json").unlink()
+            with self.assertRaisesRegex(ValueError, "graded candidate differs"):
+                analysis.analyze(root)
+
     def test_unknown_values_are_not_measured_zero(self):
         self.assertIsNone(analysis.coverage([None], 1)["reported_sum"])
         self.assertEqual(analysis.coverage([0], 1)["reported_sum"], 0)
