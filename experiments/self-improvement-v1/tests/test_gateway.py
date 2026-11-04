@@ -21,6 +21,15 @@ BODY = dict(model="frozen/model", messages=[dict(role="user", content="Fix the p
 
 
 class GatewayTests(unittest.TestCase):
+    def test_optional_transport_timeout_is_bounded_and_default_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "campaign"
+            Store(root, create=True).close()
+            self.assertEqual(Gateway(root, MODEL, LIMITS, "fixture").transport_timeout_seconds, 120)
+            self.assertEqual(Gateway(root, MODEL, LIMITS, "fixture", transport_timeout_seconds=240).transport_timeout_seconds, 240)
+            for timeout in (0, 241, True, "240"):
+                with self.assertRaises(Refusal): Gateway(root, MODEL, LIMITS, "fixture", transport_timeout_seconds=timeout)
+
     def test_reasoning_representations_match_frozen_effort_without_expansion(self):
         model = {**MODEL, "reasoning_effort": "low"}
         for extra in ({"reasoning_effort": "low"}, {"reasoning": {"effort": "low"}}):

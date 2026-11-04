@@ -23,7 +23,9 @@ class Forward(http.server.BaseHTTPRequestHandler):
         body = self.rfile.read(length)
         token = os.environ["PACTRAIL_LAB_LEASE"]
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as upstream:
-            upstream.settimeout(130)
+            # The trusted gateway may admit up to 240 seconds of model I/O.
+            # This relay never grants time beyond the engine/trial deadline.
+            upstream.settimeout(250)
             upstream.connect("/gateway.sock")
             header = ("POST /v1/chat/completions HTTP/1.0\r\nHost: gateway\r\nContent-Type: application/json\r\n"
                       f"Authorization: Bearer {token}\r\nContent-Length: {len(body)}\r\n\r\n").encode()

@@ -24,9 +24,24 @@ class ProfileTests(unittest.TestCase):
                     {**original, "max_reported_tokens": 4000001}, {**original, "extra": True},
                     {**original, "tasks": [original["tasks"][0]] * 4},
                     {**original, "tasks": [{}]},
+                    {**original, "transport_timeout_seconds": 241},
+                    {**original, "continue_independent_trials_after_timeout": "yes"},
                     {**original, "engine_limits": {**original["engine_limits"], "output_tokens": 8193}}]
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "profile.json"
             for variant in variants:
                 path.write_text(json.dumps(variant))
                 with self.assertRaises(pilot.Refusal): pilot.load_profile(path)
+
+    def test_new_protocol_declares_timeout_and_continuation(self):
+        profile = pilot.load_profile(Path(__file__).with_name("profile-v2.json"))
+        self.assertEqual(profile["transport_timeout_seconds"], 240)
+        self.assertIs(profile["continue_independent_trials_after_timeout"], True)
+
+    def test_uncertain_attempts_keep_full_token_charge(self):
+        config = {"context_tokens": 131072, "output_tokens": 8192}
+        rows = [{"state": "settled", "usage": {"input_tokens": 100, "output_tokens": 20}},
+                {"state": "reserved", "usage": None}, {"state": "reserved", "usage": None}]
+        self.assertEqual(pilot.token_reservations(rows, config), 120 + 2 * (131072 + 8192))
+        with self.assertRaises(pilot.Refusal):
+            pilot.token_reservations([{"state": "settled", "usage": None}], config)

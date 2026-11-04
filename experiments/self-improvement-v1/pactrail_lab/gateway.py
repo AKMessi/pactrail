@@ -19,7 +19,7 @@ from .safe import MAX_JSON, Refusal, canonical, decode, integer, text
 from .store import Store
 
 
-def _provider_bytes(endpoint, key, encoded, sender):
+def _provider_bytes(endpoint, key, encoded, sender, timeout_seconds=120):
     """Trusted host worker; a stalled DNS/TLS/body read can be terminated.
 
     Only bounded bytes cross back. Exceptions never serialize credentials,
@@ -31,7 +31,7 @@ def _provider_bytes(endpoint, key, encoded, sender):
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, *_):
                 raise Refusal("provider redirect refused")
-        with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect).open(request, timeout=120) as response:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect).open(request, timeout=timeout_seconds) as response:
             data = response.read(8_388_609)
         sender.send_bytes(b"S" + data if len(data) <= 8_388_608 else b"E")
     except Exception:
@@ -84,11 +84,12 @@ def validate_request(body, config):
 
 
 class Gateway:
-    def __init__(self, root, config, limits, api_key, transport=None):
+    def __init__(self, root, config, limits, api_key, transport=None, *, transport_timeout_seconds=120):
         self.root, self.config, self.limits = root, config, limits
         if not isinstance(api_key, str) or not api_key or len(api_key) > 8192 or "\n" in api_key or "\r" in api_key:
             raise Refusal("provider credential is unavailable or invalid")
         self.key, self.transport = api_key, transport or self._provider
+        self.transport_timeout_seconds = integer(transport_timeout_seconds, 1, 240, "provider total timeout")
         self.leases, self.lock = {}, threading.Lock()
 
     def lease(self, name, requests, seconds):
@@ -102,13 +103,13 @@ class Gateway:
         self.leases.pop(token, None)
 
     def _provider(self, body):
-        deadline = min(time.time_ns() + 120 * 10**9, self.network_deadline_ns)
+        deadline = min(time.time_ns() + self.transport_timeout_seconds * 10**9, self.network_deadline_ns)
         remaining = (deadline - time.time_ns()) / 10**9
         if remaining <= 0: raise Refusal("provider deadline exhausted")
         context = multiprocessing.get_context("spawn")
         receiver, sender = context.Pipe(duplex=False)
         child = context.Process(target=_provider_bytes,
-            args=(self.config["endpoint"], self.key, canonical(body), sender), daemon=True)
+            args=(self.config["endpoint"], self.key, canonical(body), sender, self.transport_timeout_seconds), daemon=True)
         try:
             child.start()
             sender.close()

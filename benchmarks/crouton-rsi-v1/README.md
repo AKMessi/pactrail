@@ -4,7 +4,7 @@ An explicitly configured reuse of the existing Nemotron free-only runner, not
 a new engine or a model substitution inside an existing experiment. Exact model:
 `stealth/crouton-alpha`. Zero prompt/completion prices must be present in the
 live catalog; zero-price provider routing and no fallback are enforced. Quota,
-transport, identity or infrastructure failures stop further inference. This
+transport, identity or infrastructure failures stop further inference by default. This
 does not assume unlimited access or independently verify invoice charges.
 
 Four public **development** issues cover Python, TypeScript, JavaScript and Rust.
@@ -47,3 +47,21 @@ analysis can be tracked. Missing metrics remain null. All declared trials count,
 including failures and unattempted trials after a provider/infrastructure stop.
 Failure summaries are descriptive, not causal proof. Never change a scored
 protocol; retain it and create another version if infrastructure needs repair.
+
+## v2 transport qualification
+
+The immutable v1 experiment stopped after one turn-exhausted Requests run and
+a 120-second total timeout during the next trial. Twenty-two responses were
+accepted, one invocation remained uncertain, and ten trials were unattempted.
+Its zero successes cannot be reported as 0/12 model accuracy.
+
+`profile-v2.json` preserves tasks/order/model/engine budgets but explicitly
+permits a 240-second total provider timeout. The relay permits 250 seconds;
+the engine's 300-second request bound, trial/campaign deadlines and cancellation
+still apply. The ordinary gateway default remains 120 seconds. A v2 timed-out
+trial is terminal and counts as failed. Its invocation is never retried or
+refunded; its entire conservative token reservation remains counted. Only later
+independently preregistered trials may continue. A quota, pricing, identity or
+other transport/infrastructure error still stops the campaign. No hidden retry
+or model/provider substitution is allowed. Use a fresh output directory and
+`--profile benchmarks/crouton-rsi-v1/profile-v2.json` to run it.

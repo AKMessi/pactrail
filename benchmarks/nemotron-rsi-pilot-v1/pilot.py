@@ -74,7 +74,7 @@ def request(key, path, body=None, timeout=45):
 
 def provider_worker(key, body, sender):
     try:
-        metadata, data = request(key, "chat/completions", body)
+        metadata, data = request(key, "chat/completions", body, timeout=240)
         sender.send_bytes(canonical(metadata))
         sender.send_bytes(data)
     except Exception:
@@ -108,7 +108,25 @@ def wire_request(body):
                                  "max_price": {"prompt": 0, "completion": 0}}}
 
 
+def token_reservations(rows, config):
+    total = 0
+    for row in rows:
+        if row["state"] == "settled":
+            if row.get("usage") is None:
+                raise Refusal("unknown settled usage; stop further inference")
+            total += row["usage"]["input_tokens"] + row["usage"]["output_tokens"]
+        else:
+            # Includes current admission and every uncertain earlier call.
+            total += config["context_tokens"] + config["output_tokens"]
+    return total
+
+
 class FreeGateway(Gateway):
+    def __init__(self, root, config, limits, api_key):
+        with Store(root) as store:
+            timeout = store.value("pilot-transport-timeout-seconds", 120)
+        super().__init__(root, config, limits, api_key, transport_timeout_seconds=timeout)
+
     def submit(self, token, body):
         try:
             return super().submit(token, body)
@@ -121,17 +139,12 @@ class FreeGateway(Gateway):
         with Store(self.root) as store:
             if store.value("free-provider-blocked", False):
                 raise Refusal("provider blocked; no replay, paid fallback or substitution")
-            rows = budget.reservations(store).values()
-            total = 0
-            for row in rows:
-                if row["state"] == "settled":
-                    if row.get("usage") is None:
-                        raise Refusal("unknown settled usage; stop further inference")
-                    total += row["usage"]["input_tokens"] + row["usage"]["output_tokens"]
-            if total + self.config["context_tokens"] + self.config["output_tokens"] > store.value("pilot-token-ceiling", MAX_REPORTED_TOKENS):
+            rows = list(budget.reservations(store).values())
+            total = token_reservations(rows, self.config)
+            if total > store.value("pilot-token-ceiling", MAX_REPORTED_TOKENS):
                 raise Refusal("campaign token admission ceiling reached")
             wait_until = store.value("next-provider-ns", 0)
-        deadline = min(self.network_deadline_ns, time.time_ns() + 120 * 10**9)
+        deadline = min(self.network_deadline_ns, time.time_ns() + self.transport_timeout_seconds * 10**9)
         while time.time_ns() < wait_until:
             if wait_until >= deadline: raise Refusal("pacing exceeds invocation deadline")
             time.sleep(min(0.5, (wait_until - time.time_ns()) / 10**9))
@@ -147,6 +160,9 @@ class FreeGateway(Gateway):
             child.start()
             sender.close()
             if not receiver.poll(max(0, (deadline - time.time_ns()) / 10**9)):
+                with Store(self.root) as store, store.transaction():
+                    store.append("free-provider-timeout", {"stage": "headers", "limit_seconds": self.transport_timeout_seconds})
+                    store.set("pilot-last-provider-timeout", True)
                 raise Refusal("provider total deadline reached")
             metadata = json.loads(receiver.recv_bytes(4096))
             with Store(self.root) as store, store.transaction():
@@ -154,6 +170,9 @@ class FreeGateway(Gateway):
             if metadata.get("transport_error"):
                 raise Refusal("provider transport failed; no retry")
             if not receiver.poll(max(0, (deadline - time.time_ns()) / 10**9)):
+                with Store(self.root) as store, store.transaction():
+                    store.append("free-provider-timeout", {"stage": "body", "limit_seconds": self.transport_timeout_seconds})
+                    store.set("pilot-last-provider-timeout", True)
                 raise Refusal("provider body deadline reached")
             data = receiver.recv_bytes(MAX_BODY)
             with Store(self.root) as store, store.transaction():
@@ -211,7 +230,8 @@ def validations(output, tasks=TASKS):
 def load_profile(path):
     from pactrail_lab.safe import fields, integer, identifier
     value = json.loads(read(path))
-    fields(value, {"schema_version", "id", "model", "tasks", "seed", "max_requests", "max_reported_tokens", "engine_limits"})
+    fields(value, {"schema_version", "id", "model", "tasks", "seed", "max_requests", "max_reported_tokens", "engine_limits"},
+           {"transport_timeout_seconds", "continue_independent_trials_after_timeout"})
     identifier(value["id"])
     if value["model"] != "stealth/crouton-alpha":
         raise Refusal("only the explicitly authorized Crouton profile is admitted")
@@ -223,6 +243,9 @@ def load_profile(path):
     integer(value["seed"], 0, 2**32 - 1, "seed")
     integer(value["max_requests"], 1, 192, "campaign request cap")
     integer(value["max_reported_tokens"], 131072, 4000000, "campaign token admission cap")
+    integer(value.get("transport_timeout_seconds", 120), 1, 240, "provider total timeout")
+    if type(value.get("continue_independent_trials_after_timeout", False)) is not bool:
+        raise Refusal("timeout continuation must be explicit boolean")
     limits = value["engine_limits"]
     fields(limits, {"model_turns", "wall_seconds", "context_tokens", "output_tokens", "model_tokens"})
     for name, high in {"model_turns": 16, "wall_seconds": 900, "context_tokens": 32768,
@@ -280,6 +303,7 @@ def run(args):
                 "limits": dict(requests=request_cap, cost_microusd=1, wall_seconds=14400 if profile else 7200)}))
             store.set("deadline-ns", time.time_ns() + (14400 if profile else 7200) * 10**9)
             store.set("pilot-token-ceiling", token_cap)
+            store.set("pilot-transport-timeout-seconds", profile.get("transport_timeout_seconds", 120) if profile else 120)
             harness = import_git(store, REPO, sha)
             parent = revision(store, harness, binary, {"agent_mode": "single"}, [])
         tasks = []
@@ -313,6 +337,11 @@ def run(args):
             "limitations": ["Baseline only; no harness proposal/candidate comparison", "No independent held-out curation",
                 "Gateway byte reservation 131072 differs from engine context target 32768", "Invoice and unlimited-access status unverified",
                 "Per-run token cap is checked by engine after response; one invocation can overshoot", "No process tools inside agent; external grading only"]}
+        if profile:
+            protocol["provider_policy"]["transport_timeout_seconds"] = profile.get("transport_timeout_seconds", 120)
+            protocol["provider_policy"]["continue_independent_trials_after_timeout"] = profile.get("continue_independent_trials_after_timeout", False)
+            if profile.get("continue_independent_trials_after_timeout", False):
+                protocol["stopping"] = "No retries/substitution/paid fallback. A timed-out trial fails; its uncertain invocation stays reserved. Only later independently declared trials may continue. Any other provider/infrastructure error stops the campaign."
         (output / "protocol.json").write_bytes(canonical(protocol))
         (output / "protocol.sha256").write_text(digest(canonical(protocol)) + "\n")
         with store.transaction(): store.append("pilot-protocol-frozen", {"artifact": store.put(canonical(protocol))})
@@ -343,7 +372,13 @@ def run(args):
                             regression = helpers.external_grade(lab, task_id, "candidate", trial / "regression", trial / "candidate", "regression")
                             row.update(targeted=targeted["targeted"], regression=regression["regression"],
                                 strict_success=bool(targeted["qualified"] and regression["qualified"] and len(outcome["checks"]) >= 4 and all(v is True for v in outcome["checks"].values())))
-                        if store.value("free-provider-blocked", False): stopped = True
+                        if store.value("free-provider-blocked", False):
+                            if profile and profile.get("continue_independent_trials_after_timeout", False) and store.value("pilot-last-provider-timeout", False):
+                                with store.transaction():
+                                    store.append("pilot-timeout-trial-closed", {"trial": trial.name, "uncertain_usage_reserved": True, "no_replay": True})
+                                    store.set("free-provider-blocked", False)
+                                    store.set("pilot-last-provider-timeout", False)
+                            else: stopped = True
                         if not any(r["lease"] == trial.name for r in budget.reservations(store).values()) and not row["strict_success"]:
                             stopped = True
                     except (Refusal, OSError, ValueError) as error:
