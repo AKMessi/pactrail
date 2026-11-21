@@ -19,24 +19,51 @@ durable, inspectable software change transaction.
 Illustrative terminal flow (values depend on the run):
 
 ```text
-pactrail 2.1.2 · Ledger
-  workspace  /work/project
-  commands   isolated edits · native processes blocked
+  ╭─ Pactrail 2.1.2 · verification-native ───────────────────────────╮
+  │ Ready  isolated transaction workspace                            │
+  │                                                                  │
+  │ workspace  /work/project                                         │
+  │ model      local-coder · Ollama                                  │
+  │ commands   isolated edits · native processes blocked             │
+  │                                                                  │
+  │ Next                                                             │
+  │   type a task  describe a change; nothing runs until Enter       │
+  │                                                                  │
+  │ Work stays isolated in a candidate directory until you review    │
+  │ and apply it.                                                    │
+  ╰──────────────────────────────────────────────────────────────────╯
 
-pactrail ❯ Fix the parser regression and add a test.
+  Enter dispatch · Ctrl+J newline · Tab complete · Ctrl+P commands
+  Ctrl+O runs · Ctrl+S draft · Ctrl+G editor · /help
 
-◇ state     contracting · validating task contract
-● model     turn 1 · 2 actions
-◆ tool      edit_file · changed src/parser.rs
-✓ verify    contract-bound regression check · deterministic pass
+╭─ Composer · commands: none · local-coder ─────────────────────────╮
+│ workspace · new task                                              │
+╰─ pactrail ❯ Fix the parser regression and add a test.
 
-Receipt · ◇ Awaiting review
-  candidate  1 file · +42 / -7 bytes
-  /diff review · /evidence inspect · /apply · /discard
+  ◇ state     contracting → validating task contract
+  ◇ model     turn 1 · 2 actions
+  ◆ tool      edit_file · changed src/parser.rs
+  ✓ verify    regression check · deterministic pass
 
-Composer · commands: none · local-coder
-pactrail ❯
+  ╭─ Receipt · ◇ Awaiting review ────────────────────────────────────╮
+  │ run        019f...                                               │
+  │ goal       Fix the parser regression and add a test.             │
+  │ candidate  1 file · +42 / −7 bytes                               │
+  │ evidence   1 passed · 0 failed · 0 inconclusive                  │
+  │ integrity  Verified receipt digest                               │
+  │                                                                  │
+  │ Candidate files                                                  │
+  │   M src/parser.rs                                                │
+  │     +42 B  -7 B                                                  │
+  ╰──────────────────────────────────────────────────────────────────╯
+
+  Next /diff inspect exact changes · /apply land files · /discard reject candidate
+  Inspect /trace timeline · /runs history · /evidence obligations
 ```
+
+Startup, help, status, setup summaries, run history, and receipts share one
+width-safe card system. They wrap down to narrow terminals and use ASCII frames
+when `PACTRAIL_ASCII=1`, `TERM=dumb`, or plain mode is active.
 
 While a run executes, you can prepare the next draft. Enter retains it; dispatch
 remains explicit. `continue` recovers eligible interrupted/failed work or creates
@@ -339,7 +366,7 @@ Cargo normally installs the executable in `~/.cargo/bin`; put that directory on
 
 ### Connect your model
 
-Run `pactrail setup`, or enter your first task in `pactrail` and follow guided setup. Choose a provider, paste a hidden key if needed, then search/select a model. See [model setup](docs/model-setup.md) for credential storage and platform details.
+Run `pactrail setup`, or enter your first task in `pactrail` and follow guided setup. The provider menu detects running local servers, environment keys, workspace `.env` entries, and previously saved endpoint-bound keys. Choose a grouped provider, paste a hidden key only when needed, then pick from a ranked model catalog or enter an exact ID. A single matching or discovered model is selected automatically. See [model setup](docs/model-setup.md) for credential storage and platform details.
 
 
 Open a terminal in a project and launch the session:

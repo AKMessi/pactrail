@@ -27,12 +27,23 @@ layout. Startup and approval fields stack on narrow terminals. Live activity
 puts elapsed time at the right at 80 columns and wider; narrow terminals omit
 that visual timestamp. Event timestamps remain in the durable trace.
 
+Startup, help, status, setup summaries, run history, and receipts share width-safe
+rounded cards. The startup card states whether setup is needed, a candidate is
+waiting, or the transaction workspace is ready; it then shows workspace, model,
+process boundary, active memory, one contextual Next action, and the isolation
+note. Long values wrap inside the card instead of crossing the terminal edge.
+`/help` groups commands with rules and a keyboard map, and `/help <command>`
+opens focused usage. `/status` groups the effective model, boundaries, and
+workspace settings into one card. Receipts show run, goal, candidate, evidence,
+integrity, candidate files, and unresolved risks; only deterministic passing
+evidence uses green.
+
 The composer shows process mode, workspace and explicit continuation focus.
-`?` opens help. `PACTRAIL_ASCII=1` replaces the state markers and composer
-indicators with ASCII; repository paths and model prose keep their original
-Unicode. `PACTRAIL_REDUCED_MOTION=1` disables the spinner's timed animation, as
-`PACTRAIL_NO_ANIMATION=1` does. `NO_COLOR` disables styling. Metadata uses the
-terminal's faint style rather than assuming a dark background.
+`?` opens help. `PACTRAIL_ASCII=1` replaces card frames, state markers, and
+composer indicators with ASCII; repository paths and model prose keep their
+original Unicode. `PACTRAIL_REDUCED_MOTION=1` disables the spinner's timed
+animation, as `PACTRAIL_NO_ANIMATION=1` does. `NO_COLOR` disables styling.
+Metadata uses the terminal's faint style rather than assuming a dark background.
 
 Failure reports keep the original engine error and add guidance for its class.
 Guidance never grants permissions, resets budgets or promises that a checkpoint
@@ -54,6 +65,19 @@ requires a terminal, preserves scrollback, and has no live type-ahead editor.
 it. Process requests are denied in plain mode; use cursor mode for interruptible
 per-request approvals or explicitly configure a one-shot process policy. Use
 `pactrail run` for noninteractive automation.
+
+## Guided setup
+
+`/setup` and `pactrail setup` inspect the environment before asking anything:
+running local runtimes on their usual ports, provider environment variables,
+matching workspace `.env` entries, and saved endpoint-bound keys. The provider
+menu groups local runtimes, hosted providers, and custom endpoints. Numbers 1–7
+keep their original meaning; 8–10 add LM Studio, llama.cpp, and vLLM. Discovered
+models are ranked toward coding/chat use, a single model is selected
+automatically, and search accepts a number, partial name, exact ID, or Enter for
+the first match. The session closes with a summary card for the model, provider,
+endpoint, and credential source. See [model setup](model-setup.md) for storage
+and platform details.
 
 ## What the UI reports
 
