@@ -35,7 +35,9 @@ impl Theme {
     #[must_use]
     pub fn brand(&self, value: &str) -> String {
         self.paint(
-            Style::new().fg_color(Some(AnsiColor::Cyan.into())).bold(),
+            Style::new()
+                .fg_color(Some(AnsiColor::BrightCyan.into()))
+                .bold(),
             value,
         )
     }
