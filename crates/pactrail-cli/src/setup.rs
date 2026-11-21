@@ -1,7 +1,10 @@
 //! Explicit guided onboarding. Keys never pass through task history or settings TOML.
+use std::collections::BTreeSet;
 use std::io::IsTerminal;
+use std::net::{SocketAddr, TcpStream};
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 use reedline::Signal;
 use secrecy::{ExposeSecret, SecretString};
@@ -9,8 +12,232 @@ use secrecy::{ExposeSecret, SecretString};
 use crate::cli::ProviderKind;
 use crate::commands::CliError;
 use crate::settings::{InteractiveSettings, SettingsStore};
+use crate::theme::Theme;
 
 const PREFIX: &str = "PACTRAIL_SAVED_";
+
+struct ProviderOption {
+    name: &'static str,
+    aliases: &'static [&'static str],
+    group: &'static str,
+    provider: ProviderKind,
+    endpoint: &'static str,
+    env: &'static str,
+    local_port: Option<u16>,
+    custom_endpoint: bool,
+}
+
+// Numbers are stable across releases: 1-7 retain their historical meaning.
+const PROVIDERS: &[ProviderOption] = &[
+    ProviderOption {
+        name: "OpenRouter",
+        aliases: &["openrouter", "open-router"],
+        group: "Hosted providers",
+        provider: ProviderKind::OpenAiCompatible,
+        endpoint: "https://openrouter.ai/api/v1",
+        env: "OPENROUTER_API_KEY",
+        local_port: None,
+        custom_endpoint: false,
+    },
+    ProviderOption {
+        name: "Ollama",
+        aliases: &["ollama"],
+        group: "Local runtimes",
+        provider: ProviderKind::Ollama,
+        endpoint: "http://127.0.0.1:11434/v1",
+        env: "PACTRAIL_NO_KEY",
+        local_port: Some(11434),
+        custom_endpoint: false,
+    },
+    ProviderOption {
+        name: "OpenAI",
+        aliases: &["openai", "open-ai"],
+        group: "Hosted providers",
+        provider: ProviderKind::OpenAi,
+        endpoint: "https://api.openai.com/v1",
+        env: "OPENAI_API_KEY",
+        local_port: None,
+        custom_endpoint: false,
+    },
+    ProviderOption {
+        name: "Anthropic",
+        aliases: &["anthropic", "claude"],
+        group: "Hosted providers",
+        provider: ProviderKind::Anthropic,
+        endpoint: "https://api.anthropic.com",
+        env: "ANTHROPIC_API_KEY",
+        local_port: None,
+        custom_endpoint: false,
+    },
+    ProviderOption {
+        name: "Gemini",
+        aliases: &["gemini", "google"],
+        group: "Hosted providers",
+        provider: ProviderKind::Gemini,
+        endpoint: "https://generativelanguage.googleapis.com",
+        env: "GEMINI_API_KEY",
+        local_port: None,
+        custom_endpoint: false,
+    },
+    ProviderOption {
+        name: "OpenAI Responses",
+        aliases: &["responses", "openai-responses"],
+        group: "Hosted providers",
+        provider: ProviderKind::OpenAiResponses,
+        endpoint: "https://api.openai.com/v1",
+        env: "OPENAI_API_KEY",
+        local_port: None,
+        custom_endpoint: false,
+    },
+    ProviderOption {
+        name: "Other compatible",
+        aliases: &["other", "compatible", "openai-compatible"],
+        group: "Custom",
+        provider: ProviderKind::OpenAiCompatible,
+        endpoint: "",
+        env: "OPENAI_API_KEY",
+        local_port: None,
+        custom_endpoint: true,
+    },
+    ProviderOption {
+        name: "LM Studio",
+        aliases: &["lmstudio", "lm-studio"],
+        group: "Local runtimes",
+        provider: ProviderKind::OpenAiCompatible,
+        endpoint: "http://127.0.0.1:1234/v1",
+        env: "PACTRAIL_NO_KEY",
+        local_port: Some(1234),
+        custom_endpoint: false,
+    },
+    ProviderOption {
+        name: "llama.cpp",
+        aliases: &["llamacpp", "llama-cpp"],
+        group: "Local runtimes",
+        provider: ProviderKind::OpenAiCompatible,
+        endpoint: "http://127.0.0.1:8080/v1",
+        env: "PACTRAIL_NO_KEY",
+        local_port: Some(8080),
+        custom_endpoint: false,
+    },
+    ProviderOption {
+        name: "vLLM",
+        aliases: &["vllm"],
+        group: "Local runtimes",
+        provider: ProviderKind::OpenAiCompatible,
+        endpoint: "http://127.0.0.1:8000/v1",
+        env: "PACTRAIL_NO_KEY",
+        local_port: Some(8000),
+        custom_endpoint: false,
+    },
+];
+
+const PROVIDER_GROUPS: &[&str] = &["Local runtimes", "Hosted providers", "Custom"];
+
+struct ProviderDetection {
+    active: bool,
+    status: String,
+}
+
+fn normalize_provider(value: &str) -> String {
+    value
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn find_provider(choice: &str) -> Option<&'static ProviderOption> {
+    if let Ok(index) = choice.parse::<usize>()
+        && let Some(option) = index.checked_sub(1).and_then(|index| PROVIDERS.get(index))
+    {
+        return Some(option);
+    }
+    let choice = normalize_provider(choice);
+    PROVIDERS.iter().find(|option| {
+        normalize_provider(option.name) == choice
+            || option
+                .aliases
+                .iter()
+                .any(|alias| normalize_provider(alias) == choice)
+    })
+}
+
+fn local_runtime_running(port: u16) -> bool {
+    TcpStream::connect_timeout(
+        &SocketAddr::from(([127, 0, 0, 1], port)),
+        Duration::from_millis(150),
+    )
+    .is_ok()
+}
+
+fn workspace_env_names(workspace: &Path) -> BTreeSet<String> {
+    dotenvy::from_path_iter(workspace.join(".env"))
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter(|(_, value)| !value.is_empty())
+        .map(|(name, _)| name)
+        .collect()
+}
+
+fn provider_detections(replace_key: bool, env_names: &BTreeSet<String>) -> Vec<ProviderDetection> {
+    PROVIDERS
+        .iter()
+        .map(|option| {
+            if let Some(port) = option.local_port {
+                let active = local_runtime_running(port);
+                return ProviderDetection {
+                    active,
+                    status: if active {
+                        format!("detected on 127.0.0.1:{port}")
+                    } else {
+                        format!("not running on 127.0.0.1:{port}")
+                    },
+                };
+            }
+            if option.custom_endpoint {
+                return ProviderDetection {
+                    active: false,
+                    status: "you provide the URL".to_owned(),
+                };
+            }
+            let environment = std::env::var(option.env).is_ok_and(|value| !value.is_empty());
+            let workspace_file = env_names.contains(option.env);
+            let saved = !replace_key
+                && !option.endpoint.is_empty()
+                && credential(&key_id(option.endpoint)).is_ok_and(|key| key.is_some());
+            ProviderDetection {
+                active: environment || workspace_file || saved,
+                status: if environment {
+                    format!("{} found", option.env)
+                } else if workspace_file {
+                    format!("{} found in .env", option.env)
+                } else if saved {
+                    "saved key available".to_owned()
+                } else {
+                    format!("{} not set", option.env)
+                },
+            }
+        })
+        .collect()
+}
+
+fn recommended_provider(current: &InteractiveSettings, detections: &[ProviderDetection]) -> usize {
+    if current.model.is_some()
+        && let Some(index) = PROVIDERS.iter().position(|option| {
+            option.provider == current.provider
+                && (option.endpoint.is_empty()
+                    || current.base_url.as_deref() == Some(option.endpoint))
+        })
+    {
+        return index;
+    }
+    detections
+        .iter()
+        .position(|detection| detection.active)
+        .unwrap_or(1)
+}
+
 static SESSION_KEYS: OnceLock<Mutex<std::collections::HashMap<String, SecretString>>> =
     OnceLock::new();
 
@@ -210,6 +437,142 @@ fn windows_protect(value: &str, decrypt: bool) -> Result<String, CliError> {
     String::from_utf8(output.stdout).map_err(|_| error("Invalid protected credential encoding"))
 }
 
+fn model_bucket(model: &str, preferred: Option<&str>) -> u8 {
+    let lower = model.to_lowercase();
+    if preferred == Some(model) {
+        0
+    } else if [
+        "embedding",
+        "embed-",
+        "whisper",
+        "tts",
+        "moderation",
+        "dall-e",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+    {
+        3
+    } else if ["coder", "code", "instruct", "chat"]
+        .iter()
+        .any(|marker| lower.contains(marker))
+    {
+        1
+    } else {
+        2
+    }
+}
+
+fn ranked_models(models: &[String], preferred: Option<&str>) -> Vec<String> {
+    let mut ranked = models.to_vec();
+    ranked.sort_by(|left, right| {
+        model_bucket(left, preferred)
+            .cmp(&model_bucket(right, preferred))
+            .then_with(|| left.to_lowercase().cmp(&right.to_lowercase()))
+    });
+    ranked
+}
+
+fn print_provider_menu(
+    theme: &Theme,
+    detections: &[ProviderDetection],
+    recommended: usize,
+) -> Result<(), CliError> {
+    let columns = crate::interactive::terminal_columns();
+    say(&format!(
+        "\n  {}\n  {}\n\n",
+        theme.heading("Connect a model"),
+        theme.muted("Guided setup · /cancel keeps your current settings")
+    ))?;
+    for group in PROVIDER_GROUPS {
+        say(&format!("  {}\n", theme.heading(group)))?;
+        for (index, option) in PROVIDERS.iter().enumerate() {
+            if option.group != *group {
+                continue;
+            }
+            let detection = &detections[index];
+            let marker = if detection.active {
+                theme.brand(theme.symbol("●"))
+            } else {
+                theme.muted(theme.symbol("○"))
+            };
+            let wide = columns >= 60;
+            let recommended_label = if index == recommended {
+                theme.brand(if wide { " · recommended" } else { " *" })
+            } else {
+                String::new()
+            };
+            if wide {
+                let status =
+                    crate::terminal::truncate(&detection.status, columns.saturating_sub(41));
+                say(&format!(
+                    "  {marker} {:>2}  {} {}{recommended_label}\n",
+                    index + 1,
+                    theme.text(&format!("{:<18}", option.name)),
+                    if detection.active {
+                        theme.text(&status)
+                    } else {
+                        theme.muted(&status)
+                    }
+                ))?;
+            } else {
+                say(&format!(
+                    "  {marker} {:>2}  {}{recommended_label}\n",
+                    index + 1,
+                    theme.text(option.name)
+                ))?;
+            }
+        }
+    }
+    let recommended = PROVIDERS
+        .get(recommended)
+        .map_or("Ollama", |option| option.name);
+    say(&format!(
+        "\n  Type a number or provider name. Enter selects {}.\n",
+        theme.accent(recommended)
+    ))?;
+    Ok(())
+}
+
+fn print_model_menu(
+    theme: &Theme,
+    columns: usize,
+    models: &[String],
+    preferred: Option<&str>,
+) -> Result<(), CliError> {
+    let shown = models.len().min(20);
+    say(&format!(
+        "\n  {} {}\n",
+        theme.heading("Discovered models"),
+        theme.muted(&format!(
+            "· {} total{}",
+            models.len(),
+            if models.len() > shown {
+                format!(" · showing {shown}")
+            } else {
+                String::new()
+            }
+        ))
+    ))?;
+    for (index, model) in models.iter().take(shown).enumerate() {
+        let current = preferred == Some(model);
+        let suffix_width = if current { 10 } else { 0 };
+        let name = crate::terminal::truncate(model, columns.saturating_sub(6 + suffix_width));
+        say(&format!(
+            "  {:>2}  {}{}\n",
+            index + 1,
+            theme.code(&name),
+            if current {
+                theme.brand(" · current")
+            } else {
+                String::new()
+            }
+        ))?;
+    }
+    say("\n")?;
+    Ok(())
+}
+
 pub(crate) async fn launch(
     workspace: &Path,
     forget_key: bool,
@@ -260,73 +623,62 @@ pub(crate) async fn configure(
         )?;
         return Ok(false);
     }
-    say(
-        "\nConnect a model · /cancel or Ctrl-C cancels\n\n  1  OpenRouter\n  2  Ollama (local, no key)\n  3  OpenAI\n  4  Anthropic\n  5  Gemini\n  6  OpenAI Responses\n  7  Other OpenAI-compatible endpoint\n\n",
-    )?;
-    let Some(choice) = ask("Provider [number or name]: ")? else {
-        return Ok(false);
-    };
-    let (provider, endpoint, env) = match choice.to_lowercase().as_str() {
-        "1" | "openrouter" => (
-            ProviderKind::OpenAiCompatible,
-            "https://openrouter.ai/api/v1",
-            "OPENROUTER_API_KEY",
-        ),
-        "2" | "ollama" => (ProviderKind::Ollama, "http://127.0.0.1:11434/v1", ""),
-        "3" | "openai" => (
-            ProviderKind::OpenAi,
-            "https://api.openai.com/v1",
-            "OPENAI_API_KEY",
-        ),
-        "4" | "anthropic" => (
-            ProviderKind::Anthropic,
-            "https://api.anthropic.com",
-            "ANTHROPIC_API_KEY",
-        ),
-        "5" | "gemini" => (
-            ProviderKind::Gemini,
-            "https://generativelanguage.googleapis.com",
-            "GEMINI_API_KEY",
-        ),
-        "6" | "responses" => (
-            ProviderKind::OpenAiResponses,
-            "https://api.openai.com/v1",
-            "OPENAI_API_KEY",
-        ),
-        "7" | "other" | "compatible" => (ProviderKind::OpenAiCompatible, "", "OPENAI_API_KEY"),
-        _ => {
-            return Err(error(
-                "Unknown provider. Run /setup and choose a listed name or number.",
-            ));
+    let theme = Theme::detect();
+    let columns = crate::interactive::terminal_columns();
+    let env_names = workspace_env_names(workspace);
+    let detections = provider_detections(replace_key, &env_names);
+    let recommended = recommended_provider(current, &detections);
+    print_provider_menu(&theme, &detections, recommended)?;
+    let default_name = PROVIDERS
+        .get(recommended)
+        .map_or("Ollama", |option| option.name);
+    let option = loop {
+        let Some(choice) = ask(&format!(
+            "Provider [1-{}, name, Enter for {default_name}]: ",
+            PROVIDERS.len()
+        ))?
+        else {
+            return Ok(false);
+        };
+        if choice.is_empty() {
+            break PROVIDERS.get(recommended).unwrap_or(&PROVIDERS[0]);
         }
+        if let Some(option) = find_provider(&choice) {
+            break option;
+        }
+        say(&format!(
+            "  Unknown provider {choice:?}. Use a listed number or name, or /cancel.\n"
+        ))?;
     };
     let mut settings = current.clone();
-    settings.provider = provider;
-    let endpoint = if endpoint.is_empty() {
+    settings.provider = option.provider;
+    let endpoint = if option.custom_endpoint {
         let Some(url) = ask("API base URL (include /v1 if required): ")? else {
             return Ok(false);
         };
         crate::interactive::validate_base_url(&url)?;
         url
     } else {
-        endpoint.to_owned()
+        option.endpoint.to_owned()
     };
     settings.base_url = Some(endpoint.clone());
-    settings.api_key_env = if env.is_empty() {
-        "OPENAI_API_KEY"
-    } else {
-        env
-    }
-    .to_owned();
+    settings.api_key_env = option.env.to_owned();
+    let local_runtime = option.local_port.is_some();
     let mut new_key = None;
     let mut temporary_key = TemporaryKey(None);
-    if provider != ProviderKind::Ollama {
+    if local_runtime {
+        "PACTRAIL_NO_KEY".clone_into(&mut settings.api_key_env);
+        say(&format!(
+            "  {} Local runtime selected; no API key is required.\n",
+            theme.brand(theme.symbol("●"))
+        ))?;
+    } else {
         let saved_name = key_id(&endpoint);
-        if !replace_key && credential(env)?.is_some() {
-            say(&format!("Using {env} from the environment.\n"))?;
+        if !replace_key && credential(option.env)?.is_some() {
+            say(&format!("  Using {} from the environment.\n", option.env))?;
         } else if !replace_key && credential(&saved_name)?.is_some() {
             settings.api_key_env = saved_name;
-            say("Using the previously saved key for this endpoint.\n")?;
+            say("  Using the previously saved key for this endpoint.\n")?;
         } else {
             // Read just the explicitly selected variable; never import repository environment wholesale.
             let dot_key = (!replace_key)
@@ -335,12 +687,13 @@ pub(crate) async fn configure(
                 .and_then(|values| {
                     values
                         .filter_map(Result::ok)
-                        .find(|(name, value)| name == env && !value.is_empty())
+                        .find(|(name, value)| name == option.env && !value.is_empty())
                         .map(|(_, value)| value)
                 });
             let offered = if let Some(value) = dot_key {
                 let Some(answer) = ask(&format!(
-                    "Found {env} in this workspace's .env. Use it for {endpoint}? [Y/n]: "
+                    "  Found {} in this workspace's .env. Use it for {endpoint}? [Y/n]: ",
+                    option.env
                 ))?
                 else {
                     return Ok(false);
@@ -356,21 +709,18 @@ pub(crate) async fn configure(
             let value = if let Some(value) = offered {
                 value
             } else {
-                if provider == ProviderKind::OpenAiCompatible && env == "OPENAI_API_KEY" {
-                    say(
-                        "Paste API key (hidden; Unix private file / Windows user-encrypted), or Enter for no authentication: ",
-                    )?;
+                let no_key_allowed = option.custom_endpoint;
+                if no_key_allowed {
+                    say("  Paste API key (hidden), or Enter for no authentication: ")?;
                 } else {
                     say(
-                        "Paste API key (hidden; Unix private file / Windows user-encrypted). Empty cancels: ",
+                        "  Paste API key (hidden; Unix private file / Windows user-encrypted). Empty cancels: ",
                     )?;
                 }
                 let Some(value) = read_secret()? else {
                     return Ok(false);
                 };
-                if value.is_empty()
-                    && !(provider == ProviderKind::OpenAiCompatible && env == "OPENAI_API_KEY")
-                {
+                if value.is_empty() && !no_key_allowed {
                     return Ok(false);
                 }
                 value
@@ -380,7 +730,7 @@ pub(crate) async fn configure(
             }
             if value.is_empty() {
                 "PACTRAIL_NO_KEY".clone_into(&mut settings.api_key_env);
-                say("No API authentication selected.\n")?;
+                say("  No API authentication selected.\n")?;
             } else {
                 settings.api_key_env = saved_name.clone();
                 // Session only until the complete setup is accepted.
@@ -394,7 +744,10 @@ pub(crate) async fn configure(
             }
         }
     }
-    say("Looking for models (up to 8 seconds)…\n")?;
+    say(&format!(
+        "\n  Looking for models at {} (up to 8 seconds, no inference)…\n\n",
+        theme.code(&endpoint)
+    ))?;
     let discovery = tokio::select! {
         result = crate::interactive::available_models(&settings) => result,
         signal = tokio::signal::ctrl_c() => {
@@ -407,50 +760,89 @@ pub(crate) async fn configure(
         models
     } else {
         say(
-            "Model discovery was unavailable. Check the endpoint/key, or enter an exact model ID. No inference or tool call has been made.\n",
+            "  Model discovery was unavailable. Check the endpoint or key, then enter an exact model ID.\n  No inference or tool call has been made.\n",
         )?;
         Vec::new()
     };
-    if models.is_empty() && provider == ProviderKind::Ollama {
-        say(
-            "No local model was found. Start Ollama and pull a model, then rerun setup; or enter an installed model ID now.\n",
-        )?;
+    if models.is_empty() && local_runtime {
+        say(&format!(
+            "  No model was reported by {}. Start the runtime and load or pull a model, or enter an installed model ID now.\n",
+            option.name
+        ))?;
     }
-    let selected = loop {
-        let Some(query) = ask("Model ID or search (e.g. part of a name): ")? else {
-            return Ok(false);
-        };
-        if query.is_empty() {
-            continue;
+    let preferred = (current.provider == settings.provider)
+        .then_some(current.model.as_deref())
+        .flatten();
+    let ranked = ranked_models(&models, preferred);
+    let selected = if ranked.len() == 1 {
+        say(&format!(
+            "  Using the only discovered model: {}\n",
+            theme.accent(&ranked[0])
+        ))?;
+        ranked[0].clone()
+    } else {
+        if !ranked.is_empty() {
+            print_model_menu(&theme, columns, &ranked, preferred)?;
         }
-        if models.iter().any(|model| model == &query) || models.is_empty() {
-            break query;
-        }
-        let matches: Vec<_> = models
-            .iter()
-            .filter(|m| m.to_lowercase().contains(&query.to_lowercase()))
-            .collect();
-        if matches.is_empty() {
-            let Some(answer) = ask("Not in the catalog. Use this exact ID anyway? [y/N]: ")? else {
+        loop {
+            let prompt = if ranked.is_empty() {
+                "Model ID or search: ".to_owned()
+            } else {
+                format!(
+                    "Model ID or search [1-{}, number or text; Enter=1]: ",
+                    ranked.len().min(20)
+                )
+            };
+            let Some(query) = ask(&prompt)? else {
                 return Ok(false);
             };
-            if answer.eq_ignore_ascii_case("y") {
+            if query.is_empty() {
+                if let Some(model) = ranked.first() {
+                    break model.clone();
+                }
+                continue;
+            }
+            if let Ok(index) = query.parse::<usize>()
+                && let Some(model) = index.checked_sub(1).and_then(|index| ranked.get(index))
+            {
+                break model.clone();
+            }
+            if ranked.is_empty() || ranked.iter().any(|model| model == &query) {
                 break query;
             }
-            continue;
-        }
-        for (index, model) in matches.iter().take(30).enumerate() {
-            say(&format!("  {}  {model}\n", index + 1))?;
-        }
-        let Some(answer) = ask("Select number, or Enter to refine the search: ")? else {
-            return Ok(false);
-        };
-        if let Ok(index) = answer.parse::<usize>()
-            && let Some(model) = index
-                .checked_sub(1)
-                .and_then(|i| matches.iter().take(30).nth(i))
-        {
-            break (*model).clone();
+            let matches = ranked
+                .iter()
+                .filter(|model| model.to_lowercase().contains(&query.to_lowercase()))
+                .collect::<Vec<_>>();
+            match matches.as_slice() {
+                [] => {
+                    let Some(answer) =
+                        ask("  Not in the catalog. Use this exact ID anyway? [y/N]: ")?
+                    else {
+                        return Ok(false);
+                    };
+                    if answer.eq_ignore_ascii_case("y") {
+                        break query;
+                    }
+                }
+                [model] => break (*model).clone(),
+                matches => {
+                    for (index, model) in matches.iter().take(20).enumerate() {
+                        let name = crate::terminal::truncate(model, columns.saturating_sub(6));
+                        say(&format!("  {:>2}  {}\n", index + 1, theme.code(&name)))?;
+                    }
+                    let Some(answer) = ask("  Select number, or Enter to refine the search: ")?
+                    else {
+                        return Ok(false);
+                    };
+                    if let Ok(index) = answer.parse::<usize>()
+                        && let Some(model) =
+                            index.checked_sub(1).and_then(|index| matches.get(index))
+                    {
+                        break (*model).clone();
+                    }
+                }
+            }
         }
     };
     settings.model = Some(selected.clone());
@@ -472,16 +864,69 @@ pub(crate) async fn configure(
         }
         remember_key(&name, key)?;
         #[cfg(unix)]
-        say("Key saved privately in your user config (0600 file; not encrypted).\n")?;
+        say("  Key saved privately in your user config (0600 file; not encrypted).\n")?;
         #[cfg(windows)]
-        say("Key saved with Windows user-scoped DPAPI encryption.\n")?;
+        say("  Key saved with Windows user-scoped DPAPI encryption.\n")?;
         #[cfg(not(any(unix, windows)))]
-        say("Key available only in this process; use an environment key for future sessions.\n")?;
+        say("  Key available only in this process; use an environment key for future sessions.\n")?;
     }
     store.save(&settings).map_err(error)?;
     temporary_key.0 = None;
+    let columns = crate::interactive::terminal_columns();
+    let credential = if local_runtime {
+        "not required".to_owned()
+    } else if settings.api_key_env == "PACTRAIL_NO_KEY" {
+        "none selected".to_owned()
+    } else if settings.api_key_env.starts_with(PREFIX) {
+        "saved with user-scoped protection".to_owned()
+    } else {
+        format!("{} (environment or saved)", settings.api_key_env)
+    };
+    let mut body = Vec::new();
+    body.extend(crate::ui::card_field(
+        &theme,
+        columns,
+        "model",
+        &selected,
+        |line| theme.accent(line),
+    ));
+    body.extend(crate::ui::card_field(
+        &theme,
+        columns,
+        "provider",
+        option.name,
+        |line| theme.text(line),
+    ));
+    body.extend(crate::ui::card_field(
+        &theme,
+        columns,
+        "endpoint",
+        &endpoint,
+        |line| theme.text(line),
+    ));
+    body.extend(crate::ui::card_field(
+        &theme,
+        columns,
+        "credential",
+        &credential,
+        |line| theme.text(line),
+    ));
+    body.push(String::new());
+    for line in crate::terminal::wrap(
+        "Command permissions are unchanged. Catalog discovery does not verify inference or tool support; use /probe to test one bounded turn.",
+        crate::ui::card_body_width(columns),
+    ) {
+        body.push(theme.muted(&line));
+    }
     say(&format!(
-        "\nModel configured: {selected}\nEndpoint: {endpoint}\nCommand permissions unchanged. Catalog discovery does not verify inference or tool support.\nStart a task with `pactrail`, or reconnect with /setup.\n"
+        "\n  Model configured: {}\n",
+        theme.accent(&selected)
+    ))?;
+    let lines = crate::ui::card(&theme, columns, "Setup complete", "", body);
+    say(&format!("\n{}\n\n", lines.join("\n")))?;
+    say(&format!(
+        "  Start a task with {}. Reconnect or replace the key with /setup.\n",
+        theme.accent("pactrail")
     ))?;
     Ok(true)
 }
@@ -509,5 +954,69 @@ mod tests {
         assert!(check_binding(&name, "https://example.com/v1/").is_ok());
         assert!(check_binding(&name, "https://evil.example/v1").is_err());
         assert!(check_binding("OPENAI_API_KEY", "https://example.com/v1").is_ok());
+    }
+
+    #[test]
+    fn provider_numbers_keep_their_historical_meaning() {
+        let names = PROVIDERS
+            .iter()
+            .map(|option| option.name)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            &names[..7],
+            [
+                "OpenRouter",
+                "Ollama",
+                "OpenAI",
+                "Anthropic",
+                "Gemini",
+                "OpenAI Responses",
+                "Other compatible"
+            ]
+        );
+        assert_eq!(&names[7..], ["LM Studio", "llama.cpp", "vLLM"]);
+        assert_eq!(
+            find_provider("7").map(|option| option.name),
+            Some("Other compatible")
+        );
+        assert_eq!(find_provider("10").map(|option| option.name), Some("vLLM"));
+        assert_eq!(
+            find_provider("lm-studio").map(|option| option.name),
+            Some("LM Studio")
+        );
+        assert_eq!(
+            find_provider("Claude").map(|option| option.name),
+            Some("Anthropic")
+        );
+        assert!(find_provider("0").is_none());
+        assert!(find_provider("11").is_none());
+        assert!(find_provider("not-a-provider").is_none());
+    }
+
+    #[test]
+    fn model_ranking_prefers_current_then_coding_models() {
+        let models = [
+            "text-embedding-3-large",
+            "vision-model",
+            "general-chat",
+            "qwen-coder",
+            "current-model",
+        ]
+        .map(str::to_owned);
+        let ranked = ranked_models(&models, Some("current-model"));
+        assert_eq!(
+            ranked,
+            [
+                "current-model",
+                "general-chat",
+                "qwen-coder",
+                "vision-model",
+                "text-embedding-3-large"
+            ]
+        );
+        assert_eq!(
+            ranked_models(&models, None).last().map(String::as_str),
+            Some("text-embedding-3-large")
+        );
     }
 }
