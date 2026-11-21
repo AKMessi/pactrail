@@ -30,10 +30,15 @@ pub(crate) fn card(
     meta: &str,
     body: Vec<String>,
 ) -> Vec<String> {
+    let separator = if crate::ui::glyphs::ascii_requested() {
+        "."
+    } else {
+        "·"
+    };
     let label_plain = if meta.is_empty() {
         title.to_owned()
     } else {
-        format!("{title} · {meta}")
+        format!("{title} {separator} {meta}")
     };
     let label = if meta.is_empty() {
         theme.heading(title)
@@ -41,7 +46,7 @@ pub(crate) fn card(
         format!(
             "{} {}",
             theme.heading(title),
-            theme.muted(&format!("· {meta}"))
+            theme.muted(&format!("{separator} {meta}"))
         )
     };
     card_styled(theme, columns, label, &label_plain, body)

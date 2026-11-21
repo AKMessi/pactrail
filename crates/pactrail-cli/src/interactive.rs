@@ -5829,8 +5829,61 @@ fn receipt_lines(
 ) -> Result<Vec<String>, CliError> {
     let integrity = receipt.verify_integrity()?;
     let outcome = outcome_text(theme, receipt.outcome);
-    let label_plain = format!("Receipt · {}", crate::terminal::strip_styles(&outcome));
-    let label = format!("{} {}", theme.muted("Receipt ·"), outcome);
+    let ascii = crate::ui::glyphs::ascii_requested();
+    let receipt_label = crate::ui::glyphs::label("Receipt ·", ascii);
+    let label_plain = format!(
+        "{receipt_label} {}",
+        crate::terminal::strip_styles(&outcome)
+    );
+    let label = format!("{} {}", theme.muted(&receipt_label), outcome);
+    let mut body = receipt_summary_fields(theme, columns, receipt, integrity);
+    let inner = crate::ui::card_body_width(columns);
+    if !receipt.changes.is_empty() {
+        body.push(String::new());
+        body.push(crate::ui::card_group(theme, "Candidate files"));
+        for change in &receipt.changes {
+            body.extend(
+                wrap_text(&change.path, inner.saturating_sub(4).max(1))
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, line)| {
+                        format!(
+                            "  {} {}",
+                            if index == 0 {
+                                change_marker(theme, change)
+                            } else {
+                                " ".to_owned()
+                            },
+                            theme.code(&line)
+                        )
+                    }),
+            );
+            body.push(format!("    {}", theme.muted(&change_delta(change))));
+        }
+    }
+    for risk in &receipt.unresolved_risks {
+        body.push(String::new());
+        body.extend(
+            wrap_text(&format!("! {risk}"), inner.saturating_sub(2).max(1))
+                .into_iter()
+                .map(|line| theme.warning(&line)),
+        );
+    }
+    Ok(crate::ui::card_styled(
+        theme,
+        columns,
+        label,
+        &label_plain,
+        body,
+    ))
+}
+
+fn receipt_summary_fields(
+    theme: &Theme,
+    columns: usize,
+    receipt: &ChangeReceipt,
+    integrity: bool,
+) -> Vec<String> {
     let (added, removed) = change_bytes(receipt);
     let mut body = Vec::new();
     for (field, value, tone) in [
@@ -5884,45 +5937,7 @@ fn receipt_lines(
             |line| tone.paint(theme, line),
         ));
     }
-    let inner = crate::ui::card_body_width(columns);
-    if !receipt.changes.is_empty() {
-        body.push(String::new());
-        body.push(crate::ui::card_group(theme, "Candidate files"));
-        for change in &receipt.changes {
-            body.extend(
-                wrap_text(&change.path, inner.saturating_sub(4).max(1))
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, line)| {
-                        format!(
-                            "  {} {}",
-                            if index == 0 {
-                                change_marker(theme, change)
-                            } else {
-                                " ".to_owned()
-                            },
-                            theme.code(&line)
-                        )
-                    }),
-            );
-            body.push(format!("    {}", theme.muted(&change_delta(change))));
-        }
-    }
-    for risk in &receipt.unresolved_risks {
-        body.push(String::new());
-        body.extend(
-            wrap_text(&format!("! {risk}"), inner.saturating_sub(2).max(1))
-                .into_iter()
-                .map(|line| theme.warning(&line)),
-        );
-    }
-    Ok(crate::ui::card_styled(
-        theme,
-        columns,
-        label,
-        &label_plain,
-        body,
-    ))
+    body
 }
 
 #[derive(Debug, thiserror::Error)]
