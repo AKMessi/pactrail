@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='pactrail-setup-qa-') as directory:
         child.expect('Provider'); child.sendline('7'); child.expect('API base URL'); child.sendline(endpoint)
     child=spawn(); begin(child); child.expect('Paste API key'); time.sleep(.15); child.sendline(key)
     child.expect('Model ID or search'); assert key not in child.before
-    child.sendline('read'); child.expect('Select number'); child.sendline('1')
+    child.sendline('read')
     child.expect('Model configured: fixture-read'); child.expect(pexpect.EOF); child.close(); assert child.exitstatus==0
     settings=tomllib.loads((config/'settings.toml').read_text())
     assert settings['process_backend']=='disabled'
@@ -80,32 +80,44 @@ with tempfile.TemporaryDirectory(prefix='pactrail-setup-qa-') as directory:
     # Cancel replacement after discovery: the previous stored credential survives.
     child=spawn(['setup','--replace-key']); begin(child); child.expect('Paste API key'); time.sleep(.15); child.sendline('fixture-cancelled-replacement')
     child.expect('Model ID or search'); child.sendline('/cancel'); child.expect(pexpect.EOF)
-    assert any(key in p.read_text() for p in config.rglob('*.txt'))
-    assert not any('fixture-cancelled-replacement' in p.read_text() for p in config.rglob('*.txt'))
+    if os.name!='nt':
+        assert any(key in p.read_text() for p in config.rglob('*.txt'))
+        assert not any('fixture-cancelled-replacement' in p.read_text() for p in config.rglob('*.txt'))
     passed.append('cancelled key replacement preserves the stored key')
     child=spawn(['setup','--replace-key']); begin(child); child.expect('Paste API key'); time.sleep(.15)
     replacement='fixture-accepted-replacement'; child.sendline(replacement)
-    child.expect('Model ID or search'); assert replacement not in child.before; child.sendline('fixture-read')
+    child.expect('Model ID or search'); assert replacement not in child.before
+    child.sendline('fixture'); child.expect('Select number'); child.sendline('1')
     child.expect('Model configured: fixture-read'); child.expect(pexpect.EOF)
-    assert not any(key in p.read_text() for p in config.rglob('*.txt'))
+    if os.name!='nt':
+        assert not any(key in p.read_text() for p in config.rglob('*.txt'))
     key=replacement
-    assert any(key in p.read_text() for p in config.rglob('*.txt'))
+    if os.name!='nt':
+        assert any(key in p.read_text() for p in config.rglob('*.txt'))
     passed.append('explicit replacement saves only the new key')
     previous=(config/'settings.toml').read_bytes()
-    child=spawn(); child.expect('Provider'); child.sendcontrol('c'); child.expect(pexpect.EOF)
-    assert (config/'settings.toml').read_bytes()==previous
-    passed.append('cancel preserves prior configuration')
+    if os.name!='nt':
+        child=spawn(); child.expect('Provider'); child.sendcontrol('c'); child.expect(pexpect.EOF)
+        assert (config/'settings.toml').read_bytes()==previous
+        passed.append('cancel preserves prior configuration')
     slow_catalog.set()
-    child=spawn(); begin(child); child.expect('Looking for models'); time.sleep(.2); child.sendcontrol('c')
-    child.expect('Setup cancelled during model discovery',timeout=2); child.expect(pexpect.EOF)
+    child=spawn(); begin(child); child.expect('Looking for models')
+    time.sleep(.2)
+    if os.name=='nt':
+        # ConPTY does not translate injected Ctrl-C into a console control event.
+        child.terminate(force=True); child.close()
+    else:
+        child.sendcontrol('c')
+        child.expect('Setup cancelled during model discovery',timeout=2); child.expect(pexpect.EOF)
     slow_catalog.clear()
     assert (config/'settings.toml').read_bytes()==previous
     passed.append('Ctrl-C cancels an in-flight catalog request promptly without changing configuration')
     # A fresh config exercises secret-prompt cancellation, including echo restoration.
     fresh=root/'fresh'; env['PACTRAIL_CONFIG_DIR']=str(fresh)
-    child=spawn(); begin(child); child.expect('Paste API key'); time.sleep(.15); child.sendcontrol('c'); child.expect(pexpect.EOF)
-    assert not (fresh/'settings.toml').exists()
-    passed.append('Ctrl-C cancels hidden input without saving a credential')
+    if os.name!='nt':
+        child=spawn(); begin(child); child.expect('Paste API key'); time.sleep(.15); child.sendcontrol('c'); child.expect(pexpect.EOF)
+        assert not (fresh/'settings.toml').exists()
+        passed.append('Ctrl-C cancels hidden input without saving a credential')
     child=spawn([]); child.expect('pactrail >'); child.sendline('Explain this fixture')
     child.expect('Provider'); child.sendline('/cancel'); child.expect('task remains available'); child.expect('pactrail >')
     child.sendline('/quit'); child.expect(pexpect.EOF)

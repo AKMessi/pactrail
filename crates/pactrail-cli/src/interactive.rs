@@ -1675,9 +1675,6 @@ impl Session {
             }
         }
         self.render_banner()?;
-        if self.settings.effective_model().is_none() {
-            self.emit("Connect a model with /setup. Choose a provider, then a model; no shell configuration required.\n")?;
-        }
         Ok(())
     }
 
@@ -2665,67 +2662,77 @@ impl Session {
     }
 
     fn render_banner(&self) -> Result<(), CliError> {
+        let theme = &self.theme;
         let columns = terminal_columns();
-        let model = self
-            .settings
-            .effective_model()
-            .unwrap_or_else(|| "not configured · /models or /connect".to_owned());
-        let mut lines = vec![
-            crate::ui::section(
-                &self.theme,
-                columns,
-                &format!("pactrail {} · Ledger", env!("CARGO_PKG_VERSION")),
-            ),
-            String::new(),
-        ];
-        lines.extend(frame_field(
-            &self.theme,
+        let model = self.settings.effective_model();
+        let configured = model.is_some();
+        let model = model.unwrap_or_else(|| "not configured".to_owned());
+        let process = banner_process(self.settings.process_backend);
+        let mut body = banner_state_lines(theme, columns, configured, self.pending_runs);
+        body.push(String::new());
+        body.extend(crate::ui::card_field(
+            theme,
             columns,
             "workspace",
             &display_path(&self.workspace),
-            TimelineTone::Normal,
+            |line| TimelineTone::Normal.paint(theme, line),
         ));
-        lines.extend(frame_field(
-            &self.theme,
+        body.extend(crate::ui::card_field(
+            theme,
             columns,
             "model",
             &format!("{} · {}", model, provider_label(self.settings.provider)),
-            TimelineTone::Accent,
+            |line| TimelineTone::Accent.paint(theme, line),
         ));
-        let process = banner_process(self.settings.process_backend);
-        lines.extend(frame_field(
-            &self.theme,
+        body.extend(crate::ui::card_field(
+            theme,
             columns,
             "commands",
             &process.0,
-            process.1,
+            |line| process.1.paint(theme, line),
         ));
-        if self.pending_runs > 0 {
-            lines.extend(frame_field(
-                &self.theme,
+        if self.memory_count > 0 {
+            body.extend(crate::ui::card_field(
+                theme,
                 columns,
-                "review",
-                &banner_review(self.pending_runs).0,
-                TimelineTone::Warning,
+                "memory",
+                &format!(
+                    "{} active {}",
+                    self.memory_count,
+                    plural(self.memory_count, "entry", "entries")
+                ),
+                |line| TimelineTone::Muted.paint(theme, line),
             ));
         }
-        lines.extend(frame_note(
-            &self.theme,
+        body.push(String::new());
+        body.push(crate::ui::card_group(theme, "Next"));
+        body.extend(banner_next_lines(
+            theme,
             columns,
-            "Work stays isolated until you review and apply a candidate.",
+            configured,
+            self.pending_runs,
+            self.last_run.is_some(),
         ));
-        lines.push(String::new());
-        for shortcuts in [
-            "Enter dispatch   ·   Ctrl+J newline   ·   Tab complete",
-            "Ctrl+P commands  ·   Ctrl+O runs      ·   /help",
-            "Ctrl+S save draft ·  Ctrl+G editor    ·   continue",
-        ] {
-            lines.extend(
-                wrap_text(shortcuts, content_width(columns, 2, 88))
-                    .into_iter()
-                    .map(|line| format!("  {}", self.theme.muted(&line))),
-            );
+        body.push(String::new());
+        for line in wrap_text(
+            "Work stays isolated in a candidate directory until you review and apply it.",
+            crate::ui::card_body_width(columns),
+        ) {
+            body.push(theme.muted(&line));
         }
+        let mut lines = crate::ui::card(
+            theme,
+            columns,
+            &format!("Pactrail {}", env!("CARGO_PKG_VERSION")),
+            if columns >= 56 {
+                "verification-native"
+            } else {
+                ""
+            },
+            body,
+        );
+        lines.push(String::new());
+        lines.extend(banner_shortcuts(theme, columns));
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
@@ -2742,7 +2749,11 @@ impl Session {
                     CliError::Argument(format!("no help for {topic:?}{suggestion}"))
                 })?;
             let mut lines = vec![
-                self.theme.heading(command.name()),
+                format!(
+                    "{}  {}",
+                    self.theme.heading(command.name()),
+                    self.theme.muted(command.group)
+                ),
                 format!("  {}", self.theme.code(command.usage)),
             ];
             lines.extend(
@@ -2750,13 +2761,35 @@ impl Session {
                     .into_iter()
                     .map(|line| format!("  {}", self.theme.text(&line))),
             );
+            lines.push(String::new());
+            lines.extend(
+                wrap_text(
+                    "Tab completes arguments · /help lists every command",
+                    content_width(columns, 2, 96),
+                )
+                .into_iter()
+                .map(|line| format!("  {}", self.theme.muted(&line))),
+            );
             return self.emit(&format!("\n{}\n\n", lines.join("\n")));
         }
 
         let mut lines = vec![self.theme.heading("Command palette")];
+        lines.extend(
+            wrap_text(
+                "Type / then Tab to filter · Enter runs a command · all commands are local",
+                content_width(columns, 2, 96),
+            )
+            .into_iter()
+            .map(|line| format!("  {}", self.theme.muted(&line))),
+        );
         for group in HELP_GROUPS {
             lines.push(String::new());
-            lines.push(self.theme.heading(group));
+            let rule_width = content_width(columns, 4 + group.len(), 80);
+            lines.push(format!(
+                "  {} {}",
+                self.theme.heading(group),
+                self.theme.muted(&"─".repeat(rule_width))
+            ));
             lines.extend(
                 COMMANDS
                     .iter()
@@ -2767,14 +2800,18 @@ impl Session {
             );
         }
         lines.push(String::new());
-        lines.extend(
-            wrap_text(
-                "Tab completes commands · arrows browse history · Ctrl-R searches · Ctrl-C cancels input · Ctrl-D exits",
-                content_width(columns, 2, 96),
-            )
-            .into_iter()
-            .map(|line| self.theme.muted(&line)),
-        );
+        lines.push(self.theme.heading("Keyboard"));
+        for shortcut in [
+            "Enter dispatch · Ctrl+J newline · Tab complete · Ctrl+P palette",
+            "Ctrl+O runs · Ctrl+S save draft · Ctrl+G editor · Ctrl+R history",
+            "Ctrl+C cancel input or stop a run · Ctrl+D exit · /help <command>",
+        ] {
+            lines.extend(
+                wrap_text(shortcut, content_width(columns, 2, 96))
+                    .into_iter()
+                    .map(|line| format!("  {}", self.theme.muted(&line))),
+            );
+        }
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
 
@@ -3040,9 +3077,14 @@ impl Session {
                 },
             ),
         ];
-        let mut lines = vec![self.theme.heading("Session")];
-        for (label, value, tone) in fields {
-            lines.extend(labelled_rows(&self.theme, columns, label, &value, tone));
+        let body = status_card_body(&self.theme, columns, &fields);
+        let mut lines = crate::ui::card(&self.theme, columns, "Session", "status", body);
+        lines.push(String::new());
+        for line in wrap_text(
+            "Change a setting with /model, /provider, /endpoint, /process, or /setup. /help lists all commands.",
+            content_width(columns, 2, 96),
+        ) {
+            lines.push(format!("  {}", self.theme.muted(&line)));
         }
         self.emit(&format!("\n{}\n\n", lines.join("\n")))
     }
@@ -4005,23 +4047,51 @@ impl Session {
             completed.cost_microusd,
         )?;
         self.emit(&format!("\n{}\n\n", lines.join("\n")))?;
-        for line in wrap_text(
-            "/trace full timeline  ·  /runs history",
-            content_width(terminal_columns(), 2, 96),
-        ) {
-            self.emit(&format!("  {}\n", self.theme.muted(&line)))?;
-        }
-        if completed.receipt.outcome == ReceiptOutcome::ReadyToApply {
-            let message = if completed.receipt.changes.is_empty() {
-                "No file changes were produced. Nothing needs applying."
-            } else {
-                "Next: /diff review · /apply apply files · /discard discard candidate"
-            };
-            for line in wrap_text(message, content_width(terminal_columns(), 2, 96)) {
-                self.emit(&format!("  {}\n", self.theme.heading(&line)))?;
+        let columns = terminal_columns();
+        let (next, inspect) = match completed.receipt.outcome {
+            ReceiptOutcome::ReadyToApply if completed.receipt.changes.is_empty() => (
+                "no file changes were produced; nothing needs applying",
+                "/trace timeline · /runs history · /evidence obligations",
+            ),
+            ReceiptOutcome::ReadyToApply => (
+                "/diff inspect exact changes · /apply land files · /discard reject candidate",
+                "/trace timeline · /runs history · /evidence obligations",
+            ),
+            ReceiptOutcome::Answered | ReceiptOutcome::Applied => (
+                "type a follow-up · /continue builds on this task",
+                "/review receipt · /trace timeline · /runs history",
+            ),
+            ReceiptOutcome::Cancelled | ReceiptOutcome::Failed => (
+                "/retry restores the task · /runs shows retained state",
+                "/trace timeline · /doctor local runtimes",
+            ),
+            ReceiptOutcome::Discarded => (
+                "type a new task · /runs history keeps the evidence",
+                "/trace timeline · /evidence obligations",
+            ),
+        };
+        for (label, value) in [("Next", next), ("Inspect", inspect)] {
+            let indent = 2 + label.len() + 1;
+            for (index, line) in wrap_text(value, content_width(columns, indent, 94))
+                .into_iter()
+                .enumerate()
+            {
+                if index == 0 {
+                    self.emit(&format!(
+                        "  {} {}\n",
+                        self.theme.accent(label),
+                        self.theme.text(&line)
+                    ))?;
+                } else {
+                    self.emit(&format!(
+                        "{}{}\n",
+                        " ".repeat(indent),
+                        self.theme.text(&line)
+                    ))?;
+                }
             }
-            self.emit("\n")?;
         }
+        self.emit("\n")?;
         Ok(())
     }
 
@@ -4764,14 +4834,20 @@ impl SessionPrompt {
         } else {
             " · "
         };
+        let columns = terminal_columns();
         let location = truncate(
             &format!("{workspace}{separator}{focus}"),
-            terminal_columns(),
+            columns.saturating_sub(2),
         );
+        let (rail, bottom, horizontal) = if crate::ui::glyphs::ascii_requested() {
+            ("|", "+", "-")
+        } else {
+            ("│", "╰", "─")
+        };
         Self {
             left: format!(
-                "{}\n{location}\npactrail",
-                composer_edge(terminal_columns(), status)
+                "{}\n{rail} {location}\n{bottom}{horizontal} pactrail",
+                composer_edge(columns, status)
             ),
             right: String::new(),
         }
@@ -4781,21 +4857,24 @@ impl SessionPrompt {
 fn composer_edge(columns: usize, status: &str) -> String {
     let ascii = crate::ui::glyphs::ascii_requested();
     let label = if ascii { "Composer . " } else { "Composer · " };
-    let header = format!(
-        "{label}{}",
-        truncate(
-            status,
-            columns.saturating_sub(crate::terminal::width(label))
-        )
-    );
-    let remaining = columns.saturating_sub(crate::terminal::width(&header));
+    let label_width = crate::terminal::width(label);
+    let available = columns.saturating_sub(6);
+    let status = truncate(status, available.saturating_sub(label_width));
+    let header = format!("{label}{status}");
+    let header_width = crate::terminal::width(&header);
+    let remaining = columns.saturating_sub(header_width + 5);
+    let (top_left, top_right, horizontal) = if ascii {
+        ('+', '+', '-')
+    } else {
+        ('╭', '╮', '─')
+    };
     if remaining > 0 {
         format!(
-            "{header} {}",
-            (if ascii { "-" } else { "─" }).repeat(remaining - 1)
+            "{top_left}{horizontal} {header} {}{top_right}",
+            horizontal.to_string().repeat(remaining)
         )
     } else {
-        header
+        truncate(&header, columns)
     }
 }
 
@@ -5288,6 +5367,105 @@ fn content_width(columns: usize, prefix: usize, maximum: usize) -> usize {
     columns.saturating_sub(prefix).clamp(1, maximum)
 }
 
+fn banner_state_lines(
+    theme: &Theme,
+    columns: usize,
+    configured: bool,
+    pending_runs: usize,
+) -> Vec<String> {
+    let (label, detail) = if !configured {
+        ("Setup needed", "connect a model to begin".to_owned())
+    } else if pending_runs > 0 {
+        (
+            "Candidate ready",
+            format!("{pending_runs} waiting for review"),
+        )
+    } else {
+        ("Ready", "isolated transaction workspace".to_owned())
+    };
+    let styled = if configured {
+        theme.brand(label)
+    } else {
+        theme.warning(label)
+    };
+    banner_lead_lines(theme, columns, "", &styled, label, &detail)
+}
+
+fn banner_lead_lines(
+    theme: &Theme,
+    columns: usize,
+    indent: &str,
+    lead: &str,
+    lead_plain: &str,
+    detail: &str,
+) -> Vec<String> {
+    let lead_width = crate::terminal::width(lead_plain);
+    let detail_width = crate::ui::card_body_width(columns)
+        .saturating_sub(crate::terminal::width(indent) + lead_width + 2)
+        .max(1);
+    wrap_text(detail, detail_width)
+        .into_iter()
+        .enumerate()
+        .map(|(index, line)| {
+            if index == 0 {
+                format!("{indent}{lead}  {}", theme.text(&line))
+            } else {
+                format!(
+                    "{indent}{}{}",
+                    " ".repeat(lead_width.saturating_add(2)),
+                    theme.text(&line)
+                )
+            }
+        })
+        .collect()
+}
+
+fn banner_next_lines(
+    theme: &Theme,
+    columns: usize,
+    configured: bool,
+    pending_runs: usize,
+    has_last_run: bool,
+) -> Vec<String> {
+    let (action, detail) = if !configured {
+        (
+            "/setup",
+            "connect a provider and choose a model (guided, no shell editing)",
+        )
+    } else if pending_runs > 0 {
+        (
+            "/review",
+            "inspect the waiting candidate before applying anything",
+        )
+    } else if has_last_run {
+        (
+            "type a task",
+            "or /continue to build on the focused task, /runs to browse history",
+        )
+    } else {
+        (
+            "type a task",
+            "describe a change; nothing runs until you press Enter",
+        )
+    };
+    banner_lead_lines(theme, columns, "  ", &theme.accent(action), action, detail)
+}
+
+fn banner_shortcuts(theme: &Theme, columns: usize) -> Vec<String> {
+    [
+        "Enter dispatch · Ctrl+J newline · Tab complete · Ctrl+P commands",
+        "Ctrl+O runs · Ctrl+S draft · Ctrl+G editor · /help",
+    ]
+    .into_iter()
+    .flat_map(|shortcuts| {
+        wrap_text(shortcuts, content_width(columns, 2, 90))
+            .into_iter()
+            .map(|line| format!("  {}", theme.muted(&line)))
+            .collect::<Vec<_>>()
+    })
+    .collect()
+}
+
 fn banner_process(backend: ProcessBackendArg) -> (String, TimelineTone) {
     match backend {
         ProcessBackendArg::Disabled => (
@@ -5305,32 +5483,50 @@ fn banner_process(backend: ProcessBackendArg) -> (String, TimelineTone) {
     }
 }
 
-fn banner_review(pending: usize) -> (String, TimelineTone) {
-    if pending == 0 {
-        ("no candidates waiting".to_owned(), TimelineTone::Muted)
-    } else {
-        (
-            format!(
-                "{pending} {} waiting · /review",
-                plural(pending, "candidate", "candidates")
-            ),
-            TimelineTone::Warning,
-        )
-    }
-}
-
-fn frame_field(
+fn status_card_body(
     theme: &Theme,
     columns: usize,
-    label: &str,
-    value: &str,
-    tone: TimelineTone,
+    fields: &[(&str, String, TimelineTone)],
 ) -> Vec<String> {
-    crate::ui::field(theme, columns, label, value, |line| tone.paint(theme, line))
-}
-
-fn frame_note(theme: &Theme, columns: usize, value: &str) -> Vec<String> {
-    crate::ui::note(theme, columns, value)
+    const GROUPS: [(&str, &[&str]); 3] = [
+        (
+            "Model",
+            &[
+                "runtime",
+                "endpoint",
+                "transport",
+                "credential",
+                "capabilities",
+                "limits",
+            ],
+        ),
+        ("Boundaries", &["processes", "mcp", "images"]),
+        (
+            "Workspace",
+            &["workspace", "review", "memory", "display", "latent state"],
+        ),
+    ];
+    let mut body = wrap_text(
+        "Effective local configuration. Nothing here leaves this machine unless a task runs.",
+        crate::ui::card_body_width(columns),
+    )
+    .into_iter()
+    .map(|line| theme.muted(&line))
+    .collect::<Vec<_>>();
+    for (group, labels) in GROUPS {
+        body.push(String::new());
+        body.push(crate::ui::card_group(theme, group));
+        for (label, value, tone) in fields.iter().filter(|(label, _, _)| labels.contains(label)) {
+            body.extend(crate::ui::card_field(
+                theme,
+                columns,
+                label,
+                value,
+                |line| tone.paint(theme, line),
+            ));
+        }
+    }
+    body
 }
 
 fn labelled_rows(
@@ -5632,19 +5828,67 @@ fn receipt_lines(
     receipt: &ChangeReceipt,
 ) -> Result<Vec<String>, CliError> {
     let integrity = receipt.verify_integrity()?;
-    let mut lines = vec![
-        String::new(),
-        format!(
-            "  {} {}",
-            theme.muted("Receipt ·"),
-            outcome_text(theme, receipt.outcome)
-        ),
-        String::new(),
-    ];
+    let outcome = outcome_text(theme, receipt.outcome);
+    let ascii = crate::ui::glyphs::ascii_requested();
+    let receipt_label = crate::ui::glyphs::label("Receipt ·", ascii);
+    let label_plain = format!(
+        "{receipt_label} {}",
+        crate::terminal::strip_styles(&outcome)
+    );
+    let label = format!("{} {}", theme.muted(&receipt_label), outcome);
+    let mut body = receipt_summary_fields(theme, columns, receipt, integrity);
+    let inner = crate::ui::card_body_width(columns);
+    if !receipt.changes.is_empty() {
+        body.push(String::new());
+        body.push(crate::ui::card_group(theme, "Candidate files"));
+        for change in &receipt.changes {
+            body.extend(
+                wrap_text(&change.path, inner.saturating_sub(4).max(1))
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, line)| {
+                        format!(
+                            "  {} {}",
+                            if index == 0 {
+                                change_marker(theme, change)
+                            } else {
+                                " ".to_owned()
+                            },
+                            theme.code(&line)
+                        )
+                    }),
+            );
+            body.push(format!("    {}", theme.muted(&change_delta(change))));
+        }
+    }
+    for risk in &receipt.unresolved_risks {
+        body.push(String::new());
+        body.extend(
+            wrap_text(&format!("! {risk}"), inner.saturating_sub(2).max(1))
+                .into_iter()
+                .map(|line| theme.warning(&line)),
+        );
+    }
+    Ok(crate::ui::card_styled(
+        theme,
+        columns,
+        label,
+        &label_plain,
+        body,
+    ))
+}
+
+fn receipt_summary_fields(
+    theme: &Theme,
+    columns: usize,
+    receipt: &ChangeReceipt,
+    integrity: bool,
+) -> Vec<String> {
     let (added, removed) = change_bytes(receipt);
-    let fields = [
-        ("run", receipt.run_id.to_string()),
-        ("goal", receipt.contract.goal.clone()),
+    let mut body = Vec::new();
+    for (field, value, tone) in [
+        ("run", receipt.run_id.to_string(), TimelineTone::Normal),
+        ("goal", receipt.contract.goal.clone(), TimelineTone::Normal),
         (
             "candidate",
             format!(
@@ -5654,6 +5898,7 @@ fn receipt_lines(
                 format_count(added),
                 format_count(removed)
             ),
+            TimelineTone::Normal,
         ),
         (
             "evidence",
@@ -5664,6 +5909,11 @@ fn receipt_lines(
                 receipt.verification.inconclusive,
                 receipt.verification.skipped
             ),
+            if receipt.verification.failed > 0 {
+                TimelineTone::Danger
+            } else {
+                TimelineTone::Normal
+            },
         ),
         (
             "integrity",
@@ -5672,49 +5922,22 @@ fn receipt_lines(
             } else {
                 "INVALID receipt digest".to_owned()
             },
+            if integrity {
+                TimelineTone::Normal
+            } else {
+                TimelineTone::Danger
+            },
         ),
-    ];
-    for (label, value) in fields {
-        lines.extend(frame_field(
+    ] {
+        body.extend(crate::ui::card_field(
             theme,
             columns,
-            label,
+            field,
             &value,
-            TimelineTone::Normal,
+            |line| tone.paint(theme, line),
         ));
     }
-    lines.push(String::new());
-    for change in &receipt.changes {
-        lines.extend(
-            wrap_text(&change.path, content_width(columns, 7, 100))
-                .into_iter()
-                .enumerate()
-                .map(|(i, line)| {
-                    format!(
-                        "  {} {}",
-                        if i == 0 {
-                            change_marker(theme, change)
-                        } else {
-                            " ".to_owned()
-                        },
-                        theme.code(&line)
-                    )
-                }),
-        );
-        lines.extend(
-            wrap_text(&change_delta(change), content_width(columns, 6, 100))
-                .into_iter()
-                .map(|l| format!("      {}", theme.muted(&l))),
-        );
-    }
-    for risk in &receipt.unresolved_risks {
-        lines.extend(
-            wrap_text(&format!("! {risk}"), content_width(columns, 2, 100))
-                .into_iter()
-                .map(|l| format!("  {}", theme.warning(&l))),
-        );
-    }
-    Ok(lines)
+    body
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -6038,14 +6261,39 @@ mod tests {
     }
 
     #[test]
+    fn startup_offers_one_contextual_next_action() {
+        let theme = Theme::plain();
+        let setup = banner_next_lines(&theme, 100, false, 0, false).join("\n");
+        assert!(setup.contains("/setup"));
+        let review = banner_next_lines(&theme, 100, true, 1, true).join("\n");
+        assert!(review.contains("/review"));
+        let resume = banner_next_lines(&theme, 100, true, 0, true).join("\n");
+        assert!(resume.contains("/continue"));
+        let begin = banner_next_lines(&theme, 100, true, 0, false).join("\n");
+        assert!(begin.contains("type a task"));
+        for lines in [&setup, &review, &resume, &begin] {
+            assert!(
+                lines
+                    .lines()
+                    .all(|line| crate::terminal::width(line) <= 100),
+                "{lines}"
+            );
+        }
+        let state = banner_state_lines(&theme, 100, true, 2).join("\n");
+        assert!(state.contains("Candidate ready") && state.contains("2 waiting for review"));
+        let unconfigured = banner_state_lines(&theme, 40, false, 0).join("\n");
+        assert!(unconfigured.contains("Setup needed"));
+    }
+
+    #[test]
     fn stacked_metadata_and_composer_fit_small_screens() {
         for columns in [32, 40, 59, 60, 80, 120] {
-            let lines = frame_field(
+            let lines = crate::ui::card_field(
                 &Theme::plain(),
                 columns,
                 "workspace",
                 "/some/very/long/ユニコード/path/to/a/project/with/many/components",
-                TimelineTone::Normal,
+                str::to_owned,
             );
             assert!(
                 lines
@@ -6090,12 +6338,12 @@ mod tests {
             "read_file · https://example.com/a/very/long/path/that/must/remain/visible",
             TimelineTone::Normal,
         );
-        let fields = frame_field(
+        let fields = crate::ui::card_field(
             &theme,
             columns,
             "workspace",
             r"C:\Users\builder\a-very-long-workspace-name\project",
-            TimelineTone::Normal,
+            str::to_owned,
         );
         let commands = COMMANDS
             .iter()

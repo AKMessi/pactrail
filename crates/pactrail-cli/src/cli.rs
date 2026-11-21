@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
     version,
     about,
     propagate_version = true,
-    after_help = "Start: pactrail\nTask:  pactrail \"Explain this repository\"\nWork:  pactrail -C /path/to/project\n\nIn the session: Ctrl+P commands · Alt+Enter newline · Ctrl+G editor · /help\nAutomation: pactrail run <goal> --output json"
+    after_help = "Start:  pactrail\nSetup:  pactrail setup\nTask:   pactrail \"Explain this repository\"\nWork:   pactrail -C /path/to/project\n\nIn the session: Enter dispatch · Ctrl+J newline · Tab complete · Ctrl+P commands\nMore: /help · /status · /doctor\nAutomation: pactrail run <goal> --output json"
 )]
 pub struct Cli {
     /// Workspace used to resolve the default state directory.

@@ -6,6 +6,27 @@ follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### CLI experience
+
+- Introduce a width-safe rounded card system for the startup dashboard, status,
+  help, setup summaries, run history, and receipts, with ASCII frame fallbacks.
+- Make startup contextual: state, workspace, model, process boundary, memory,
+  one Next action, and the isolation rule. Remove the separate setup reminder so
+  an unconfigured session has one clear next step.
+- Group `/help` by outcome with rules, focused help, and a keyboard map; render
+  `/status` as grouped model, boundary, and workspace cards.
+- Add file, evidence, and integrity detail to receipt cards while preserving the
+  `Receipt · <outcome>` contract, and follow every run with explicit Next and
+  Inspect guidance.
+- Redesign `pactrail list` with outcome markers, pending-review counts, file
+  counts, goal excerpts, and review/apply hints.
+- Make guided setup detect local runtimes, environment keys, workspace `.env`
+  entries, and saved endpoint keys. Keep provider numbers 1–7 stable and add
+  local presets 8–10 for LM Studio, llama.cpp, and vLLM.
+- Rank discovered models toward coding/chat use, auto-select a single model,
+  accept a numbered catalog or partial search, and close with a setup summary
+  card showing the credential source.
+
 ## [2.1.2] - 2026-10-05
 
 - Add a conversation workspace matching the supplied DeepSeek Harness reference: compact run header, readable task/result thread, bottom next-task composer and slim usage footer.

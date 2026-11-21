@@ -3,19 +3,29 @@
 Start `pactrail` and type your task. If no model is configured, guided setup
 opens and keeps your task. Or run `pactrail setup` / type `/setup` at any time.
 
-1. Choose OpenRouter, Ollama, OpenAI, Anthropic, Gemini, OpenAI Responses, or
-   another OpenAI-compatible service. Built-in choices supply the endpoint.
+1. Choose from a grouped provider list. Stable numbers 1–7 keep their original
+   meaning (OpenRouter, Ollama, OpenAI, Anthropic, Gemini, OpenAI Responses,
+   other compatible). Local presets for LM Studio, llama.cpp, and vLLM are
+   appended as 8–10. Running local servers are detected on their usual ports;
+   hosted providers show whether an environment, `.env`, or saved key is
+   available. Built-in choices supply the endpoint.
 2. Existing provider environment keys are reused. A matching workspace `.env`
-   key is offered explicitly; the rest of that file is never imported. Otherwise
-   paste a key into hidden input. Ollama needs no key. Other compatible endpoints
-   also support explicit no authentication (Enter at the key prompt).
-3. Enter a model ID or search a part of its name; choose a numbered match.
-   If discovery is unavailable, enter a known exact identifier.
+   key is offered explicitly; the rest of that file is never imported.
+   Endpoint-bound saved keys are reused too. Otherwise paste a key into hidden
+   input. Local runtimes need no key. Other compatible endpoints also support
+   explicit no authentication (Enter at the key prompt).
+3. Review the ranked model catalog. A single discovered model is selected
+   automatically; otherwise enter a number, search part of a name, or press
+   Enter for the first ranked match. If discovery is unavailable, enter a known
+   exact identifier. Setup closes with a summary card showing the model,
+   provider, endpoint, and credential source.
 
 The selection is saved for CLI sessions and browser bootstrap defaults. Existing
 browser-local composer preferences can still override defaults. Setup changes no
 process permissions and executes no model inference or tools. Discovery only
 checks the catalog; the first task exercises inference/tool compatibility.
+Ranking prefers coding/chat models and keeps embedding, speech, and moderation
+models out of the way. It never hides the full catalog from search.
 
 `/cancel`, Ctrl-C or EOF cancels; existing settings stay intact. A cancelled
 first task stays available through `/retry`. Active `PACTRAIL_MODEL` or
