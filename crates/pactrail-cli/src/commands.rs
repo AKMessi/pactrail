@@ -2826,25 +2826,96 @@ pub(crate) fn list(state: &Path, json_output: bool) -> Result<(), CliError> {
     if json_output {
         write_json(&values)
     } else if values.is_empty() {
-        write_human_stdout("No durable Pactrail runs found.\n").map_err(CliError::Output)
+        let theme = crate::theme::Theme::detect();
+        write_human_stdout(&format!(
+            "\n  {}\n  {}\n\n",
+            theme.muted("No durable runs in this workspace."),
+            theme.accent("Start: pactrail \"Explain this repository\"")
+        ))
+        .map_err(CliError::Output)
     } else {
-        let text = values
+        let theme = crate::theme::Theme::detect();
+        let columns = crate::interactive::terminal_columns();
+        let pending = runs
             .iter()
-            .map(|value| {
-                let status = value["outcome"]
-                    .as_str()
-                    .or_else(|| value["state"].as_str())
-                    .unwrap_or_default();
-                format!(
-                    "{}  {:<16}  {}",
-                    value["run_id"].as_str().unwrap_or_default(),
-                    status,
-                    value["goal"].as_str().unwrap_or_default()
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        write_human_stdout(&format!("{text}\n")).map_err(CliError::Output)
+            .filter(|run| run.outcome == Some(ReceiptOutcome::ReadyToApply))
+            .count();
+        let mut lines = vec![format!(
+            "  {}  {}",
+            theme.heading("Pactrail runs"),
+            theme.muted(&format!(
+                "{} total · {} awaiting review",
+                runs.len(),
+                pending
+            ))
+        )];
+        lines.push(String::new());
+        for run in &runs {
+            let marker = match run.outcome {
+                Some(ReceiptOutcome::ReadyToApply) => theme.brand(theme.symbol("◇")),
+                Some(ReceiptOutcome::Failed) => theme.danger(theme.symbol("×")),
+                Some(ReceiptOutcome::Cancelled) => theme.warning(theme.symbol("■")),
+                Some(ReceiptOutcome::Applied) => theme.accent(theme.symbol("✓")),
+                _ => theme.muted(theme.symbol("○")),
+            };
+            let status = human_run_status(run.state, run.outcome);
+            let files = match run.outcome {
+                Some(ReceiptOutcome::Answered) => "answer only".to_owned(),
+                Some(_) if run.changes == 0 => "no file changes".to_owned(),
+                Some(_) => format!(
+                    "{} {}",
+                    run.changes,
+                    if run.changes == 1 { "file" } else { "files" }
+                ),
+                None => "files pending".to_owned(),
+            };
+            lines.push(format!(
+                "  {marker} {}  {status} · {files}",
+                theme.code(&run.run_id.to_string())
+            ));
+            lines.extend(
+                crate::terminal::wrap(&run.goal, columns.saturating_sub(6).clamp(20, 94))
+                    .into_iter()
+                    .take(3)
+                    .map(|line| format!("      {}", theme.text(&line))),
+            );
+        }
+        lines.push(String::new());
+        lines.extend(
+            crate::terminal::wrap(
+                "Inspect: pactrail inspect <id> · Review: pactrail diff <id> · Apply: pactrail apply <id> · JSON: pactrail list --json",
+                columns.saturating_sub(2).clamp(20, 110),
+            )
+            .into_iter()
+            .map(|line| format!("  {}", theme.muted(&line))),
+        );
+        write_human_stdout(&format!("\n{}\n\n", lines.join("\n"))).map_err(CliError::Output)
+    }
+}
+
+fn human_run_status(state: RunState, outcome: Option<ReceiptOutcome>) -> String {
+    match outcome {
+        Some(ReceiptOutcome::Answered) => "answered".to_owned(),
+        Some(ReceiptOutcome::ReadyToApply) => "awaiting review".to_owned(),
+        Some(ReceiptOutcome::Applied) => "applied".to_owned(),
+        Some(ReceiptOutcome::Discarded) => "discarded".to_owned(),
+        Some(ReceiptOutcome::Failed) => "failed".to_owned(),
+        Some(ReceiptOutcome::Cancelled) => "stopped".to_owned(),
+        None => match state {
+            RunState::Created => "created".to_owned(),
+            RunState::Contracting => "contracting".to_owned(),
+            RunState::Investigating => "investigating".to_owned(),
+            RunState::Planning => "planning".to_owned(),
+            RunState::Executing => "executing".to_owned(),
+            RunState::Verifying => "verifying".to_owned(),
+            RunState::Reviewing => "reviewing".to_owned(),
+            RunState::AwaitingApply => "awaiting review".to_owned(),
+            RunState::Completed => "completed".to_owned(),
+            RunState::Applied => "applied".to_owned(),
+            RunState::Discarded => "discarded".to_owned(),
+            RunState::Failed => "failed".to_owned(),
+            RunState::Cancelled => "stopped".to_owned(),
+        },
     }
 }
 
@@ -3362,47 +3433,103 @@ pub(crate) fn doctor(json_output: bool) -> Result<(), CliError> {
     if json_output {
         write_json(&report)
     } else {
-        let mut lines = vec![
-            "Process boundaries".to_owned(),
-            "  disabled    ready       no process execution".to_owned(),
-            "  native      ready       trusted host authority; candidate working directory"
-                .to_owned(),
-            format!(
-                "  oci/docker  {:<10} network denied; candidate-only writable mount",
-                if command_available("docker") {
-                    "detected"
-                } else {
-                    "not found"
-                }
-            ),
-            format!(
-                "  oci/podman  {:<10} network denied; candidate-only writable mount",
-                if command_available("podman") {
-                    "detected"
-                } else {
-                    "not found"
-                }
-            ),
-            String::new(),
-            "Native mode is not a host-filesystem or network sandbox.".to_owned(),
-            "Use --process-backend oci --sandbox-image <local-image> for untrusted commands."
-                .to_owned(),
-            String::new(),
-            "Toolchain discovery".to_owned(),
-        ];
-        for check in checks {
-            lines.push(format!(
-                "{:<10} {}",
-                check["program"].as_str().unwrap_or_default(),
-                if check["available"].as_bool().unwrap_or(false) {
-                    "available"
-                } else {
-                    "not found"
-                }
-            ));
-        }
-        write_human_stdout(&format!("{}\n", lines.join("\n"))).map_err(CliError::Output)
+        doctor_human(&checks)
     }
+}
+
+fn doctor_human(checks: &[serde_json::Value]) -> Result<(), CliError> {
+    let available = |name: &str| {
+        checks
+            .iter()
+            .any(|check| check["program"] == name && check["available"].as_bool().unwrap_or(false))
+    };
+    let theme = crate::theme::Theme::detect();
+    let columns = crate::interactive::terminal_columns();
+    let mut lines = vec![
+        crate::ui::section(&theme, columns, "Process boundaries"),
+        String::new(),
+    ];
+    let docker = available("docker");
+    let podman = available("podman");
+    for (name, status, detail, available) in [
+        ("disabled", "ready", "no process execution", true),
+        (
+            "native",
+            "ready",
+            "trusted host authority; candidate working directory",
+            true,
+        ),
+        (
+            "oci/docker",
+            if docker { "detected" } else { "not found" },
+            "network denied; candidate-only writable mount",
+            docker,
+        ),
+        (
+            "oci/podman",
+            if podman { "detected" } else { "not found" },
+            "network denied; candidate-only writable mount",
+            podman,
+        ),
+    ] {
+        if columns >= 60 {
+            let detail_width = columns.saturating_sub(26).max(8);
+            let prefix = format!("  {name:<12}{status:<10}");
+            for (index, line) in crate::terminal::wrap(detail, detail_width)
+                .into_iter()
+                .enumerate()
+            {
+                let row = if index == 0 {
+                    format!("{prefix}{line}")
+                } else {
+                    format!("{}{line}", " ".repeat(24))
+                };
+                lines.push(if available {
+                    theme.text(&row)
+                } else {
+                    theme.muted(&row)
+                });
+            }
+        } else {
+            let row = format!("  {name}  {status}");
+            lines.push(if available {
+                theme.text(&row)
+            } else {
+                theme.muted(&row)
+            });
+            lines.extend(
+                crate::terminal::wrap(detail, columns.saturating_sub(4).max(8))
+                    .into_iter()
+                    .map(|line| format!("    {}", theme.muted(&line))),
+            );
+        }
+    }
+    lines.extend(crate::ui::note(
+        &theme,
+        columns,
+        "Native mode is not a host-filesystem or network sandbox.",
+    ));
+    lines.extend(crate::ui::note(
+        &theme,
+        columns,
+        "Use --process-backend oci --sandbox-image <local-image> for untrusted commands.",
+    ));
+    lines.push(String::new());
+    lines.push(crate::ui::section(&theme, columns, "Toolchains"));
+    lines.push(String::new());
+    for check in checks {
+        let installed = check["available"].as_bool().unwrap_or(false);
+        lines.push(format!(
+            "  {:<12}{}",
+            check["program"].as_str().unwrap_or_default(),
+            if installed {
+                theme.accent("available")
+            } else {
+                theme.muted("not found")
+            }
+        ));
+    }
+    write_human_stdout(&format!("{}\n", lines.join("\n"))).map_err(CliError::Output)
 }
 
 fn render_run(
